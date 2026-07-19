@@ -50,10 +50,10 @@ ALTER TABLE garage_staff FORCE ROW LEVEL SECURITY;
 CREATE POLICY garage_staff_rls_policy ON garage_staff
 FOR ALL
 USING (
-    garage_id = current_setting('app.current_garage_id')::uuid
+    garage_id = current_setting('app.current_garage_id', true)::uuid
 )
 WITH CHECK (
-    garage_id = current_setting('app.current_garage_id')::uuid
+    garage_id = current_setting('app.current_garage_id', true)::uuid
 );
 
 -- Add comment explaining RLS policy

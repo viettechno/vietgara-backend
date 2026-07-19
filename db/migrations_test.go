@@ -24,6 +24,8 @@ type PostgresContainer struct {
 	ctx       context.Context
 }
 
+const rlsTestRole = "rls_test_reader"
+
 // StartPostgresContainer starts a PostgreSQL container and returns a connection
 func StartPostgresContainer(ctx context.Context) (*PostgresContainer, error) {
 	req := testcontainers.ContainerRequest{
@@ -119,6 +121,40 @@ func (pc *PostgresContainer) RunMigrations(migrationsDir string) error {
 	return nil
 }
 
+// OpenRLSConnection returns a pinned, non-superuser connection for RLS assertions.
+// PostgreSQL superusers bypass RLS, so using the bootstrap postgres user would not
+// exercise the policies created by the migrations.
+func (pc *PostgresContainer) OpenRLSConnection(ctx context.Context) (*sql.Conn, error) {
+	for _, statement := range []string{
+		"CREATE ROLE " + rlsTestRole + " NOLOGIN NOSUPERUSER NOBYPASSRLS",
+		"GRANT USAGE ON SCHEMA public TO " + rlsTestRole,
+		"GRANT SELECT ON garages, garage_staff TO " + rlsTestRole,
+	} {
+		if _, err := pc.DB.ExecContext(ctx, statement); err != nil {
+			return nil, fmt.Errorf("configure RLS test role: %w", err)
+		}
+	}
+
+	conn, err := pc.DB.Conn(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("open RLS test connection: %w", err)
+	}
+	if _, err := conn.ExecContext(ctx, "SET ROLE "+rlsTestRole); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("set RLS test role: %w", err)
+	}
+	return conn, nil
+}
+
+func openRLSConnection(t *testing.T, pc *PostgresContainer, ctx context.Context) *sql.Conn {
+	t.Helper()
+	conn, err := pc.OpenRLSConnection(ctx)
+	if err != nil {
+		t.Fatalf("failed to open RLS test connection: %v", err)
+	}
+	return conn
+}
+
 // TestRLS_QueryFailsWithoutSessionVariable verifies that queries are blocked when session variable is not set
 func TestRLS_QueryFailsWithoutSessionVariable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
@@ -166,8 +202,9 @@ func TestRLS_QueryFailsWithoutSessionVariable(t *testing.T) {
 	}
 
 	// Test: Query garages table WITHOUT setting session variable - should return 0 rows
+	rlsConn := openRLSConnection(t, pgContainer, ctx)
 	var count int
-	err = pgContainer.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM garages").Scan(&count)
+	err = rlsConn.QueryRowContext(ctx, "SELECT COUNT(*) FROM garages").Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to query garages: %v", err)
 	}
@@ -224,14 +261,16 @@ func TestRLS_QuerySucceedsWithCorrectSessionVariable(t *testing.T) {
 		t.Fatalf("failed to insert garage: %v", err)
 	}
 
+	rlsConn := openRLSConnection(t, pgContainer, ctx)
+
 	// Set session variable and query - should return 1 row
 	setSession := fmt.Sprintf("SELECT set_config('app.current_garage_id', '%s'::text, false)", garageID)
-	if _, err := pgContainer.DB.ExecContext(ctx, setSession); err != nil {
+	if _, err := rlsConn.ExecContext(ctx, setSession); err != nil {
 		t.Fatalf("failed to set session variable: %v", err)
 	}
 
 	var count int
-	err = pgContainer.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM garages").Scan(&count)
+	err = rlsConn.QueryRowContext(ctx, "SELECT COUNT(*) FROM garages").Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to query garages with session variable: %v", err)
 	}
@@ -243,7 +282,7 @@ func TestRLS_QuerySucceedsWithCorrectSessionVariable(t *testing.T) {
 
 	// Verify we can read the data
 	var name string
-	err = pgContainer.DB.QueryRowContext(ctx, "SELECT name FROM garages").Scan(&name)
+	err = rlsConn.QueryRowContext(ctx, "SELECT name FROM garages").Scan(&name)
 	if err != nil {
 		t.Fatalf("failed to read garage name: %v", err)
 	}
@@ -284,11 +323,18 @@ func TestRLS_QueryBlockedWithWrongSessionVariable(t *testing.T) {
 	garageID2 := "00000000-0000-0000-0000-000000000008"
 
 	// Insert accounts
-	for id, email := range map[string]string{accountID1: "test3@example.com", accountID2: "test4@example.com"} {
+	for _, account := range []struct {
+		id    string
+		email string
+		uid   string
+	}{
+		{id: accountID1, email: "test3@example.com", uid: "uid-003"},
+		{id: accountID2, email: "test4@example.com", uid: "uid-004"},
+	} {
 		insertAccount := fmt.Sprintf(
 			`INSERT INTO accounts (id, email, auth_provider, identity_platform_uid, full_name, status) 
-			 VALUES ('%s', '%s', 'local', 'uid-%s', 'Test User', 'active')`,
-			id, email, id[:8],
+			 VALUES ('%s', '%s', 'local', '%s', 'Test User', 'active')`,
+			account.id, account.email, account.uid,
 		)
 		if _, err := pgContainer.DB.ExecContext(ctx, insertAccount); err != nil {
 			t.Fatalf("failed to insert account: %v", err)
@@ -314,15 +360,17 @@ func TestRLS_QueryBlockedWithWrongSessionVariable(t *testing.T) {
 		t.Fatalf("failed to insert garage 2: %v", err)
 	}
 
+	rlsConn := openRLSConnection(t, pgContainer, ctx)
+
 	// Set session to garage 1
 	setSession := fmt.Sprintf("SELECT set_config('app.current_garage_id', '%s'::text, false)", garageID1)
-	if _, err := pgContainer.DB.ExecContext(ctx, setSession); err != nil {
+	if _, err := rlsConn.ExecContext(ctx, setSession); err != nil {
 		t.Fatalf("failed to set session variable: %v", err)
 	}
 
 	// Query should only return garage 1
 	var count int
-	err = pgContainer.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM garages").Scan(&count)
+	err = rlsConn.QueryRowContext(ctx, "SELECT COUNT(*) FROM garages").Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to query garages: %v", err)
 	}
@@ -333,7 +381,7 @@ func TestRLS_QueryBlockedWithWrongSessionVariable(t *testing.T) {
 
 	// Verify the returned garage is garage 1
 	var name string
-	err = pgContainer.DB.QueryRowContext(ctx, "SELECT name FROM garages").Scan(&name)
+	err = rlsConn.QueryRowContext(ctx, "SELECT name FROM garages").Scan(&name)
 	if err != nil {
 		t.Fatalf("failed to read garage name: %v", err)
 	}
@@ -405,8 +453,9 @@ func TestRLS_GarageStaffRowLevelSecurity(t *testing.T) {
 	}
 
 	// Test 1: Query garage_staff WITHOUT session variable - should return 0 rows
+	rlsConn := openRLSConnection(t, pgContainer, ctx)
 	var count int
-	err = pgContainer.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM garage_staff").Scan(&count)
+	err = rlsConn.QueryRowContext(ctx, "SELECT COUNT(*) FROM garage_staff").Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to query garage_staff: %v", err)
 	}
@@ -418,11 +467,11 @@ func TestRLS_GarageStaffRowLevelSecurity(t *testing.T) {
 
 	// Test 2: Set session variable and query - should return 1 row
 	setSession := fmt.Sprintf("SELECT set_config('app.current_garage_id', '%s'::text, false)", garageID)
-	if _, err := pgContainer.DB.ExecContext(ctx, setSession); err != nil {
+	if _, err := rlsConn.ExecContext(ctx, setSession); err != nil {
 		t.Fatalf("failed to set session variable: %v", err)
 	}
 
-	err = pgContainer.DB.QueryRowContext(ctx, "SELECT COUNT(*) FROM garage_staff").Scan(&count)
+	err = rlsConn.QueryRowContext(ctx, "SELECT COUNT(*) FROM garage_staff").Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to query garage_staff with session: %v", err)
 	}
@@ -434,7 +483,7 @@ func TestRLS_GarageStaffRowLevelSecurity(t *testing.T) {
 
 	// Verify we can read the role
 	var role string
-	err = pgContainer.DB.QueryRowContext(ctx, "SELECT role FROM garage_staff").Scan(&role)
+	err = rlsConn.QueryRowContext(ctx, "SELECT role FROM garage_staff").Scan(&role)
 	if err != nil {
 		t.Fatalf("failed to read staff role: %v", err)
 	}

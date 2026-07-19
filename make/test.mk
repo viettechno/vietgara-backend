@@ -1,35 +1,25 @@
 .PHONY: \
-	test \
 	test-unit \
+	test-short \
 	test-integration \
 	test-race \
 	test-bench \
 	test-cover \
 	test-cover-html \
 	test-cover-func \
-	test-verbose \
-	test-short \
 	test-clean
 
 GO               := go
-COVERAGE_FILE    := coverage.out
-COVERAGE_HTML    := coverage.html
-
-test: ## Run all unit tests
-	@printf "$(CYAN)▶ Running unit tests...$(RESET)\n"
-	@$(GO) test ./...
+COVERAGE_FILE    := ./tmp/coverage.out
+COVERAGE_HTML    := ./tmp/coverage.html
 
 test-unit: ## Run unit tests with no cache
 	@printf "$(CYAN)▶ Running unit tests (no cache)...$(RESET)\n"
-	@$(GO) test -count=1 ./...
+	@$(GO) test -count=1 -v ./...
 
 test-short: ## Run short unit tests
 	@printf "$(CYAN)▶ Running short tests...$(RESET)\n"
 	@$(GO) test -short ./...
-
-test-verbose: ## Run tests in verbose mode
-	@printf "$(CYAN)▶ Running verbose tests...$(RESET)\n"
-	@$(GO) test -v ./...
 
 test-race: ## Run tests with race detector
 	@printf "$(CYAN)▶ Running race detector...$(RESET)\n"

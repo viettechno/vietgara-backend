@@ -2,6 +2,7 @@
 
 include make/install.mk
 include make/test.mk
+include make/lint.mk
 include make/docker.mk
 include make/build.mk
 

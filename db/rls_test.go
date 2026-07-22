@@ -1,4 +1,4 @@
-package db
+package db_test
 
 import (
 	"context"
@@ -10,6 +10,8 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
+	dbpkg "vietgara/db"
 )
 
 const rlsTestDriverName = "rls_test_driver"
@@ -50,20 +52,25 @@ func newRLSTestDB(t *testing.T, steps ...rlsTestStep) *sql.DB {
 	if err != nil {
 		t.Fatalf("open test database: %v", err)
 	}
+
 	t.Cleanup(func() {
 		if err := db.Close(); err != nil {
 			t.Errorf("close test database: %v", err)
 		}
+
 		state.mu.Lock()
 		remaining := len(state.steps)
 		state.mu.Unlock()
+
 		if remaining != 0 {
 			t.Errorf("%d expected database operations were not performed", remaining)
 		}
+
 		rlsTestStatesMu.Lock()
 		delete(rlsTestStates, dsn)
 		rlsTestStatesMu.Unlock()
 	})
+
 	return db
 }
 
@@ -78,11 +85,12 @@ func rlsSessionStep(garageID string) rlsTestStep {
 
 func TestNewRLSContext(t *testing.T) {
 	db := newRLSTestDB(t)
-	ctx := NewRLSContext(db, "garage-1")
+	ctx := dbpkg.NewRLSContext(db, "garage-1")
 
 	if ctx.DB != db {
 		t.Error("DB was not retained")
 	}
+
 	if ctx.GarageID != "garage-1" {
 		t.Errorf("GarageID = %q, want garage-1", ctx.GarageID)
 	}
@@ -103,6 +111,7 @@ func TestRLSContext_WithRLSSession(t *testing.T) {
 				if ctx == nil || db == nil {
 					return errors.New("callback received invalid arguments")
 				}
+
 				return nil
 			},
 		},
@@ -126,11 +135,13 @@ func TestRLSContext_WithRLSSession(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			rc := NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1")
+			rc := dbpkg.NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1")
+
 			err := rc.WithRLSSession(t.Context(), tt.callback)
 			if tt.wantErr == "" && err != nil {
 				t.Fatalf("WithRLSSession() error = %v", err)
 			}
+
 			if tt.wantErr != "" && (err == nil || err.Error() != tt.wantErr) {
 				t.Fatalf("WithRLSSession() error = %v, want %q", err, tt.wantErr)
 			}
@@ -140,29 +151,33 @@ func TestRLSContext_WithRLSSession(t *testing.T) {
 
 func TestRLSContext_GetGarage(t *testing.T) {
 	garageRows := &rlsTestRows{columns: []string{"id", "account_id", "name", "timezone", "currency", "status"}, values: [][]driver.Value{{"garage-1", "account-1", "Main Garage", "Asia/Ho_Chi_Minh", "VND", "active"}}}
+
 	tests := []struct {
 		name    string
 		steps   []rlsTestStep
-		want    map[string]interface{}
+		want    map[string]any
 		wantErr string
 	}{
-		{name: "returns garage", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garages", rows: garageRows}}, want: map[string]interface{}{"id": "garage-1", "account_id": "account-1", "name": "Main Garage", "timezone": "Asia/Ho_Chi_Minh", "currency": "VND", "status": "active"}},
+		{name: "returns garage", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garages", rows: garageRows}}, want: map[string]any{"id": "garage-1", "account_id": "account-1", "name": "Main Garage", "timezone": "Asia/Ho_Chi_Minh", "currency": "VND", "status": "active"}},
 		{name: "reports missing garage", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garages", rows: &rlsTestRows{columns: garageRows.columns}}}, wantErr: "garage not found"},
 		{name: "wraps query error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garages", err: errors.New("query failed")}}, wantErr: "query failed: query failed"},
 		{name: "wraps scan error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garages", rows: &rlsTestRows{columns: garageRows.columns, values: [][]driver.Value{{"only-one-column"}}}}}, wantErr: "scan failed:"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1").GetGarage(t.Context())
+			got, err := dbpkg.NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1").GetGarage(t.Context())
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("GetGarage() error = %v, want containing %q", err, tt.wantErr)
 				}
+
 				return
 			}
+
 			if err != nil {
 				t.Fatalf("GetGarage() error = %v", err)
 			}
+
 			for key, want := range tt.want {
 				if got[key] != want {
 					t.Errorf("GetGarage()[%q] = %v, want %v", key, got[key], want)
@@ -174,6 +189,7 @@ func TestRLSContext_GetGarage(t *testing.T) {
 
 func TestRLSContext_GetGarageStaff(t *testing.T) {
 	columns := []string{"id", "garage_id", "account_id", "role", "status", "created_at"}
+
 	tests := []struct {
 		name    string
 		steps   []rlsTestStep
@@ -187,19 +203,23 @@ func TestRLSContext_GetGarageStaff(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1").GetGarageStaff(t.Context())
+			got, err := dbpkg.NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1").GetGarageStaff(t.Context())
 			if tt.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 					t.Fatalf("GetGarageStaff() error = %v, want containing %q", err, tt.wantErr)
 				}
+
 				return
 			}
+
 			if err != nil {
 				t.Fatalf("GetGarageStaff() error = %v", err)
 			}
+
 			if len(got) != tt.wantLen {
 				t.Errorf("len(GetGarageStaff()) = %d, want %d", len(got), tt.wantLen)
 			}
+
 			if tt.wantLen > 0 && got[0]["role"] != "owner" {
 				t.Errorf("first staff role = %v, want owner", got[0]["role"])
 			}
@@ -220,10 +240,11 @@ func TestRLSContext_UpdateGarageStatus(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1").UpdateGarageStatus(t.Context(), "inactive")
+			err := dbpkg.NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1").UpdateGarageStatus(t.Context(), "inactive")
 			if tt.wantErr == "" && err != nil {
 				t.Fatalf("UpdateGarageStatus() error = %v", err)
 			}
+
 			if tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
 				t.Fatalf("UpdateGarageStatus() error = %v, want containing %q", err, tt.wantErr)
 			}
@@ -242,10 +263,11 @@ func TestRLSContext_AssignStaffToGarage(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1").AssignStaffToGarage(t.Context(), "account-1", "mechanic")
+			err := dbpkg.NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1").AssignStaffToGarage(t.Context(), "account-1", "mechanic")
 			if tt.wantErr == "" && err != nil {
 				t.Fatalf("AssignStaffToGarage() error = %v", err)
 			}
+
 			if tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
 				t.Fatalf("AssignStaffToGarage() error = %v, want containing %q", err, tt.wantErr)
 			}
@@ -266,10 +288,11 @@ func TestRLSContext_RemoveStaffFromGarage(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1").RemoveStaffFromGarage(t.Context(), "account-1")
+			err := dbpkg.NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1").RemoveStaffFromGarage(t.Context(), "account-1")
 			if tt.wantErr == "" && err != nil {
 				t.Fatalf("RemoveStaffFromGarage() error = %v", err)
 			}
+
 			if tt.wantErr != "" && (err == nil || !strings.Contains(err.Error(), tt.wantErr)) {
 				t.Fatalf("RemoveStaffFromGarage() error = %v, want containing %q", err, tt.wantErr)
 			}
@@ -283,9 +306,11 @@ func (rlsTestDriver) Open(name string) (driver.Conn, error) {
 	rlsTestStatesMu.Lock()
 	state := rlsTestStates[name]
 	rlsTestStatesMu.Unlock()
+
 	if state == nil {
 		return nil, fmt.Errorf("unknown test database %q", name)
 	}
+
 	return rlsTestConn{state: state}, nil
 }
 
@@ -298,57 +323,72 @@ func (rlsTestConn) Close() error { return nil }
 func (rlsTestConn) Begin() (driver.Tx, error) {
 	return nil, errors.New("transactions are not supported")
 }
+
 func (c rlsTestConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	step, err := c.state.next("exec", query, args)
 	if err != nil {
 		return nil, err
 	}
+
 	if step.err != nil {
 		return nil, step.err
 	}
+
 	if step.result == nil {
 		return driver.RowsAffected(1), nil
 	}
+
 	return step.result, nil
 }
+
 func (c rlsTestConn) QueryContext(_ context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	step, err := c.state.next("query", query, args)
 	if err != nil {
 		return nil, err
 	}
+
 	if step.err != nil {
 		return nil, step.err
 	}
+
 	if step.rows == nil {
 		return nil, errors.New("query returned no rows definition")
 	}
+
 	return step.rows.clone(), nil
 }
 
 func (s *rlsTestState) next(kind, query string, args []driver.NamedValue) (rlsTestStep, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
 	if len(s.steps) == 0 {
 		return rlsTestStep{}, fmt.Errorf("unexpected %s query: %s", kind, query)
 	}
+
 	step := s.steps[0]
 	s.steps = s.steps[1:]
+
 	if step.kind != kind {
 		return rlsTestStep{}, fmt.Errorf("got %s query, want %s", kind, step.kind)
 	}
+
 	if !strings.Contains(query, step.contains) {
 		return rlsTestStep{}, fmt.Errorf("query %q does not contain %q", query, step.contains)
 	}
+
 	if step.args != nil {
 		if len(args) != len(step.args) {
 			return rlsTestStep{}, fmt.Errorf("got %d arguments, want %d", len(args), len(step.args))
 		}
+
 		for i, arg := range args {
 			if arg.Value != step.args[i] {
 				return rlsTestStep{}, fmt.Errorf("argument %d = %v, want %v", i, arg.Value, step.args[i])
 			}
 		}
 	}
+
 	return step, nil
 }
 
@@ -364,8 +404,10 @@ func (r *rlsTestRows) Next(dest []driver.Value) error {
 	if r.index == len(r.values) {
 		return io.EOF
 	}
+
 	copy(dest, r.values[r.index])
 	r.index++
+
 	return nil
 }
 func (r *rlsTestRows) clone() *rlsTestRows { return &rlsTestRows{columns: r.columns, values: r.values} }

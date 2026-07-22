@@ -1,4 +1,4 @@
-package db
+package db_test
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-// PostgresContainer represents a running PostgreSQL container for testing
+// PostgresContainer represents a running PostgreSQL container for testing.
 type PostgresContainer struct {
 	Container testcontainers.Container
 	Host      string
@@ -26,7 +26,7 @@ type PostgresContainer struct {
 
 const rlsTestRole = "rls_test_reader"
 
-// StartPostgresContainer starts a PostgreSQL container and returns a connection
+// StartPostgresContainer starts a PostgreSQL container and returns a connection.
 func StartPostgresContainer(ctx context.Context) (*PostgresContainer, error) {
 	req := testcontainers.ContainerRequest{
 		Image:        "postgres:15-alpine",
@@ -51,13 +51,13 @@ func StartPostgresContainer(ctx context.Context) (*PostgresContainer, error) {
 
 	host, err := container.Host(ctx)
 	if err != nil {
-		container.Terminate(ctx)
+		_ = container.Terminate(ctx)
 		return nil, fmt.Errorf("failed to get host: %w", err)
 	}
 
 	port, err := container.MappedPort(ctx, "5432")
 	if err != nil {
-		container.Terminate(ctx)
+		_ = container.Terminate(ctx)
 		return nil, fmt.Errorf("failed to get port: %w", err)
 	}
 
@@ -65,15 +65,16 @@ func StartPostgresContainer(ctx context.Context) (*PostgresContainer, error) {
 	time.Sleep(1 * time.Second)
 
 	dsn := fmt.Sprintf("postgres://postgres:postgres@%s:%s/vietgara_test?sslmode=disable", host, port.Port())
+
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
-		container.Terminate(ctx)
+		_ = container.Terminate(ctx)
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
 	// Test the connection
 	if err := db.PingContext(ctx); err != nil {
-		container.Terminate(ctx)
+		_ = container.Terminate(ctx)
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
@@ -86,18 +87,20 @@ func StartPostgresContainer(ctx context.Context) (*PostgresContainer, error) {
 	}, nil
 }
 
-// Close closes the database connection and terminates the container
+// Close closes the database connection and terminates the container.
 func (pc *PostgresContainer) Close() error {
 	if pc.DB != nil {
-		pc.DB.Close()
+		_ = pc.DB.Close()
 	}
+
 	if pc.Container != nil {
 		return pc.Container.Terminate(pc.ctx)
 	}
+
 	return nil
 }
 
-// RunMigrations runs all migration files in order
+// RunMigrations runs all migration files in order.
 func (pc *PostgresContainer) RunMigrations(migrationsDir string) error {
 	// Read migration files and execute them in order
 	files := []string{
@@ -108,6 +111,8 @@ func (pc *PostgresContainer) RunMigrations(migrationsDir string) error {
 
 	for _, file := range files {
 		filePath := filepath.Join(migrationsDir, file)
+
+		// #nosec G304 -- filePath is constructed from a fixed migration directory and filename.
 		content, err := os.ReadFile(filePath)
 		if err != nil {
 			return fmt.Errorf("failed to read migration file %s: %w", file, err)
@@ -139,23 +144,27 @@ func (pc *PostgresContainer) OpenRLSConnection(ctx context.Context) (*sql.Conn, 
 	if err != nil {
 		return nil, fmt.Errorf("open RLS test connection: %w", err)
 	}
+
 	if _, err := conn.ExecContext(ctx, "SET ROLE "+rlsTestRole); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("set RLS test role: %w", err)
 	}
+
 	return conn, nil
 }
 
 func openRLSConnection(t *testing.T, pc *PostgresContainer, ctx context.Context) *sql.Conn {
 	t.Helper()
+
 	conn, err := pc.OpenRLSConnection(ctx)
 	if err != nil {
 		t.Fatalf("failed to open RLS test connection: %v", err)
 	}
+
 	return conn
 }
 
-// TestRLS_QueryFailsWithoutSessionVariable verifies that queries are blocked when session variable is not set
+// TestRLS_QueryFailsWithoutSessionVariable verifies that queries are blocked when session variable is not set.
 func TestRLS_QueryFailsWithoutSessionVariable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -165,13 +174,14 @@ func TestRLS_QueryFailsWithoutSessionVariable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to start postgres container: %v", err)
 	}
-	defer pgContainer.Close()
+	defer func() { _ = pgContainer.Close() }()
 
 	// Get the migrations directory relative to this test file
 	_, testFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("failed to determine test file location")
 	}
+
 	migrationsDir := filepath.Join(filepath.Dir(testFile), "migrations")
 
 	// Run migrations
@@ -203,7 +213,9 @@ func TestRLS_QueryFailsWithoutSessionVariable(t *testing.T) {
 
 	// Test: Query garages table WITHOUT setting session variable - should return 0 rows
 	rlsConn := openRLSConnection(t, pgContainer, ctx)
+
 	var count int
+
 	err = rlsConn.QueryRowContext(ctx, "SELECT COUNT(*) FROM garages").Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to query garages: %v", err)
@@ -212,10 +224,11 @@ func TestRLS_QueryFailsWithoutSessionVariable(t *testing.T) {
 	if count != 0 {
 		t.Errorf("expected 0 rows without session variable, got %d rows. RLS is not working correctly", count)
 	}
+
 	t.Logf("✓ Query without session variable correctly returned 0 rows")
 }
 
-// TestRLS_QuerySucceedsWithCorrectSessionVariable verifies that queries work when session variable matches
+// TestRLS_QuerySucceedsWithCorrectSessionVariable verifies that queries work when session variable matches.
 func TestRLS_QuerySucceedsWithCorrectSessionVariable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -225,13 +238,14 @@ func TestRLS_QuerySucceedsWithCorrectSessionVariable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to start postgres container: %v", err)
 	}
-	defer pgContainer.Close()
+	defer func() { _ = pgContainer.Close() }()
 
 	// Get the migrations directory
 	_, testFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("failed to determine test file location")
 	}
+
 	migrationsDir := filepath.Join(filepath.Dir(testFile), "migrations")
 
 	// Run migrations
@@ -270,6 +284,7 @@ func TestRLS_QuerySucceedsWithCorrectSessionVariable(t *testing.T) {
 	}
 
 	var count int
+
 	err = rlsConn.QueryRowContext(ctx, "SELECT COUNT(*) FROM garages").Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to query garages with session variable: %v", err)
@@ -278,21 +293,25 @@ func TestRLS_QuerySucceedsWithCorrectSessionVariable(t *testing.T) {
 	if count != 1 {
 		t.Errorf("expected 1 row with correct session variable, got %d rows", count)
 	}
+
 	t.Logf("✓ Query with correct session variable returned 1 row")
 
 	// Verify we can read the data
 	var name string
+
 	err = rlsConn.QueryRowContext(ctx, "SELECT name FROM garages").Scan(&name)
 	if err != nil {
 		t.Fatalf("failed to read garage name: %v", err)
 	}
+
 	if name != "Test Garage 2" {
 		t.Errorf("expected name 'Test Garage 2', got '%s'", name)
 	}
+
 	t.Logf("✓ Successfully read garage data with correct session variable")
 }
 
-// TestRLS_QueryBlockedWithWrongSessionVariable verifies that queries are blocked when session variable is wrong
+// TestRLS_QueryBlockedWithWrongSessionVariable verifies that queries are blocked when session variable is wrong.
 func TestRLS_QueryBlockedWithWrongSessionVariable(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -302,13 +321,14 @@ func TestRLS_QueryBlockedWithWrongSessionVariable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to start postgres container: %v", err)
 	}
-	defer pgContainer.Close()
+	defer func() { _ = pgContainer.Close() }()
 
 	// Get the migrations directory
 	_, testFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("failed to determine test file location")
 	}
+
 	migrationsDir := filepath.Join(filepath.Dir(testFile), "migrations")
 
 	// Run migrations
@@ -331,12 +351,11 @@ func TestRLS_QueryBlockedWithWrongSessionVariable(t *testing.T) {
 		{id: accountID1, email: "test3@example.com", uid: "uid-003"},
 		{id: accountID2, email: "test4@example.com", uid: "uid-004"},
 	} {
-		insertAccount := fmt.Sprintf(
-			`INSERT INTO accounts (id, email, auth_provider, identity_platform_uid, full_name, status) 
-			 VALUES ('%s', '%s', 'local', '%s', 'Test User', 'active')`,
+		if _, err := pgContainer.DB.ExecContext(ctx,
+			`INSERT INTO accounts (id, email, auth_provider, identity_platform_uid, full_name, status)
+			 VALUES ($1, $2, 'local', $3, 'Test User', 'active')`,
 			account.id, account.email, account.uid,
-		)
-		if _, err := pgContainer.DB.ExecContext(ctx, insertAccount); err != nil {
+		); err != nil {
 			t.Fatalf("failed to insert account: %v", err)
 		}
 	}
@@ -370,6 +389,7 @@ func TestRLS_QueryBlockedWithWrongSessionVariable(t *testing.T) {
 
 	// Query should only return garage 1
 	var count int
+
 	err = rlsConn.QueryRowContext(ctx, "SELECT COUNT(*) FROM garages").Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to query garages: %v", err)
@@ -381,10 +401,12 @@ func TestRLS_QueryBlockedWithWrongSessionVariable(t *testing.T) {
 
 	// Verify the returned garage is garage 1
 	var name string
+
 	err = rlsConn.QueryRowContext(ctx, "SELECT name FROM garages").Scan(&name)
 	if err != nil {
 		t.Fatalf("failed to read garage name: %v", err)
 	}
+
 	if name != "Garage 1" {
 		t.Errorf("expected 'Garage 1', got '%s'", name)
 	}
@@ -393,7 +415,7 @@ func TestRLS_QueryBlockedWithWrongSessionVariable(t *testing.T) {
 	t.Logf("✓ Cannot see Garage 2 - RLS is working correctly")
 }
 
-// TestRLS_GarageStaffRowLevelSecurity verifies RLS on garage_staff table
+// TestRLS_GarageStaffRowLevelSecurity verifies RLS on garage_staff table.
 func TestRLS_GarageStaffRowLevelSecurity(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -403,13 +425,14 @@ func TestRLS_GarageStaffRowLevelSecurity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to start postgres container: %v", err)
 	}
-	defer pgContainer.Close()
+	defer func() { _ = pgContainer.Close() }()
 
 	// Get the migrations directory
 	_, testFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("failed to determine test file location")
 	}
+
 	migrationsDir := filepath.Join(filepath.Dir(testFile), "migrations")
 
 	// Run migrations
@@ -454,7 +477,9 @@ func TestRLS_GarageStaffRowLevelSecurity(t *testing.T) {
 
 	// Test 1: Query garage_staff WITHOUT session variable - should return 0 rows
 	rlsConn := openRLSConnection(t, pgContainer, ctx)
+
 	var count int
+
 	err = rlsConn.QueryRowContext(ctx, "SELECT COUNT(*) FROM garage_staff").Scan(&count)
 	if err != nil {
 		t.Fatalf("failed to query garage_staff: %v", err)
@@ -463,6 +488,7 @@ func TestRLS_GarageStaffRowLevelSecurity(t *testing.T) {
 	if count != 0 {
 		t.Errorf("expected 0 rows without session variable, got %d rows", count)
 	}
+
 	t.Logf("✓ garage_staff: Query without session variable correctly returned 0 rows")
 
 	// Test 2: Set session variable and query - should return 1 row
@@ -479,21 +505,25 @@ func TestRLS_GarageStaffRowLevelSecurity(t *testing.T) {
 	if count != 1 {
 		t.Errorf("expected 1 row with session variable, got %d rows", count)
 	}
+
 	t.Logf("✓ garage_staff: Query with session variable returned 1 row")
 
 	// Verify we can read the role
 	var role string
+
 	err = rlsConn.QueryRowContext(ctx, "SELECT role FROM garage_staff").Scan(&role)
 	if err != nil {
 		t.Fatalf("failed to read staff role: %v", err)
 	}
+
 	if role != "owner" {
 		t.Errorf("expected role 'owner', got '%s'", role)
 	}
+
 	t.Logf("✓ garage_staff: Successfully read role with session variable")
 }
 
-// TestRLS_SessionVariableHandling verifies proper session variable handling
+// TestRLS_SessionVariableHandling verifies proper session variable handling.
 func TestRLS_SessionVariableHandling(t *testing.T) {
 	ctx, cancel := context.WithTimeout(t.Context(), 60*time.Second)
 	defer cancel()
@@ -503,13 +533,14 @@ func TestRLS_SessionVariableHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to start postgres container: %v", err)
 	}
-	defer pgContainer.Close()
+	defer func() { _ = pgContainer.Close() }()
 
 	// Get the migrations directory
 	_, testFile, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("failed to determine test file location")
 	}
+
 	migrationsDir := filepath.Join(filepath.Dir(testFile), "migrations")
 
 	// Run migrations
@@ -519,6 +550,7 @@ func TestRLS_SessionVariableHandling(t *testing.T) {
 
 	// Test setting and checking session variable
 	garageID := "00000000-0000-0000-0000-00000000000c"
+
 	setSession := fmt.Sprintf("SELECT set_config('app.current_garage_id', '%s'::text, false)", garageID)
 	if _, err := pgContainer.DB.ExecContext(ctx, setSession); err != nil {
 		t.Fatalf("failed to set session variable: %v", err)
@@ -526,6 +558,7 @@ func TestRLS_SessionVariableHandling(t *testing.T) {
 
 	// Verify session variable is set
 	var retrievedValue string
+
 	err = pgContainer.DB.QueryRowContext(ctx, "SELECT current_setting('app.current_garage_id')").Scan(&retrievedValue)
 	if err != nil {
 		t.Fatalf("failed to retrieve session variable: %v", err)
@@ -534,5 +567,6 @@ func TestRLS_SessionVariableHandling(t *testing.T) {
 	if retrievedValue != garageID {
 		t.Errorf("expected session variable '%s', got '%s'", garageID, retrievedValue)
 	}
+
 	t.Logf("✓ Session variable correctly set and retrieved: %s", retrievedValue)
 }

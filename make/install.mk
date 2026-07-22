@@ -8,7 +8,8 @@ GOLANGCI_LINT_VERSION      := 2.12.2
 	install-golang-migrate \
 	install-testcontainers-go \
 	install-lib-pq \
-	install-golangci-lint
+	install-golangci-lint \
+	install-gotestfmt
 
 install-deps: install-golang-migrate install-testcontainers-go install-lib-pq install-golangci-lint ## Install pinned Go dependencies
 	@echo "$(BOLD)$(BLUE)Synchronizing Go module files...$(RESET)"
@@ -54,3 +55,6 @@ install-golangci-lint: ## Install golangci-lint v$(GOLANGCI_LINT_VERSION)
 		go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v$(GOLANGCI_LINT_VERSION); \
 		echo "$(BOLD)$(GREEN)golangci-lint v$(GOLANGCI_LINT_VERSION) installed.$(RESET)"; \
 	fi
+
+install-gotestfmt: ## Install gotestfmt
+	go install github.com/gotesttools/gotestfmt/v2/cmd/gotestfmt@latest

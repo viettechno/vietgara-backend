@@ -3,16 +3,22 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 )
 
-// RLSContext wraps a database connection with RLS context
+const (
+	accountIDKey = "account_id"
+	statusKey    = "status"
+)
+
+// RLSContext wraps a database connection with RLS context.
 type RLSContext struct {
 	DB       *sql.DB
 	GarageID string
 }
 
-// NewRLSContext creates a new RLS context with a garage ID
+// NewRLSContext creates a new RLS context with a garage ID.
 func NewRLSContext(db *sql.DB, garageID string) *RLSContext {
 	return &RLSContext{
 		DB:       db,
@@ -21,7 +27,7 @@ func NewRLSContext(db *sql.DB, garageID string) *RLSContext {
 }
 
 // WithRLSSession executes a callback with RLS session variable set
-// This is a helper function to ensure proper RLS handling
+// This is a helper function to ensure proper RLS handling.
 func (rc *RLSContext) WithRLSSession(ctx context.Context, callback func(context.Context, *sql.DB) error) error {
 	// Set RLS session variable
 	_, err := rc.DB.ExecContext(ctx,
@@ -40,9 +46,9 @@ func (rc *RLSContext) WithRLSSession(ctx context.Context, callback func(context.
 	return nil
 }
 
-// GetGarage retrieves a garage by ID (with RLS)
-func (rc *RLSContext) GetGarage(ctx context.Context) (map[string]interface{}, error) {
-	var garage map[string]interface{}
+// GetGarage retrieves a garage by ID (with RLS).
+func (rc *RLSContext) GetGarage(ctx context.Context) (map[string]any, error) {
+	var garage map[string]any
 
 	err := rc.WithRLSSession(ctx, func(ctx context.Context, db *sql.DB) error {
 		rows, err := db.QueryContext(ctx,
@@ -51,7 +57,7 @@ func (rc *RLSContext) GetGarage(ctx context.Context) (map[string]interface{}, er
 		if err != nil {
 			return fmt.Errorf("query failed: %w", err)
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		if rows.Next() {
 			var id, accountID, name, timezone, currency, status string
@@ -59,33 +65,36 @@ func (rc *RLSContext) GetGarage(ctx context.Context) (map[string]interface{}, er
 				return fmt.Errorf("scan failed: %w", err)
 			}
 
-			garage = map[string]interface{}{
+			garage = map[string]any{
 				"id":         id,
-				"account_id": accountID,
+				accountIDKey: accountID,
 				"name":       name,
 				"timezone":   timezone,
 				"currency":   currency,
-				"status":     status,
+				statusKey:    status,
 			}
+		}
+
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("iterate garages: %w", err)
 		}
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
 
 	if garage == nil {
-		return nil, fmt.Errorf("garage not found")
+		return nil, errors.New("garage not found")
 	}
 
 	return garage, nil
 }
 
-// GetGarageStaff retrieves all staff for a garage (with RLS)
-func (rc *RLSContext) GetGarageStaff(ctx context.Context) ([]map[string]interface{}, error) {
-	var staff []map[string]interface{}
+// GetGarageStaff retrieves all staff for a garage (with RLS).
+func (rc *RLSContext) GetGarageStaff(ctx context.Context) ([]map[string]any, error) {
+	var staff []map[string]any
 
 	err := rc.WithRLSSession(ctx, func(ctx context.Context, db *sql.DB) error {
 		rows, err := db.QueryContext(ctx,
@@ -95,7 +104,7 @@ func (rc *RLSContext) GetGarageStaff(ctx context.Context) ([]map[string]interfac
 		if err != nil {
 			return fmt.Errorf("query failed: %w", err)
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		for rows.Next() {
 			var id, garageID, accountID, role, status, createdAt string
@@ -103,19 +112,22 @@ func (rc *RLSContext) GetGarageStaff(ctx context.Context) ([]map[string]interfac
 				return fmt.Errorf("scan failed: %w", err)
 			}
 
-			staff = append(staff, map[string]interface{}{
+			staff = append(staff, map[string]any{
 				"id":         id,
 				"garage_id":  garageID,
-				"account_id": accountID,
+				accountIDKey: accountID,
 				"role":       role,
-				"status":     status,
+				statusKey:    status,
 				"created_at": createdAt,
 			})
 		}
 
+		if err := rows.Err(); err != nil {
+			return fmt.Errorf("iterate garage staff: %w", err)
+		}
+
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +135,7 @@ func (rc *RLSContext) GetGarageStaff(ctx context.Context) ([]map[string]interfac
 	return staff, nil
 }
 
-// UpdateGarageStatus updates garage status (with RLS)
+// UpdateGarageStatus updates garage status (with RLS).
 func (rc *RLSContext) UpdateGarageStatus(ctx context.Context, newStatus string) error {
 	return rc.WithRLSSession(ctx, func(ctx context.Context, db *sql.DB) error {
 		result, err := db.ExecContext(ctx,
@@ -143,15 +155,15 @@ func (rc *RLSContext) UpdateGarageStatus(ctx context.Context, newStatus string) 
 		}
 
 		if rowsAffected == 0 {
-			return fmt.Errorf("no garage updated (RLS may have blocked access)")
+			return errors.New("no garage updated (RLS may have blocked access)")
 		}
 
 		return nil
 	})
 }
 
-// AssignStaffToGarage assigns a staff member to a garage (with RLS)
-func (rc *RLSContext) AssignStaffToGarage(ctx context.Context, accountID string, role string) error {
+// AssignStaffToGarage assigns a staff member to a garage (with RLS).
+func (rc *RLSContext) AssignStaffToGarage(ctx context.Context, accountID, role string) error {
 	return rc.WithRLSSession(ctx, func(ctx context.Context, db *sql.DB) error {
 		_, err := db.ExecContext(ctx,
 			`INSERT INTO garage_staff (id, garage_id, account_id, role, status) 
@@ -170,7 +182,7 @@ func (rc *RLSContext) AssignStaffToGarage(ctx context.Context, accountID string,
 	})
 }
 
-// RemoveStaffFromGarage removes a staff member from a garage (with RLS)
+// RemoveStaffFromGarage removes a staff member from a garage (with RLS).
 func (rc *RLSContext) RemoveStaffFromGarage(ctx context.Context, accountID string) error {
 	return rc.WithRLSSession(ctx, func(ctx context.Context, db *sql.DB) error {
 		result, err := db.ExecContext(ctx,
@@ -190,7 +202,7 @@ func (rc *RLSContext) RemoveStaffFromGarage(ctx context.Context, accountID strin
 		}
 
 		if rowsAffected == 0 {
-			return fmt.Errorf("staff member not found in garage (RLS may have blocked access)")
+			return errors.New("staff member not found in garage (RLS may have blocked access)")
 		}
 
 		return nil
@@ -202,17 +214,17 @@ func (rc *RLSContext) RemoveStaffFromGarage(ctx context.Context, accountID strin
 func GarageHandler(w http.ResponseWriter, r *http.Request) {
 	// Get garage ID from URL parameter or JWT token
 	garageID := r.URL.Query().Get("garage_id")
-	
+
 	// Create RLS context
 	rlsCtx := NewRLSContext(db, garageID)
-	
+
 	// Use RLS context for all database operations
 	garage, err := rlsCtx.GetGarage(r.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(garage)
 }

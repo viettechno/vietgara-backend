@@ -1,0 +1,20 @@
+all: false
+dir: "{{.InterfaceDir}}/mocks"
+filename: "{{.SrcPackageName}}.go"
+force-file-write: true
+formatter: goimports
+log-level: info
+structname: "{{.Mock}}{{.InterfaceName}}"
+pkgname: "mocks"
+recursive: false
+template: testify
+packages:
+  github.com/viettechno/vietgara-backend/internal/platform/db:
+    config:
+      all: true
+  github.com/jackc/pgx/v5:
+    interfaces:
+      Tx:
+        config:
+          filename: "pgx_tx.go"
+          dir: "./internal/platform/db/mocks"

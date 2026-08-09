@@ -1,2 +1,7 @@
 .env
 out/*
+.tmp/*
+
+# Ignore copilot skills
+.codex/*
+.opencode/*

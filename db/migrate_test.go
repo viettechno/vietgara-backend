@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"testing"
 	"time"
-	"vietgara/db"
 
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"github.com/viettechno/vietgara-backend/db"
 )
 
 const (

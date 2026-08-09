@@ -5,6 +5,7 @@ include make/test.mk
 include make/lint.mk
 include make/docker.mk
 include make/build.mk
+include make/mock.mk
 
 # Styles
 BOLD 	:= \033[1m

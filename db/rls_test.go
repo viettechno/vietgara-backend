@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	dbpkg "vietgara/db"
+	dbpkg "github.com/viettechno/vietgara-backend/db"
 )
 
 const rlsTestDriverName = "rls_test_driver"

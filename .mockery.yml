@@ -12,17 +12,18 @@ packages:
   github.com/viettechno/vietgara-backend/internal/platform/db:
     config:
       all: true
+      dir: "./internal/mocks"
   github.com/jackc/pgx/v5:
     interfaces:
       Tx:
         config:
           filename: "pgx_tx.go"
-          dir: "./internal/platform/db/mocks"
+          dir: "./internal/mocks"
       Row:
         config:
           filename: "pgx_row.go"
-          dir: "./internal/platform/db/mocks"
+          dir: "./internal/mocks"
       Rows:
         config:
           filename: "pgx_rows.go"
-          dir: "./internal/platform/db/mocks"
+          dir: "./internal/mocks"

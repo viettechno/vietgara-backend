@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/viettechno/vietgara-backend/internal/mocks"
 	dbpkg "github.com/viettechno/vietgara-backend/internal/platform/db"
-	"github.com/viettechno/vietgara-backend/internal/platform/db/mocks"
 )
 
 // ---------------------------------------------------------------------------

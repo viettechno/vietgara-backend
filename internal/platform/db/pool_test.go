@@ -8,8 +8,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/viettechno/vietgara-backend/internal/mocks"
 	"github.com/viettechno/vietgara-backend/internal/platform/db"
-	"github.com/viettechno/vietgara-backend/internal/platform/db/mocks"
 )
 
 const (

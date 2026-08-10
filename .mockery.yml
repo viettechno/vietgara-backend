@@ -13,6 +13,12 @@ packages:
     config:
       all: true
       dir: "./internal/mocks"
+      filename: "platform_db.go"
+  github.com/viettechno/vietgara-backend/internal/tenant/repository:
+    config:
+      all: true
+      dir: "./internal/mocks"
+      filename: "tenant_repository.go"
   github.com/jackc/pgx/v5:
     interfaces:
       Tx:

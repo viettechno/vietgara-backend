@@ -9,16 +9,6 @@ pkgname: "mocks"
 recursive: false
 template: testify
 packages:
-  github.com/viettechno/vietgara-backend/internal/platform/db:
-    config:
-      all: true
-      dir: "./internal/mocks"
-      filename: "platform_db.go"
-  github.com/viettechno/vietgara-backend/internal/tenant/repository:
-    config:
-      all: true
-      dir: "./internal/mocks"
-      filename: "tenant_repository.go"
   github.com/jackc/pgx/v5:
     interfaces:
       Tx:
@@ -33,3 +23,18 @@ packages:
         config:
           filename: "pgx_rows.go"
           dir: "./internal/mocks"
+  github.com/viettechno/vietgara-backend/internal/platform/db:
+    config:
+      all: true
+      dir: "./internal/mocks"
+      filename: "platform_db.go"
+  github.com/viettechno/vietgara-backend/internal/tenant/repository:
+    config:
+      all: true
+      dir: "./internal/mocks"
+      filename: "tenant_repository.go"
+  github.com/viettechno/vietgara-backend/internal/tenant/usecase:
+    config:
+      all: true
+      dir: "./internal/mocks"
+      filename: "tenant_usecase.go"

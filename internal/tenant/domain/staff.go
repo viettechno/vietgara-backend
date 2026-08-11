@@ -25,8 +25,9 @@ func (r Role) IsValid() bool {
 type StaffStatus string
 
 const (
-	StaffStatusActive  StaffStatus = "active"
-	StaffStatusRemoved StaffStatus = "removed"
+	StaffStatusActive    StaffStatus = "active"
+	StaffStatusInactive  StaffStatus = "inactive"
+	StaffStatusSuspended StaffStatus = "suspended"
 )
 
 // GarageStaff assigns an Account a Role within exactly one Garage.

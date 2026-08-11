@@ -10,8 +10,9 @@ import (
 type GarageStatus string
 
 const (
-	GarageStatusActive   GarageStatus = "active"
-	GarageStatusInactive GarageStatus = "inactive"
+	GarageStatusActive    GarageStatus = "active"
+	GarageStatusInactive  GarageStatus = "inactive"
+	GarageStatusSuspended StaffStatus  = "suspended"
 )
 
 // Garage is one tenant: an independent operating/data-isolation unit.

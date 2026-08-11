@@ -14,6 +14,7 @@ export COVERAGE_FILE	?= $(BUILD_DIR)/coverage.out
 export COVERAGE_HTML	?= $(BUILD_DIR)/coverage.html
 export COVERAGE_JSON	?= $(BUILD_DIR)/coverage.json
 export COVERAGE_OUT		?= $(BUILD_DIR)/toolcover.out
+export TEST_PKGS		?= $(shell go list ./... | grep -v '/internal/mocks$$' || true)
 
 define CHECK_COVERAGE
 	{ \
@@ -36,13 +37,13 @@ endef
 test-unit: ## Run unit tests with no cache
 	@mkdir -p $(BUILD_DIR)
 	@printf "$(CYAN)▶ Running unit tests (no cache)...$(RESET)\n"
-	@go test -count=1 -v -covermode=atomic -coverprofile=$(COVERAGE_FILE) ./...
+	@go test -count=1 -v -covermode=atomic -coverprofile=$(COVERAGE_FILE) $(TEST_PKGS)
 	@go tool cover -func=$(COVERAGE_FILE) | $(CHECK_COVERAGE)
 
 test-short: ## Run short unit tests
 	@mkdir -p $(BUILD_DIR)
 	@printf "$(CYAN)▶ Running short tests...$(RESET)\n"
-	@go test -short -covermode=atomic -coverprofile=$(COVERAGE_FILE) ./...
+	@go test -short -covermode=atomic -coverprofile=$(COVERAGE_FILE) $(TEST_PKGS)
 
 test-race: ## Run tests with race detector
 	@printf "$(CYAN)▶ Running race detector...$(RESET)\n"
@@ -61,7 +62,7 @@ test-unit-html: test-unit ## Run unit test and generate HTML coverage report
 test-unit-json: ## Run unit test and generate JSON coverage report
 	@mkdir -p $(BUILD_DIR)
 	@printf "$(CYAN)▶ Running unit tests (no cache)...$(RESET)\n"
-	@go test -count=1 -v -covermode=atomic -coverprofile=$(COVERAGE_FILE) -json ./... | tee $(COVERAGE_JSON) | gotestfmt -hide successful-tests
+	@go test -count=1 -v -covermode=atomic -coverprofile=$(COVERAGE_FILE) -json $(TEST_PKGS) | tee $(COVERAGE_JSON) | gotestfmt -hide successful-tests
 	@go tool cover -func=$(COVERAGE_FILE) | tee $(COVERAGE_OUT) | $(CHECK_COVERAGE)
 
 	@printf "$(CYAN)▶ Generating JSON coverage...$(RESET)\n"

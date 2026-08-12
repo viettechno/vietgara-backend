@@ -1,5 +1,6 @@
 .PHONY: \
 	test-unit \
+	test-unit-no-check \
 	test-unit-html \
 	test-unit-func \
 	test-short \
@@ -40,6 +41,11 @@ test-unit: ## Run unit tests with no cache
 	@go test -count=1 -v -covermode=atomic -coverprofile=$(COVERAGE_FILE) $(TEST_PKGS)
 	@go tool cover -func=$(COVERAGE_FILE) | $(CHECK_COVERAGE)
 
+test-unit-no-check: ## Run unit tests (no cache) without enforcing coverage threshold
+	@mkdir -p $(BUILD_DIR)
+	@printf "$(CYAN)▶ Running unit tests (no cache, no coverage check)...$(RESET)\n"
+	@go test -count=1 -v -covermode=atomic -coverprofile=$(COVERAGE_FILE) $(TEST_PKGS)
+
 test-short: ## Run short unit tests
 	@mkdir -p $(BUILD_DIR)
 	@printf "$(CYAN)▶ Running short tests...$(RESET)\n"
@@ -53,7 +59,7 @@ test-bench: ## Run benchmarks
 	@printf "$(CYAN)▶ Running benchmarks...$(RESET)\n"
 	@go test -bench=. -benchmem ./...
 
-test-unit-html: test-unit ## Run unit test and generate HTML coverage report
+test-unit-html: test-unit-no-check ## Run unit test and generate HTML coverage report
 	@printf "$(CYAN)▶ Generating HTML coverage...$(RESET)\n"
 	@go tool cover \
 		-html=$(COVERAGE_FILE) \

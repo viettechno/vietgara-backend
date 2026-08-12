@@ -87,6 +87,7 @@ func (uc *GarageUseCase) List(ctx context.Context, accountID string) ([]*domain.
 	if err != nil {
 		return nil, apperror.Wrap(apperror.CodeInternal, "list garages", err)
 	}
+
 	return garages, nil
 }
 
@@ -95,20 +96,26 @@ func (uc *GarageUseCase) Update(ctx context.Context, req UpdateGarageRequest) (*
 	if err != nil {
 		return nil, apperror.Wrap(apperror.CodeNotFound, "garage not found", err)
 	}
+
 	if req.Name != nil {
 		g.Name = *req.Name
 	}
+
 	if req.TaxCode != nil {
 		g.TaxCode = req.TaxCode
 	}
+
 	if req.Address != nil {
 		g.Address = req.Address
 	}
+
 	if req.LogoURL != nil {
 		g.LogoURL = req.LogoURL
 	}
+
 	if err := uc.garageRepo.Update(ctx, g); err != nil {
 		return nil, apperror.Wrap(apperror.CodeInternal, "update garage", err)
 	}
+
 	return g, nil
 }

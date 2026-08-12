@@ -34,10 +34,12 @@ func NewPgxPool(ctx context.Context, dsn string) (ConnPool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrParsePgxConfig, err)
 	}
+
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrCreatePgxPool, err)
 	}
+
 	return pool, nil
 }
 
@@ -66,5 +68,6 @@ func QuerierFromContext(ctx context.Context, pool *Pool) Querier {
 	if tx, ok := ctx.Value(TxKey{}).(pgx.Tx); ok {
 		return tx
 	}
+
 	return pool.pool
 }

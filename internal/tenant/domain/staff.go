@@ -19,6 +19,7 @@ func (r Role) IsValid() bool {
 	case RoleOwner, RoleAccountant, RoleTechnician, RoleServiceAdvisor, RoleInventoryStaff:
 		return true
 	}
+
 	return false
 }
 

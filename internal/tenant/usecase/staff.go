@@ -49,6 +49,7 @@ func (uc *StaffUseCase) Add(ctx context.Context, req AddStaffRequest) (*domain.G
 	if err := uc.staff.Create(ctx, s); err != nil {
 		return nil, apperror.Wrap(apperror.CodeInternal, "add staff", err)
 	}
+
 	return s, nil
 }
 
@@ -57,5 +58,6 @@ func (uc *StaffUseCase) List(ctx context.Context, garageID string) ([]*domain.Ga
 	if err != nil {
 		return nil, apperror.Wrap(apperror.CodeInternal, "list staff", err)
 	}
+
 	return list, nil
 }

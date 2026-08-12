@@ -54,5 +54,6 @@ func (m *TxManager) WithTransaction(ctx context.Context, garageID *string, fn fu
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("%w: %w", ErrCommitTransaction, err)
 	}
+
 	return nil
 }

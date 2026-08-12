@@ -27,16 +27,22 @@ func NewPostgresGarageRepository(pool *platformdb.Pool) *PostgresGarageRepositor
 const garageColumns = `id, account_id, name, tax_code, address, logo_url, timezone, currency, status, created_at, updated_at`
 
 func scanGarage(row pgx.Row) (*domain.Garage, error) {
-	var g domain.Garage
-	var status string
+	var (
+		g      domain.Garage
+		status string
+	)
+
 	err := row.Scan(&g.ID, &g.AccountID, &g.Name, &g.TaxCode, &g.Address, &g.LogoURL, &g.Timezone, &g.Currency, &status, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrGarageNotFound
 		}
+
 		return nil, err
 	}
+
 	g.Status = domain.GarageStatus(status)
+
 	return &g, nil
 }
 
@@ -51,6 +57,7 @@ func scanGarage(row pgx.Row) (*domain.Garage, error) {
 func (r *PostgresGarageRepository) FindByID(ctx context.Context, id string) (*domain.Garage, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 	row := q.QueryRow(ctx, `SELECT `+garageColumns+` FROM garages WHERE id = $1`, id)
+
 	return scanGarage(row)
 }
 
@@ -62,6 +69,7 @@ func (r *PostgresGarageRepository) ListByAccountID(ctx context.Context, accountI
 	// this exact query, or a SECURITY DEFINER function -- flagged here so
 	// it isn't copied as a pattern for any other repository method.
 	q := platformdb.QuerierFromContext(ctx, r.pool)
+
 	rows, err := q.Query(ctx, `SELECT `+garageColumns+` FROM garages WHERE account_id = $1 ORDER BY created_at ASC`, accountID)
 	if err != nil {
 		return nil, err
@@ -69,13 +77,16 @@ func (r *PostgresGarageRepository) ListByAccountID(ctx context.Context, accountI
 	defer rows.Close()
 
 	var result []*domain.Garage
+
 	for rows.Next() {
 		g, err := scanGarage(rows)
 		if err != nil {
 			return nil, err
 		}
+
 		result = append(result, g)
 	}
+
 	return result, rows.Err()
 }
 
@@ -91,6 +102,7 @@ func (r *PostgresGarageRepository) Create(ctx context.Context, g *domain.Garage)
 		RETURNING id, created_at, updated_at`,
 		g.ID, g.AccountID, g.Name, g.TaxCode, g.Address, g.LogoURL, g.Timezone, g.Currency, string(g.Status),
 	)
+
 	return row.Scan(&g.ID, &g.CreatedAt, &g.UpdatedAt)
 }
 
@@ -101,5 +113,6 @@ func (r *PostgresGarageRepository) Update(ctx context.Context, g *domain.Garage)
 		WHERE id = $8`,
 		g.Name, g.TaxCode, g.Address, g.LogoURL, g.Timezone, g.Currency, string(g.Status), g.ID,
 	)
+
 	return err
 }

@@ -42,11 +42,13 @@ func (r *PostgresGarageStaffRepository) Create(ctx context.Context, s *domain.Ga
 		RETURNING id, created_at, updated_at`,
 		s.ID, s.GarageID, s.AccountID, string(s.Role), string(s.Status),
 	)
+
 	return row.Scan(&s.ID, &s.CreatedAt, &s.UpdatedAt)
 }
 
 func (r *PostgresGarageStaffRepository) ListByGarageID(ctx context.Context, garageID string) ([]*domain.GarageStaff, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
+
 	rows, err := q.Query(ctx, `SELECT id, garage_id, account_id, role, status, created_at, updated_at
 		FROM garage_staff WHERE garage_id = $1 AND status = 'active' ORDER BY created_at ASC`, garageID)
 	if err != nil {
@@ -55,15 +57,20 @@ func (r *PostgresGarageStaffRepository) ListByGarageID(ctx context.Context, gara
 	defer rows.Close()
 
 	var result []*domain.GarageStaff
+
 	for rows.Next() {
-		var s domain.GarageStaff
-		var role, status string
+		var (
+			s            domain.GarageStaff
+			role, status string
+		)
 		if err := rows.Scan(&s.ID, &s.GarageID, &s.AccountID, &role, &status, &s.CreatedAt, &s.UpdatedAt); err != nil {
 			return nil, err
 		}
+
 		s.Role, s.Status = domain.Role(role), domain.StaffStatus(status)
 		result = append(result, &s)
 	}
+
 	return result, rows.Err()
 }
 
@@ -72,13 +79,18 @@ func (r *PostgresGarageStaffRepository) FindByGarageAndAccount(ctx context.Conte
 	row := q.QueryRow(ctx, `SELECT id, garage_id, account_id, role, status, created_at, updated_at
 		FROM garage_staff WHERE garage_id = $1 AND account_id = $2`, garageID, accountID)
 
-	var s domain.GarageStaff
-	var role, status string
+	var (
+		s            domain.GarageStaff
+		role, status string
+	)
+
 	err := row.Scan(&s.ID, &s.GarageID, &s.AccountID, &role, &status, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
+
 	s.Role, s.Status = domain.Role(role), domain.StaffStatus(status)
+
 	return &s, nil
 }
 
@@ -88,6 +100,7 @@ func (r *PostgresGarageStaffRepository) FindByGarageAndAccount(ctx context.Conte
 // time, before any single garage_id is known yet.
 func (r *PostgresGarageStaffRepository) ListRolesForAccount(ctx context.Context, accountID string) ([]RoleAssignment, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
+
 	rows, err := q.Query(ctx, `SELECT garage_id, role FROM garage_staff WHERE account_id = $1 AND status = 'active'`, accountID)
 	if err != nil {
 		return nil, err
@@ -95,12 +108,15 @@ func (r *PostgresGarageStaffRepository) ListRolesForAccount(ctx context.Context,
 	defer rows.Close()
 
 	var result []RoleAssignment
+
 	for rows.Next() {
 		var ra RoleAssignment
 		if err := rows.Scan(&ra.GarageID, &ra.Role); err != nil {
 			return nil, err
 		}
+
 		result = append(result, ra)
 	}
+
 	return result, rows.Err()
 }

@@ -163,14 +163,17 @@ func TestPostgresGarageRepository_ListByAccountID(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+
 			if len(tt.wantIDs) == 0 {
 				assert.Empty(t, list)
 				return
 			}
 
 			require.Len(t, list, len(tt.wantIDs))
+
 			for i := range tt.wantIDs {
 				assert.Equal(t, tt.wantIDs[i], list[i].ID)
+
 				if i < len(tt.wantStatus) {
 					assert.Equal(t, tt.wantStatus[i], list[i].Status)
 				}

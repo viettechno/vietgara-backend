@@ -38,7 +38,7 @@ func TestAppError_Unwrap(t *testing.T) {
 	base := errors.New("db failure")
 	err := &apperror.AppError{Code: apperror.CodeInternal, Message: "create garage", Err: base}
 
-	if got := err.Unwrap(); got != base {
+	if got := err.Unwrap(); !errors.Is(got, base) {
 		t.Fatalf("Unwrap() = %v, want %v", got, base)
 	}
 }
@@ -48,12 +48,15 @@ func TestNew(t *testing.T) {
 	if err == nil {
 		t.Fatal("New() returned nil")
 	}
+
 	if err.Code != apperror.CodeInvalidArgument {
 		t.Fatalf("Code = %q, want %q", err.Code, apperror.CodeInvalidArgument)
 	}
+
 	if err.Message != "name is required" {
 		t.Fatalf("Message = %q, want %q", err.Message, "name is required")
 	}
+
 	if err.Err != nil {
 		t.Fatalf("Err = %v, want nil", err.Err)
 	}
@@ -61,20 +64,25 @@ func TestNew(t *testing.T) {
 
 func TestWrap(t *testing.T) {
 	base := errors.New("resource missing")
+
 	err := apperror.Wrap(apperror.CodeNotFound, "garage not found", base)
 	if err == nil {
 		t.Fatal("Wrap() returned nil")
 	}
+
 	if err.Code != apperror.CodeNotFound {
 		t.Fatalf("Code = %q, want %q", err.Code, apperror.CodeNotFound)
 	}
+
 	if err.Message != "garage not found" {
 		t.Fatalf("Message = %q, want %q", err.Message, "garage not found")
 	}
+
 	if !errors.Is(err, base) {
 		t.Fatalf("Wrap() did not preserve wrapped error: %v", base)
 	}
-	if err.Err != base {
+
+	if !errors.Is(err.Err, base) {
 		t.Fatalf("Err = %v, want %v", err.Err, base)
 	}
 }
@@ -112,9 +120,11 @@ func TestAs(t *testing.T) {
 			if ok != tt.wantOK {
 				t.Fatalf("As() ok = %v, want %v", ok, tt.wantOK)
 			}
+
 			if !ok {
 				return
 			}
+
 			if got.Message != tt.wantMsg {
 				t.Fatalf("As().Message = %q, want %q", got.Message, tt.wantMsg)
 			}

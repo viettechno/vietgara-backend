@@ -71,6 +71,27 @@ func TestGarageStatusValues(t *testing.T) {
 	}
 }
 
+func TestGarageStatusIsValid(t *testing.T) {
+	tests := []struct {
+		name   string
+		status domain.GarageStatus
+		want   bool
+	}{
+		{name: "active", status: domain.GarageStatusActive, want: true},
+		{name: "inactive", status: domain.GarageStatusInactive, want: true},
+		{name: "suspended", status: domain.GarageStatusSuspended, want: true},
+		{name: "empty", status: domain.GarageStatus(""), want: false},
+		{name: "unrecognized", status: domain.GarageStatus("archived"), want: false},
+		{name: "wrong case", status: domain.GarageStatus("ACTIVE"), want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.status.IsValid())
+		})
+	}
+}
+
 func TestStaffStatusValues(t *testing.T) {
 	tests := []struct {
 		name string
@@ -85,6 +106,27 @@ func TestStaffStatusValues(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.want, string(tt.got))
+		})
+	}
+}
+
+func TestStaffStatusIsValid(t *testing.T) {
+	tests := []struct {
+		name   string
+		status domain.StaffStatus
+		want   bool
+	}{
+		{name: "active", status: domain.StaffStatusActive, want: true},
+		{name: "inactive", status: domain.StaffStatusInactive, want: true},
+		{name: "suspended", status: domain.StaffStatusSuspended, want: true},
+		{name: "empty", status: domain.StaffStatus(""), want: false},
+		{name: "unrecognized", status: domain.StaffStatus("removed"), want: false},
+		{name: "wrong case", status: domain.StaffStatus("ACTIVE"), want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.status.IsValid())
 		})
 	}
 }

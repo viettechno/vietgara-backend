@@ -35,6 +35,16 @@ const (
 	StaffStatusSuspended StaffStatus = "suspended"
 )
 
+// IsValid reports whether s is one of the defined StaffStatus values.
+func (s StaffStatus) IsValid() bool {
+	switch s {
+	case StaffStatusActive, StaffStatusInactive, StaffStatusSuspended:
+		return true
+	}
+
+	return false
+}
+
 // GarageStaff assigns an Account a Role within exactly one Garage.
 type GarageStaff struct {
 	ID        string

@@ -17,6 +17,16 @@ const (
 	GarageStatusSuspended GarageStatus = "suspended"
 )
 
+// IsValid reports whether s is one of the defined GarageStatus values.
+func (s GarageStatus) IsValid() bool {
+	switch s {
+	case GarageStatusActive, GarageStatusInactive, GarageStatusSuspended:
+		return true
+	}
+
+	return false
+}
+
 // Garage is one tenant: an independent operating/data-isolation unit.
 // Per Decision Log DEC-003, an Account may own many Garages (1 account --
 // many garages); "branch" is used synonymously with "garage" throughout

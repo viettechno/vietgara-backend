@@ -3,16 +3,18 @@ module github.com/viettechno/vietgara-backend
 go 1.26.5
 
 require (
-	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/golang-migrate/migrate/v4 v4.19.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.5.4
 	github.com/lib/pq v1.12.3
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.43.0
-	golang.org/x/crypto v0.54.0
+	github.com/viettechno/vietgara-proto v0.0.0-00010101000000-000000000000
 	google.golang.org/grpc v1.74.2
+	google.golang.org/protobuf v1.36.11
 )
+
+require golang.org/x/crypto v0.54.0 // indirect
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
@@ -69,6 +71,7 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250818200422-3122310a409c // indirect
-	google.golang.org/protobuf v1.36.7 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace github.com/viettechno/vietgara-proto => ../vietgara-proto

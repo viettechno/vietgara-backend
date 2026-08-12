@@ -16,6 +16,8 @@ type CreateGarageRequest struct {
 	Name      string
 	TaxCode   *string
 	Address   *string
+	Timezone  *string
+	Currency  *string
 }
 
 // UpdateGarageRequest is the input for GarageUseCase.Update; nil pointer
@@ -26,6 +28,8 @@ type UpdateGarageRequest struct {
 	TaxCode  *string
 	Address  *string
 	LogoURL  *string
+	Timezone *string
+	Currency *string
 }
 
 // GarageUseCase (FR-TEN-01/02/03/05) implements the garage lifecycle
@@ -56,8 +60,8 @@ func (uc *GarageUseCase) Create(ctx context.Context, req CreateGarageRequest) (*
 		Name:      req.Name,
 		TaxCode:   req.TaxCode,
 		Address:   req.Address,
-		Timezone:  "Asia/Ho_Chi_Minh",
-		Currency:  "VND",
+		Timezone:  valueOrDefault(req.Timezone, "Asia/Ho_Chi_Minh"),
+		Currency:  valueOrDefault(req.Currency, "VND"),
 		Status:    domain.GarageStatusActive,
 	}
 	if err := uc.garageRepo.Create(ctx, g); err != nil {
@@ -97,6 +101,16 @@ func (uc *GarageUseCase) List(ctx context.Context, accountID string) ([]*domain.
 	return garages, nil
 }
 
+// Get returns the garage with the given id.
+func (uc *GarageUseCase) Get(ctx context.Context, garageID string) (*domain.Garage, error) {
+	g, err := uc.garageRepo.FindByID(ctx, garageID)
+	if err != nil {
+		return nil, apperror.Wrap(apperror.CodeNotFound, "garage not found", err)
+	}
+
+	return g, nil
+}
+
 // Update applies the partial updates in req to the matching garage and
 // persists it.
 func (uc *GarageUseCase) Update(ctx context.Context, req UpdateGarageRequest) (*domain.Garage, error) {
@@ -121,9 +135,26 @@ func (uc *GarageUseCase) Update(ctx context.Context, req UpdateGarageRequest) (*
 		g.LogoURL = req.LogoURL
 	}
 
+	if req.Timezone != nil {
+		g.Timezone = *req.Timezone
+	}
+
+	if req.Currency != nil {
+		g.Currency = *req.Currency
+	}
+
 	if err := uc.garageRepo.Update(ctx, g); err != nil {
 		return nil, apperror.Wrap(apperror.CodeInternal, "update garage", err)
 	}
 
 	return g, nil
+}
+
+// valueOrDefault returns def when v is nil, otherwise *v.
+func valueOrDefault(v *string, def string) string {
+	if v != nil {
+		return *v
+	}
+
+	return def
 }

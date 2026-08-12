@@ -7,8 +7,10 @@ import (
 	"time"
 )
 
+// GarageStatus is the lifecycle state of a garage.
 type GarageStatus string
 
+// Valid GarageStatus values.
 const (
 	GarageStatusActive    GarageStatus = "active"
 	GarageStatusInactive  GarageStatus = "inactive"
@@ -34,6 +36,7 @@ type Garage struct {
 	UpdatedAt time.Time
 }
 
+// Sentinel errors for business-rule violations in the Tenant/Garage module.
 var (
 	ErrGarageNotFound     = errors.New("garage not found")
 	ErrGarageNameRequired = errors.New("garage name is required")

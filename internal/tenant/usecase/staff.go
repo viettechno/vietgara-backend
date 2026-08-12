@@ -10,25 +10,27 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-// ---------------------------------------------------------------------------
-// StaffUseCase (FR-TEN-04): combines staff membership operations that share
-// the same repository and are used together in garage management flows.
-// ---------------------------------------------------------------------------
-
+// AddStaffRequest is the input for StaffUseCase.Add.
 type AddStaffRequest struct {
 	GarageID  string
 	AccountID string
 	Role      domain.Role
 }
 
+// StaffUseCase (FR-TEN-04) implements the staff membership operations that
+// share the same repository and are used together in garage management
+// flows.
 type StaffUseCase struct {
 	staff repository.GarageStaffRepository
 }
 
+// NewStaffUseCase wires the staff use case to its repository.
 func NewStaffUseCase(staff repository.GarageStaffRepository) *StaffUseCase {
 	return &StaffUseCase{staff: staff}
 }
 
+// Add validates the role, rejects duplicate active memberships, and
+// persists the new staff record.
 func (uc *StaffUseCase) Add(ctx context.Context, req AddStaffRequest) (*domain.GarageStaff, error) {
 	if !req.Role.IsValid() {
 		return nil, apperror.Wrap(apperror.CodeInvalidArgument, "invalid role", domain.ErrInvalidRole)
@@ -53,6 +55,7 @@ func (uc *StaffUseCase) Add(ctx context.Context, req AddStaffRequest) (*domain.G
 	return s, nil
 }
 
+// List returns the active staff members of garageID.
 func (uc *StaffUseCase) List(ctx context.Context, garageID string) ([]*domain.GarageStaff, error) {
 	list, err := uc.staff.ListByGarageID(ctx, garageID)
 	if err != nil {

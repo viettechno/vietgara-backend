@@ -10,6 +10,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// Errors returned by NewPgxPool; the underlying cause is wrapped via %w.
 var (
 	ErrParsePgxConfig = errors.New("failed to parse pgx config")
 	ErrCreatePgxPool  = errors.New("failed to create pgx pool")
@@ -29,6 +30,8 @@ type Pool struct {
 	pool ConnPool
 }
 
+// NewPgxPool parses dsn and creates a pgx connection pool. The caller owns
+// the returned pool and must Close it when done.
 func NewPgxPool(ctx context.Context, dsn string) (ConnPool, error) {
 	cfg, err := pgxpool.ParseConfig(dsn)
 	if err != nil {
@@ -43,10 +46,13 @@ func NewPgxPool(ctx context.Context, dsn string) (ConnPool, error) {
 	return pool, nil
 }
 
-func NewPool(ctx context.Context, pool ConnPool) *Pool {
+// NewPool wraps an existing ConnPool (typically created by NewPgxPool) into
+// a Pool, the concrete type repositories depend on.
+func NewPool(_ context.Context, pool ConnPool) *Pool {
 	return &Pool{pool: pool}
 }
 
+// Close releases the underlying connection pool.
 func (p *Pool) Close() {
 	p.pool.Close()
 }

@@ -1,3 +1,7 @@
+// Package usecase contains the application use cases of the Tenant/Garage
+// module: they validate input, enforce business rules, and orchestrate the
+// domain and repository layers.
+// See: Coding_Standards.docx Section 2.3, LLD Section 6.
 package usecase
 
 import "context"

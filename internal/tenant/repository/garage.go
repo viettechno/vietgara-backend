@@ -1,3 +1,6 @@
+// Package repository implements the persistence layer of the Tenant/Garage
+// module on top of the shared Postgres pool.
+// See: Database Design Section 2.2, LLD Section 4.
 package repository
 
 import (
@@ -9,6 +12,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 )
 
+// GarageRepository defines the persistence contract for garages.
 type GarageRepository interface {
 	FindByID(ctx context.Context, id string) (*domain.Garage, error)
 	ListByAccountID(ctx context.Context, accountID string) ([]*domain.Garage, error)
@@ -16,10 +20,12 @@ type GarageRepository interface {
 	Update(ctx context.Context, g *domain.Garage) error
 }
 
+// PostgresGarageRepository implements GarageRepository over the shared pgx pool.
 type PostgresGarageRepository struct {
 	pool *platformdb.Pool
 }
 
+// NewPostgresGarageRepository returns a garage repository backed by pool.
 func NewPostgresGarageRepository(pool *platformdb.Pool) *PostgresGarageRepository {
 	return &PostgresGarageRepository{pool: pool}
 }
@@ -61,6 +67,8 @@ func (r *PostgresGarageRepository) FindByID(ctx context.Context, id string) (*do
 	return scanGarage(row)
 }
 
+// ListByAccountID returns every garage owned by accountID. By design it
+// bypasses the per-garage RLS policy (see the note inside the method).
 func (r *PostgresGarageRepository) ListByAccountID(ctx context.Context, accountID string) ([]*domain.Garage, error) {
 	// NOTE: this is the one read path in the codebase that must bypass the
 	// per-garage RLS policy by design, since "list every garage I own" is
@@ -90,6 +98,7 @@ func (r *PostgresGarageRepository) ListByAccountID(ctx context.Context, accountI
 	return result, rows.Err()
 }
 
+// Create inserts g and scans back the server-generated timestamps.
 func (r *PostgresGarageRepository) Create(ctx context.Context, g *domain.Garage) error {
 	// g.ID is generated call-site side (see usecase.CreateGarage), so it is
 	// inserted explicitly -- the callers rely on FindByID(g.ID) and the
@@ -106,6 +115,7 @@ func (r *PostgresGarageRepository) Create(ctx context.Context, g *domain.Garage)
 	return row.Scan(&g.ID, &g.CreatedAt, &g.UpdatedAt)
 }
 
+// Update persists the editable fields of g.
 func (r *PostgresGarageRepository) Update(ctx context.Context, g *domain.Garage) error {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 	_, err := q.Exec(ctx, `

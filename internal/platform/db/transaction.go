@@ -10,12 +10,16 @@ import (
 	"fmt"
 )
 
+// Errors returned by TxManager.WithTransaction when a Postgres operation
+// fails; the underlying cause is wrapped via %w.
 var (
 	ErrBeginTransaction  = errors.New("failed to begin transaction")
 	ErrSetTenantContext  = errors.New("failed to set tenant context")
 	ErrCommitTransaction = errors.New("failed to commit transaction")
 )
 
+// SetTenantSQL (re)sets the app.current_garage_id session variable used by
+// the Row-Level Security policies on tenant-scoped tables.
 const SetTenantSQL = "SELECT set_config('app.current_garage_id', $1, true)"
 
 // TxManager runs fn inside a single Postgres transaction. If a
@@ -29,16 +33,19 @@ type TxManager struct {
 	pool *Pool
 }
 
+// NewTxManager returns a TxManager bound to the given pool.
 func NewTxManager(pool *Pool) *TxManager {
 	return &TxManager{pool: pool}
 }
 
+// WithTransaction runs fn inside a single Postgres transaction, committing
+// when fn returns nil and rolling back otherwise.
 func (m *TxManager) WithTransaction(ctx context.Context, garageID *string, fn func(ctx context.Context) error) error {
 	tx, err := m.pool.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrBeginTransaction, err)
 	}
-	defer tx.Rollback(ctx) // no-op if already committed
+	defer func() { _ = tx.Rollback(ctx) }() // no-op if already committed
 
 	if garageID != nil {
 		if _, err := tx.Exec(ctx, SetTenantSQL, *garageID); err != nil {

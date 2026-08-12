@@ -10,11 +10,7 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-// ---------------------------------------------------------------------------
-// GarageUseCase (FR-TEN-01/02/03/05): combines the garage lifecycle actions
-// that share the same repositories and can be injected as a single dependency.
-// ---------------------------------------------------------------------------
-
+// CreateGarageRequest is the input for GarageUseCase.Create.
 type CreateGarageRequest struct {
 	AccountID string
 	Name      string
@@ -22,6 +18,8 @@ type CreateGarageRequest struct {
 	Address   *string
 }
 
+// UpdateGarageRequest is the input for GarageUseCase.Update; nil pointer
+// fields keep their current value.
 type UpdateGarageRequest struct {
 	GarageID string
 	Name     *string
@@ -30,16 +28,23 @@ type UpdateGarageRequest struct {
 	LogoURL  *string
 }
 
+// GarageUseCase (FR-TEN-01/02/03/05) implements the garage lifecycle
+// actions that share the same repositories and can be injected as a single
+// dependency.
 type GarageUseCase struct {
 	garageRepo     repository.GarageRepository
 	staffRepo      repository.GarageStaffRepository
 	eventPublisher EventPublisher
 }
 
+// NewGarageUseCase wires the garage use case to its repositories and the
+// event publisher.
 func NewGarageUseCase(garage repository.GarageRepository, staff repository.GarageStaffRepository, eventPublisher EventPublisher) *GarageUseCase {
 	return &GarageUseCase{garageRepo: garage, staffRepo: staff, eventPublisher: eventPublisher}
 }
 
+// Create validates the request, persists the garage together with an owner
+// staff record, and publishes a garage.created event.
 func (uc *GarageUseCase) Create(ctx context.Context, req CreateGarageRequest) (*domain.Garage, error) {
 	if req.Name == "" {
 		return nil, apperror.Wrap(apperror.CodeInvalidArgument, "garage name is required", domain.ErrGarageNameRequired)
@@ -82,6 +87,7 @@ func (uc *GarageUseCase) Create(ctx context.Context, req CreateGarageRequest) (*
 	return g, nil
 }
 
+// List returns every garage owned by accountID.
 func (uc *GarageUseCase) List(ctx context.Context, accountID string) ([]*domain.Garage, error) {
 	garages, err := uc.garageRepo.ListByAccountID(ctx, accountID)
 	if err != nil {
@@ -91,6 +97,8 @@ func (uc *GarageUseCase) List(ctx context.Context, accountID string) ([]*domain.
 	return garages, nil
 }
 
+// Update applies the partial updates in req to the matching garage and
+// persists it.
 func (uc *GarageUseCase) Update(ctx context.Context, req UpdateGarageRequest) (*domain.Garage, error) {
 	g, err := uc.garageRepo.FindByID(ctx, req.GarageID)
 	if err != nil {

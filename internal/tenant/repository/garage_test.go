@@ -31,6 +31,8 @@ func TestPostgresGarageRepository_FindByID(t *testing.T) {
 			id:   "garage-1",
 			kind: "ok",
 			row: func(t *testing.T) pgx.Row {
+				t.Helper()
+
 				return valuesRow(t, garageScanValues("garage-1", "acc-1", "Gara A", "active"))
 			},
 			want: &domain.Garage{
@@ -44,17 +46,25 @@ func TestPostgresGarageRepository_FindByID(t *testing.T) {
 			},
 		},
 		{
-			name:    "maps ErrNoRows to ErrGarageNotFound",
-			id:      "garage-1",
-			kind:    "not-found",
-			row:     func(t *testing.T) pgx.Row { return errRow(t, pgx.ErrNoRows) },
+			name: "maps ErrNoRows to ErrGarageNotFound",
+			id:   "garage-1",
+			kind: "not-found",
+			row: func(t *testing.T) pgx.Row {
+				t.Helper()
+
+				return errRow(t, pgx.ErrNoRows)
+			},
 			wantErr: domain.ErrGarageNotFound,
 		},
 		{
-			name:    "propagates scan errors",
-			id:      "garage-1",
-			kind:    "scan-error",
-			row:     func(t *testing.T) pgx.Row { return errRow(t, errScanBoom) },
+			name: "propagates scan errors",
+			id:   "garage-1",
+			kind: "scan-error",
+			row: func(t *testing.T) pgx.Row {
+				t.Helper()
+
+				return errRow(t, errScanBoom)
+			},
 			wantErr: errScanBoom,
 		},
 	}
@@ -211,6 +221,8 @@ func TestPostgresGarageRepository_Create(t *testing.T) {
 				"Asia/Ho_Chi_Minh", "VND", "active",
 			},
 			row: func(t *testing.T) pgx.Row {
+				t.Helper()
+
 				return valuesRow(t, []any{"garage-new", createdAt, createdAt})
 			},
 			wantID:      "garage-new",
@@ -232,6 +244,8 @@ func TestPostgresGarageRepository_Create(t *testing.T) {
 				"Asia/Ho_Chi_Minh", "VND", "active",
 			},
 			row: func(t *testing.T) pgx.Row {
+				t.Helper()
+
 				return errRow(t, boom)
 			},
 			wantErr: boom,

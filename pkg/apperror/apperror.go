@@ -16,6 +16,7 @@ import (
 // this at the handler layer).
 type Code string
 
+// Error categories shared across every VietGara backend service.
 const (
 	CodeNotFound           Code = "NOT_FOUND"
 	CodeAlreadyExists      Code = "ALREADY_EXISTS"
@@ -53,10 +54,14 @@ func (e *AppError) Error() string {
 
 func (e *AppError) Unwrap() error { return e.Err }
 
+// New builds an AppError with the given code and message and no underlying
+// cause.
 func New(code Code, message string) *AppError {
 	return &AppError{Code: code, Message: message}
 }
 
+// Wrap builds an AppError that wraps err as the underlying cause. The cause
+// is kept for logging only and is never exposed to the API response.
 func Wrap(code Code, message string, err error) *AppError {
 	return &AppError{Code: code, Message: message, Err: err}
 }

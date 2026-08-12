@@ -7,6 +7,8 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 )
 
+// GarageStaffRepository defines the persistence contract for garage staff
+// memberships.
 type GarageStaffRepository interface {
 	Create(ctx context.Context, s *domain.GarageStaff) error
 	ListByGarageID(ctx context.Context, garageID string) ([]*domain.GarageStaff, error)
@@ -18,19 +20,25 @@ type GarageStaffRepository interface {
 	ListRolesForAccount(ctx context.Context, accountID string) ([]RoleAssignment, error)
 }
 
+// RoleAssignment is a single (garage_id, role) pair from
+// ListRolesForAccount.
 type RoleAssignment struct {
 	GarageID string
 	Role     string
 }
 
+// PostgresGarageStaffRepository implements GarageStaffRepository over the
+// shared pgx pool.
 type PostgresGarageStaffRepository struct {
 	pool *platformdb.Pool
 }
 
+// NewPostgresGarageStaffRepository returns a staff repository backed by pool.
 func NewPostgresGarageStaffRepository(pool *platformdb.Pool) *PostgresGarageStaffRepository {
 	return &PostgresGarageStaffRepository{pool: pool}
 }
 
+// Create inserts s and scans back the server-generated timestamps.
 func (r *PostgresGarageStaffRepository) Create(ctx context.Context, s *domain.GarageStaff) error {
 	// s.ID is generated call-site side (see usecase.CreateGarage) so the
 	// garage-scoped RLS WITH CHECK (garage_id = current_garage_id) and later
@@ -46,6 +54,8 @@ func (r *PostgresGarageStaffRepository) Create(ctx context.Context, s *domain.Ga
 	return row.Scan(&s.ID, &s.CreatedAt, &s.UpdatedAt)
 }
 
+// ListByGarageID returns the active staff members of garageID, ordered by
+// creation time.
 func (r *PostgresGarageStaffRepository) ListByGarageID(ctx context.Context, garageID string) ([]*domain.GarageStaff, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
@@ -74,6 +84,8 @@ func (r *PostgresGarageStaffRepository) ListByGarageID(ctx context.Context, gara
 	return result, rows.Err()
 }
 
+// FindByGarageAndAccount returns the staff record matching garageID and
+// accountID, or the underlying pgx error (e.g. pgx.ErrNoRows) when absent.
 func (r *PostgresGarageStaffRepository) FindByGarageAndAccount(ctx context.Context, garageID, accountID string) (*domain.GarageStaff, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 	row := q.QueryRow(ctx, `SELECT id, garage_id, account_id, role, status, created_at, updated_at

@@ -147,7 +147,7 @@ func (s *MigrationsTestSuite) SetupSuite() {
 // TearDownSuite runs once after all tests in the suite finish.
 func (s *MigrationsTestSuite) TearDownSuite() {
 	if s.pgContainer != nil {
-		s.pgContainer.Close()
+		s.Require().NoError(s.pgContainer.Close())
 	}
 
 	s.cancel()
@@ -454,7 +454,7 @@ func (s *MigrationsTestSuite) TestRollbackAllMigrations() {
 			s.Require().NoError(err)
 
 			_, _, err = db.GetMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH)
-			s.Errorf(err, "expected error after rolling back all migrations")
+			s.Require().Error(err, "expected error after rolling back all migrations")
 
 			s.Require().NoError(db.RunMigrations(s.pgContainer.ConnStr, MIGRATIONS_PATH))
 

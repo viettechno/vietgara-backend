@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -11,15 +12,41 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/viettechno/vietgara-backend/internal/middleware"
 	"github.com/viettechno/vietgara-backend/internal/mocks"
+	"github.com/viettechno/vietgara-backend/internal/platform/auth"
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/internal/tenant/handler"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
+
+const testSigningKey = "handler-test-signing-key"
+
+// authedCtx seeds a context with verified JWT claims for accountID, exactly
+// as middleware.AuthInterceptor does in production.
+func authedCtx(t *testing.T, accountID string) context.Context {
+	t.Helper()
+
+	issuer := auth.NewTokenIssuer([]byte(testSigningKey), 15*time.Minute, 24*time.Hour)
+	token, _, err := issuer.IssueAccessToken(accountID, nil)
+	require.NoError(t, err)
+
+	ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs("authorization", token))
+	gotCtx := make(chan context.Context, 1)
+	interceptor := middleware.AuthInterceptor(issuer)
+	_, err = interceptor(ctx, nil, nil, func(ctx context.Context, req any) (any, error) {
+		gotCtx <- ctx
+		return nil, nil
+	})
+	require.NoError(t, err)
+
+	return <-gotCtx
+}
 
 // newTestServer wires the handler to real usecases backed by mockery
 // mocks of the repository layer.
@@ -67,13 +94,120 @@ func testStaff() *domain.GarageStaff {
 }
 
 func TestServer_CreateGarage(t *testing.T) {
-	t.Run("missing account context is rejected", func(t *testing.T) {
-		s, _, _, _ := newTestServer(t)
+	authed := authedCtx(t, "acc-1")
 
-		_, err := s.CreateGarage(t.Context(), &tenantv1.CreateGarageRequest{Name: "Gara A"})
-		require.Error(t, err)
-		assert.Equal(t, codes.Unauthenticated, status.Code(err))
-	})
+	tests := []struct {
+		name     string
+		ctx      context.Context
+		req      *tenantv1.CreateGarageRequest
+		setup    func(*mocks.MockGarageRepository, *mocks.MockGarageStaffRepository, *mocks.MockEventPublisher)
+		verify   func(*testing.T, *tenantv1.CreateGarageResponse)
+		wantCode codes.Code
+	}{
+		{
+			name:     "missing account context is rejected",
+			ctx:      t.Context(),
+			req:      &tenantv1.CreateGarageRequest{Name: "Gara A"},
+			wantCode: codes.Unauthenticated,
+		},
+		{
+			name:     "empty name is rejected",
+			ctx:      authed,
+			req:      &tenantv1.CreateGarageRequest{},
+			wantCode: codes.InvalidArgument,
+		},
+		{
+			name: "creates the garage for the caller's account and returns it",
+			ctx:  authed,
+			req: &tenantv1.CreateGarageRequest{
+				Name:     "Gara A",
+				TaxCode:  new("0123456789"),
+				Address:  new("12 Nguyen Hue"),
+				Timezone: new("Asia/Ho_Chi_Minh"),
+				Currency: new("VND"),
+			},
+			setup: func(g *mocks.MockGarageRepository, s *mocks.MockGarageStaffRepository, e *mocks.MockEventPublisher) {
+				g.EXPECT().Create(mock.Anything, mock.MatchedBy(func(gar *domain.Garage) bool {
+					return gar.AccountID == "acc-1" && gar.Name == "Gara A" &&
+						gar.TaxCode != nil && *gar.TaxCode == "0123456789" &&
+						gar.Address != nil && *gar.Address == "12 Nguyen Hue" &&
+						gar.Timezone == "Asia/Ho_Chi_Minh" && gar.Currency == "VND" &&
+						gar.Status == domain.GarageStatusActive
+				})).Return(nil).Once()
+				s.EXPECT().Create(mock.Anything, mock.MatchedBy(func(st *domain.GarageStaff) bool {
+					return st.AccountID == "acc-1" && st.Role == domain.RoleOwner && st.Status == domain.StaffStatusActive
+				})).Return(nil).Once()
+				e.EXPECT().Publish(mock.Anything, "garage.created", mock.Anything, mock.MatchedBy(func(payload any) bool {
+					m, ok := payload.(map[string]string)
+					return ok && m["garage_id"] != "" && m["account_id"] == "acc-1"
+				})).Return(nil).Once()
+			},
+			verify: func(t *testing.T, resp *tenantv1.CreateGarageResponse) {
+				t.Helper()
+
+				gar := resp.GetGarage()
+				require.NotNil(t, gar)
+				assert.NotEmpty(t, gar.GetId())
+				assert.Equal(t, "acc-1", gar.GetAccountId())
+				assert.Equal(t, "Gara A", gar.GetName())
+				assert.Equal(t, "0123456789", gar.GetTaxCode())
+				assert.Equal(t, "12 Nguyen Hue", gar.GetAddress())
+				assert.Equal(t, "Asia/Ho_Chi_Minh", gar.GetTimezone())
+				assert.Equal(t, "VND", gar.GetCurrency())
+				assert.Equal(t, tenantv1.GarageStatus_GARAGE_STATUS_ACTIVE, gar.GetStatus())
+			},
+		},
+		{
+			name: "garage persistence failure maps to internal",
+			ctx:  authed,
+			req:  &tenantv1.CreateGarageRequest{Name: "Gara A"},
+			setup: func(g *mocks.MockGarageRepository, s *mocks.MockGarageStaffRepository, _ *mocks.MockEventPublisher) {
+				g.EXPECT().Create(mock.Anything, mock.Anything).Return(errors.New("connection lost")).Once()
+			},
+			wantCode: codes.Internal,
+		},
+		{
+			name: "owner staff persistence failure maps to internal",
+			ctx:  authed,
+			req:  &tenantv1.CreateGarageRequest{Name: "Gara A"},
+			setup: func(g *mocks.MockGarageRepository, s *mocks.MockGarageStaffRepository, _ *mocks.MockEventPublisher) {
+				g.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+				s.EXPECT().Create(mock.Anything, mock.Anything).Return(errors.New("connection lost")).Once()
+			},
+			wantCode: codes.Internal,
+		},
+		{
+			name: "event publish failure maps to internal",
+			ctx:  authed,
+			req:  &tenantv1.CreateGarageRequest{Name: "Gara A"},
+			setup: func(g *mocks.MockGarageRepository, s *mocks.MockGarageStaffRepository, e *mocks.MockEventPublisher) {
+				g.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+				s.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+				e.EXPECT().Publish(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("outbox full")).Once()
+			},
+			wantCode: codes.Internal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, garages, staff, events := newTestServer(t)
+			if tt.setup != nil {
+				tt.setup(garages, staff, events)
+			}
+
+			resp, err := s.CreateGarage(tt.ctx, tt.req)
+			if tt.wantCode != codes.OK {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantCode, status.Code(err))
+
+				return
+			}
+
+			require.NoError(t, err)
+			tt.verify(t, resp)
+		})
+	}
 }
 
 func TestServer_GetGarage(t *testing.T) {
@@ -246,13 +380,82 @@ func TestServer_UpdateGarage(t *testing.T) {
 }
 
 func TestServer_ListGarages(t *testing.T) {
-	t.Run("missing account context is rejected", func(t *testing.T) {
-		s, _, _, _ := newTestServer(t)
+	authed := authedCtx(t, "acc-1")
 
-		_, err := s.ListGarages(t.Context(), &tenantv1.ListGaragesRequest{})
-		require.Error(t, err)
-		assert.Equal(t, codes.Unauthenticated, status.Code(err))
-	})
+	tests := []struct {
+		name     string
+		ctx      context.Context
+		setup    func(*mocks.MockGarageRepository)
+		verify   func(*testing.T, *tenantv1.ListGaragesResponse)
+		wantCode codes.Code
+	}{
+		{
+			name:     "missing account context is rejected",
+			ctx:      t.Context(),
+			wantCode: codes.Unauthenticated,
+		},
+		{
+			name: "returns every garage of the account",
+			ctx:  authed,
+			setup: func(g *mocks.MockGarageRepository) {
+				g.EXPECT().ListByAccountID(mock.Anything, "acc-1").Return([]*domain.Garage{
+					{ID: "g-1", AccountID: "acc-1", Name: "Gara A", Status: domain.GarageStatusActive},
+					{ID: "g-2", AccountID: "acc-1", Name: "Gara B", Status: domain.GarageStatusInactive},
+				}, nil).Once()
+			},
+			verify: func(t *testing.T, resp *tenantv1.ListGaragesResponse) {
+				t.Helper()
+
+				require.Len(t, resp.GetGarages(), 2)
+				assert.Equal(t, "g-1", resp.GetGarages()[0].GetId())
+				assert.Equal(t, "Gara A", resp.GetGarages()[0].GetName())
+				assert.Equal(t, tenantv1.GarageStatus_GARAGE_STATUS_ACTIVE, resp.GetGarages()[0].GetStatus())
+				assert.Equal(t, "g-2", resp.GetGarages()[1].GetId())
+				assert.Equal(t, "Gara B", resp.GetGarages()[1].GetName())
+				assert.Equal(t, tenantv1.GarageStatus_GARAGE_STATUS_INACTIVE, resp.GetGarages()[1].GetStatus())
+			},
+		},
+		{
+			name: "account without garages gets an empty list",
+			ctx:  authed,
+			setup: func(g *mocks.MockGarageRepository) {
+				g.EXPECT().ListByAccountID(mock.Anything, "acc-1").Return([]*domain.Garage{}, nil).Once()
+			},
+			verify: func(t *testing.T, resp *tenantv1.ListGaragesResponse) {
+				t.Helper()
+
+				assert.Empty(t, resp.GetGarages())
+			},
+		},
+		{
+			name: "repository failure maps to internal",
+			ctx:  authed,
+			setup: func(g *mocks.MockGarageRepository) {
+				g.EXPECT().ListByAccountID(mock.Anything, "acc-1").Return(nil, errors.New("connection lost")).Once()
+			},
+			wantCode: codes.Internal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, garages, _, _ := newTestServer(t)
+			if tt.setup != nil {
+				tt.setup(garages)
+			}
+
+			resp, err := s.ListGarages(tt.ctx, &tenantv1.ListGaragesRequest{})
+			if tt.wantCode != codes.OK {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantCode, status.Code(err))
+
+				return
+			}
+
+			require.NoError(t, err)
+			tt.verify(t, resp)
+		})
+	}
 }
 
 func TestServer_AddStaff(t *testing.T) {

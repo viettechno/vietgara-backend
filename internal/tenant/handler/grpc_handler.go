@@ -8,6 +8,7 @@ import (
 
 	tenantv1 "github.com/viettechno/vietgara-proto/gen/go/vietgara/tenant/v1"
 
+	"github.com/viettechno/vietgara-backend/internal/middleware"
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
@@ -43,18 +44,15 @@ func NewServer(
 }
 
 // accountIDFromContext reads the account_id (JWT "sub" claim) attached by
-// middleware.AuthInterceptor -- see internal/middleware/interceptor.go.
+// middleware.AuthInterceptor.
 func accountIDFromContext(ctx context.Context) (string, error) {
-	// The production middleware stores the subject under accountIDCtxKey;
-	// read it inline here to keep this package's import graph minimal.
-	if v, ok := ctx.Value(accountIDCtxKey{}).(string); ok {
-		return v, nil
+	claims, ok := middleware.ClaimsFromContext(ctx)
+	if !ok {
+		return "", status.Error(codes.Unauthenticated, "missing account context")
 	}
 
-	return "", status.Error(codes.Unauthenticated, "missing account context")
+	return claims.Subject, nil
 }
-
-type accountIDCtxKey struct{}
 
 // CreateGarage validates the request, creates the garage for the caller's
 // account, and returns its API representation.

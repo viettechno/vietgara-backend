@@ -2,6 +2,7 @@ package usecase_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,50 +16,83 @@ import (
 )
 
 func TestStaffUseCase_Add(t *testing.T) {
-	t.Run("assigns a valid role successfully", func(t *testing.T) {
-		staff := mocks.NewMockGarageStaffRepository(t)
-		uc := usecase.NewStaffUseCase(staff)
+	tests := []struct {
+		name         string
+		req          usecase.AddStaffRequest
+		existing     *domain.GarageStaff
+		findErr      error
+		createErr    error
+		expectCreate bool
+		wantCode     apperror.Code
+		wantRole     domain.Role
+	}{
+		{
+			name:         "assigns a valid role",
+			req:          usecase.AddStaffRequest{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician},
+			expectCreate: true,
+			wantRole:     domain.RoleTechnician,
+		},
+		{
+			name:     "rejects an invalid role",
+			req:      usecase.AddStaffRequest{GarageID: "garage-1", AccountID: "acc-2", Role: domain.Role("not-a-real-role")},
+			wantCode: apperror.CodeInvalidArgument,
+		},
+		{
+			name:     "rejects an already active membership",
+			req:      usecase.AddStaffRequest{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician},
+			existing: &domain.GarageStaff{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive},
+			wantCode: apperror.CodeAlreadyExists,
+		},
+		{
+			name:         "allows re-adding an inactive membership",
+			req:          usecase.AddStaffRequest{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician},
+			existing:     &domain.GarageStaff{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusInactive},
+			expectCreate: true,
+			wantRole:     domain.RoleTechnician,
+		},
+		{
+			name:         "proceeds when the membership lookup fails",
+			req:          usecase.AddStaffRequest{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician},
+			findErr:      errors.New("boom"),
+			expectCreate: true,
+			wantRole:     domain.RoleTechnician,
+		},
+		{
+			name:         "fails when the staff record cannot be created",
+			req:          usecase.AddStaffRequest{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician},
+			createErr:    errors.New("boom"),
+			expectCreate: true,
+			wantCode:     apperror.CodeInternal,
+		},
+	}
 
-		staff.EXPECT().FindByGarageAndAccount(mock.Anything, "garage-1", "acc-2").Return(nil, nil).Once()
-		staff.EXPECT().Create(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
-			return s.GarageID == "garage-1" && s.AccountID == "acc-2" && s.Role == domain.RoleTechnician && s.Status == domain.StaffStatusActive
-		})).Return(nil).Once()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			staff := mocks.NewMockGarageStaffRepository(t)
+			uc := usecase.NewStaffUseCase(staff)
 
-		s, err := uc.Add(context.Background(), usecase.AddStaffRequest{
-			GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician,
+			if tt.wantCode != apperror.CodeInvalidArgument {
+				staff.EXPECT().FindByGarageAndAccount(mock.Anything, tt.req.GarageID, tt.req.AccountID).Return(tt.existing, tt.findErr).Once()
+			}
+
+			if tt.expectCreate {
+				staff.EXPECT().Create(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
+					return s.GarageID == tt.req.GarageID && s.AccountID == tt.req.AccountID && s.Role == tt.req.Role && s.Status == domain.StaffStatusActive
+				})).Return(tt.createErr).Once()
+			}
+
+			s, err := uc.Add(context.Background(), tt.req)
+			if tt.wantCode != "" {
+				assertAppError(t, err, tt.wantCode)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, s)
+			assert.Equal(t, tt.wantRole, s.Role)
+			assert.Equal(t, domain.StaffStatusActive, s.Status)
 		})
-		require.NoError(t, err)
-		assert.Equal(t, domain.RoleTechnician, s.Role)
-	})
-
-	t.Run("rejects an invalid role", func(t *testing.T) {
-		uc := usecase.NewStaffUseCase(mocks.NewMockGarageStaffRepository(t))
-
-		_, err := uc.Add(context.Background(), usecase.AddStaffRequest{
-			GarageID: "garage-1", AccountID: "acc-2", Role: domain.Role("not-a-real-role"),
-		})
-
-		appErr, ok := apperror.As(err)
-		require.True(t, ok, "expected an AppError, got %v", err)
-		assert.Equal(t, apperror.CodeInvalidArgument, appErr.Code)
-	})
-
-	t.Run("rejects adding the same account twice to the same garage", func(t *testing.T) {
-		staff := mocks.NewMockGarageStaffRepository(t)
-		uc := usecase.NewStaffUseCase(staff)
-
-		staff.EXPECT().FindByGarageAndAccount(mock.Anything, "garage-1", "acc-2").Return(&domain.GarageStaff{
-			GarageID:  "garage-1",
-			AccountID: "acc-2",
-			Role:      domain.RoleTechnician,
-			Status:    domain.StaffStatusActive,
-		}, nil).Once()
-
-		_, err := uc.Add(context.Background(), usecase.AddStaffRequest{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician})
-		appErr, ok := apperror.As(err)
-		require.True(t, ok, "expected an AppError, got %v", err)
-		assert.Equal(t, apperror.CodeAlreadyExists, appErr.Code)
-	})
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -68,21 +102,44 @@ func TestStaffUseCase_Add(t *testing.T) {
 // integration test against a real database per LLD Section 6).
 // ---------------------------------------------------------------------------
 
-func TestStaffUseCase_List_DoesNotLeakOtherGarageStaff(t *testing.T) {
-	staff := mocks.NewMockGarageStaffRepository(t)
-	uc := usecase.NewStaffUseCase(staff)
+func TestStaffUseCase_List(t *testing.T) {
+	tests := []struct {
+		name     string
+		garageID string
+		list     []*domain.GarageStaff
+		listErr  error
+		wantCode apperror.Code
+	}{
+		{
+			name:     "returns only this garage's staff",
+			garageID: "garage-A",
+			list: []*domain.GarageStaff{
+				{ID: "staff-1", GarageID: "garage-A", AccountID: "acc-1", Role: domain.RoleTechnician, Status: domain.StaffStatusActive},
+			},
+		},
+		{
+			name:     "fails when the staff list cannot be loaded",
+			garageID: "garage-A",
+			listErr:  errors.New("boom"),
+			wantCode: apperror.CodeInternal,
+		},
+	}
 
-	staff.EXPECT().ListByGarageID(mock.Anything, "garage-A").Return([]*domain.GarageStaff{{
-		ID:        "staff-1",
-		GarageID:  "garage-A",
-		AccountID: "acc-1",
-		Role:      domain.RoleTechnician,
-		Status:    domain.StaffStatusActive,
-	}}, nil).Once()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			staff := mocks.NewMockGarageStaffRepository(t)
+			uc := usecase.NewStaffUseCase(staff)
 
-	result, err := uc.List(context.Background(), "garage-A")
-	require.NoError(t, err)
+			staff.EXPECT().ListByGarageID(mock.Anything, tt.garageID).Return(tt.list, tt.listErr).Once()
 
-	require.Len(t, result, 1)
-	assert.Equal(t, "acc-1", result[0].AccountID)
+			result, err := uc.List(context.Background(), tt.garageID)
+			if tt.wantCode != "" {
+				assertAppError(t, err, tt.wantCode)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.list, result)
+		})
+	}
 }

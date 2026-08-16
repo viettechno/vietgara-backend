@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// ErrInvalidToken is returned when a token is missing, malformed, or expired.
 var ErrInvalidToken = errors.New("invalid or expired token")
 
 // GarageClaim represents one entry in the "garages" JWT claim: the
@@ -35,15 +36,18 @@ func (c *Claims) HasAccessToGarage(garageID string) (role string, ok bool) {
 			return g.Role, true
 		}
 	}
+
 	return "", false
 }
 
+// TokenIssuer signs, issues, and verifies the VietGara JWTs.
 type TokenIssuer struct {
 	signingKey      []byte
 	accessTokenTTL  time.Duration
 	refreshTokenTTL time.Duration
 }
 
+// NewTokenIssuer returns a TokenIssuer for the given signing key and TTLs.
 func NewTokenIssuer(signingKey []byte, accessTTL, refreshTTL time.Duration) *TokenIssuer {
 	return &TokenIssuer{signingKey: signingKey, accessTokenTTL: accessTTL, refreshTokenTTL: refreshTTL}
 }
@@ -63,10 +67,12 @@ func (i *TokenIssuer) IssueAccessToken(accountID string, garages []GarageClaim) 
 		Garages: garages,
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
 	signed, err := token.SignedString(i.signingKey)
 	if err != nil {
 		return "", time.Time{}, err
 	}
+
 	return signed, expiresAt, nil
 }
 
@@ -80,14 +86,17 @@ func NewRefreshToken() string {
 // Verify parses and validates an access token, returning its claims.
 func (i *TokenIssuer) Verify(tokenString string) (*Claims, error) {
 	claims := &Claims{}
+
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, ErrInvalidToken
 		}
+
 		return i.signingKey, nil
 	})
 	if err != nil || !token.Valid {
 		return nil, ErrInvalidToken
 	}
+
 	return claims, nil
 }

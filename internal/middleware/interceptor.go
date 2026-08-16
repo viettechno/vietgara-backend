@@ -6,6 +6,7 @@ package middleware
 
 import (
 	"context"
+	"slices"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -13,9 +14,11 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
+	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 )
 
 type ctxKeyClaims struct{}
+
 type ctxKeyGarageID struct{}
 
 // GarageScoped is implemented by any gRPC request message that carries a
@@ -28,6 +31,7 @@ type GarageScoped interface {
 // ClaimsFromContext retrieves the verified JWT claims set by AuthInterceptor.
 func ClaimsFromContext(ctx context.Context) (*auth.Claims, bool) {
 	c, ok := ctx.Value(ctxKeyClaims{}).(*auth.Claims)
+
 	return c, ok
 }
 
@@ -35,6 +39,7 @@ func ClaimsFromContext(ctx context.Context) (*auth.Claims, bool) {
 // has already validated for the current request.
 func GarageIDFromContext(ctx context.Context) (string, bool) {
 	id, ok := ctx.Value(ctxKeyGarageID{}).(string)
+
 	return id, ok
 }
 
@@ -43,20 +48,24 @@ func GarageIDFromContext(ctx context.Context) (string, bool) {
 // (e.g. quote approval via a token link) must be registered separately and
 // should NOT go through this interceptor -- see PublicTokenInterceptor.
 func AuthInterceptor(issuer *auth.TokenIssuer) grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		md, ok := metadata.FromIncomingContext(ctx)
 		if !ok {
 			return nil, status.Error(codes.Unauthenticated, "missing metadata")
 		}
+
 		tokens := md.Get("authorization")
 		if len(tokens) == 0 {
 			return nil, status.Error(codes.Unauthenticated, "missing authorization token")
 		}
+
 		claims, err := issuer.Verify(tokens[0])
 		if err != nil {
 			return nil, status.Error(codes.Unauthenticated, "invalid or expired token")
 		}
+
 		ctx = context.WithValue(ctx, ctxKeyClaims{}, claims)
+
 		return handler(ctx, req)
 	}
 }
@@ -73,12 +82,13 @@ func AuthInterceptor(issuer *auth.TokenIssuer) grpc.UnaryServerInterceptor {
 //
 // See: LLD Section 6, Database Design Section 1.2.
 func TenantContextInterceptor() grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		scoped, isScoped := req.(GarageScoped)
 		if !isScoped {
-			// Not every request operates on a specific garage (e.g. GET /plans).
+			// Not every request operates on a specific garage (e.g. GET /accounts).
 			return handler(ctx, req)
 		}
+
 		garageID := scoped.GetGarageId()
 		if garageID == "" {
 			return nil, status.Error(codes.InvalidArgument, "garage_id is required")
@@ -88,12 +98,45 @@ func TenantContextInterceptor() grpc.UnaryServerInterceptor {
 		if !ok {
 			return nil, status.Error(codes.Unauthenticated, "missing authentication context")
 		}
+
 		if _, hasAccess := claims.HasAccessToGarage(garageID); !hasAccess {
 			return nil, status.Error(codes.PermissionDenied, "no access to this garage")
 		}
 
 		ctx = context.WithValue(ctx, ctxKeyGarageID{}, garageID)
+
 		return handler(ctx, req)
+	}
+}
+
+// TransactionInterceptor runs every request whose garage_id was already
+// validated by TenantContextInterceptor inside a single Postgres
+// transaction, setting app.current_garage_id so the Row-Level Security
+// policies on garages/garage_staff apply (see db.TxManager.WithTransaction).
+// Requests without a garage context (e.g. creating a garage) pass through
+// untransacted -- those open their own transaction inside the usecase.
+// It must run AFTER TenantContextInterceptor in the interceptor chain.
+func TransactionInterceptor(txManager *platformdb.TxManager) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		garageID, ok := GarageIDFromContext(ctx)
+		if !ok {
+			return handler(ctx, req)
+		}
+
+		var resp any
+
+		err := txManager.WithTransaction(ctx, &garageID, func(txCtx context.Context) error {
+			var err error
+
+			resp, err = handler(txCtx, req)
+
+			return err
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		return resp, nil
 	}
 }
 
@@ -102,13 +145,15 @@ func TenantContextInterceptor() grpc.UnaryServerInterceptor {
 func ChainUnaryInterceptors(interceptors ...grpc.UnaryServerInterceptor) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		chain := handler
-		for i := len(interceptors) - 1; i >= 0; i-- {
-			interceptor := interceptors[i]
+
+		for _, interceptor := range slices.Backward(interceptors) {
 			next := chain
+
 			chain = func(ctx context.Context, req any) (any, error) {
 				return interceptor(ctx, req, info, next)
 			}
 		}
+
 		return chain(ctx, req)
 	}
 }

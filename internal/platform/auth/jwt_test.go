@@ -51,6 +51,8 @@ func TestClaims_HasAccessToGarage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			role, ok := claims.HasAccessToGarage(tt.garageID)
 			assert.Equal(t, tt.wantOK, ok)
 			assert.Equal(t, tt.wantRole, role)
@@ -59,6 +61,11 @@ func TestClaims_HasAccessToGarage(t *testing.T) {
 }
 
 func TestTokenIssuer_IssueAccessToken(t *testing.T) {
+	garages := []auth.GarageClaim{
+		{GarageID: "garage-1", Role: "owner"},
+		{GarageID: "garage-2", Role: "staff"},
+	}
+
 	tests := []struct {
 		name      string
 		accessTTL time.Duration
@@ -69,11 +76,9 @@ func TestTokenIssuer_IssueAccessToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			issuer := newTestIssuer(t, tt.accessTTL, 24*time.Hour)
-			garages := []auth.GarageClaim{
-				{GarageID: "garage-1", Role: "owner"},
-				{GarageID: "garage-2", Role: "staff"},
-			}
 
 			token, expiresAt, err := issuer.IssueAccessToken("acc-1", garages)
 			require.NoError(t, err)

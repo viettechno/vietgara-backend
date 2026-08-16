@@ -6,7 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -14,14 +17,19 @@ import (
 	"google.golang.org/grpc/status"
 
 	"github.com/viettechno/vietgara-backend/internal/middleware"
+	"github.com/viettechno/vietgara-backend/internal/mocks"
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
+	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 )
 
-const testRoute = "/vietgara.tenant.v1.GarageService/GetGarage"
+const (
+	testRoute      = "/vietgara.tenant.v1.GarageService/GetGarage"
+	testSigningKey = "test-signing-key"
+)
 
 func newTestIssuer(t *testing.T) *auth.TokenIssuer {
 	t.Helper()
-	return auth.NewTokenIssuer([]byte("test-signing-key"), 15*time.Minute, 24*time.Hour)
+	return auth.NewTokenIssuer([]byte(testSigningKey), 15*time.Minute, 24*time.Hour)
 }
 
 func issueToken(t *testing.T, issuer *auth.TokenIssuer, accountID string, garages []auth.GarageClaim) string {
@@ -85,6 +93,8 @@ func TestAuthInterceptor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			interceptor := middleware.AuthInterceptor(issuer)
 			handlerCtx := make(chan context.Context, 1)
 
@@ -103,6 +113,9 @@ func TestAuthInterceptor(t *testing.T) {
 			claims, ok := middleware.ClaimsFromContext(<-handlerCtx)
 			require.True(t, ok)
 			assert.Equal(t, "acc-1", claims.Subject)
+			assert.Len(t, claims.Garages, 1)
+			assert.Equal(t, "garage-1", claims.Garages[0].GarageID)
+			assert.Equal(t, "owner", claims.Garages[0].Role)
 		})
 	}
 }
@@ -129,6 +142,8 @@ func TestTenantContextInterceptor(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
 			interceptor := middleware.TenantContextInterceptor()
 			handlerCtx := make(chan context.Context, 1)
 
@@ -149,6 +164,112 @@ func TestTenantContextInterceptor(t *testing.T) {
 			assert.Equal(t, tt.wantGarageID, garageID)
 		})
 	}
+}
+
+// garageAuthedCtx builds the context produced by AuthInterceptor followed
+// by TenantContextInterceptor for an account that has access to garageID.
+func garageAuthedCtx(t *testing.T, garageID string) context.Context {
+	t.Helper()
+
+	issuer := newTestIssuer(t)
+	authed := authedCtx(t, issuer, issueToken(t, issuer, "acc-1", []auth.GarageClaim{{GarageID: garageID, Role: "owner"}}))
+
+	gotCtx := make(chan context.Context, 1)
+	_, err := middleware.TenantContextInterceptor()(authed, garageScopedReq{garageID: garageID}, &grpc.UnaryServerInfo{FullMethod: testRoute}, func(ctx context.Context, req any) (any, error) {
+		gotCtx <- ctx
+
+		return nil, nil
+	})
+	require.NoError(t, err)
+
+	return <-gotCtx
+}
+
+func TestTransactionInterceptor(t *testing.T) {
+	t.Run("passes requests without a garage context through untransacted", func(t *testing.T) {
+		connPool := mocks.NewMockConnPool(t)
+		txManager := platformdb.NewTxManager(platformdb.NewPool(t.Context(), connPool))
+		interceptor := middleware.TransactionInterceptor(txManager)
+
+		got, err := interceptor(t.Context(), nil, &grpc.UnaryServerInfo{FullMethod: testRoute}, func(ctx context.Context, req any) (any, error) {
+			return "handled", nil
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, "handled", got)
+		connPool.AssertNotCalled(t, "Begin", mock.Anything)
+	})
+
+	t.Run("runs garage-scoped requests inside a tenant-scoped transaction", func(t *testing.T) {
+		ctx := garageAuthedCtx(t, "garage-1")
+		connPool := mocks.NewMockConnPool(t)
+		tx := mocks.NewMockTx(t)
+		pool := platformdb.NewPool(t.Context(), connPool)
+		txManager := platformdb.NewTxManager(pool)
+		interceptor := middleware.TransactionInterceptor(txManager)
+
+		connPool.EXPECT().Begin(ctx).Return(tx, nil).Once()
+
+		tx.EXPECT().Exec(ctx, platformdb.SetTenantSQL, []any{"garage-1"}).Return(pgconn.CommandTag{}, nil).Once()
+		tx.EXPECT().Commit(ctx).Return(nil).Once()
+
+		tx.EXPECT().Rollback(ctx).Return(pgx.ErrTxClosed).Once()
+
+		handlerCtx := make(chan context.Context, 1)
+		got, err := interceptor(ctx, garageScopedReq{garageID: "garage-1"}, &grpc.UnaryServerInfo{FullMethod: testRoute}, func(ctx context.Context, req any) (any, error) {
+			handlerCtx <- ctx
+
+			return "handled", nil
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, "handled", got)
+
+		txCtx := <-handlerCtx
+		assert.Equal(t, tx, platformdb.QuerierFromContext(txCtx, pool))
+	})
+
+	t.Run("rolls back and surfaces the handler error", func(t *testing.T) {
+		ctx := garageAuthedCtx(t, "garage-1")
+		connPool := mocks.NewMockConnPool(t)
+		tx := mocks.NewMockTx(t)
+		txManager := platformdb.NewTxManager(platformdb.NewPool(t.Context(), connPool))
+		interceptor := middleware.TransactionInterceptor(txManager)
+		handlerErr := errors.New("handler failed")
+
+		connPool.EXPECT().Begin(ctx).Return(tx, nil).Once()
+
+		tx.EXPECT().Exec(ctx, platformdb.SetTenantSQL, []any{"garage-1"}).Return(pgconn.CommandTag{}, nil).Once()
+		tx.EXPECT().Rollback(ctx).Return(nil).Once()
+
+		got, err := interceptor(ctx, garageScopedReq{garageID: "garage-1"}, &grpc.UnaryServerInfo{FullMethod: testRoute}, func(ctx context.Context, req any) (any, error) {
+			return nil, handlerErr
+		})
+
+		require.ErrorIs(t, err, handlerErr)
+		assert.Nil(t, got)
+		tx.AssertNotCalled(t, "Commit", ctx)
+	})
+
+	t.Run("surfaces transaction begin failures", func(t *testing.T) {
+		ctx := garageAuthedCtx(t, "garage-1")
+		connPool := mocks.NewMockConnPool(t)
+		txManager := platformdb.NewTxManager(platformdb.NewPool(t.Context(), connPool))
+		interceptor := middleware.TransactionInterceptor(txManager)
+		handlerCalled := false
+
+		connPool.EXPECT().Begin(ctx).Return(nil, errors.New("connection lost")).Once()
+
+		got, err := interceptor(ctx, garageScopedReq{garageID: "garage-1"}, &grpc.UnaryServerInfo{FullMethod: testRoute}, func(ctx context.Context, req any) (any, error) {
+			handlerCalled = true
+
+			return nil, nil
+		})
+
+		require.Error(t, err)
+		assert.Nil(t, got)
+		assert.False(t, handlerCalled)
+	})
 }
 
 func TestChainUnaryInterceptors(t *testing.T) {

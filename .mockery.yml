@@ -28,13 +28,17 @@ packages:
       all: true
       dir: "./internal/mocks"
       filename: "platform_db.go"
-  github.com/viettechno/vietgara-backend/internal/tenant/repository:
-    config:
-      all: true
-      dir: "./internal/mocks"
-      filename: "tenant_repository.go"
   github.com/viettechno/vietgara-backend/internal/tenant/usecase:
-    config:
-      all: true
-      dir: "./internal/mocks"
-      filename: "tenant_usecase.go"
+    interfaces:
+      GarageRepository:
+        config:
+          filename: "tenant_usecase_garage_repository.go"
+          dir: "./internal/mocks"
+      GarageStaffRepository:
+        config:
+          filename: "tenant_usecase_garage_staff_repository.go"
+          dir: "./internal/mocks"
+      EventPublisher:
+        config:
+          filename: "tenant_usecase_event_publisher.go"
+          dir: "./internal/mocks"

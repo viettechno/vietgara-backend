@@ -12,14 +12,6 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 )
 
-// GarageRepository defines the persistence contract for garages.
-type GarageRepository interface {
-	FindByID(ctx context.Context, id string) (*domain.Garage, error)
-	ListByAccountID(ctx context.Context, accountID string) ([]*domain.Garage, error)
-	Create(ctx context.Context, g *domain.Garage) error
-	Update(ctx context.Context, g *domain.Garage) error
-}
-
 // PostgresGarageRepository implements GarageRepository over the shared pgx pool.
 type PostgresGarageRepository struct {
 	pool *platformdb.Pool

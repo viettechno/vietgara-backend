@@ -5,11 +5,14 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/viettechno/vietgara-backend/internal/mocks"
+	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
@@ -177,6 +180,113 @@ func TestGarageUseCase_Create(t *testing.T) {
 			assert.Equal(t, tt.wantCurrency, g.Currency)
 		})
 	}
+}
+
+// txCtxMatcher matches contexts that carry an active transaction opened
+// by db.TxManager.WithTransaction.
+var txCtxMatcher = mock.MatchedBy(func(ctx context.Context) bool {
+	_, ok := ctx.Value(platformdb.TxKey{}).(pgx.Tx)
+
+	return ok
+})
+
+// TestGarageUseCase_CreateInTransaction covers the WithTransactionManager
+// option: Create must run every insert inside one tenant-scoped
+// transaction whose app.current_garage_id is the freshly generated garage
+// id -- otherwise the Row-Level Security policies block the writes.
+func TestGarageUseCase_CreateInTransaction(t *testing.T) {
+	t.Run("persists garage, owner, and event in one tenant-scoped transaction", func(t *testing.T) {
+		garages := mocks.NewMockGarageRepository(t)
+		staff := mocks.NewMockGarageStaffRepository(t)
+		events := mocks.NewMockEventPublisher(t)
+		connPool := mocks.NewMockConnPool(t)
+		tx := mocks.NewMockTx(t)
+		ctx := t.Context()
+
+		uc := usecase.NewGarageUseCase(garages, staff, events,
+			usecase.WithTransactionManager(platformdb.NewTxManager(platformdb.NewPool(t.Context(), connPool))))
+
+		var createdGarage *domain.Garage
+
+		var createdOwner *domain.GarageStaff
+
+		var setTenantIDs []string
+
+		connPool.EXPECT().Begin(ctx).Return(tx, nil).Once()
+
+		tx.EXPECT().Exec(ctx, platformdb.SetTenantSQL, mock.Anything).Run(func(_ context.Context, _ string, arguments ...any) {
+			if id, ok := arguments[0].(string); ok {
+				setTenantIDs = append(setTenantIDs, id)
+			}
+		}).Return(pgconn.CommandTag{}, nil).Once()
+
+		garages.EXPECT().Create(txCtxMatcher, mock.Anything).Run(func(_ context.Context, g *domain.Garage) {
+			createdGarage = g
+		}).Return(nil).Once()
+
+		staff.EXPECT().Create(txCtxMatcher, mock.Anything).Run(func(_ context.Context, s *domain.GarageStaff) {
+			createdOwner = s
+		}).Return(nil).Once()
+
+		events.EXPECT().Publish(txCtxMatcher, "garage.created", mock.Anything, newCreatedEventMatcher("acc-1")).Return(nil).Once()
+
+		tx.EXPECT().Commit(ctx).Return(nil).Once()
+
+		tx.EXPECT().Rollback(ctx).Return(pgx.ErrTxClosed).Once()
+
+		g, err := uc.Create(ctx, usecase.CreateGarageRequest{AccountID: "acc-1", Name: "Gara A"})
+
+		require.NoError(t, err)
+		require.NotNil(t, g)
+		require.NotNil(t, createdGarage)
+		require.NotNil(t, createdOwner)
+		assert.Equal(t, []string{g.ID}, setTenantIDs)
+		assert.Equal(t, g.ID, createdGarage.ID)
+		assert.Equal(t, g.ID, createdOwner.GarageID)
+		assert.Equal(t, domain.RoleOwner, createdOwner.Role)
+	})
+
+	t.Run("rolls back without committing when the garage insert fails", func(t *testing.T) {
+		garages := mocks.NewMockGarageRepository(t)
+		staff := mocks.NewMockGarageStaffRepository(t)
+		events := mocks.NewMockEventPublisher(t)
+		connPool := mocks.NewMockConnPool(t)
+		tx := mocks.NewMockTx(t)
+		ctx := t.Context()
+
+		uc := usecase.NewGarageUseCase(garages, staff, events,
+			usecase.WithTransactionManager(platformdb.NewTxManager(platformdb.NewPool(t.Context(), connPool))))
+		insertErr := errors.New("boom")
+
+		connPool.EXPECT().Begin(ctx).Return(tx, nil).Once()
+
+		tx.EXPECT().Exec(ctx, platformdb.SetTenantSQL, mock.Anything).Return(pgconn.CommandTag{}, nil).Once()
+
+		garages.EXPECT().Create(txCtxMatcher, mock.Anything).Return(insertErr).Once()
+		tx.EXPECT().Rollback(ctx).Return(nil).Once()
+
+		g, err := uc.Create(ctx, usecase.CreateGarageRequest{AccountID: "acc-1", Name: "Gara A"})
+
+		assertAppError(t, err, apperror.CodeInternal)
+		assert.Nil(t, g)
+		tx.AssertNotCalled(t, "Commit", ctx)
+		staff.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+		events.AssertNotCalled(t, "Publish", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("validates the request before opening any transaction", func(t *testing.T) {
+		garages := mocks.NewMockGarageRepository(t)
+		connPool := mocks.NewMockConnPool(t)
+
+		uc := usecase.NewGarageUseCase(garages, nil, nil,
+			usecase.WithTransactionManager(platformdb.NewTxManager(platformdb.NewPool(t.Context(), connPool))))
+
+		g, err := uc.Create(t.Context(), usecase.CreateGarageRequest{AccountID: "acc-1"})
+
+		assertAppError(t, err, apperror.CodeInvalidArgument)
+		assert.Nil(t, g)
+		connPool.AssertNotCalled(t, "Begin", mock.Anything)
+	})
 }
 
 // TestGarageUseCase_CreateMultipleGarages documents FR-TEN-01: one account

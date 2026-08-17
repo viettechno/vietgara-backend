@@ -12,6 +12,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/internal/tenant/repository"
+	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 )
 
 func TestPostgresGarageStaffRepository_Create(t *testing.T) {
@@ -195,13 +196,13 @@ func TestPostgresGarageStaffRepository_ListRolesForAccount(t *testing.T) {
 	tests := []struct {
 		name    string
 		args    struct{ accountID string }
-		want    []repository.RoleAssignment
+		want    []usecase.RoleAssignment
 		wantErr error
 	}{
 		{
 			name: "returns the role assignments for every active membership",
 			args: struct{ accountID string }{accountID: "acc-2"},
-			want: []repository.RoleAssignment{
+			want: []usecase.RoleAssignment{
 				{GarageID: "garage-1", Role: "owner"},
 				{GarageID: "garage-2", Role: "accountant"},
 			},

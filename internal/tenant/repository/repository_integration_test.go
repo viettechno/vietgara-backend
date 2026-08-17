@@ -23,6 +23,7 @@ import (
 	dbpkg "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/internal/tenant/repository"
+	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 )
 
 const (
@@ -258,7 +259,7 @@ func TestPostgresGarageStaffRepository_CRUD(t *testing.T) {
 
 		roles, err := repo.ListRolesForAccount(ctx, tech.AccountID)
 		require.NoError(t, err)
-		require.Equal(t, []repository.RoleAssignment{{GarageID: env.garageA, Role: "technician"}}, roles)
+		require.Equal(t, []usecase.RoleAssignment{{GarageID: env.garageA, Role: "technician"}}, roles)
 	})
 
 	t.Run("missing membership returns pgx.ErrNoRows untouched", func(t *testing.T) {

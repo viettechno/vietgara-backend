@@ -131,8 +131,8 @@ func (s *MigrationsTestSuite) SetupSuite() {
 	pgContainer, err := StartPostgresContainer(s.ctx)
 	s.Require().NoError(err)
 	s.pgContainer = pgContainer
-	err = db.RunMigrations(s.pgContainer.ConnStr, MIGRATIONS_PATH)
-	s.Require().NoError(err)
+
+	s.Require().NoError(db.RunMigrations(s.pgContainer.ConnStr, MIGRATIONS_PATH))
 
 	for _, statement := range []string{
 		"CREATE ROLE " + rlsTestRole + " NOLOGIN NOSUPERUSER NOBYPASSRLS",
@@ -363,7 +363,7 @@ func (s *MigrationsTestSuite) TestGetMigrationVersion() {
 			name:      "successful with valid path",
 			path:      MIGRATIONS_PATH,
 			wantErr:   false,
-			wantVer:   3,
+			wantVer:   4,
 			wantDirty: false,
 		},
 		{
@@ -418,7 +418,7 @@ func (s *MigrationsTestSuite) TestRollbackLastMigration() {
 
 			version, _, err := db.GetMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH)
 			s.Require().NoError(err)
-			s.Equalf(uint(2), version, "expected version 2 after rolling back one step")
+			s.Equalf(uint(3), version, "expected version 3 after rolling back one step")
 
 			s.Require().NoError(db.RunMigrations(s.pgContainer.ConnStr, MIGRATIONS_PATH))
 		})
@@ -460,7 +460,7 @@ func (s *MigrationsTestSuite) TestRollbackAllMigrations() {
 
 			version, dirty, err := db.GetMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH)
 			s.Require().NoError(err)
-			s.Equalf(uint(3), version, "expected version restored to 3")
+			s.Equalf(uint(4), version, "expected version restored to 4")
 			s.False(dirty, "expected migration state not dirty")
 		})
 	}
@@ -508,11 +508,11 @@ func (s *MigrationsTestSuite) TestForceMigrationVersion() {
 			s.Equalf(uint(tt.version), version, "expected version forced to %d", tt.version)
 			s.False(dirty, "expected migration state not dirty after Force")
 
-			s.Require().NoError(db.ForceMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH, 3))
+			s.Require().NoError(db.ForceMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH, 4))
 
 			version, dirty, err = db.GetMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH)
 			s.Require().NoError(err)
-			s.Equalf(uint(3), version, "expected version forced back to 3")
+			s.Equalf(uint(4), version, "expected version forced back to 4")
 			s.False(dirty, "expected migration state not dirty after Force")
 		})
 	}

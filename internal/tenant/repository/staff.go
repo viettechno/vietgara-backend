@@ -8,13 +8,6 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 )
 
-// RoleAssignment is a single (garage_id, role) pair from
-// ListRolesForAccount.
-type RoleAssignment struct {
-	GarageID string
-	Role     string
-}
-
 // PostgresGarageStaffRepository implements GarageStaffRepository over the
 // shared pgx pool.
 type PostgresGarageStaffRepository struct {

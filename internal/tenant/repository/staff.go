@@ -5,6 +5,7 @@ import (
 
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
+	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 )
 
 // RoleAssignment is a single (garage_id, role) pair from
@@ -97,7 +98,7 @@ func (r *PostgresGarageStaffRepository) FindByGarageAndAccount(ctx context.Conte
 // garage-scoped RLS session variable (like ListByAccountID above) --
 // listing "every garage this account has a role in" is used at login
 // time, before any single garage_id is known yet.
-func (r *PostgresGarageStaffRepository) ListRolesForAccount(ctx context.Context, accountID string) ([]RoleAssignment, error) {
+func (r *PostgresGarageStaffRepository) ListRolesForAccount(ctx context.Context, accountID string) ([]usecase.RoleAssignment, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
 	rows, err := q.Query(ctx, `SELECT garage_id, role FROM garage_staff WHERE account_id = $1 AND status = 'active'`, accountID)
@@ -106,10 +107,10 @@ func (r *PostgresGarageStaffRepository) ListRolesForAccount(ctx context.Context,
 	}
 	defer rows.Close()
 
-	var result []RoleAssignment
+	var result []usecase.RoleAssignment
 
 	for rows.Next() {
-		var ra RoleAssignment
+		var ra usecase.RoleAssignment
 		if err := rows.Scan(&ra.GarageID, &ra.Role); err != nil {
 			return nil, err
 		}

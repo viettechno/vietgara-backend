@@ -14,6 +14,8 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/grpc/reflection"
+
 	tenantv1 "github.com/viettechno/vietgara-proto/gen/go/vietgara/tenant/v1"
 	"google.golang.org/grpc"
 
@@ -97,6 +99,7 @@ func run(ctx context.Context) error {
 	)
 	tenantv1.RegisterGarageServiceServer(grpcServer, tenantSrv)
 	tenantv1.RegisterStaffServiceServer(grpcServer, tenantSrv)
+	reflection.Register(grpcServer)
 
 	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ":"+grpcPort)
 	if err != nil {

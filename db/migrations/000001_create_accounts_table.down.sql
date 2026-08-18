@@ -11,5 +11,6 @@ DROP INDEX IF EXISTS idx_accounts_email;
 -- Drop table
 DROP TABLE IF EXISTS accounts;
 
--- Drop enum type
+-- Drop enum types
 DROP TYPE IF EXISTS account_status;
+DROP TYPE IF EXISTS account_auth_provider;

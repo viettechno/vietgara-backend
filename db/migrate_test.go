@@ -15,7 +15,8 @@ import (
 )
 
 const (
-	MIGRATIONS_PATH = "file://migrations"
+	MIGRATIONS_PATH           = "file://migrations"
+	MIGRATION_CURRENT_VERSION = 4
 
 	POSTGRES_TEST_DB       = "vietgara_test"
 	POSTGRES_TEST_USER     = "postgres"
@@ -166,7 +167,7 @@ func (s *MigrationsTestSuite) TestRLS_QueryFailsWithoutSessionVariable() {
 
 	insertAccount := fmt.Sprintf(
 		`INSERT INTO accounts (id, email, auth_provider, identity_platform_uid, full_name, status)
-		 VALUES ('%s', 'test@example.com', 'local', 'uid-001', 'Test User', 'active')`,
+		 VALUES ('%s', 'test@example.com', 'email', 'uid-001', 'Test User', 'active')`,
 		accountID,
 	)
 	_, err := s.pgContainer.DB.ExecContext(s.ctx, insertAccount)
@@ -195,7 +196,7 @@ func (s *MigrationsTestSuite) TestRLS_QuerySucceedsWithCorrectSessionVariable() 
 
 	insertAccount := fmt.Sprintf(
 		`INSERT INTO accounts (id, email, auth_provider, identity_platform_uid, full_name, status)
-		 VALUES ('%s', 'test2@example.com', 'local', 'uid-002', 'Test User 2', 'active')`,
+		 VALUES ('%s', 'test2@example.com', 'email', 'uid-002', 'Test User 2', 'active')`,
 		accountID,
 	)
 	_, err := s.pgContainer.DB.ExecContext(s.ctx, insertAccount)
@@ -244,7 +245,7 @@ func (s *MigrationsTestSuite) TestRLS_QueryBlockedWithWrongSessionVariable() {
 	} {
 		_, err := s.pgContainer.DB.ExecContext(s.ctx,
 			`INSERT INTO accounts (id, email, auth_provider, identity_platform_uid, full_name, status)
-			 VALUES ($1, $2, 'local', $3, 'Test User', 'active')`,
+			 VALUES ($1, $2, 'email', $3, 'Test User', 'active')`,
 			account.id, account.email, account.uid,
 		)
 		s.Require().NoError(err)
@@ -292,7 +293,7 @@ func (s *MigrationsTestSuite) TestRLS_GarageStaffRowLevelSecurity() {
 
 	insertAccount := fmt.Sprintf(
 		`INSERT INTO accounts (id, email, auth_provider, identity_platform_uid, full_name, status)
-		 VALUES ('%s', 'staff@example.com', 'local', 'uid-staff-001', 'Staff User', 'active')`,
+		 VALUES ('%s', 'staff@example.com', 'email', 'uid-staff-001', 'Staff User', 'active')`,
 		accountID,
 	)
 	_, err := s.pgContainer.DB.ExecContext(s.ctx, insertAccount)
@@ -363,7 +364,7 @@ func (s *MigrationsTestSuite) TestGetMigrationVersion() {
 			name:      "successful with valid path",
 			path:      MIGRATIONS_PATH,
 			wantErr:   false,
-			wantVer:   4,
+			wantVer:   MIGRATION_CURRENT_VERSION,
 			wantDirty: false,
 		},
 		{
@@ -418,7 +419,7 @@ func (s *MigrationsTestSuite) TestRollbackLastMigration() {
 
 			version, _, err := db.GetMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH)
 			s.Require().NoError(err)
-			s.Equalf(uint(3), version, "expected version 3 after rolling back one step")
+			s.Equalf(uint(MIGRATION_CURRENT_VERSION-1), version, "expected version %d after rolling back one step", MIGRATION_CURRENT_VERSION-1)
 
 			s.Require().NoError(db.RunMigrations(s.pgContainer.ConnStr, MIGRATIONS_PATH))
 		})
@@ -460,7 +461,7 @@ func (s *MigrationsTestSuite) TestRollbackAllMigrations() {
 
 			version, dirty, err := db.GetMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH)
 			s.Require().NoError(err)
-			s.Equalf(uint(4), version, "expected version restored to 4")
+			s.Equalf(uint(MIGRATION_CURRENT_VERSION), version, "expected version restored to %d", MIGRATION_CURRENT_VERSION)
 			s.False(dirty, "expected migration state not dirty")
 		})
 	}
@@ -508,11 +509,11 @@ func (s *MigrationsTestSuite) TestForceMigrationVersion() {
 			s.Equalf(uint(tt.version), version, "expected version forced to %d", tt.version)
 			s.False(dirty, "expected migration state not dirty after Force")
 
-			s.Require().NoError(db.ForceMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH, 4))
+			s.Require().NoError(db.ForceMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH, MIGRATION_CURRENT_VERSION))
 
 			version, dirty, err = db.GetMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH)
 			s.Require().NoError(err)
-			s.Equalf(uint(4), version, "expected version forced back to 4")
+			s.Equalf(uint(MIGRATION_CURRENT_VERSION), version, "expected version forced back to %d", MIGRATION_CURRENT_VERSION)
 			s.False(dirty, "expected migration state not dirty after Force")
 		})
 	}

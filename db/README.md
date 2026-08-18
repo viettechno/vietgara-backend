@@ -17,8 +17,9 @@ Row-Level Security is enabled on `garages` and `garage_staff` tables to automati
 Creates the `accounts` table with:
 - UUID primary key
 - Email and phone as unique nullable fields
-- Auth provider and identity platform UID tracking
+- Auth provider (enum: email, google, facebook) and identity platform UID tracking
 - Status field (active, inactive, suspended)
+- Password hash for email/password authentication
 - Automatic `updated_at` trigger
 - Indexes on email, phone, identity_platform_uid, auth_provider
 
@@ -230,9 +231,10 @@ go get -u github.com/lib/pq
 │ id (uuid, PK)                           │
 │ email (varchar, unique)                 │
 │ phone (varchar, unique)                 │
-│ auth_provider (varchar)                 │
+│ auth_provider (enum, default 'email')   │
 │ identity_platform_uid (varchar, unique) │
 │ full_name (varchar)                     │
+│ password_hash (varchar, nullable)       │
 │ status (varchar)                        │
 │ created_at, updated_at                  │
 └─────────────────────────────────────────┘

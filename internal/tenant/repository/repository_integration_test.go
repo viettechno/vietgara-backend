@@ -151,7 +151,7 @@ func seedGarages(t *testing.T, ctx context.Context, admin *sql.DB) (accountID, g
 	accountID = uuid.NewString()
 	_, err := admin.ExecContext(ctx,
 		`INSERT INTO accounts (id, auth_provider, identity_platform_uid, full_name)
-		 VALUES ($1, 'test', $2, 'Test Account')`,
+		 VALUES ($1, 'email', $2, 'Test Account')`,
 		accountID, "uid-"+accountID,
 	)
 	require.NoError(t, err)
@@ -234,7 +234,7 @@ func TestPostgresGarageStaffRepository_CRUD(t *testing.T) {
 	t.Run("create, list, find, and list roles", func(t *testing.T) {
 		_, err := env.admin.ExecContext(ctx,
 			`INSERT INTO accounts (id, auth_provider, identity_platform_uid, full_name)
-			 VALUES ($1, 'test', $2, 'Technician')`,
+			 VALUES ($1, 'email', $2, 'Technician')`,
 			techAccountID, "uid-tech-"+techAccountID,
 		)
 		require.NoError(t, err)

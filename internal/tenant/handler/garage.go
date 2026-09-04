@@ -5,7 +5,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
-	tenantv1 "github.com/viettechno/vietgara-proto/gen/go/vietgara/tenant/v1"
+	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 )
 
 // CreateGarage validates the request, creates the garage for the caller's

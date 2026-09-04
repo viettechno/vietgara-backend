@@ -9,7 +9,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/identity/domain"
 	"github.com/viettechno/vietgara-backend/internal/identity/usecase"
 	"github.com/viettechno/vietgara-backend/internal/mocks"
-	identityv1 "github.com/viettechno/vietgara-proto/gen/go/vietgara/identity/v1"
+	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

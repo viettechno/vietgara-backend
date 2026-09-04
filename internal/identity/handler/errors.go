@@ -7,7 +7,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	identityv1 "github.com/viettechno/vietgara-proto/gen/go/vietgara/identity/v1"
+	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 )
 
 // authProviderFromProto maps the proto AuthProvider enum to the domain

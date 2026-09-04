@@ -1,8 +1,8 @@
 package handler
 
 import (
-	identityv1 "github.com/viettechno/vietgara-proto/gen/go/vietgara/identity/v1"
-	tenantv1 "github.com/viettechno/vietgara-proto/gen/go/vietgara/tenant/v1"
+	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
+	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/identity/domain"
 	"github.com/viettechno/vietgara-backend/internal/identity/usecase"

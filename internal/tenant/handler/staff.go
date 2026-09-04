@@ -5,7 +5,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
-	tenantv1 "github.com/viettechno/vietgara-proto/gen/go/vietgara/tenant/v1"
+	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 )
 
 // AddStaff adds the given account as a staff member of a garage.

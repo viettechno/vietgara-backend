@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	tenantv1 "github.com/viettechno/vietgara-proto/gen/go/vietgara/tenant/v1"
+	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"

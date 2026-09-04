@@ -10,12 +10,12 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.43.0
-	github.com/viettechno/vietgara-proto v0.0.0-00010101000000-000000000000
+	github.com/viettechno/vietgara-proto v0.0.0-20260904194312-b7e062b52938
 	google.golang.org/grpc v1.74.2
 	google.golang.org/protobuf v1.36.11
 )
 
-require golang.org/x/crypto v0.54.0 // indirect
+require golang.org/x/crypto v0.54.0
 
 require (
 	dario.cat/mergo v1.0.2 // indirect
@@ -74,5 +74,3 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250818200422-3122310a409c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/viettechno/vietgara-proto => ../vietgara-proto

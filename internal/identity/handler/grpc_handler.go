@@ -6,7 +6,7 @@ import (
 	"context"
 	"time"
 
-	identityv1 "github.com/viettechno/vietgara-proto/gen/go/vietgara/identity/v1"
+	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/identity/domain"
 	"github.com/viettechno/vietgara-backend/internal/identity/usecase"

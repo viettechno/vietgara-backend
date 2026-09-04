@@ -35,6 +35,7 @@ func envBool(key string, fallback bool) bool {
 
 func envDuration(key string, fallback time.Duration) time.Duration {
 	v := envOr(key, fallback.String())
+
 	d, err := time.ParseDuration(v)
 	if err != nil || d <= 0 {
 		slog.Error("invalid duration environment variable", "key", key, "value", v)

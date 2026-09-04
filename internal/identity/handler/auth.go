@@ -28,6 +28,7 @@ func (s *Server) Register(ctx context.Context, req *identityv1.RegisterRequest) 
 		if verifyErr != nil {
 			return nil, verifyErr
 		}
+
 		result, err = s.uc.SocialLogin(ctx, *profile)
 	default:
 		return nil, status.Error(codes.InvalidArgument, "must provide email_password, phone_otp, or social credentials")
@@ -57,6 +58,7 @@ func (s *Server) Login(ctx context.Context, req *identityv1.LoginRequest) (*iden
 		if verifyErr != nil {
 			return nil, verifyErr
 		}
+
 		result, err = s.uc.SocialLogin(ctx, *profile)
 	default:
 		return nil, status.Error(codes.InvalidArgument, "must provide email_password, phone_otp, or social credentials")

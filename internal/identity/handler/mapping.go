@@ -41,6 +41,7 @@ func roleStringToProto(role string) tenantv1.Role {
 
 func accountToProto(acc *domain.Account) *identityv1.Account {
 	provider := identityv1.AuthProvider_AUTH_PROVIDER_UNSPECIFIED
+
 	switch acc.AuthProvider {
 	case domain.AuthProviderEmail:
 		provider = identityv1.AuthProvider_AUTH_PROVIDER_EMAIL
@@ -53,6 +54,7 @@ func accountToProto(acc *domain.Account) *identityv1.Account {
 	}
 
 	accStatus := identityv1.AccountStatus_ACCOUNT_STATUS_ACTIVE
+
 	switch acc.Status {
 	case domain.AccountStatusActive:
 		accStatus = identityv1.AccountStatus_ACCOUNT_STATUS_ACTIVE

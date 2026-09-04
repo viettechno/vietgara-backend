@@ -15,7 +15,9 @@ import (
 
 func TestServer_Register(t *testing.T) {
 	t.Parallel()
+
 	email := "register@example.com"
+
 	t.Run("email/password register returns a session", func(t *testing.T) {
 		t.Parallel()
 		accounts := mocks.NewMockAccountRepository(t)
@@ -26,6 +28,7 @@ func TestServer_Register(t *testing.T) {
 		accounts.On("Create", mock.Anything, mock.Anything).Return(nil).Once()
 		garages.On("ListGarageRolesForAccount", mock.Anything, mock.Anything).Return(nil, nil).Once()
 		tokens.On("Store", mock.Anything, mock.Anything, mock.Anything, 86400).Return(nil).Once()
+
 		resp, err := srv.Register(t.Context(), &identityv1.RegisterRequest{FullName: "Register User", Method: &identityv1.RegisterRequest_EmailPassword{EmailPassword: &identityv1.EmailPasswordCredential{Email: email, Password: "secret123"}}})
 		require.NoError(t, err)
 		require.NotNil(t, resp.GetAuth())
@@ -70,12 +73,14 @@ func TestServer_Register(t *testing.T) {
 		accounts.On("Create", mock.Anything, mock.Anything).Return(nil).Once()
 		garages.On("ListGarageRolesForAccount", mock.Anything, mock.Anything).Return(nil, nil).Once()
 		tokens.On("Store", mock.Anything, mock.Anything, mock.Anything, 86400).Return(nil).Once()
+
 		resp, err := srv.Register(t.Context(), &identityv1.RegisterRequest{FullName: "Social User", Method: &identityv1.RegisterRequest_Social{Social: &identityv1.SocialCredential{Provider: identityv1.AuthProvider_AUTH_PROVIDER_GOOGLE, IdToken: "tok-1"}}})
 		require.NoError(t, err)
 		require.NotNil(t, resp.GetAuth())
 	})
 	t.Run("phone provider register succeeds", func(t *testing.T) {
 		t.Parallel()
+
 		phone := "+84901234567"
 		accounts := mocks.NewMockAccountRepository(t)
 		garages := mocks.NewMockGarageMembershipReader(t)
@@ -102,6 +107,7 @@ func TestServer_Register_AlternateMethods(t *testing.T) {
 	t.Parallel()
 	t.Run("phone otp register succeeds", func(t *testing.T) {
 		t.Parallel()
+
 		phone := "+84901234567"
 		accounts := mocks.NewMockAccountRepository(t)
 		garages := mocks.NewMockGarageMembershipReader(t)
@@ -111,10 +117,12 @@ func TestServer_Register_AlternateMethods(t *testing.T) {
 		accounts.On("Create", mock.Anything, mock.Anything).Return(nil).Once()
 		garages.On("ListGarageRolesForAccount", mock.Anything, mock.Anything).Return(nil, nil).Once()
 		tokens.On("Store", mock.Anything, mock.Anything, mock.Anything, 86400).Return(nil).Once()
+
 		resp, err := srv.Register(t.Context(), &identityv1.RegisterRequest{FullName: "Phone User", Method: &identityv1.RegisterRequest_PhoneOtp{PhoneOtp: &identityv1.PhoneOtpCredential{Phone: phone}}})
 		require.NoError(t, err)
 		assert.Equal(t, phone, resp.GetAuth().GetAccount().GetPhone())
 	})
+
 	for _, tt := range []struct {
 		name     string
 		provider identityv1.AuthProvider

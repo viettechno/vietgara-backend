@@ -27,6 +27,7 @@ func TestServer_RefreshToken(t *testing.T) {
 		tokens.On("Revoke", mock.Anything, "session-1").Return(nil).Once()
 		garages.On("ListGarageRolesForAccount", mock.Anything, "acc-1").Return(nil, nil).Once()
 		tokens.On("Store", mock.Anything, mock.Anything, "acc-1", 86400).Return(nil).Once()
+
 		resp, err := srv.RefreshToken(t.Context(), &identityv1.RefreshTokenRequest{RefreshToken: "session-1"})
 		require.NoError(t, err)
 		assert.NotEmpty(t, resp.GetAuth().GetAccessToken())
@@ -48,6 +49,7 @@ func TestServer_RefreshToken(t *testing.T) {
 		tokens := mocks.NewMockRefreshTokenStore(t)
 		srv := newTestHandler(t, accounts, garages, tokens)
 		tokens.On("GetAccountID", mock.Anything, "bad-token").Return("", errors.New("not found")).Once()
+
 		_, err := srv.RefreshToken(t.Context(), &identityv1.RefreshTokenRequest{RefreshToken: "bad-token"})
 		require.Error(t, err)
 		assert.Equal(t, codes.Unauthenticated, status.Code(err))
@@ -64,6 +66,7 @@ func TestServer_RefreshToken(t *testing.T) {
 		tokens.On("Revoke", mock.Anything, "session-1").Return(nil).Once()
 		garages.On("ListGarageRolesForAccount", mock.Anything, "acc-fb").Return(nil, nil).Once()
 		tokens.On("Store", mock.Anything, mock.Anything, "acc-fb", 86400).Return(nil).Once()
+
 		resp, err := srv.RefreshToken(t.Context(), &identityv1.RefreshTokenRequest{RefreshToken: "session-1"})
 		require.NoError(t, err)
 		assert.Equal(t, identityv1.AuthProvider_AUTH_PROVIDER_FACEBOOK, resp.GetAuth().GetAccount().GetAuthProvider())

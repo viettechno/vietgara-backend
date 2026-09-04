@@ -22,6 +22,7 @@ func TestServer_Logout(t *testing.T) {
 		tokens := mocks.NewMockRefreshTokenStore(t)
 		srv := newTestHandler(t, accounts, garages, tokens)
 		tokens.On("Revoke", mock.Anything, "session-1").Return(nil).Once()
+
 		resp, err := srv.Logout(t.Context(), &identityv1.LogoutRequest{RefreshToken: "session-1"})
 		require.NoError(t, err)
 		assert.True(t, resp.GetRevoked())
@@ -43,6 +44,7 @@ func TestServer_Logout(t *testing.T) {
 		tokens := mocks.NewMockRefreshTokenStore(t)
 		srv := newTestHandler(t, accounts, garages, tokens)
 		tokens.On("Revoke", mock.Anything, "session-1").Return(errors.New("redis down")).Once()
+
 		_, err := srv.Logout(t.Context(), &identityv1.LogoutRequest{RefreshToken: "session-1"})
 		require.Error(t, err)
 		assert.Equal(t, codes.Internal, status.Code(err))

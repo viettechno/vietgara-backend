@@ -25,10 +25,12 @@ const (
 
 func newTestHandler(t *testing.T, accounts *mocks.MockAccountRepository, garages *mocks.MockGarageMembershipReader, tokens *mocks.MockRefreshTokenStore) *handler.Server {
 	t.Helper()
+
 	issuer := auth.NewTokenIssuer([]byte(testSigningKey), 15*time.Minute, 24*time.Hour)
 	otp := mocks.NewMockOTPVerifier(t)
 	otp.On("Verify", mock.Anything, mock.Anything, testOTPCode).Return(true, nil).Maybe()
 	uc := usecase.NewIdentityUseCase(accounts, garages, tokens, otp, issuer, 24*time.Hour)
+
 	return handler.NewServer(uc, stubSocialVerifier{})
 }
 
@@ -38,13 +40,17 @@ func (stubSocialVerifier) VerifyIDToken(_ context.Context, _ domain.AuthProvider
 	if idToken == "" {
 		return nil, errors.New("empty id_token")
 	}
+
 	return &usecase.VerifiedSocialProfile{IdentityPlatformUID: "stub-" + idToken, Provider: domain.AuthProviderGoogle, FullName: "Social User"}, nil
 }
 
 func passwordHash(t *testing.T, password string) *string {
 	t.Helper()
+
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.MinCost)
 	require.NoError(t, err)
+
 	s := string(hash)
+
 	return &s
 }

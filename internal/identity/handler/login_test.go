@@ -16,7 +16,9 @@ import (
 
 func TestServer_Login(t *testing.T) {
 	t.Parallel()
+
 	email := "login@example.com"
+
 	t.Run("successful email/password login returns the session", func(t *testing.T) {
 		t.Parallel()
 		accounts := mocks.NewMockAccountRepository(t)
@@ -26,6 +28,7 @@ func TestServer_Login(t *testing.T) {
 		accounts.On("FindByEmail", mock.Anything, email).Return(&domain.Account{ID: "acc-1", Email: &email, AuthProvider: domain.AuthProviderEmail, FullName: "Login User", PasswordHash: passwordHash(t, "secret123"), Status: domain.AccountStatusActive}, nil).Once()
 		garages.On("ListGarageRolesForAccount", mock.Anything, "acc-1").Return([]usecase.GarageRole{{GarageID: "g-1", Role: "owner"}}, nil).Once()
 		tokens.On("Store", mock.Anything, mock.Anything, "acc-1", 86400).Return(nil).Once()
+
 		resp, err := srv.Login(t.Context(), &identityv1.LoginRequest{Method: &identityv1.LoginRequest_EmailPassword{EmailPassword: &identityv1.EmailPasswordCredential{Email: email, Password: "secret123"}}})
 		require.NoError(t, err)
 		require.NotNil(t, resp.GetAuth())
@@ -61,6 +64,7 @@ func TestServer_Login_Social(t *testing.T) {
 	t.Parallel()
 	t.Run("social login maps all garage roles", func(t *testing.T) {
 		t.Parallel()
+
 		uid := "stub-social-token"
 		accounts := mocks.NewMockAccountRepository(t)
 		garages := mocks.NewMockGarageMembershipReader(t)
@@ -69,6 +73,7 @@ func TestServer_Login_Social(t *testing.T) {
 		accounts.On("FindByIdentityPlatformUID", mock.Anything, uid).Return(&domain.Account{ID: "acc-social", AuthProvider: domain.AuthProviderFacebook, IdentityPlatformUID: &uid, FullName: "Social User", Status: domain.AccountStatusActive}, nil).Once()
 		garages.On("ListGarageRolesForAccount", mock.Anything, "acc-social").Return([]usecase.GarageRole{{GarageID: "g-1", Role: "owner"}, {GarageID: "g-2", Role: "accountant"}, {GarageID: "g-3", Role: "technician"}, {GarageID: "g-4", Role: "service_advisor"}, {GarageID: "g-5", Role: "inventory_staff"}, {GarageID: "g-6", Role: "unknown_role"}}, nil).Once()
 		tokens.On("Store", mock.Anything, mock.Anything, "acc-social", 86400).Return(nil).Once()
+
 		resp, err := srv.Login(t.Context(), &identityv1.LoginRequest{Method: &identityv1.LoginRequest_Social{Social: &identityv1.SocialCredential{Provider: identityv1.AuthProvider_AUTH_PROVIDER_FACEBOOK, IdToken: "social-token"}}})
 		require.NoError(t, err)
 		require.Len(t, resp.GetAuth().GetGarages(), 6)
@@ -92,6 +97,7 @@ func TestServer_Login_Social(t *testing.T) {
 	})
 	t.Run("phone/otp login works end to end", func(t *testing.T) {
 		t.Parallel()
+
 		phone := "+84901234567"
 		accounts := mocks.NewMockAccountRepository(t)
 		garages := mocks.NewMockGarageMembershipReader(t)
@@ -100,6 +106,7 @@ func TestServer_Login_Social(t *testing.T) {
 		accounts.On("FindByPhone", mock.Anything, phone).Return(&domain.Account{ID: "acc-2", Phone: &phone, AuthProvider: domain.AuthProviderEmail, FullName: "Phone User", Status: domain.AccountStatusActive}, nil).Once()
 		garages.On("ListGarageRolesForAccount", mock.Anything, "acc-2").Return(nil, nil).Once()
 		tokens.On("Store", mock.Anything, mock.Anything, "acc-2", 86400).Return(nil).Once()
+
 		resp, err := srv.Login(t.Context(), &identityv1.LoginRequest{Method: &identityv1.LoginRequest_PhoneOtp{PhoneOtp: &identityv1.PhoneOtpCredential{Phone: phone, OtpCode: testOTPCode}}})
 		require.NoError(t, err)
 		assert.Equal(t, phone, resp.GetAuth().GetAccount().GetPhone())

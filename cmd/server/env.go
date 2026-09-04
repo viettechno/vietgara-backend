@@ -3,6 +3,7 @@ package main
 import (
 	"log/slog"
 	"os"
+	"time"
 )
 
 func mustEnv(key string) string {
@@ -30,4 +31,15 @@ func envBool(key string, fallback bool) bool {
 	}
 
 	return v == "1" || v == "true" || v == "TRUE"
+}
+
+func envDuration(key string, fallback time.Duration) time.Duration {
+	v := envOr(key, fallback.String())
+	d, err := time.ParseDuration(v)
+	if err != nil || d <= 0 {
+		slog.Error("invalid duration environment variable", "key", key, "value", v)
+		os.Exit(1)
+	}
+
+	return d
 }

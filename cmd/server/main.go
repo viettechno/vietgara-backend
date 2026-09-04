@@ -70,8 +70,8 @@ func run(ctx context.Context) error {
 	}
 
 	txManager := platformdb.NewTxManager(pool)
-	accessTTL := 20 * time.Minute
-	refreshTTL := 30 * 24 * time.Hour
+	accessTTL := envDuration("JWT_ACCESS_TTL", 20*time.Minute)
+	refreshTTL := envDuration("JWT_REFRESH_TTL", 30*24*time.Hour)
 	tokenIssuer := auth.NewTokenIssuer(signingKey, accessTTL, refreshTTL)
 
 	// --- Repositories ---

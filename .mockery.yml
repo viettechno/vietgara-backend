@@ -42,3 +42,21 @@ packages:
         config:
           filename: "tenant_usecase_event_publisher.go"
           dir: "./internal/mocks"
+  github.com/viettechno/vietgara-backend/internal/identity/usecase:
+    interfaces:
+      AccountRepository:
+        config:
+          filename: "identity_usecase_account.go"
+          dir: "./internal/mocks"
+      GarageMembershipReader:
+        config:
+          filename: "identity_usecase_garage_membership_reader.go"
+          dir: "./internal/mocks"
+      RefreshTokenStore:
+        config:
+          filename: "identity_usecase_refresh_token_store.go"
+          dir: "./internal/mocks"
+      OTPVerifier:
+        config:
+          filename: "identity_usecase_otp_verifier.go"
+          dir: "./internal/mocks"

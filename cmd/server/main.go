@@ -16,10 +16,14 @@ import (
 
 	"google.golang.org/grpc/reflection"
 
+	identityv1 "github.com/viettechno/vietgara-proto/gen/go/vietgara/identity/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/gen/go/vietgara/tenant/v1"
 	"google.golang.org/grpc"
 
 	appdb "github.com/viettechno/vietgara-backend/db"
+	identityHandler "github.com/viettechno/vietgara-backend/internal/identity/handler"
+	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
+	identityUsecase "github.com/viettechno/vietgara-backend/internal/identity/usecase"
 	"github.com/viettechno/vietgara-backend/internal/middleware"
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
@@ -66,11 +70,14 @@ func run(ctx context.Context) error {
 	}
 
 	txManager := platformdb.NewTxManager(pool)
-	tokenIssuer := auth.NewTokenIssuer(signingKey, 20*time.Minute, 30*24*time.Hour)
+	accessTTL := 20 * time.Minute
+	refreshTTL := 30 * 24 * time.Hour
+	tokenIssuer := auth.NewTokenIssuer(signingKey, accessTTL, refreshTTL)
 
 	// --- Repositories ---
 	garageRepo := tenantRepo.NewPostgresGarageRepository(pool)
 	staffRepo := tenantRepo.NewPostgresGarageStaffRepository(pool)
+	accountRepo := identityRepo.NewPostgresAccountRepository(pool)
 
 	// --- Usecases ---
 	eventPublisher := outbox.NewEventPublisher(pool)
@@ -82,21 +89,45 @@ func run(ctx context.Context) error {
 	)
 	staffUC := tenantUsecase.NewStaffUseCase(staffRepo)
 
+	// Identity: the garage-reader adapter keeps the Identity module
+	// dependency-free of the Tenant module (see wiring.go).
+	refreshStore := newInMemoryRefreshTokenStore()
+	garageReader := &tenantToIdentityGarageReaderAdapter{staffRepo: staffRepo}
+	identityUC := identityUsecase.NewIdentityUseCase(
+		accountRepo,
+		garageReader,
+		refreshStore,
+		&stubOTPVerifier{},
+		tokenIssuer,
+		refreshTTL,
+	)
+
 	// --- Handler ---
 	tenantSrv := tenantHandler.NewServer(garageUC, staffUC)
+	identitySrv := identityHandler.NewServer(
+		identityUC,
+		&stubSocialIdentityVerifier{},
+	)
 
 	// --- gRPC server with the shared interceptor chain ---
-	// NOTE: AuthInterceptor must be skipped for Register/Login/SocialLogin
-	// themselves (no token exists yet) -- in the real .proto wiring this is
-	// done via a per-method allowlist passed into a small wrapper around
-	// AuthInterceptor; the Identity module is not wired yet.
+	// Auth endpoints (Register/Login/RefreshToken/Logout) are public: no
+	// token exists yet when they run, so they are allowlisted on the auth
+	// interceptor while everything else stays protected.
 	grpcServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
-			middleware.AuthInterceptor(tokenIssuer),
+			middleware.AuthInterceptor(tokenIssuer,
+				middleware.WithSkipMethods(
+					identityv1.AuthService_Register_FullMethodName,
+					identityv1.AuthService_Login_FullMethodName,
+					identityv1.AuthService_RefreshToken_FullMethodName,
+					identityv1.AuthService_Logout_FullMethodName,
+				),
+			),
 			middleware.TenantContextInterceptor(),
 			middleware.TransactionInterceptor(txManager),
 		),
 	)
+	identityv1.RegisterAuthServiceServer(grpcServer, identitySrv)
 	tenantv1.RegisterGarageServiceServer(grpcServer, tenantSrv)
 	tenantv1.RegisterStaffServiceServer(grpcServer, tenantSrv)
 	reflection.Register(grpcServer)

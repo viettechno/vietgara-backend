@@ -14,12 +14,33 @@ services:
     volumes:
       - /Users/akagi/viettechno/vietgara/postgres-data:/var/lib/postgresql/18/docker
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
 
+    networks:
+      - vietgara-network
+
+  vietgara-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vietgara-backend
+    restart: unless-stopped
+    depends_on:
+      vietgara-pgsql:
+        condition: service_healthy
+    environment:
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED}@vietgara-pgsql:5432/${POSTGRES_DB}?sslmode=disable
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-20m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-720h}
+      GRPC_PORT: 50051
+    ports:
+      - "${GRPC_PORT:-50051}:50051"
     networks:
       - vietgara-network
 

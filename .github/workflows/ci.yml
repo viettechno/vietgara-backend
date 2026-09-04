@@ -46,7 +46,6 @@ jobs:
         uses: golangci/golangci-lint-action@v7
         with:
           version: v2.12.2
-          args: run ./...
 
   integration:
     name: Integration tests

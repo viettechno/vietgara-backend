@@ -5,7 +5,7 @@ CREATE TYPE account_status AS ENUM ('active', 'inactive', 'suspended');
 -- Values follow Database Design Section 2.1 ('email' | 'google' |
 -- 'facebook'); phone-only registration still records 'email' so the
 -- account can upgrade to a password later.
-CREATE TYPE account_auth_provider AS ENUM ('email', 'google', 'facebook');
+CREATE TYPE account_auth_provider AS ENUM ('email', 'phone', 'google', 'facebook');
 
 -- Create accounts table
 -- password_hash is only set for accounts registered via email/password

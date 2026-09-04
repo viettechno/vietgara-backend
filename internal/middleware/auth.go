@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"net/http"
 	"slices"
 
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
@@ -10,6 +11,26 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 )
+
+// HTTPAuth protects browser-facing JSON endpoints with the same JWT issuer
+// used by the gRPC interceptor.
+func HTTPAuth(issuer *auth.TokenIssuer, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get("Authorization")
+		if len(token) < len("Bearer ") || token[:len("Bearer ")] != "Bearer " {
+			http.Error(w, "missing authorization token", http.StatusUnauthorized)
+			return
+		}
+
+		claims, err := issuer.Verify(token[len("Bearer "):])
+		if err != nil {
+			http.Error(w, "invalid or expired token", http.StatusUnauthorized)
+			return
+		}
+
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKeyClaims{}, claims)))
+	})
+}
 
 type ctxKeyClaims struct{}
 

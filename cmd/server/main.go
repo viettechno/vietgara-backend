@@ -9,6 +9,7 @@ import (
 	"context"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -52,6 +53,7 @@ func run(ctx context.Context) error {
 	dsn := mustEnv("DATABASE_URL")
 	signingKey := []byte(mustEnv("JWT_SIGNING_KEY"))
 	grpcPort := envOr("GRPC_PORT", "50051")
+	httpPort := envOr("HTTP_PORT", "8080")
 
 	connPool, err := platformdb.NewPgxPool(ctx, dsn)
 	if err != nil {
@@ -137,11 +139,24 @@ func run(ctx context.Context) error {
 		return err
 	}
 
+	httpMux := http.NewServeMux()
+	httpMux.Handle("/auth/", identitySrv)
+	httpMux.Handle("/staff", middleware.HTTPAuth(tokenIssuer, tenantSrv))
+	httpServer := &http.Server{Addr: ":" + httpPort, Handler: httpMux}
+	go func() {
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("HTTP server exited", "error", err)
+		}
+	}()
+
 	go func() {
 		<-ctx.Done()
 
 		slog.Info("shutting down gRPC server")
 		grpcServer.GracefulStop()
+		if err := httpServer.Shutdown(context.Background()); err != nil {
+			slog.Error("HTTP server shutdown failed", "error", err)
+		}
 	}()
 
 	slog.Info("VietGara backend (Modular Monolith, Phase 1) listening", "addr", lis.Addr().String())

@@ -55,44 +55,62 @@ func run(ctx context.Context) error {
 	grpcPort := envOr("GRPC_PORT", "50051")
 	httpPort := envOr("HTTP_PORT", "8080")
 
-	connPool, err := platformdb.NewPgxPool(ctx, dsn)
+	pool, err := initPool(ctx, dsn)
 	if err != nil {
 		return err
 	}
-	defer connPool.Close()
-
-	pool := platformdb.NewPool(ctx, connPool)
 	defer pool.Close()
 
-	if envBool("RUN_MIGRATIONS", true) {
-		migrationsPath := envOr("MIGRATIONS_PATH", defaultMigrationsPath)
-		if err := appdb.RunMigrations(dsn, migrationsPath); err != nil {
-			return err
-		}
+	if err := runMigrations(dsn); err != nil {
+		return err
 	}
 
+	grpcServer, httpServer, err := buildServices(pool, signingKey)
+	if err != nil {
+		return err
+	}
+
+	return serve(ctx, grpcPort, httpPort, grpcServer, httpServer)
+}
+
+func initPool(ctx context.Context, dsn string) (*platformdb.Pool, error) {
+	connPool, err := platformdb.NewPgxPool(ctx, dsn)
+	if err != nil {
+		return nil, err
+	}
+
+	return platformdb.NewPool(ctx, connPool), nil
+}
+
+func runMigrations(dsn string) error {
+	if !envBool("RUN_MIGRATIONS", true) {
+		return nil
+	}
+
+	migrationsPath := envOr("MIGRATIONS_PATH", defaultMigrationsPath)
+
+	return appdb.RunMigrations(dsn, migrationsPath)
+}
+
+func buildServices(pool *platformdb.Pool, signingKey []byte) (*grpc.Server, *http.Server, error) {
 	txManager := platformdb.NewTxManager(pool)
 	accessTTL := envDuration("JWT_ACCESS_TTL", 20*time.Minute)
 	refreshTTL := envDuration("JWT_REFRESH_TTL", 30*24*time.Hour)
 	tokenIssuer := auth.NewTokenIssuer(signingKey, accessTTL, refreshTTL)
 
-	// --- Repositories ---
 	garageRepo := tenantRepo.NewPostgresGarageRepository(pool)
 	staffRepo := tenantRepo.NewPostgresGarageStaffRepository(pool)
 	accountRepo := identityRepo.NewPostgresAccountRepository(pool)
 
-	// --- Usecases ---
 	eventPublisher := outbox.NewEventPublisher(pool)
 	garageUC := tenantUsecase.NewGarageUseCase(
 		garageRepo,
 		staffRepo,
 		eventPublisher,
-		tenantUsecase.WithTransactionManager(txManager), // CreateGarage runs inside one tenant-scoped transaction (RLS)
+		tenantUsecase.WithTransactionManager(txManager),
 	)
 	staffUC := tenantUsecase.NewStaffUseCase(staffRepo)
 
-	// Identity: the garage-reader adapter keeps the Identity module
-	// dependency-free of the Tenant module (see wiring.go).
 	refreshStore := newInMemoryRefreshTokenStore()
 	garageReader := &tenantToIdentityGarageReaderAdapter{staffRepo: staffRepo}
 	identityUC := identityUsecase.NewIdentityUseCase(
@@ -104,12 +122,8 @@ func run(ctx context.Context) error {
 		refreshTTL,
 	)
 
-	// --- Handler ---
 	tenantSrv := tenantHandler.NewServer(garageUC, staffUC)
-	identitySrv := identityHandler.NewServer(
-		identityUC,
-		&stubSocialIdentityVerifier{},
-	)
+	identitySrv := identityHandler.NewServer(identityUC, &stubSocialIdentityVerifier{})
 	identitySrv.ConfigureGoogleOAuth(identityHandler.GoogleOAuthConfig{
 		ClientID:       envOr("GOOGLE_CLIENT_ID", ""),
 		ClientSecret:   envOr("GOOGLE_CLIENT_SECRET", ""),
@@ -120,10 +134,6 @@ func run(ctx context.Context) error {
 		FrontendOrigin: envOr("FRONTEND_ORIGIN", "http://localhost:8000"),
 	})
 
-	// --- gRPC server with the shared interceptor chain ---
-	// Auth endpoints (Register/Login/RefreshToken/Logout) are public: no
-	// token exists yet when they run, so they are allowlisted on the auth
-	// interceptor while everything else stays protected.
 	grpcServer := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			middleware.AuthInterceptor(tokenIssuer,
@@ -143,36 +153,51 @@ func run(ctx context.Context) error {
 	tenantv1.RegisterStaffServiceServer(grpcServer, tenantSrv)
 	reflection.Register(grpcServer)
 
+	httpMux := http.NewServeMux()
+	httpMux.Handle("/auth/", identitySrv)
+	httpMux.Handle("/staff", middleware.HTTPAuth(tokenIssuer, tenantSrv))
+
+	return grpcServer, &http.Server{
+		Addr:              ":" + envOr("HTTP_PORT", "8080"),
+		Handler:           httpMux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}, nil
+}
+
+func serve(ctx context.Context, grpcPort, httpPort string, services *grpc.Server, httpServer *http.Server) error {
 	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ":"+grpcPort)
 	if err != nil {
 		return err
 	}
 
-	httpMux := http.NewServeMux()
-	httpMux.Handle("/auth/", identitySrv)
-	httpMux.Handle("/staff", middleware.HTTPAuth(tokenIssuer, tenantSrv))
-
-	httpServer := &http.Server{Addr: ":" + httpPort, Handler: httpMux}
-	go func() {
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("HTTP server exited", "error", err)
-		}
-	}()
+	if httpServer != nil {
+		httpServer.Addr = ":" + httpPort
+		go func() {
+			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				slog.Error("HTTP server exited", "error", err)
+			}
+		}()
+	}
 
 	go func() {
 		<-ctx.Done()
 
 		slog.Info("shutting down gRPC server")
-		grpcServer.GracefulStop()
+		services.GracefulStop()
 
-		if err := httpServer.Shutdown(context.Background()); err != nil {
-			slog.Error("HTTP server shutdown failed", "error", err)
+		shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+
+		if httpServer != nil {
+			if err := httpServer.Shutdown(shutdownCtx); err != nil {
+				slog.Error("HTTP server shutdown failed", "error", err)
+			}
 		}
 	}()
 
 	slog.Info("VietGara backend (Modular Monolith, Phase 1) listening", "addr", lis.Addr().String())
 
-	if err := grpcServer.Serve(lis); err != nil {
+	if err := services.Serve(lis); err != nil {
 		return err
 	}
 

@@ -113,21 +113,35 @@ func writeProtoJSON(w http.ResponseWriter, message protoreflect.ProtoMessage) {
 }
 
 func writeGRPCHTTPError(w http.ResponseWriter, err error) {
-	code := status.Code(err)
-	httpCode := http.StatusInternalServerError
+	writeHTTPError(w, grpcCodeToHTTPStatus(status.Code(err)), status.Convert(err).Message())
+}
 
-	switch code {
-	case codes.InvalidArgument:
-		httpCode = http.StatusBadRequest
-	case codes.Unauthenticated:
-		httpCode = http.StatusUnauthorized
-	case codes.AlreadyExists:
-		httpCode = http.StatusConflict
-	case codes.FailedPrecondition:
-		httpCode = http.StatusPreconditionFailed
+var grpcCodeHTTPStatus = map[codes.Code]int{
+	codes.OK:                 http.StatusOK,
+	codes.Canceled:           http.StatusRequestTimeout,
+	codes.Unknown:            http.StatusInternalServerError,
+	codes.InvalidArgument:    http.StatusBadRequest,
+	codes.DeadlineExceeded:   http.StatusGatewayTimeout,
+	codes.NotFound:           http.StatusNotFound,
+	codes.PermissionDenied:   http.StatusForbidden,
+	codes.ResourceExhausted:  http.StatusTooManyRequests,
+	codes.FailedPrecondition: http.StatusPreconditionFailed,
+	codes.Aborted:            http.StatusConflict,
+	codes.OutOfRange:         http.StatusBadRequest,
+	codes.Unimplemented:      http.StatusNotImplemented,
+	codes.Internal:           http.StatusInternalServerError,
+	codes.Unavailable:        http.StatusServiceUnavailable,
+	codes.DataLoss:           http.StatusInternalServerError,
+	codes.Unauthenticated:    http.StatusUnauthorized,
+	codes.AlreadyExists:      http.StatusConflict,
+}
+
+func grpcCodeToHTTPStatus(code codes.Code) int {
+	if httpCode, ok := grpcCodeHTTPStatus[code]; ok {
+		return httpCode
 	}
 
-	writeHTTPError(w, httpCode, status.Convert(err).Message())
+	return http.StatusInternalServerError
 }
 
 func writeHTTPError(w http.ResponseWriter, code int, message string) {

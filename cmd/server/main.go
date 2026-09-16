@@ -110,6 +110,15 @@ func run(ctx context.Context) error {
 		identityUC,
 		&stubSocialIdentityVerifier{},
 	)
+	identitySrv.ConfigureGoogleOAuth(identityHandler.GoogleOAuthConfig{
+		ClientID:       envOr("GOOGLE_CLIENT_ID", ""),
+		ClientSecret:   envOr("GOOGLE_CLIENT_SECRET", ""),
+		AuthEndpoint:   envOr("GOOGLE_AUTH_ENDPOINT", "https://accounts.google.com/o/oauth2/v2/auth"),
+		TokenEndpoint:  envOr("GOOGLE_TOKEN_ENDPOINT", "https://oauth2.googleapis.com/token"),
+		UserInfoURL:    envOr("GOOGLE_USERINFO_URL", "https://openidconnect.googleapis.com/v1/userinfo"),
+		RedirectURI:    envOr("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback"),
+		FrontendOrigin: envOr("FRONTEND_ORIGIN", "http://localhost:8000"),
+	})
 
 	// --- gRPC server with the shared interceptor chain ---
 	// Auth endpoints (Register/Login/RefreshToken/Logout) are public: no
@@ -142,6 +151,7 @@ func run(ctx context.Context) error {
 	httpMux := http.NewServeMux()
 	httpMux.Handle("/auth/", identitySrv)
 	httpMux.Handle("/staff", middleware.HTTPAuth(tokenIssuer, tenantSrv))
+
 	httpServer := &http.Server{Addr: ":" + httpPort, Handler: httpMux}
 	go func() {
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -154,6 +164,7 @@ func run(ctx context.Context) error {
 
 		slog.Info("shutting down gRPC server")
 		grpcServer.GracefulStop()
+
 		if err := httpServer.Shutdown(context.Background()); err != nil {
 			slog.Error("HTTP server shutdown failed", "error", err)
 		}

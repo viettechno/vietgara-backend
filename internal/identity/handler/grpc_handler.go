@@ -33,6 +33,13 @@ type Server struct {
 	socialVerifier SocialIdentityVerifier
 
 	now func() time.Time
+
+	googleOAuth *GoogleOAuthConfig
+}
+
+// ConfigureGoogleOAuth enables the browser authorization-code flow.
+func (s *Server) ConfigureGoogleOAuth(config GoogleOAuthConfig) {
+	s.googleOAuth = &config
 }
 
 // NewServer wires the handler to the identity use case and its

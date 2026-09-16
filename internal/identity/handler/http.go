@@ -25,6 +25,19 @@ type registerRequest struct {
 // the source of truth; these endpoints only translate JSON to the same RPC
 // request types used by native clients.
 func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		switch r.URL.Path {
+		case "/auth/google/login":
+			s.googleLogin(w, r)
+		case "/auth/google/callback":
+			s.googleCallback(w, r)
+		default:
+			writeHTTPError(w, http.StatusNotFound, "not found")
+		}
+
+		return
+	}
+
 	if r.Method != http.MethodPost {
 		writeHTTPError(w, http.StatusMethodNotAllowed, "method not allowed")
 		return
@@ -102,6 +115,7 @@ func writeProtoJSON(w http.ResponseWriter, message protoreflect.ProtoMessage) {
 func writeGRPCHTTPError(w http.ResponseWriter, err error) {
 	code := status.Code(err)
 	httpCode := http.StatusInternalServerError
+
 	switch code {
 	case codes.InvalidArgument:
 		httpCode = http.StatusBadRequest

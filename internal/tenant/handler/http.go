@@ -49,6 +49,7 @@ func (s *Server) listHTTPStaff(w http.ResponseWriter, r *http.Request) {
 		writeStaffHTTPError(w, http.StatusBadRequest, "garageId is required")
 		return
 	}
+
 	if !httpHasGarageAccess(r, garageID) {
 		writeStaffHTTPError(w, http.StatusForbidden, "no access to this garage")
 		return
@@ -79,12 +80,14 @@ func (s *Server) addHTTPStaff(w http.ResponseWriter, r *http.Request) {
 		writeStaffHTTPError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+
 	if !httpHasGarageAccess(r, payload.GarageID) {
 		writeStaffHTTPError(w, http.StatusForbidden, "no access to this garage")
 		return
 	}
 
 	role := domain.Role(payload.Role)
+
 	member, err := s.staff.Add(r.Context(), usecase.AddStaffRequest{
 		GarageID: payload.GarageID, AccountID: payload.AccountID, Role: role,
 	})
@@ -108,6 +111,7 @@ func httpHasGarageAccess(r *http.Request, garageID string) bool {
 	}
 
 	_, hasAccess := claims.HasAccessToGarage(garageID)
+
 	return hasAccess
 }
 

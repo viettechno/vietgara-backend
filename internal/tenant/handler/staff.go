@@ -5,6 +5,8 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/converter"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 )
 
@@ -16,7 +18,7 @@ func (s *Server) AddStaff(ctx context.Context, req *tenantv1.AddStaffRequest) (*
 		Role:      roleFromProto(req.GetRole()),
 	})
 	if err != nil {
-		return nil, toGRPCError(err)
+		return nil, apperror.ToGRPCError(err)
 	}
 
 	return &tenantv1.AddStaffResponse{Staff: staffToProto(st)}, nil
@@ -26,7 +28,7 @@ func (s *Server) AddStaff(ctx context.Context, req *tenantv1.AddStaffRequest) (*
 func (s *Server) ListStaff(ctx context.Context, req *tenantv1.ListStaffRequest) (*tenantv1.ListStaffResponse, error) {
 	list, err := s.staff.List(ctx, req.GetGarageId())
 	if err != nil {
-		return nil, toGRPCError(err)
+		return nil, apperror.ToGRPCError(err)
 	}
 
 	resp := &tenantv1.ListStaffResponse{}
@@ -44,8 +46,8 @@ func staffToProto(s *domain.GarageStaff) *tenantv1.GarageStaff {
 		AccountId: s.AccountID,
 		Role:      roleToProto(s.Role),
 		Status:    staffStatusToProto(s.Status),
-		CreatedAt: timeToProto(s.CreatedAt),
-		UpdatedAt: timeToProto(s.UpdatedAt),
+		CreatedAt: converter.TimeToProto(s.CreatedAt),
+		UpdatedAt: converter.TimeToProto(s.UpdatedAt),
 	}
 }
 

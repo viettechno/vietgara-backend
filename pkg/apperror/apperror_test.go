@@ -4,7 +4,11 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 func TestAppError_Error(t *testing.T) {
@@ -128,6 +132,36 @@ func TestAs(t *testing.T) {
 			if got.Message != tt.wantMsg {
 				t.Fatalf("As().Message = %q, want %q", got.Message, tt.wantMsg)
 			}
+		})
+	}
+}
+
+func TestToGRPCError(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		err      error
+		wantCode codes.Code
+	}{
+		{name: "not found", err: apperror.New(apperror.CodeNotFound, "missing"), wantCode: codes.NotFound},
+		{name: "already exists", err: apperror.New(apperror.CodeAlreadyExists, "dup"), wantCode: codes.AlreadyExists},
+		{name: "invalid argument", err: apperror.New(apperror.CodeInvalidArgument, "bad"), wantCode: codes.InvalidArgument},
+		{name: "permission denied", err: apperror.New(apperror.CodePermissionDenied, "denied"), wantCode: codes.PermissionDenied},
+		{name: "unauthenticated", err: apperror.New(apperror.CodeUnauthenticated, "who"), wantCode: codes.Unauthenticated},
+		{name: "failed precondition", err: apperror.New(apperror.CodeFailedPrecondition, "precond"), wantCode: codes.FailedPrecondition},
+		{name: "internal", err: apperror.New(apperror.CodeInternal, "boom"), wantCode: codes.Internal},
+		{name: "unknown app error code", err: apperror.New(apperror.Code("SOMETHING_ELSE"), "boom"), wantCode: codes.Internal},
+		{name: "non app error", err: errors.New("plain error"), wantCode: codes.Internal},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			err := apperror.ToGRPCError(tc.err)
+			require.Error(t, err)
+			assert.Equal(t, tc.wantCode, status.Code(err))
 		})
 	}
 }

@@ -3,6 +3,8 @@ package handler
 import (
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"github.com/viettechno/vietgara-backend/internal/identity/domain"
 	"github.com/viettechno/vietgara-backend/internal/identity/usecase"
@@ -65,4 +67,24 @@ func accountToProto(acc *domain.Account) *identityv1.Account {
 	}
 
 	return &identityv1.Account{Id: acc.ID, Email: acc.Email, Phone: acc.Phone, AuthProvider: provider, FullName: acc.FullName, Status: accStatus}
+}
+
+// authProviderFromProto maps the proto AuthProvider enum to the domain
+// value, rejecting unknown values so an unauthenticated user cannot force
+// an arbitrary provider through.
+func authProviderFromProto(p identityv1.AuthProvider) (domain.AuthProvider, error) {
+	switch p {
+	case identityv1.AuthProvider_AUTH_PROVIDER_EMAIL:
+		return domain.AuthProviderEmail, nil
+	case identityv1.AuthProvider_AUTH_PROVIDER_PHONE:
+		return domain.AuthProviderPhone, nil
+	case identityv1.AuthProvider_AUTH_PROVIDER_GOOGLE:
+		return domain.AuthProviderGoogle, nil
+	case identityv1.AuthProvider_AUTH_PROVIDER_FACEBOOK:
+		return domain.AuthProviderFacebook, nil
+	case identityv1.AuthProvider_AUTH_PROVIDER_UNSPECIFIED:
+		return "", status.Error(codes.InvalidArgument, "auth provider is required")
+	default:
+		return "", status.Error(codes.InvalidArgument, "unsupported auth provider")
+	}
 }

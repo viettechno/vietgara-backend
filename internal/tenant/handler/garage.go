@@ -5,6 +5,8 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/converter"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 )
 
@@ -25,7 +27,7 @@ func (s *Server) CreateGarage(ctx context.Context, req *tenantv1.CreateGarageReq
 		Currency:  req.Currency,
 	})
 	if err != nil {
-		return nil, toGRPCError(err)
+		return nil, apperror.ToGRPCError(err)
 	}
 
 	return &tenantv1.CreateGarageResponse{Garage: garageToProto(g)}, nil
@@ -35,7 +37,7 @@ func (s *Server) CreateGarage(ctx context.Context, req *tenantv1.CreateGarageReq
 func (s *Server) GetGarage(ctx context.Context, req *tenantv1.GetGarageRequest) (*tenantv1.GetGarageResponse, error) {
 	g, err := s.garage.Get(ctx, req.GetGarageId())
 	if err != nil {
-		return nil, toGRPCError(err)
+		return nil, apperror.ToGRPCError(err)
 	}
 
 	return &tenantv1.GetGarageResponse{Garage: garageToProto(g)}, nil
@@ -54,7 +56,7 @@ func (s *Server) UpdateGarage(ctx context.Context, req *tenantv1.UpdateGarageReq
 		Currency: req.Currency,
 	})
 	if err != nil {
-		return nil, toGRPCError(err)
+		return nil, apperror.ToGRPCError(err)
 	}
 
 	return &tenantv1.UpdateGarageResponse{Garage: garageToProto(g)}, nil
@@ -69,7 +71,7 @@ func (s *Server) ListGarages(ctx context.Context, _ *tenantv1.ListGaragesRequest
 
 	garages, err := s.garage.List(ctx, accountID)
 	if err != nil {
-		return nil, toGRPCError(err)
+		return nil, apperror.ToGRPCError(err)
 	}
 
 	resp := &tenantv1.ListGaragesResponse{}
@@ -91,8 +93,8 @@ func garageToProto(g *domain.Garage) *tenantv1.Garage {
 		Timezone:  g.Timezone,
 		Currency:  g.Currency,
 		Status:    garageStatusToProto(g.Status),
-		CreatedAt: timeToProto(g.CreatedAt),
-		UpdatedAt: timeToProto(g.UpdatedAt),
+		CreatedAt: converter.TimeToProto(g.CreatedAt),
+		UpdatedAt: converter.TimeToProto(g.UpdatedAt),
 	}
 }
 

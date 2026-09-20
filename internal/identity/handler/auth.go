@@ -6,6 +6,7 @@ import (
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/identity/usecase"
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -35,7 +36,7 @@ func (s *Server) Register(ctx context.Context, req *identityv1.RegisterRequest) 
 	}
 
 	if err != nil {
-		return nil, toGRPCError(err)
+		return nil, apperror.ToGRPCError(err)
 	}
 
 	return &identityv1.RegisterResponse{Auth: s.authToProto(result)}, nil
@@ -65,7 +66,7 @@ func (s *Server) Login(ctx context.Context, req *identityv1.LoginRequest) (*iden
 	}
 
 	if err != nil {
-		return nil, toGRPCError(err)
+		return nil, apperror.ToGRPCError(err)
 	}
 
 	return &identityv1.LoginResponse{Auth: s.authToProto(result)}, nil
@@ -79,7 +80,7 @@ func (s *Server) RefreshToken(ctx context.Context, req *identityv1.RefreshTokenR
 
 	result, err := s.uc.Refresh(ctx, req.GetRefreshToken())
 	if err != nil {
-		return nil, toGRPCError(err)
+		return nil, apperror.ToGRPCError(err)
 	}
 
 	return &identityv1.RefreshTokenResponse{Auth: s.authToProto(result)}, nil
@@ -92,7 +93,7 @@ func (s *Server) Logout(ctx context.Context, req *identityv1.LogoutRequest) (*id
 	}
 
 	if err := s.uc.Logout(ctx, req.GetRefreshToken()); err != nil {
-		return nil, toGRPCError(err)
+		return nil, apperror.ToGRPCError(err)
 	}
 
 	return &identityv1.LogoutResponse{Revoked: true}, nil

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/labstack/echo/v4"
 	"github.com/viettechno/vietgara-backend/internal/middleware"
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
@@ -25,22 +26,10 @@ type staffHTTPResponse struct {
 	UpdatedAt string `json:"updatedAt"`
 }
 
-// ServeHTTP exposes the browser-facing staff endpoints. Authentication and
-// garage authorization are applied by the HTTP middleware in cmd/server.
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/staff" {
-		http.Error(w, "not found", http.StatusNotFound)
-		return
-	}
-
-	switch r.Method {
-	case http.MethodGet:
-		s.listHTTPStaff(w, r)
-	case http.MethodPost:
-		s.addHTTPStaff(w, r)
-	default:
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-	}
+// RegisterHTTPRoutes adds browser-facing staff endpoints to Echo.
+func (s *Server) RegisterHTTPRoutes(router *echo.Group) {
+	router.GET("/staff", echo.WrapHandler(http.HandlerFunc(s.listHTTPStaff)))
+	router.POST("/staff", echo.WrapHandler(http.HandlerFunc(s.addHTTPStaff)))
 }
 
 func (s *Server) listHTTPStaff(w http.ResponseWriter, r *http.Request) {

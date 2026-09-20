@@ -9,6 +9,9 @@ package apperror
 import (
 	"errors"
 	"fmt"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // Code is a stable, machine-readable error category independent of the
@@ -74,4 +77,31 @@ func As(err error) (*AppError, bool) {
 	}
 
 	return nil, false
+}
+
+// ToGRPCError translates *AppError into a gRPC status error.
+func ToGRPCError(err error) error {
+	appErr, ok := As(err)
+	if !ok {
+		return status.Error(codes.Internal, "internal error")
+	}
+
+	switch appErr.Code {
+	case CodeNotFound:
+		return status.Error(codes.NotFound, appErr.Message)
+	case CodeAlreadyExists:
+		return status.Error(codes.AlreadyExists, appErr.Message)
+	case CodeInvalidArgument:
+		return status.Error(codes.InvalidArgument, appErr.Message)
+	case CodePermissionDenied:
+		return status.Error(codes.PermissionDenied, appErr.Message)
+	case CodeUnauthenticated:
+		return status.Error(codes.Unauthenticated, appErr.Message)
+	case CodeFailedPrecondition:
+		return status.Error(codes.FailedPrecondition, appErr.Message)
+	case CodeInternal:
+		return status.Error(codes.Internal, appErr.Message)
+	default:
+		return status.Error(codes.Internal, "internal error")
+	}
 }

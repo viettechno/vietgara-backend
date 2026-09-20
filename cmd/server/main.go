@@ -15,6 +15,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/labstack/echo/v4"
 	"google.golang.org/grpc/reflection"
 
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
@@ -153,13 +154,16 @@ func buildServices(pool *platformdb.Pool, signingKey []byte) (*grpc.Server, *htt
 	tenantv1.RegisterStaffServiceServer(grpcServer, tenantSrv)
 	reflection.Register(grpcServer)
 
-	httpMux := http.NewServeMux()
-	httpMux.Handle("/auth/", identitySrv)
-	httpMux.Handle("/staff", middleware.HTTPAuth(tokenIssuer, tenantSrv))
+	e := echo.New()
+	identitySrv.RegisterHTTPRoutes(e.Group(""))
+	staffGroup := e.Group("", echo.WrapMiddleware(func(next http.Handler) http.Handler {
+		return middleware.HTTPAuth(tokenIssuer, next)
+	}))
+	tenantSrv.RegisterHTTPRoutes(staffGroup)
 
 	return grpcServer, &http.Server{
 		Addr:              ":" + envOr("HTTP_PORT", "8080"),
-		Handler:           httpMux,
+		Handler:           e,
 		ReadHeaderTimeout: 5 * time.Second,
 	}, nil
 }

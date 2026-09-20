@@ -4,8 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/labstack/echo/v4"
+	"github.com/viettechno/vietgara-backend/pkg/converter"
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/reflect/protoreflect"
@@ -21,36 +22,12 @@ type registerRequest struct {
 	FullName string `json:"fullName"`
 }
 
-// ServeHTTP exposes the browser-facing auth endpoints. The gRPC service stays
-// the source of truth; these endpoints only translate JSON to the same RPC
-// request types used by native clients.
-func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		switch r.URL.Path {
-		case "/auth/google/login":
-			s.googleLogin(w, r)
-		case "/auth/google/callback":
-			s.googleCallback(w, r)
-		default:
-			writeHTTPError(w, http.StatusNotFound, "not found")
-		}
-
-		return
-	}
-
-	if r.Method != http.MethodPost {
-		writeHTTPError(w, http.StatusMethodNotAllowed, "method not allowed")
-		return
-	}
-
-	switch r.URL.Path {
-	case "/auth/register":
-		s.handleHTTPRegister(w, r)
-	case "/auth/login":
-		s.handleHTTPLogin(w, r)
-	default:
-		writeHTTPError(w, http.StatusNotFound, "not found")
-	}
+// RegisterHTTPRoutes adds the browser-facing auth endpoints to Echo.
+func (s *Server) RegisterHTTPRoutes(router *echo.Group) {
+	router.POST("/auth/register", echo.WrapHandler(http.HandlerFunc(s.handleHTTPRegister)))
+	router.POST("/auth/login", echo.WrapHandler(http.HandlerFunc(s.handleHTTPLogin)))
+	router.GET("/auth/google/login", echo.WrapHandler(http.HandlerFunc(s.googleLogin)))
+	router.GET("/auth/google/callback", echo.WrapHandler(http.HandlerFunc(s.googleCallback)))
 }
 
 func (s *Server) handleHTTPRegister(w http.ResponseWriter, r *http.Request) {
@@ -113,35 +90,7 @@ func writeProtoJSON(w http.ResponseWriter, message protoreflect.ProtoMessage) {
 }
 
 func writeGRPCHTTPError(w http.ResponseWriter, err error) {
-	writeHTTPError(w, grpcCodeToHTTPStatus(status.Code(err)), status.Convert(err).Message())
-}
-
-var grpcCodeHTTPStatus = map[codes.Code]int{
-	codes.OK:                 http.StatusOK,
-	codes.Canceled:           http.StatusRequestTimeout,
-	codes.Unknown:            http.StatusInternalServerError,
-	codes.InvalidArgument:    http.StatusBadRequest,
-	codes.DeadlineExceeded:   http.StatusGatewayTimeout,
-	codes.NotFound:           http.StatusNotFound,
-	codes.PermissionDenied:   http.StatusForbidden,
-	codes.ResourceExhausted:  http.StatusTooManyRequests,
-	codes.FailedPrecondition: http.StatusPreconditionFailed,
-	codes.Aborted:            http.StatusConflict,
-	codes.OutOfRange:         http.StatusBadRequest,
-	codes.Unimplemented:      http.StatusNotImplemented,
-	codes.Internal:           http.StatusInternalServerError,
-	codes.Unavailable:        http.StatusServiceUnavailable,
-	codes.DataLoss:           http.StatusInternalServerError,
-	codes.Unauthenticated:    http.StatusUnauthorized,
-	codes.AlreadyExists:      http.StatusConflict,
-}
-
-func grpcCodeToHTTPStatus(code codes.Code) int {
-	if httpCode, ok := grpcCodeHTTPStatus[code]; ok {
-		return httpCode
-	}
-
-	return http.StatusInternalServerError
+	writeHTTPError(w, converter.GRPCCodeToHTTPStatus(status.Code(err)), status.Convert(err).Message())
 }
 
 func writeHTTPError(w http.ResponseWriter, code int, message string) {

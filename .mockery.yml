@@ -42,6 +42,10 @@ packages:
         config:
           filename: "tenant_usecase_event_publisher.go"
           dir: "./internal/mocks"
+      AccountDirectory:
+        config:
+          filename: "tenant_usecase_account_directory.go"
+          dir: "./internal/mocks"
   github.com/viettechno/vietgara-backend/internal/identity/usecase:
     interfaces:
       AccountRepository:

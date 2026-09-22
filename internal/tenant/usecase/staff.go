@@ -20,12 +20,19 @@ type AddStaffRequest struct {
 // share the same repository and are used together in garage management
 // flows.
 type StaffUseCase struct {
-	staffRepo GarageStaffRepository
+	staff   GarageStaffRepository
+	account AccountDirectory
 }
 
 // NewStaffUseCase wires the staff use case to its repository.
-func NewStaffUseCase(staff GarageStaffRepository) *StaffUseCase {
-	return &StaffUseCase{staffRepo: staff}
+func NewStaffUseCase(staff GarageStaffRepository, opts ...StaffOption) *StaffUseCase {
+	uc := &StaffUseCase{staff: staff}
+
+	for _, opt := range opts {
+		opt(uc)
+	}
+
+	return uc
 }
 
 // Add validates the role, rejects duplicate active memberships, and
@@ -35,7 +42,11 @@ func (uc *StaffUseCase) Add(ctx context.Context, req AddStaffRequest) (*domain.G
 		return nil, apperror.Wrap(apperror.CodeInvalidArgument, "invalid role", domain.ErrInvalidRole)
 	}
 
-	existing, err := uc.staffRepo.FindByGarageAndAccount(ctx, req.GarageID, req.AccountID)
+	if err := uc.requireActiveAccount(ctx, req.AccountID); err != nil {
+		return nil, err
+	}
+
+	existing, err := uc.staff.FindByGarageAndAccount(ctx, req.GarageID, req.AccountID)
 	if err == nil && existing != nil && existing.Status == domain.StaffStatusActive {
 		return nil, apperror.Wrap(apperror.CodeAlreadyExists, "account is already staff at this garage", domain.ErrStaffAlreadyExists)
 	}
@@ -47,7 +58,7 @@ func (uc *StaffUseCase) Add(ctx context.Context, req AddStaffRequest) (*domain.G
 		Role:      req.Role,
 		Status:    domain.StaffStatusActive,
 	}
-	if err := uc.staffRepo.Create(ctx, s); err != nil {
+	if err := uc.staff.Create(ctx, s); err != nil {
 		return nil, apperror.Wrap(apperror.CodeInternal, "add staff", err)
 	}
 
@@ -56,7 +67,7 @@ func (uc *StaffUseCase) Add(ctx context.Context, req AddStaffRequest) (*domain.G
 
 // List returns the active staff members of garageID.
 func (uc *StaffUseCase) List(ctx context.Context, garageID string) ([]*domain.GarageStaff, error) {
-	list, err := uc.staffRepo.ListByGarageID(ctx, garageID)
+	list, err := uc.staff.ListByGarageID(ctx, garageID)
 	if err != nil {
 		return nil, apperror.Wrap(apperror.CodeInternal, "list staff", err)
 	}

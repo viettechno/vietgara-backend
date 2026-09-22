@@ -3,12 +3,13 @@ package main
 import (
 	"context"
 	"errors"
-	"log/slog"
-	"sync"
 
 	"github.com/viettechno/vietgara-backend/internal/identity/domain"
+	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
 	identityUsecase "github.com/viettechno/vietgara-backend/internal/identity/usecase"
+	tenantDomain "github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
+	tenantUsecase "github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 )
 
 // tenantToIdentityGarageReaderAdapter bridges the Tenant module's
@@ -35,78 +36,54 @@ func (a *tenantToIdentityGarageReaderAdapter) ListGarageRolesForAccount(ctx cont
 	return result, nil
 }
 
-// inMemoryRefreshTokenStore is an ephemeral RefreshTokenStore.
-// TODO(Phase 1 hardening, before staging): replace with a Redis
-// (Memorystore) implementation -- see Security Architecture Section 2.2.
-// An in-memory store does not survive a process restart and does not work
-// across multiple replicas, which is only acceptable for local
-// development.
-type inMemoryRefreshTokenStore struct {
-	mu     sync.Mutex
-	tokens map[string]string // refreshToken -> accountID
+// identityToTenantAccountDirectoryAdapter gives the Tenant module a narrow
+// read-only view of Identity accounts (email/phone lookup and id batches)
+// without importing the Identity module -- the mirror image of
+// tenantToIdentityGarageReaderAdapter.
+type identityToTenantAccountDirectoryAdapter struct {
+	accountRepo *identityRepo.PostgresAccountRepository
 }
 
-func newInMemoryRefreshTokenStore() *inMemoryRefreshTokenStore {
-	return &inMemoryRefreshTokenStore{tokens: map[string]string{}}
+func (a *identityToTenantAccountDirectoryAdapter) FindByEmail(ctx context.Context, email string) (*tenantUsecase.AccountSummary, error) {
+	return summaryOrNotFound(a.accountRepo.FindByEmailFold(ctx, email))
 }
 
-func (s *inMemoryRefreshTokenStore) Store(_ context.Context, refreshToken, accountID string, _ int) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.tokens[refreshToken] = accountID
-
-	return nil
+func (a *identityToTenantAccountDirectoryAdapter) FindByPhone(ctx context.Context, phone string) (*tenantUsecase.AccountSummary, error) {
+	return summaryOrNotFound(a.accountRepo.FindByPhoneNormalized(ctx, phone))
 }
 
-func (s *inMemoryRefreshTokenStore) GetAccountID(_ context.Context, refreshToken string) (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	accountID, ok := s.tokens[refreshToken]
-	if !ok {
-		return "", errors.New("refresh token not found or revoked")
+func (a *identityToTenantAccountDirectoryAdapter) ListByIDs(ctx context.Context, ids []string) (map[string]*tenantUsecase.AccountSummary, error) {
+	accounts, err := a.accountRepo.FindByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
 	}
 
-	return accountID, nil
-}
-
-func (s *inMemoryRefreshTokenStore) Revoke(_ context.Context, refreshToken string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	delete(s.tokens, refreshToken)
-
-	return nil
-}
-
-// stubOTPVerifier always accepts the dev code "000000" -- local development
-// only.
-// TODO(Phase 1 hardening, before staging): replace with a real SMS OTP
-// provider integration.
-type stubOTPVerifier struct{}
-
-func (s *stubOTPVerifier) Verify(_ context.Context, _, code string) (bool, error) {
-	return code == "000000", nil
-}
-
-// stubSocialIdentityVerifier skips real GCP Identity Platform verification
-// (ADR-007) and treats the id_token itself as the verified profile, so the
-// flow can be exercised end to end without a real GCP project.
-// TODO(Phase 1 hardening, before staging): replace with the Identity
-// Platform Admin SDK.
-type stubSocialIdentityVerifier struct{}
-
-func (s *stubSocialIdentityVerifier) VerifyIDToken(_ context.Context, provider domain.AuthProvider, idToken string) (*identityUsecase.VerifiedSocialProfile, error) {
-	if idToken == "" {
-		return nil, errors.New("empty id_token")
+	result := make(map[string]*tenantUsecase.AccountSummary, len(accounts))
+	for _, acc := range accounts {
+		result[acc.ID] = toAccountSummary(acc)
 	}
 
-	slog.Warn("using stub Identity Platform verifier -- replace before staging", "provider", provider)
+	return result, nil
+}
 
-	return &identityUsecase.VerifiedSocialProfile{
-		IdentityPlatformUID: "stub-" + idToken,
-		Provider:            provider,
-		FullName:            "Dev User",
-	}, nil
+func summaryOrNotFound(acc *domain.Account, err error) (*tenantUsecase.AccountSummary, error) {
+	if err != nil {
+		if errors.Is(err, domain.ErrAccountNotFound) {
+			return nil, tenantDomain.ErrAccountNotFound
+		}
+
+		return nil, err
+	}
+
+	return toAccountSummary(acc), nil
+}
+
+func toAccountSummary(acc *domain.Account) *tenantUsecase.AccountSummary {
+	return &tenantUsecase.AccountSummary{
+		ID:       acc.ID,
+		FullName: acc.FullName,
+		Email:    acc.Email,
+		Phone:    acc.Phone,
+		Active:   acc.Status == domain.AccountStatusActive,
+	}
 }

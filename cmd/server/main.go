@@ -110,7 +110,9 @@ func buildServices(pool *platformdb.Pool, signingKey []byte) (*grpc.Server, *htt
 		eventPublisher,
 		tenantUsecase.WithTransactionManager(txManager),
 	)
-	staffUC := tenantUsecase.NewStaffUseCase(staffRepo)
+	staffUC := tenantUsecase.NewStaffUseCase(staffRepo,
+		tenantUsecase.WithAccountDirectory(&identityToTenantAccountDirectoryAdapter{accountRepo: accountRepo}),
+	)
 
 	refreshStore := newInMemoryRefreshTokenStore()
 	garageReader := &tenantToIdentityGarageReaderAdapter{staffRepo: staffRepo}

@@ -6,6 +6,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 
@@ -102,4 +103,47 @@ func (r *PostgresAccountRepository) UpdatePasswordHash(ctx context.Context, acco
 	_, err := q.Exec(ctx, `UPDATE accounts SET password_hash = $1 WHERE id = $2`, hash, accountID)
 
 	return err
+}
+
+// FindByEmailFold returns the account whose email equals email ignoring case.
+func (r *PostgresAccountRepository) FindByEmailFold(ctx context.Context, email string) (*domain.Account, error) {
+	q := platformdb.QuerierFromContext(ctx, r.pool)
+	row := q.QueryRow(ctx, `SELECT `+accountColumns+` FROM accounts WHERE lower(email) = lower($1) ORDER BY created_at LIMIT 1`, strings.TrimSpace(email))
+
+	return scanAccount(row)
+}
+
+// FindByPhoneNormalized returns the account whose phone equals phone once
+// spaces, dashes, dots and parentheses are ignored. A Vietnamese number is
+// matched in both its "0912345678" and "+84912345678" forms.
+func (r *PostgresAccountRepository) FindByPhoneNormalized(ctx context.Context, phone string) (*domain.Account, error) {
+	q := platformdb.QuerierFromContext(ctx, r.pool)
+	row := q.QueryRow(ctx, `SELECT `+accountColumns+` FROM accounts
+		WHERE regexp_replace(phone, '[\s().-]', '', 'g') = ANY($1) ORDER BY created_at LIMIT 1`, PhoneVariants(phone))
+
+	return scanAccount(row)
+}
+
+// FindByIDs returns the accounts with the given ids; unknown ids are skipped.
+func (r *PostgresAccountRepository) FindByIDs(ctx context.Context, ids []string) ([]*domain.Account, error) {
+	q := platformdb.QuerierFromContext(ctx, r.pool)
+
+	rows, err := q.Query(ctx, `SELECT `+accountColumns+` FROM accounts WHERE id = ANY($1::uuid[])`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []*domain.Account
+
+	for rows.Next() {
+		acc, err := scanAccount(rows)
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, acc)
+	}
+
+	return result, rows.Err()
 }

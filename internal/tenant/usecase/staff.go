@@ -104,36 +104,8 @@ func (uc *StaffUseCase) Update(ctx context.Context, req UpdateStaffRequest) (*do
 		return nil, apperror.Wrap(apperror.CodeNotFound, "staff membership not found", domain.ErrStaffNotFound)
 	}
 
-	wasOwner := s.Role == domain.RoleOwner
-
-	if req.Role != nil {
-		if !req.Role.IsValid() {
-			return nil, apperror.Wrap(apperror.CodeInvalidArgument, "invalid role", domain.ErrInvalidRole)
-		}
-
-		if *req.Role == domain.RoleOwner && !wasOwner {
-			return nil, apperror.Wrap(apperror.CodeInvalidArgument, "owners cannot be invited", domain.ErrInvalidRole)
-		}
-
-		if wasOwner && *req.Role != domain.RoleOwner {
-			return nil, apperror.Wrap(apperror.CodeFailedPrecondition, "the garage owner's role cannot be changed", domain.ErrOwnerRoleChange)
-		}
-
-		s.Role = *req.Role
-	}
-
-	if req.Status != nil {
-		if !req.Status.IsValid() {
-			return nil, apperror.Wrap(apperror.CodeInvalidArgument, "invalid staff status", domain.ErrInvalidStaffStatus)
-		}
-
-		// Use the pre-update role so a combined {role, status} request
-		// cannot demote-then-deactivate the owner in a single call.
-		if *req.Status != domain.StaffStatusActive && wasOwner {
-			return nil, apperror.Wrap(apperror.CodeFailedPrecondition, "the garage owner cannot be deactivated", domain.ErrOwnerDeactivation)
-		}
-
-		s.Status = *req.Status
+	if err := applyStaffUpdate(s, req); err != nil {
+		return nil, err
 	}
 
 	if err := uc.staff.Update(ctx, s); err != nil {
@@ -141,6 +113,58 @@ func (uc *StaffUseCase) Update(ctx context.Context, req UpdateStaffRequest) (*do
 	}
 
 	return s, nil
+}
+
+func applyStaffUpdate(s *domain.GarageStaff, req UpdateStaffRequest) error {
+	wasOwner := s.Role == domain.RoleOwner
+
+	if req.Role != nil {
+		if err := validateRoleUpdate(*req.Role, wasOwner); err != nil {
+			return err
+		}
+
+		s.Role = *req.Role
+	}
+
+	if req.Status != nil {
+		if err := validateStatusUpdate(*req.Status, wasOwner); err != nil {
+			return err
+		}
+
+		s.Status = *req.Status
+	}
+
+	return nil
+}
+
+func validateRoleUpdate(role domain.Role, wasOwner bool) error {
+	if !role.IsValid() {
+		return apperror.Wrap(apperror.CodeInvalidArgument, "invalid role", domain.ErrInvalidRole)
+	}
+
+	if role == domain.RoleOwner && !wasOwner {
+		return apperror.Wrap(apperror.CodeInvalidArgument, "owners cannot be invited", domain.ErrInvalidRole)
+	}
+
+	if wasOwner && role != domain.RoleOwner {
+		return apperror.Wrap(apperror.CodeFailedPrecondition, "the garage owner's role cannot be changed", domain.ErrOwnerRoleChange)
+	}
+
+	return nil
+}
+
+func validateStatusUpdate(status domain.StaffStatus, wasOwner bool) error {
+	if !status.IsValid() {
+		return apperror.Wrap(apperror.CodeInvalidArgument, "invalid staff status", domain.ErrInvalidStaffStatus)
+	}
+
+	// Use the pre-update role so a combined {role, status} request
+	// cannot demote-then-deactivate the owner in a single call.
+	if status != domain.StaffStatusActive && wasOwner {
+		return apperror.Wrap(apperror.CodeFailedPrecondition, "the garage owner cannot be deactivated", domain.ErrOwnerDeactivation)
+	}
+
+	return nil
 }
 
 // Deactivate marks a staff membership inactive. It is idempotent:

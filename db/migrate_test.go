@@ -6,16 +6,17 @@ import (
 	"fmt"
 	"testing"
 	"time"
-	"vietgara/db"
 
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/suite"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"github.com/viettechno/vietgara-backend/db"
 )
 
 const (
-	MIGRATIONS_PATH = "file://migrations"
+	MIGRATIONS_PATH           = "file://migrations"
+	MIGRATION_CURRENT_VERSION = 4
 
 	POSTGRES_TEST_DB       = "vietgara_test"
 	POSTGRES_TEST_USER     = "postgres"
@@ -131,8 +132,8 @@ func (s *MigrationsTestSuite) SetupSuite() {
 	pgContainer, err := StartPostgresContainer(s.ctx)
 	s.Require().NoError(err)
 	s.pgContainer = pgContainer
-	err = db.RunMigrations(s.pgContainer.ConnStr, MIGRATIONS_PATH)
-	s.Require().NoError(err)
+
+	s.Require().NoError(db.RunMigrations(s.pgContainer.ConnStr, MIGRATIONS_PATH))
 
 	for _, statement := range []string{
 		"CREATE ROLE " + rlsTestRole + " NOLOGIN NOSUPERUSER NOBYPASSRLS",
@@ -147,14 +148,16 @@ func (s *MigrationsTestSuite) SetupSuite() {
 // TearDownSuite runs once after all tests in the suite finish.
 func (s *MigrationsTestSuite) TearDownSuite() {
 	if s.pgContainer != nil {
-		s.pgContainer.Close()
+		s.Require().NoError(s.pgContainer.Close())
 	}
+
 	s.cancel()
 }
 
 func (s *MigrationsTestSuite) openRLSConnection() *sql.Conn {
 	conn, err := s.pgContainer.OpenRLSConnection(s.ctx)
 	s.Require().NoError(err)
+
 	return conn
 }
 
@@ -164,7 +167,7 @@ func (s *MigrationsTestSuite) TestRLS_QueryFailsWithoutSessionVariable() {
 
 	insertAccount := fmt.Sprintf(
 		`INSERT INTO accounts (id, email, auth_provider, identity_platform_uid, full_name, status)
-		 VALUES ('%s', 'test@example.com', 'local', 'uid-001', 'Test User', 'active')`,
+		 VALUES ('%s', 'test@example.com', 'email', 'uid-001', 'Test User', 'active')`,
 		accountID,
 	)
 	_, err := s.pgContainer.DB.ExecContext(s.ctx, insertAccount)
@@ -184,7 +187,7 @@ func (s *MigrationsTestSuite) TestRLS_QueryFailsWithoutSessionVariable() {
 
 	err = rlsConn.QueryRowContext(s.ctx, "SELECT COUNT(*) FROM garages").Scan(&count)
 	s.Require().NoError(err)
-	s.Assert().Equalf(0, count, "expected 0 rows without session variable. RLS is not working correctly")
+	s.Equalf(0, count, "expected 0 rows without session variable. RLS is not working correctly")
 }
 
 func (s *MigrationsTestSuite) TestRLS_QuerySucceedsWithCorrectSessionVariable() {
@@ -193,7 +196,7 @@ func (s *MigrationsTestSuite) TestRLS_QuerySucceedsWithCorrectSessionVariable() 
 
 	insertAccount := fmt.Sprintf(
 		`INSERT INTO accounts (id, email, auth_provider, identity_platform_uid, full_name, status)
-		 VALUES ('%s', 'test2@example.com', 'local', 'uid-002', 'Test User 2', 'active')`,
+		 VALUES ('%s', 'test2@example.com', 'email', 'uid-002', 'Test User 2', 'active')`,
 		accountID,
 	)
 	_, err := s.pgContainer.DB.ExecContext(s.ctx, insertAccount)
@@ -217,13 +220,13 @@ func (s *MigrationsTestSuite) TestRLS_QuerySucceedsWithCorrectSessionVariable() 
 
 	err = rlsConn.QueryRowContext(s.ctx, "SELECT COUNT(*) FROM garages").Scan(&count)
 	s.Require().NoError(err)
-	s.Assert().Equalf(1, count, "expected 1 row with correct session variable")
+	s.Equalf(1, count, "expected 1 row with correct session variable")
 
 	var name string
 
 	err = rlsConn.QueryRowContext(s.ctx, "SELECT name FROM garages").Scan(&name)
 	s.Require().NoError(err)
-	s.Assert().Equalf("Test Garage 2", name, "expected garage name to match")
+	s.Equalf("Test Garage 2", name, "expected garage name to match")
 }
 
 func (s *MigrationsTestSuite) TestRLS_QueryBlockedWithWrongSessionVariable() {
@@ -242,7 +245,7 @@ func (s *MigrationsTestSuite) TestRLS_QueryBlockedWithWrongSessionVariable() {
 	} {
 		_, err := s.pgContainer.DB.ExecContext(s.ctx,
 			`INSERT INTO accounts (id, email, auth_provider, identity_platform_uid, full_name, status)
-			 VALUES ($1, $2, 'local', $3, 'Test User', 'active')`,
+			 VALUES ($1, $2, 'email', $3, 'Test User', 'active')`,
 			account.id, account.email, account.uid,
 		)
 		s.Require().NoError(err)
@@ -274,13 +277,13 @@ func (s *MigrationsTestSuite) TestRLS_QueryBlockedWithWrongSessionVariable() {
 
 	err = rlsConn.QueryRowContext(s.ctx, "SELECT COUNT(*) FROM garages").Scan(&count)
 	s.Require().NoError(err)
-	s.Assert().Equalf(1, count, "expected 1 row (garage 1 only)")
+	s.Equalf(1, count, "expected 1 row (garage 1 only)")
 
 	var name string
 
 	err = rlsConn.QueryRowContext(s.ctx, "SELECT name FROM garages").Scan(&name)
 	s.Require().NoError(err)
-	s.Assert().Equalf("Garage 1", name, "expected the visible garage to be Garage 1")
+	s.Equalf("Garage 1", name, "expected the visible garage to be Garage 1")
 }
 
 func (s *MigrationsTestSuite) TestRLS_GarageStaffRowLevelSecurity() {
@@ -290,7 +293,7 @@ func (s *MigrationsTestSuite) TestRLS_GarageStaffRowLevelSecurity() {
 
 	insertAccount := fmt.Sprintf(
 		`INSERT INTO accounts (id, email, auth_provider, identity_platform_uid, full_name, status)
-		 VALUES ('%s', 'staff@example.com', 'local', 'uid-staff-001', 'Staff User', 'active')`,
+		 VALUES ('%s', 'staff@example.com', 'email', 'uid-staff-001', 'Staff User', 'active')`,
 		accountID,
 	)
 	_, err := s.pgContainer.DB.ExecContext(s.ctx, insertAccount)
@@ -318,7 +321,7 @@ func (s *MigrationsTestSuite) TestRLS_GarageStaffRowLevelSecurity() {
 
 	err = rlsConn.QueryRowContext(s.ctx, "SELECT COUNT(*) FROM garage_staff").Scan(&count)
 	s.Require().NoError(err)
-	s.Assert().Equalf(0, count, "expected 0 rows without session variable")
+	s.Equalf(0, count, "expected 0 rows without session variable")
 
 	setSession := fmt.Sprintf("SELECT set_config('app.current_garage_id', '%s'::text, false)", garageID)
 	_, err = rlsConn.ExecContext(s.ctx, setSession)
@@ -326,13 +329,13 @@ func (s *MigrationsTestSuite) TestRLS_GarageStaffRowLevelSecurity() {
 
 	err = rlsConn.QueryRowContext(s.ctx, "SELECT COUNT(*) FROM garage_staff").Scan(&count)
 	s.Require().NoError(err)
-	s.Assert().Equalf(1, count, "expected 1 row with session variable")
+	s.Equalf(1, count, "expected 1 row with session variable")
 
 	var role string
 
 	err = rlsConn.QueryRowContext(s.ctx, "SELECT role FROM garage_staff").Scan(&role)
 	s.Require().NoError(err)
-	s.Assert().Equalf("owner", role, "expected staff role to be 'owner'")
+	s.Equalf("owner", role, "expected staff role to be 'owner'")
 }
 
 func (s *MigrationsTestSuite) TestRLS_SessionVariableHandling() {
@@ -346,7 +349,7 @@ func (s *MigrationsTestSuite) TestRLS_SessionVariableHandling() {
 
 	err = s.pgContainer.DB.QueryRowContext(s.ctx, "SELECT current_setting('app.current_garage_id')").Scan(&retrievedValue)
 	s.Require().NoError(err)
-	s.Assert().Equalf(garageID, retrievedValue, "expected session variable to match")
+	s.Equalf(garageID, retrievedValue, "expected session variable to match")
 }
 
 func (s *MigrationsTestSuite) TestGetMigrationVersion() {
@@ -361,7 +364,7 @@ func (s *MigrationsTestSuite) TestGetMigrationVersion() {
 			name:      "successful with valid path",
 			path:      MIGRATIONS_PATH,
 			wantErr:   false,
-			wantVer:   3,
+			wantVer:   MIGRATION_CURRENT_VERSION,
 			wantDirty: false,
 		},
 		{
@@ -375,12 +378,13 @@ func (s *MigrationsTestSuite) TestGetMigrationVersion() {
 		s.Run(tt.name, func() {
 			version, dirty, err := db.GetMigrationVersion(s.pgContainer.ConnStr, tt.path)
 			if tt.wantErr {
-				s.Assert().Error(err)
+				s.Error(err)
 				return
 			}
+
 			s.Require().NoError(err)
-			s.Assert().Equalf(tt.wantVer, version, "expected version %d", tt.wantVer)
-			s.Assert().Equalf(tt.wantDirty, dirty, "expected dirty=%v", tt.wantDirty)
+			s.Equalf(tt.wantVer, version, "expected version %d", tt.wantVer)
+			s.Equalf(tt.wantDirty, dirty, "expected dirty=%v", tt.wantDirty)
 		})
 	}
 }
@@ -407,14 +411,15 @@ func (s *MigrationsTestSuite) TestRollbackLastMigration() {
 		s.Run(tt.name, func() {
 			err := db.RollbackLastMigration(s.pgContainer.ConnStr, tt.path)
 			if tt.wantErr {
-				s.Assert().Error(err)
+				s.Error(err)
 				return
 			}
+
 			s.Require().NoError(err)
 
 			version, _, err := db.GetMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH)
 			s.Require().NoError(err)
-			s.Assert().Equalf(uint(2), version, "expected version 2 after rolling back one step")
+			s.Equalf(uint(MIGRATION_CURRENT_VERSION-1), version, "expected version %d after rolling back one step", MIGRATION_CURRENT_VERSION-1)
 
 			s.Require().NoError(db.RunMigrations(s.pgContainer.ConnStr, MIGRATIONS_PATH))
 		})
@@ -443,20 +448,21 @@ func (s *MigrationsTestSuite) TestRollbackAllMigrations() {
 		s.Run(tt.name, func() {
 			err := db.RollbackAllMigrations(s.pgContainer.ConnStr, tt.path)
 			if tt.wantErr {
-				s.Assert().Error(err)
+				s.Error(err)
 				return
 			}
+
 			s.Require().NoError(err)
 
 			_, _, err = db.GetMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH)
-			s.Assert().Errorf(err, "expected error after rolling back all migrations")
+			s.Require().Error(err, "expected error after rolling back all migrations")
 
 			s.Require().NoError(db.RunMigrations(s.pgContainer.ConnStr, MIGRATIONS_PATH))
 
 			version, dirty, err := db.GetMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH)
 			s.Require().NoError(err)
-			s.Assert().Equalf(uint(3), version, "expected version restored to 3")
-			s.Assert().False(dirty, "expected migration state not dirty")
+			s.Equalf(uint(MIGRATION_CURRENT_VERSION), version, "expected version restored to %d", MIGRATION_CURRENT_VERSION)
+			s.False(dirty, "expected migration state not dirty")
 		})
 	}
 }
@@ -492,22 +498,23 @@ func (s *MigrationsTestSuite) TestForceMigrationVersion() {
 		s.Run(tt.name, func() {
 			err := db.ForceMigrationVersion(s.pgContainer.ConnStr, tt.path, tt.version)
 			if tt.wantErr {
-				s.Assert().Error(err)
+				s.Error(err)
 				return
 			}
+
 			s.Require().NoError(err)
 
 			version, dirty, err := db.GetMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH)
 			s.Require().NoError(err)
-			s.Assert().Equalf(uint(tt.version), version, "expected version forced to %d", tt.version)
-			s.Assert().False(dirty, "expected migration state not dirty after Force")
+			s.Equalf(uint(tt.version), version, "expected version forced to %d", tt.version)
+			s.False(dirty, "expected migration state not dirty after Force")
 
-			s.Require().NoError(db.ForceMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH, 3))
+			s.Require().NoError(db.ForceMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH, MIGRATION_CURRENT_VERSION))
 
 			version, dirty, err = db.GetMigrationVersion(s.pgContainer.ConnStr, MIGRATIONS_PATH)
 			s.Require().NoError(err)
-			s.Assert().Equalf(uint(3), version, "expected version forced back to 3")
-			s.Assert().False(dirty, "expected migration state not dirty after Force")
+			s.Equalf(uint(MIGRATION_CURRENT_VERSION), version, "expected version forced back to %d", MIGRATION_CURRENT_VERSION)
+			s.False(dirty, "expected migration state not dirty after Force")
 		})
 	}
 }

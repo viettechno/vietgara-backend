@@ -1,0 +1,773 @@
+package handler_test
+
+import (
+	"context"
+	"errors"
+	"testing"
+	"time"
+
+	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+
+	"github.com/viettechno/vietgara-backend/internal/middleware"
+	"github.com/viettechno/vietgara-backend/internal/mocks"
+	"github.com/viettechno/vietgara-backend/internal/platform/auth"
+	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
+	"github.com/viettechno/vietgara-backend/internal/tenant/handler"
+	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/timestamppb"
+)
+
+const testSigningKey = "handler-test-signing-key"
+
+// authedCtx seeds a context with verified JWT claims for accountID, exactly
+// as middleware.AuthInterceptor does in production.
+func authedCtx(t *testing.T, accountID string) context.Context {
+	t.Helper()
+
+	issuer := auth.NewTokenIssuer([]byte(testSigningKey), 15*time.Minute, 24*time.Hour)
+	token, _, err := issuer.IssueAccessToken(accountID, nil)
+	require.NoError(t, err)
+
+	ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs("authorization", token))
+	gotCtx := make(chan context.Context, 1)
+	interceptor := middleware.AuthInterceptor(issuer)
+	_, err = interceptor(ctx, nil, nil, func(ctx context.Context, req any) (any, error) {
+		gotCtx <- ctx
+		return nil, nil
+	})
+	require.NoError(t, err)
+
+	return <-gotCtx
+}
+
+// newTestServer wires the handler to real usecases backed by mockery
+// mocks of the repository layer.
+func newTestServer(t *testing.T) (*handler.Server, *mocks.MockGarageRepository, *mocks.MockGarageStaffRepository, *mocks.MockEventPublisher) {
+	t.Helper()
+
+	garages := mocks.NewMockGarageRepository(t)
+	staff := mocks.NewMockGarageStaffRepository(t)
+	events := mocks.NewMockEventPublisher(t)
+
+	return handler.NewServer(
+		usecase.NewGarageUseCase(garages, staff, events),
+		usecase.NewStaffUseCase(staff),
+	), garages, staff, events
+}
+
+func testGarage() *domain.Garage {
+	taxCode, address, logoURL := "0123456789", "12 Nguyen Hue", "https://storage.example.com/logo.png"
+
+	return &domain.Garage{
+		ID:        "garage-1",
+		AccountID: "acc-1",
+		Name:      "Gara A",
+		TaxCode:   &taxCode,
+		Address:   &address,
+		LogoURL:   &logoURL,
+		Timezone:  "Asia/Ho_Chi_Minh",
+		Currency:  "VND",
+		Status:    domain.GarageStatusActive,
+		CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+		UpdatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+	}
+}
+
+func testStaff() *domain.GarageStaff {
+	return &domain.GarageStaff{
+		ID:        "staff-1",
+		GarageID:  "garage-1",
+		AccountID: "acc-1",
+		Role:      domain.RoleOwner,
+		Status:    domain.StaffStatusActive,
+		CreatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+		UpdatedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
+	}
+}
+
+func TestServer_CreateGarage(t *testing.T) {
+	authed := authedCtx(t, "acc-1")
+
+	tests := []struct {
+		name     string
+		ctx      context.Context
+		req      *tenantv1.CreateGarageRequest
+		setup    func(*mocks.MockGarageRepository, *mocks.MockGarageStaffRepository, *mocks.MockEventPublisher)
+		verify   func(*testing.T, *tenantv1.CreateGarageResponse)
+		wantCode codes.Code
+	}{
+		{
+			name:     "missing account context is rejected",
+			ctx:      t.Context(),
+			req:      &tenantv1.CreateGarageRequest{Name: "Gara A"},
+			wantCode: codes.Unauthenticated,
+		},
+		{
+			name:     "empty name is rejected",
+			ctx:      authed,
+			req:      &tenantv1.CreateGarageRequest{},
+			wantCode: codes.InvalidArgument,
+		},
+		{
+			name: "creates the garage for the caller's account and returns it",
+			ctx:  authed,
+			req: &tenantv1.CreateGarageRequest{
+				Name:     "Gara A",
+				TaxCode:  new("0123456789"),
+				Address:  new("12 Nguyen Hue"),
+				Timezone: new("Asia/Ho_Chi_Minh"),
+				Currency: new("VND"),
+			},
+			setup: func(g *mocks.MockGarageRepository, s *mocks.MockGarageStaffRepository, e *mocks.MockEventPublisher) {
+				g.EXPECT().Create(mock.Anything, mock.MatchedBy(func(gar *domain.Garage) bool {
+					return gar.AccountID == "acc-1" && gar.Name == "Gara A" &&
+						gar.TaxCode != nil && *gar.TaxCode == "0123456789" &&
+						gar.Address != nil && *gar.Address == "12 Nguyen Hue" &&
+						gar.Timezone == "Asia/Ho_Chi_Minh" && gar.Currency == "VND" &&
+						gar.Status == domain.GarageStatusActive
+				})).Return(nil).Once()
+				s.EXPECT().Create(mock.Anything, mock.MatchedBy(func(st *domain.GarageStaff) bool {
+					return st.AccountID == "acc-1" && st.Role == domain.RoleOwner && st.Status == domain.StaffStatusActive
+				})).Return(nil).Once()
+				e.EXPECT().Publish(mock.Anything, "garage.created", mock.Anything, mock.MatchedBy(func(payload any) bool {
+					m, ok := payload.(map[string]string)
+					return ok && m["garage_id"] != "" && m["account_id"] == "acc-1"
+				})).Return(nil).Once()
+			},
+			verify: func(t *testing.T, resp *tenantv1.CreateGarageResponse) {
+				t.Helper()
+
+				gar := resp.GetGarage()
+				require.NotNil(t, gar)
+				assert.NotEmpty(t, gar.GetId())
+				assert.Equal(t, "acc-1", gar.GetAccountId())
+				assert.Equal(t, "Gara A", gar.GetName())
+				assert.Equal(t, "0123456789", gar.GetTaxCode())
+				assert.Equal(t, "12 Nguyen Hue", gar.GetAddress())
+				assert.Equal(t, "Asia/Ho_Chi_Minh", gar.GetTimezone())
+				assert.Equal(t, "VND", gar.GetCurrency())
+				assert.Equal(t, tenantv1.GarageStatus_GARAGE_STATUS_ACTIVE, gar.GetStatus())
+			},
+		},
+		{
+			name: "garage persistence failure maps to internal",
+			ctx:  authed,
+			req:  &tenantv1.CreateGarageRequest{Name: "Gara A"},
+			setup: func(g *mocks.MockGarageRepository, s *mocks.MockGarageStaffRepository, _ *mocks.MockEventPublisher) {
+				g.EXPECT().Create(mock.Anything, mock.Anything).Return(errors.New("connection lost")).Once()
+			},
+			wantCode: codes.Internal,
+		},
+		{
+			name: "owner staff persistence failure maps to internal",
+			ctx:  authed,
+			req:  &tenantv1.CreateGarageRequest{Name: "Gara A"},
+			setup: func(g *mocks.MockGarageRepository, s *mocks.MockGarageStaffRepository, _ *mocks.MockEventPublisher) {
+				g.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+				s.EXPECT().Create(mock.Anything, mock.Anything).Return(errors.New("connection lost")).Once()
+			},
+			wantCode: codes.Internal,
+		},
+		{
+			name: "event publish failure maps to internal",
+			ctx:  authed,
+			req:  &tenantv1.CreateGarageRequest{Name: "Gara A"},
+			setup: func(g *mocks.MockGarageRepository, s *mocks.MockGarageStaffRepository, e *mocks.MockEventPublisher) {
+				g.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+				s.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+				e.EXPECT().Publish(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(errors.New("outbox full")).Once()
+			},
+			wantCode: codes.Internal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, garages, staff, events := newTestServer(t)
+			if tt.setup != nil {
+				tt.setup(garages, staff, events)
+			}
+
+			resp, err := s.CreateGarage(tt.ctx, tt.req)
+			if tt.wantCode != codes.OK {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantCode, status.Code(err))
+
+				return
+			}
+
+			require.NoError(t, err)
+			tt.verify(t, resp)
+		})
+	}
+}
+
+func TestServer_GetGarage(t *testing.T) {
+	tests := []struct {
+		name     string
+		garageID string
+		setup    func(*mocks.MockGarageRepository)
+		verify   func(*testing.T, *tenantv1.GetGarageResponse)
+		wantCode codes.Code
+	}{
+		{
+			name:     "returns the requested garage",
+			garageID: "garage-1",
+			setup: func(g *mocks.MockGarageRepository) {
+				g.EXPECT().FindByID(mock.Anything, "garage-1").Return(testGarage(), nil).Once()
+			},
+			verify: func(t *testing.T, resp *tenantv1.GetGarageResponse) {
+				t.Helper()
+
+				gar := resp.GetGarage()
+				require.NotNil(t, gar)
+				assert.Equal(t, "garage-1", gar.GetId())
+				assert.Equal(t, "acc-1", gar.GetAccountId())
+				assert.Equal(t, "Gara A", gar.GetName())
+				assert.Equal(t, "0123456789", gar.GetTaxCode())
+				assert.Equal(t, "12 Nguyen Hue", gar.GetAddress())
+				assert.Equal(t, "https://storage.example.com/logo.png", gar.GetLogoUrl())
+				assert.Equal(t, "Asia/Ho_Chi_Minh", gar.GetTimezone())
+				assert.Equal(t, "VND", gar.GetCurrency())
+				assert.Equal(t, tenantv1.GarageStatus_GARAGE_STATUS_ACTIVE, gar.GetStatus())
+				assert.Equal(t, timestamppb.New(testGarage().CreatedAt), gar.GetCreatedAt())
+				assert.Equal(t, timestamppb.New(testGarage().UpdatedAt), gar.GetUpdatedAt())
+			},
+		},
+		{
+			name:     "keeps optional fields absent when the domain garage is minimal",
+			garageID: "garage-1",
+			setup: func(g *mocks.MockGarageRepository) {
+				g.EXPECT().FindByID(mock.Anything, "garage-1").Return(
+					&domain.Garage{ID: "garage-1", AccountID: "acc-1", Name: "Minimal"}, nil,
+				).Once()
+			},
+			verify: func(t *testing.T, resp *tenantv1.GetGarageResponse) {
+				t.Helper()
+
+				gar := resp.GetGarage()
+				require.NotNil(t, gar)
+				assert.Equal(t, "Minimal", gar.GetName())
+				assert.Nil(t, gar.TaxCode)
+				assert.Nil(t, gar.Address)
+				assert.Nil(t, gar.LogoUrl)
+				assert.Equal(t, tenantv1.GarageStatus_GARAGE_STATUS_UNSPECIFIED, gar.GetStatus())
+				assert.Nil(t, gar.GetCreatedAt())
+				assert.Nil(t, gar.GetUpdatedAt())
+			},
+		},
+		{
+			name:     "unknown garage maps to not found",
+			garageID: "garage-unknown",
+			setup: func(g *mocks.MockGarageRepository) {
+				g.EXPECT().FindByID(mock.Anything, "garage-unknown").Return(nil, errors.New("no rows")).Once()
+			},
+			wantCode: codes.NotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, garages, _, _ := newTestServer(t)
+			tt.setup(garages)
+
+			resp, err := s.GetGarage(t.Context(), &tenantv1.GetGarageRequest{GarageId: tt.garageID})
+			if tt.wantCode != codes.OK {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantCode, status.Code(err))
+
+				return
+			}
+
+			require.NoError(t, err)
+			tt.verify(t, resp)
+		})
+	}
+}
+
+func TestServer_GetGarage_StatusMapping(t *testing.T) {
+	statuses := []struct {
+		name string
+		in   domain.GarageStatus
+		want tenantv1.GarageStatus
+	}{
+		{name: "active", in: domain.GarageStatusActive, want: tenantv1.GarageStatus_GARAGE_STATUS_ACTIVE},
+		{name: "inactive", in: domain.GarageStatusInactive, want: tenantv1.GarageStatus_GARAGE_STATUS_INACTIVE},
+		{name: "suspended", in: domain.GarageStatusSuspended, want: tenantv1.GarageStatus_GARAGE_STATUS_SUSPENDED},
+		{name: "unset", in: domain.GarageStatus(""), want: tenantv1.GarageStatus_GARAGE_STATUS_UNSPECIFIED},
+		{name: "unknown", in: domain.GarageStatus("archived"), want: tenantv1.GarageStatus_GARAGE_STATUS_UNSPECIFIED},
+	}
+
+	for _, tt := range statuses {
+		t.Run(tt.name, func(t *testing.T) {
+			s, garages, _, _ := newTestServer(t)
+			garages.EXPECT().FindByID(mock.Anything, "garage-1").Return(
+				&domain.Garage{ID: "garage-1", Name: "Gara A", Status: tt.in}, nil,
+			).Once()
+
+			resp, err := s.GetGarage(t.Context(), &tenantv1.GetGarageRequest{GarageId: "garage-1"})
+			require.NoError(t, err)
+			require.NotNil(t, resp.GetGarage())
+			assert.Equal(t, tt.want, resp.GetGarage().GetStatus())
+		})
+	}
+}
+
+func TestServer_UpdateGarage(t *testing.T) {
+	name, currency := "Gara A Renamed", "USD"
+
+	tests := []struct {
+		name     string
+		req      *tenantv1.UpdateGarageRequest
+		setup    func(*mocks.MockGarageRepository)
+		verify   func(*testing.T, *tenantv1.UpdateGarageResponse)
+		wantCode codes.Code
+	}{
+		{
+			name: "applies only the provided fields",
+			req:  &tenantv1.UpdateGarageRequest{GarageId: "garage-1", Name: &name, Currency: &currency},
+			setup: func(g *mocks.MockGarageRepository) {
+				g.EXPECT().FindByID(mock.Anything, "garage-1").Return(testGarage(), nil).Once()
+				g.EXPECT().Update(mock.Anything, mock.MatchedBy(func(gar *domain.Garage) bool {
+					return gar.Name == name && gar.Currency == currency &&
+						gar.Timezone == "Asia/Ho_Chi_Minh" && gar.Address != nil
+				})).Return(nil).Once()
+			},
+			verify: func(t *testing.T, resp *tenantv1.UpdateGarageResponse) {
+				t.Helper()
+
+				gar := resp.GetGarage()
+				require.NotNil(t, gar)
+				assert.Equal(t, name, gar.GetName())
+				assert.Equal(t, currency, gar.GetCurrency())
+			},
+		},
+		{
+			name: "unknown garage maps to not found",
+			req:  &tenantv1.UpdateGarageRequest{GarageId: "garage-unknown"},
+			setup: func(g *mocks.MockGarageRepository) {
+				g.EXPECT().FindByID(mock.Anything, "garage-unknown").Return(nil, errors.New("no rows")).Once()
+			},
+			wantCode: codes.NotFound,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, garages, _, _ := newTestServer(t)
+			tt.setup(garages)
+
+			resp, err := s.UpdateGarage(t.Context(), tt.req)
+			if tt.wantCode != codes.OK {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantCode, status.Code(err))
+
+				return
+			}
+
+			require.NoError(t, err)
+			tt.verify(t, resp)
+		})
+	}
+}
+
+func TestServer_ListGarages(t *testing.T) {
+	authed := authedCtx(t, "acc-1")
+
+	tests := []struct {
+		name     string
+		ctx      context.Context
+		setup    func(*mocks.MockGarageRepository)
+		verify   func(*testing.T, *tenantv1.ListGaragesResponse)
+		wantCode codes.Code
+	}{
+		{
+			name:     "missing account context is rejected",
+			ctx:      t.Context(),
+			wantCode: codes.Unauthenticated,
+		},
+		{
+			name: "returns every garage of the account",
+			ctx:  authed,
+			setup: func(g *mocks.MockGarageRepository) {
+				g.EXPECT().ListByAccountID(mock.Anything, "acc-1").Return([]*domain.Garage{
+					{ID: "g-1", AccountID: "acc-1", Name: "Gara A", Status: domain.GarageStatusActive},
+					{ID: "g-2", AccountID: "acc-1", Name: "Gara B", Status: domain.GarageStatusInactive},
+				}, nil).Once()
+			},
+			verify: func(t *testing.T, resp *tenantv1.ListGaragesResponse) {
+				t.Helper()
+
+				require.Len(t, resp.GetGarages(), 2)
+				assert.Equal(t, "g-1", resp.GetGarages()[0].GetId())
+				assert.Equal(t, "Gara A", resp.GetGarages()[0].GetName())
+				assert.Equal(t, tenantv1.GarageStatus_GARAGE_STATUS_ACTIVE, resp.GetGarages()[0].GetStatus())
+				assert.Equal(t, "g-2", resp.GetGarages()[1].GetId())
+				assert.Equal(t, "Gara B", resp.GetGarages()[1].GetName())
+				assert.Equal(t, tenantv1.GarageStatus_GARAGE_STATUS_INACTIVE, resp.GetGarages()[1].GetStatus())
+			},
+		},
+		{
+			name: "account without garages gets an empty list",
+			ctx:  authed,
+			setup: func(g *mocks.MockGarageRepository) {
+				g.EXPECT().ListByAccountID(mock.Anything, "acc-1").Return([]*domain.Garage{}, nil).Once()
+			},
+			verify: func(t *testing.T, resp *tenantv1.ListGaragesResponse) {
+				t.Helper()
+
+				assert.Empty(t, resp.GetGarages())
+			},
+		},
+		{
+			name: "repository failure maps to internal",
+			ctx:  authed,
+			setup: func(g *mocks.MockGarageRepository) {
+				g.EXPECT().ListByAccountID(mock.Anything, "acc-1").Return(nil, errors.New("connection lost")).Once()
+			},
+			wantCode: codes.Internal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, garages, _, _ := newTestServer(t)
+			if tt.setup != nil {
+				tt.setup(garages)
+			}
+
+			resp, err := s.ListGarages(tt.ctx, &tenantv1.ListGaragesRequest{})
+			if tt.wantCode != codes.OK {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantCode, status.Code(err))
+
+				return
+			}
+
+			require.NoError(t, err)
+			tt.verify(t, resp)
+		})
+	}
+}
+
+func TestServer_AddStaff(t *testing.T) {
+	tests := []struct {
+		name     string
+		req      *tenantv1.AddStaffRequest
+		setup    func(*mocks.MockGarageStaffRepository)
+		verify   func(*testing.T, *tenantv1.AddStaffResponse)
+		wantCode codes.Code
+	}{
+		{
+			name: "adds staff with the given role",
+			req:  &tenantv1.AddStaffRequest{GarageId: "garage-1", AccountId: "acc-2", Role: tenantv1.Role_ROLE_ACCOUNTANT},
+			setup: func(s *mocks.MockGarageStaffRepository) {
+				s.EXPECT().FindByGarageAndAccount(mock.Anything, "garage-1", "acc-2").Return(nil, nil).Once()
+				s.EXPECT().Create(mock.Anything, mock.MatchedBy(func(st *domain.GarageStaff) bool {
+					return st.GarageID == "garage-1" && st.AccountID == "acc-2" &&
+						st.Role == domain.RoleAccountant && st.Status == domain.StaffStatusActive
+				})).Return(nil).Once()
+			},
+			verify: func(t *testing.T, resp *tenantv1.AddStaffResponse) {
+				t.Helper()
+
+				st := resp.GetStaff()
+				require.NotNil(t, st)
+				assert.Equal(t, "garage-1", st.GetGarageId())
+				assert.Equal(t, "acc-2", st.GetAccountId())
+				assert.Equal(t, tenantv1.Role_ROLE_ACCOUNTANT, st.GetRole())
+				assert.Equal(t, tenantv1.StaffStatus_STAFF_STATUS_ACTIVE, st.GetStatus())
+			},
+		},
+		{
+			name:     "unspecified role is rejected",
+			req:      &tenantv1.AddStaffRequest{GarageId: "garage-1", AccountId: "acc-2", Role: tenantv1.Role_ROLE_UNSPECIFIED},
+			wantCode: codes.InvalidArgument,
+		},
+		{
+			name:     "unknown role value is rejected",
+			req:      &tenantv1.AddStaffRequest{GarageId: "garage-1", AccountId: "acc-2", Role: tenantv1.Role(99)},
+			wantCode: codes.InvalidArgument,
+		},
+		{
+			name: "duplicate active staff maps to already exists",
+			req:  &tenantv1.AddStaffRequest{GarageId: "garage-1", AccountId: "acc-2", Role: tenantv1.Role_ROLE_TECHNICIAN},
+			setup: func(s *mocks.MockGarageStaffRepository) {
+				s.EXPECT().FindByGarageAndAccount(mock.Anything, "garage-1", "acc-2").Return(testStaff(), nil).Once()
+			},
+			wantCode: codes.AlreadyExists,
+		},
+		{
+			name: "persistence failure maps to internal",
+			req:  &tenantv1.AddStaffRequest{GarageId: "garage-1", AccountId: "acc-2", Role: tenantv1.Role_ROLE_TECHNICIAN},
+			setup: func(s *mocks.MockGarageStaffRepository) {
+				s.EXPECT().FindByGarageAndAccount(mock.Anything, "garage-1", "acc-2").Return(nil, nil).Once()
+				s.EXPECT().Create(mock.Anything, mock.Anything).Return(errors.New("connection lost")).Once()
+			},
+			wantCode: codes.Internal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, _, staff, _ := newTestServer(t)
+			if tt.setup != nil {
+				tt.setup(staff)
+			}
+
+			resp, err := s.AddStaff(t.Context(), tt.req)
+			if tt.wantCode != codes.OK {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantCode, status.Code(err))
+
+				return
+			}
+
+			require.NoError(t, err)
+			tt.verify(t, resp)
+		})
+	}
+}
+
+func TestServer_AddStaff_EveryRole(t *testing.T) {
+	roles := []struct {
+		name   string
+		proto  tenantv1.Role
+		domain domain.Role
+	}{
+		{name: "owner", proto: tenantv1.Role_ROLE_OWNER, domain: domain.RoleOwner},
+		{name: "accountant", proto: tenantv1.Role_ROLE_ACCOUNTANT, domain: domain.RoleAccountant},
+		{name: "technician", proto: tenantv1.Role_ROLE_TECHNICIAN, domain: domain.RoleTechnician},
+		{name: "service advisor", proto: tenantv1.Role_ROLE_SERVICE_ADVISOR, domain: domain.RoleServiceAdvisor},
+		{name: "inventory staff", proto: tenantv1.Role_ROLE_INVENTORY_STAFF, domain: domain.RoleInventoryStaff},
+	}
+
+	for _, tt := range roles {
+		t.Run(tt.name, func(t *testing.T) {
+			s, _, staff, _ := newTestServer(t)
+			staff.EXPECT().FindByGarageAndAccount(mock.Anything, "garage-1", "acc-2").Return(nil, nil).Once()
+			staff.EXPECT().Create(mock.Anything, mock.MatchedBy(func(st *domain.GarageStaff) bool {
+				return st.Role == tt.domain && st.Status == domain.StaffStatusActive
+			})).Return(nil).Once()
+
+			resp, err := s.AddStaff(t.Context(), &tenantv1.AddStaffRequest{
+				GarageId: "garage-1", AccountId: "acc-2", Role: tt.proto,
+			})
+			require.NoError(t, err)
+			require.NotNil(t, resp.GetStaff())
+			assert.Equal(t, tt.proto, resp.GetStaff().GetRole())
+			assert.Equal(t, tenantv1.StaffStatus_STAFF_STATUS_ACTIVE, resp.GetStaff().GetStatus())
+		})
+	}
+}
+
+func TestServer_ListStaff(t *testing.T) {
+	tests := []struct {
+		name     string
+		setup    func(*mocks.MockGarageStaffRepository)
+		verify   func(*testing.T, *tenantv1.ListStaffResponse)
+		wantCode codes.Code
+	}{
+		{
+			name: "returns the staff of a garage",
+			setup: func(s *mocks.MockGarageStaffRepository) {
+				s.EXPECT().ListByGarageID(mock.Anything, "garage-1").Return([]*domain.GarageStaff{testStaff()}, nil).Once()
+			},
+			verify: func(t *testing.T, resp *tenantv1.ListStaffResponse) {
+				t.Helper()
+
+				require.Len(t, resp.GetStaff(), 1)
+				st := resp.GetStaff()[0]
+				assert.Equal(t, "staff-1", st.GetId())
+				assert.Equal(t, "garage-1", st.GetGarageId())
+				assert.Equal(t, "acc-1", st.GetAccountId())
+				assert.Equal(t, tenantv1.Role_ROLE_OWNER, st.GetRole())
+				assert.Equal(t, tenantv1.StaffStatus_STAFF_STATUS_ACTIVE, st.GetStatus())
+				assert.Equal(t, timestamppb.New(testStaff().CreatedAt), st.GetCreatedAt())
+				assert.Equal(t, timestamppb.New(testStaff().UpdatedAt), st.GetUpdatedAt())
+			},
+		},
+		{
+			name: "garage without staff gets an empty list",
+			setup: func(s *mocks.MockGarageStaffRepository) {
+				s.EXPECT().ListByGarageID(mock.Anything, "garage-1").Return([]*domain.GarageStaff{}, nil).Once()
+			},
+			verify: func(t *testing.T, resp *tenantv1.ListStaffResponse) {
+				t.Helper()
+
+				assert.Empty(t, resp.GetStaff())
+			},
+		},
+		{
+			name: "repository failure maps to internal",
+			setup: func(s *mocks.MockGarageStaffRepository) {
+				s.EXPECT().ListByGarageID(mock.Anything, "garage-1").Return(nil, errors.New("connection lost")).Once()
+			},
+			wantCode: codes.Internal,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s, _, staff, _ := newTestServer(t)
+			tt.setup(staff)
+
+			resp, err := s.ListStaff(t.Context(), &tenantv1.ListStaffRequest{GarageId: "garage-1"})
+			if tt.wantCode != codes.OK {
+				require.Error(t, err)
+				assert.Equal(t, tt.wantCode, status.Code(err))
+
+				return
+			}
+
+			require.NoError(t, err)
+			tt.verify(t, resp)
+		})
+	}
+}
+
+func TestServer_ListStaff_RoleAndStatusMapping(t *testing.T) {
+	cases := []struct {
+		name      string
+		role      domain.Role
+		status    domain.StaffStatus
+		wantRole  tenantv1.Role
+		wantState tenantv1.StaffStatus
+	}{
+		{name: "owner", role: domain.RoleOwner, status: domain.StaffStatusActive, wantRole: tenantv1.Role_ROLE_OWNER, wantState: tenantv1.StaffStatus_STAFF_STATUS_ACTIVE},
+		{name: "accountant", role: domain.RoleAccountant, status: domain.StaffStatusInactive, wantRole: tenantv1.Role_ROLE_ACCOUNTANT, wantState: tenantv1.StaffStatus_STAFF_STATUS_INACTIVE},
+		{name: "technician", role: domain.RoleTechnician, status: domain.StaffStatusSuspended, wantRole: tenantv1.Role_ROLE_TECHNICIAN, wantState: tenantv1.StaffStatus_STAFF_STATUS_SUSPENDED},
+		{name: "service advisor", role: domain.RoleServiceAdvisor, status: domain.StaffStatus("removed"), wantRole: tenantv1.Role_ROLE_SERVICE_ADVISOR, wantState: tenantv1.StaffStatus_STAFF_STATUS_UNSPECIFIED},
+		{name: "inventory staff", role: domain.RoleInventoryStaff, status: domain.StaffStatus(""), wantRole: tenantv1.Role_ROLE_INVENTORY_STAFF, wantState: tenantv1.StaffStatus_STAFF_STATUS_UNSPECIFIED},
+		{name: "unknown", role: domain.Role("admin"), status: domain.StaffStatusActive, wantRole: tenantv1.Role_ROLE_UNSPECIFIED, wantState: tenantv1.StaffStatus_STAFF_STATUS_ACTIVE},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			s, _, staff, _ := newTestServer(t)
+			staff.EXPECT().ListByGarageID(mock.Anything, "garage-1").Return(
+				[]*domain.GarageStaff{{ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: tt.role, Status: tt.status}}, nil,
+			).Once()
+
+			resp, err := s.ListStaff(t.Context(), &tenantv1.ListStaffRequest{GarageId: "garage-1"})
+			require.NoError(t, err)
+			require.Len(t, resp.GetStaff(), 1)
+			st := resp.GetStaff()[0]
+			assert.Equal(t, tt.wantRole, st.GetRole())
+			assert.Equal(t, tt.wantState, st.GetStatus())
+			assert.Nil(t, st.GetCreatedAt())
+		})
+	}
+}
+
+func TestServer_UpdateAndRemoveStaff(t *testing.T) {
+	t.Parallel()
+
+	t.Run("UpdateStaff changes the role", func(t *testing.T) {
+		t.Parallel()
+
+		s, _, staff, _ := newTestServer(t)
+		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(&domain.GarageStaff{
+			ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
+		}, nil).Once()
+		staff.EXPECT().Update(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
+			return s.ID == "staff-1" && s.Role == domain.RoleAccountant
+		})).Return(nil).Once()
+
+		resp, err := s.UpdateStaff(t.Context(), &tenantv1.UpdateStaffRequest{
+			GarageId: "garage-1", StaffId: "staff-1", Role: tenantv1.Role_ROLE_ACCOUNTANT.Enum(),
+		})
+
+		require.NoError(t, err)
+		assert.Equal(t, tenantv1.Role_ROLE_ACCOUNTANT, resp.GetStaff().GetRole())
+	})
+
+	t.Run("UpdateStaff changes the status", func(t *testing.T) {
+		t.Parallel()
+
+		for _, tc := range []struct {
+			name   string
+			status tenantv1.StaffStatus
+			want   domain.StaffStatus
+		}{
+			{name: "inactive", status: tenantv1.StaffStatus_STAFF_STATUS_INACTIVE, want: domain.StaffStatusInactive},
+			{name: "suspended", status: tenantv1.StaffStatus_STAFF_STATUS_SUSPENDED, want: domain.StaffStatusSuspended},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+
+				s, _, staff, _ := newTestServer(t)
+				staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(&domain.GarageStaff{
+					ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
+				}, nil).Once()
+				staff.EXPECT().Update(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
+					return s.ID == "staff-1" && s.Status == tc.want
+				})).Return(nil).Once()
+
+				resp, err := s.UpdateStaff(t.Context(), &tenantv1.UpdateStaffRequest{
+					GarageId: "garage-1", StaffId: "staff-1", Status: tc.status.Enum(),
+				})
+
+				require.NoError(t, err)
+				assert.Equal(t, tc.status, resp.GetStaff().GetStatus())
+			})
+		}
+	})
+
+	t.Run("UpdateStaff keeps unset fields", func(t *testing.T) {
+		t.Parallel()
+
+		s, _, staff, _ := newTestServer(t)
+		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(&domain.GarageStaff{
+			ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
+		}, nil).Once()
+		staff.EXPECT().Update(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
+			return s.Role == domain.RoleTechnician && s.Status == domain.StaffStatusActive
+		})).Return(nil).Once()
+
+		resp, err := s.UpdateStaff(t.Context(), &tenantv1.UpdateStaffRequest{GarageId: "garage-1", StaffId: "staff-1"})
+
+		require.NoError(t, err)
+		assert.Equal(t, tenantv1.Role_ROLE_TECHNICIAN, resp.GetStaff().GetRole())
+	})
+
+	t.Run("RemoveStaff deactivates the membership", func(t *testing.T) {
+		t.Parallel()
+
+		s, _, staff, _ := newTestServer(t)
+		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(&domain.GarageStaff{
+			ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
+		}, nil).Once()
+		staff.EXPECT().Update(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
+			return s.ID == "staff-1" && s.Status == domain.StaffStatusInactive
+		})).Return(nil).Once()
+
+		resp, err := s.RemoveStaff(t.Context(), &tenantv1.RemoveStaffRequest{GarageId: "garage-1", StaffId: "staff-1"})
+
+		require.NoError(t, err)
+		assert.Equal(t, "garage-1", resp.GetGarageId())
+		assert.Equal(t, "staff-1", resp.GetStaffId())
+	})
+
+	t.Run("RemoveStaff rejects the owner", func(t *testing.T) {
+		t.Parallel()
+
+		s, _, staff, _ := newTestServer(t)
+		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(&domain.GarageStaff{
+			ID: "staff-1", GarageID: "garage-1", AccountID: "acc-1", Role: domain.RoleOwner, Status: domain.StaffStatusActive,
+		}, nil).Once()
+
+		_, err := s.RemoveStaff(t.Context(), &tenantv1.RemoveStaffRequest{GarageId: "garage-1", StaffId: "staff-1"})
+
+		require.Error(t, err)
+		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	})
+}

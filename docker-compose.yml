@@ -3,7 +3,7 @@ version: "3.9"
 services:
   vietgara-pgsql:
     image: postgres:18.4
-    container_name: postgres
+    container_name: vietgara-pgsql
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -14,12 +14,72 @@ services:
     volumes:
       - /Users/akagi/viettechno/vietgara/postgres-data:/var/lib/postgresql/18/docker
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 10s
 
+    networks:
+      - vietgara-network
+
+  vietgara-backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vietgara-backend
+    restart: unless-stopped
+    depends_on:
+      vietgara-pgsql:
+        condition: service_healthy
+    environment:
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED}@vietgara-pgsql:5432/${POSTGRES_DB}?sslmode=disable
+      JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
+      JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-20m}
+      JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-720h}
+      GRPC_PORT: 50051
+      HTTP_PORT: 8080
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8000/api/auth/google/callback}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8000}
+    # Native gRPC is intentionally internal; Kong is the application entry point.
+    expose:
+      - "50051"
+      - "8080"
+    networks:
+      - vietgara-network
+
+  vietgara-web-admin:
+    build:
+      context: ../vietgara-web-admin
+      dockerfile: Dockerfile
+    container_name: vietgara-web-admin
+    restart: unless-stopped
+    networks:
+      - vietgara-network
+
+  vietgara-api-gateway:
+    image: kong:3.9
+    container_name: vietgara-api-gateway
+    restart: unless-stopped
+    depends_on:
+      - vietgara-backend
+      - vietgara-web-admin
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_ADMIN_LISTEN: 0.0.0.0:8001
+      KONG_LOG_LEVEL: warn
+    ports:
+      # Single local entry point: the admin SPA is served at http://localhost:8000.
+      - "${KONG_PROXY_PORT:-8000}:8000"
+      # Bind the Admin API to loopback only; it is not an application-facing API.
+      - "127.0.0.1:${KONG_ADMIN_PORT:-8001}:8001"
+    volumes:
+      - ./kong/kong.yml:/etc/kong/kong.yml:ro
     networks:
       - vietgara-network
 

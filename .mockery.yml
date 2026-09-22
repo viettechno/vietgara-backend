@@ -1,0 +1,66 @@
+all: false
+dir: "{{.InterfaceDir}}/mocks"
+filename: "{{.SrcPackageName}}.go"
+force-file-write: true
+formatter: goimports
+log-level: info
+structname: "{{.Mock}}{{.InterfaceName}}"
+pkgname: "mocks"
+recursive: false
+template: testify
+packages:
+  github.com/jackc/pgx/v5:
+    interfaces:
+      Tx:
+        config:
+          filename: "pgx_tx.go"
+          dir: "./internal/mocks"
+      Row:
+        config:
+          filename: "pgx_row.go"
+          dir: "./internal/mocks"
+      Rows:
+        config:
+          filename: "pgx_rows.go"
+          dir: "./internal/mocks"
+  github.com/viettechno/vietgara-backend/internal/platform/db:
+    config:
+      all: true
+      dir: "./internal/mocks"
+      filename: "platform_db.go"
+  github.com/viettechno/vietgara-backend/internal/tenant/usecase:
+    interfaces:
+      GarageRepository:
+        config:
+          filename: "tenant_usecase_garage_repository.go"
+          dir: "./internal/mocks"
+      GarageStaffRepository:
+        config:
+          filename: "tenant_usecase_garage_staff_repository.go"
+          dir: "./internal/mocks"
+      EventPublisher:
+        config:
+          filename: "tenant_usecase_event_publisher.go"
+          dir: "./internal/mocks"
+      AccountDirectory:
+        config:
+          filename: "tenant_usecase_account_directory.go"
+          dir: "./internal/mocks"
+  github.com/viettechno/vietgara-backend/internal/identity/usecase:
+    interfaces:
+      AccountRepository:
+        config:
+          filename: "identity_usecase_account.go"
+          dir: "./internal/mocks"
+      GarageMembershipReader:
+        config:
+          filename: "identity_usecase_garage_membership_reader.go"
+          dir: "./internal/mocks"
+      RefreshTokenStore:
+        config:
+          filename: "identity_usecase_refresh_token_store.go"
+          dir: "./internal/mocks"
+      OTPVerifier:
+        config:
+          filename: "identity_usecase_otp_verifier.go"
+          dir: "./internal/mocks"

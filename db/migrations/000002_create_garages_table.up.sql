@@ -10,7 +10,7 @@ CREATE TABLE garages (
     address TEXT,
     logo_url VARCHAR(500),
     timezone VARCHAR(20) NOT NULL DEFAULT 'UTC',
-    currency VARCHAR(3) NOT NULL DEFAULT 'USD',
+    currency VARCHAR(3) NOT NULL DEFAULT 'VND',
     status garage_status NOT NULL DEFAULT 'active',
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()

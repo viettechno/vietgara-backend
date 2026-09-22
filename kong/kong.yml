@@ -1,0 +1,39 @@
+_format_version: "3.0"
+_transform: true
+
+services:
+  # The browser-facing SPA is the default route. Nginx handles client-side
+  # routes so direct navigation to /staff or /login still loads the app.
+  - name: web-admin
+    url: http://vietgara-web-admin:80
+    routes:
+      - name: web-admin-route
+        paths:
+          - /
+        strip_path: false
+        protocols:
+          - http
+          - https
+
+  # The backend currently exposes native gRPC only. Kong routes gRPC clients
+  # on the Compose network to that service; a future HTTP/JSON adapter can be
+  # added under /api without changing the browser-facing SPA route.
+  - name: backend-grpc
+    url: grpc://vietgara-backend:50051
+    routes:
+      - name: backend-grpc-route
+        paths:
+          - /
+        protocols:
+          - grpc
+
+  - name: backend-http
+    url: http://vietgara-backend:8080
+    routes:
+      - name: backend-http-route
+        paths:
+          - /api
+        strip_path: true
+        protocols:
+          - http
+          - https

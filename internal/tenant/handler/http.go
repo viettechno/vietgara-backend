@@ -26,8 +26,9 @@ type staffHTTPResponse struct {
 	UpdatedAt string `json:"updatedAt"`
 }
 
-// RegisterHTTPRoutes adds browser-facing staff endpoints to Echo.
+// RegisterHTTPRoutes adds the browser-facing staff and garage endpoints to Echo.
 func (s *Server) RegisterHTTPRoutes(router *echo.Group) {
+	s.registerGarageHTTPRoutes(router)
 	router.GET("/staff", echo.WrapHandler(http.HandlerFunc(s.listHTTPStaff)))
 	router.POST("/staff", echo.WrapHandler(http.HandlerFunc(s.addHTTPStaff)))
 }

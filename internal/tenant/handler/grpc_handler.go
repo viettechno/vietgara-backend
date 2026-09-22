@@ -8,6 +8,7 @@ import (
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/middleware"
+	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 
 	"google.golang.org/grpc/codes"
@@ -26,17 +27,26 @@ type Server struct {
 
 	garage *usecase.GarageUseCase
 	staff  *usecase.StaffUseCase
+
+	txManager *platformdb.TxManager
 }
 
 // NewServer wires the handler to its use cases and returns a ready Server.
 func NewServer(
 	garage *usecase.GarageUseCase,
 	staff *usecase.StaffUseCase,
+	opts ...ServerOption,
 ) *Server {
-	return &Server{
+	s := &Server{
 		garage: garage,
 		staff:  staff,
 	}
+
+	for _, opt := range opts {
+		opt(s)
+	}
+
+	return s
 }
 
 // accountIDFromContext reads the account_id (JWT "sub" claim) attached by

@@ -123,7 +123,7 @@ func buildServices(pool *platformdb.Pool, signingKey []byte) (*grpc.Server, *htt
 		refreshTTL,
 	)
 
-	tenantSrv := tenantHandler.NewServer(garageUC, staffUC)
+	tenantSrv := tenantHandler.NewServer(garageUC, staffUC, tenantHandler.WithTxManager(txManager))
 	identitySrv := identityHandler.NewServer(identityUC, &stubSocialIdentityVerifier{})
 	identitySrv.ConfigureGoogleOAuth(identityHandler.GoogleOAuthConfig{
 		ClientID:       envOr("GOOGLE_CLIENT_ID", ""),

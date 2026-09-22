@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/middleware"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
+	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 	"github.com/viettechno/vietgara-backend/pkg/converter"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
@@ -104,9 +106,17 @@ func (s *Server) getHTTPGarage(c echo.Context) error {
 func (s *Server) updateHTTPGarage(c echo.Context) error {
 	garageID := c.Param("id")
 
+	// Read the raw body once: the proto fields decode as protojson while the
+	// lifecycle "status" (not in the garage proto yet) decodes as plain
+	// JSON from the same bytes. Unknown proto fields are discarded.
+	raw, err := io.ReadAll(http.MaxBytesReader(c.Response(), c.Request().Body, maxGarageBodyBytes))
+	if err != nil {
+		return writeGarageHTTPError(c, status.Error(codes.InvalidArgument, "invalid request body"))
+	}
+
 	var req tenantv1.UpdateGarageRequest
-	if err := decodeGarageBody(c, &req); err != nil {
-		return writeGarageHTTPError(c, err)
+	if err := (protojson.UnmarshalOptions{DiscardUnknown: true}).Unmarshal(raw, &req); err != nil {
+		return writeGarageHTTPError(c, status.Error(codes.InvalidArgument, "invalid request body"))
 	}
 
 	req.GarageId = garageID
@@ -119,19 +129,33 @@ func (s *Server) updateHTTPGarage(c echo.Context) error {
 		return writeGarageHTTPError(c, err)
 	}
 
+	domainStatus, err := parseGarageStatus(raw)
+	if err != nil {
+		return writeGarageHTTPError(c, err)
+	}
+
 	var garage *tenantv1.Garage
 
-	err := s.inGarageTx(c.Request().Context(), garageID, func(ctx context.Context) error {
+	err = s.inGarageTx(c.Request().Context(), garageID, func(ctx context.Context) error {
 		if _, err := s.authorizedGarage(ctx, garageID, true); err != nil {
 			return err
 		}
 
-		resp, err := s.UpdateGarage(ctx, &req)
+		updated, err := s.garage.Update(ctx, usecase.UpdateGarageRequest{
+			GarageID: garageID,
+			Name:     req.Name,
+			TaxCode:  req.TaxCode,
+			Address:  req.Address,
+			LogoURL:  req.LogoUrl,
+			Timezone: req.Timezone,
+			Currency: req.Currency,
+			Status:   domainStatus,
+		})
 		if err != nil {
 			return err
 		}
 
-		garage = resp.GetGarage()
+		garage = garageToProto(updated)
 
 		return nil
 	})
@@ -140,6 +164,32 @@ func (s *Server) updateHTTPGarage(c echo.Context) error {
 	}
 
 	return writeGarageProtoJSON(c, http.StatusOK, garage)
+}
+
+// parseGarageStatus extracts the optional "status" member ("active",
+// "inactive" or "suspended") from a raw JSON body. Absent means "keep the
+// current status" and returns (nil, nil).
+func parseGarageStatus(raw []byte) (*domain.GarageStatus, error) {
+	var payload struct {
+		Status *string `json:"status"`
+	}
+
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid request body")
+	}
+
+	if payload.Status == nil {
+		return nil, nil
+	}
+
+	switch domain.GarageStatus(*payload.Status) {
+	case domain.GarageStatusActive, domain.GarageStatusInactive, domain.GarageStatusSuspended:
+		parsed := domain.GarageStatus(*payload.Status)
+
+		return &parsed, nil
+	default:
+		return nil, status.Error(codes.InvalidArgument, "status must be active, inactive or suspended")
+	}
 }
 
 // inGarageTx runs fn inside a transaction scoped to garageID so the garages

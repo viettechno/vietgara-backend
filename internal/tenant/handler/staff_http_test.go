@@ -3,10 +3,12 @@ package handler_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -30,7 +32,7 @@ func TestServer_RegisterHTTPRoutesStaff(t *testing.T) {
 		registered[route.Method+" "+route.Path] = true
 	}
 
-	for _, want := range []string{"GET /staff", "POST /staff", "GET /staff/lookup"} {
+	for _, want := range []string{"GET /staff", "POST /staff", "GET /staff/lookup", "PATCH /staff/:id", "DELETE /staff/:id"} {
 		assert.Truef(t, registered[want], "expected route %s to be registered", want)
 	}
 }
@@ -274,5 +276,209 @@ func TestServer_AddHTTPStaff(t *testing.T) {
 		assert.Equal(t, "garage-1", payload["garageId"])
 		assert.Equal(t, "Tran Binh", payload["fullName"])
 		assert.Equal(t, "technician", payload["role"])
+	})
+}
+
+func TestServer_UpdateHTTPStaff(t *testing.T) {
+	t.Parallel()
+
+	technician := technicianStaff
+
+	t.Run("owner deactivates a technician", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffHTTPTestServer(t)
+		f.garages.EXPECT().FindByID(mock.Anything, "garage-1").Return(testGarage(), nil).Once()
+		f.staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(technician(), nil).Once()
+		f.staff.EXPECT().Update(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
+			return s.ID == "staff-1" && s.Status == domain.StaffStatusInactive
+		})).Return(nil).Once()
+		f.staff.EXPECT().ListByGarageID(mock.Anything, "garage-1").Return(nil, nil).Once()
+
+		rec := garageHTTPRequest(t, f.srv, "acc-1", nil, http.MethodPatch, "/staff/staff-1", `{"garageId":"garage-1","status":"inactive"}`)
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), `"status":"inactive"`)
+	})
+
+	t.Run("owner reactivates a membership", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffHTTPTestServer(t)
+		f.garages.EXPECT().FindByID(mock.Anything, "garage-1").Return(testGarage(), nil).Once()
+
+		inactive := technician()
+		inactive.Status = domain.StaffStatusInactive
+		f.staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(inactive, nil).Once()
+		f.staff.EXPECT().Update(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
+			return s.Status == domain.StaffStatusActive
+		})).Return(nil).Once()
+		f.staff.EXPECT().ListByGarageID(mock.Anything, "garage-1").Return(nil, nil).Once()
+
+		rec := garageHTTPRequest(t, f.srv, "acc-1", nil, http.MethodPatch, "/staff/staff-1", `{"garageId":"garage-1","status":"active"}`)
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), `"status":"active"`)
+	})
+
+	t.Run("missing garageId returns bad request", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffHTTPTestServer(t)
+		rec := garageHTTPRequest(t, f.srv, "acc-1", nil, http.MethodPatch, "/staff/staff-1", `{"status":"inactive"}`)
+
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("empty update returns bad request", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffHTTPTestServer(t)
+		rec := garageHTTPRequest(t, f.srv, "acc-1", nil, http.MethodPatch, "/staff/staff-1", `{"garageId":"garage-1"}`)
+
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+}
+
+func technicianStaff() *domain.GarageStaff {
+	return &domain.GarageStaff{
+		ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
+	}
+}
+
+func TestServer_UpdateHTTPStaffEdgeCases(t *testing.T) {
+	t.Parallel()
+
+	technician := technicianStaff
+
+	t.Run("owner role cannot be assigned", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffHTTPTestServer(t)
+		rec := garageHTTPRequest(t, f.srv, "acc-1", nil, http.MethodPatch, "/staff/staff-1", `{"garageId":"garage-1","role":"owner"}`)
+
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("reactivated member is enriched with account details", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffHTTPTestServer(t)
+		f.garages.EXPECT().FindByID(mock.Anything, "garage-1").Return(testGarage(), nil).Once()
+
+		updated := &domain.GarageStaff{
+			ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
+		}
+		f.staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(&domain.GarageStaff{
+			ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusInactive,
+		}, nil).Once()
+		f.staff.EXPECT().Update(mock.Anything, mock.Anything).Return(nil).Once()
+		f.staff.EXPECT().ListByGarageID(mock.Anything, "garage-1").Return([]*domain.GarageStaff{updated}, nil).Once()
+
+		account := &usecase.AccountSummary{ID: "acc-2", FullName: "Tran Binh", Email: new("binh@example.com"), Active: true}
+		f.directory.EXPECT().ListByIDs(mock.Anything, []string{"acc-2"}).Return(map[string]*usecase.AccountSummary{"acc-2": account}, nil).Once()
+
+		rec := garageHTTPRequest(t, f.srv, "acc-1", nil, http.MethodPatch, "/staff/staff-1", `{"garageId":"garage-1","status":"active"}`)
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), `"fullName":"Tran Binh"`)
+	})
+
+	t.Run("account load failure returns internal error", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffHTTPTestServer(t)
+		f.garages.EXPECT().FindByID(mock.Anything, "garage-1").Return(testGarage(), nil).Once()
+		f.staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(technician(), nil).Once()
+		f.staff.EXPECT().Update(mock.Anything, mock.Anything).Return(nil).Once()
+		f.staff.EXPECT().ListByGarageID(mock.Anything, "garage-1").Return(nil, errors.New("boom")).Once()
+
+		rec := garageHTTPRequest(t, f.srv, "acc-1", nil, http.MethodPatch, "/staff/staff-1", `{"garageId":"garage-1","status":"inactive"}`)
+
+		require.Equal(t, http.StatusInternalServerError, rec.Code)
+	})
+
+	t.Run("non-owner staff is forbidden", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffHTTPTestServer(t)
+		f.garages.EXPECT().FindByID(mock.Anything, "garage-1").Return(testGarage(), nil).Once()
+
+		rec := garageHTTPRequest(t, f.srv, "acc-2", technicianClaims, http.MethodPatch, "/staff/staff-1", `{"garageId":"garage-1","status":"inactive"}`)
+
+		require.Equal(t, http.StatusForbidden, rec.Code)
+	})
+
+	t.Run("unknown membership returns not found", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffHTTPTestServer(t)
+		f.garages.EXPECT().FindByID(mock.Anything, "garage-1").Return(testGarage(), nil).Once()
+		f.staff.EXPECT().FindByID(mock.Anything, "missing").Return(nil, pgx.ErrNoRows).Once()
+
+		rec := garageHTTPRequest(t, f.srv, "acc-1", nil, http.MethodPatch, "/staff/missing", `{"garageId":"garage-1","status":"inactive"}`)
+
+		require.Equal(t, http.StatusNotFound, rec.Code)
+	})
+}
+
+func TestServer_RemoveHTTPStaff(t *testing.T) {
+	t.Parallel()
+
+	t.Run("owner removes a technician", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffHTTPTestServer(t)
+		f.garages.EXPECT().FindByID(mock.Anything, "garage-1").Return(testGarage(), nil).Once()
+		f.staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(&domain.GarageStaff{
+			ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
+		}, nil).Once()
+		f.staff.EXPECT().Update(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
+			return s.Status == domain.StaffStatusInactive
+		})).Return(nil).Once()
+
+		rec := garageHTTPRequest(t, f.srv, "acc-1", nil, http.MethodDelete, "/staff/staff-1?garageId=garage-1", "")
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), `"status":"inactive"`)
+	})
+
+	t.Run("owner membership cannot be removed", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffHTTPTestServer(t)
+		f.garages.EXPECT().FindByID(mock.Anything, "garage-1").Return(testGarage(), nil).Once()
+		f.staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(&domain.GarageStaff{
+			ID: "staff-1", GarageID: "garage-1", AccountID: "acc-1", Role: domain.RoleOwner, Status: domain.StaffStatusActive,
+		}, nil).Once()
+
+		rec := garageHTTPRequest(t, f.srv, "acc-1", nil, http.MethodDelete, "/staff/staff-1?garageId=garage-1", "")
+
+		require.Equal(t, http.StatusPreconditionFailed, rec.Code)
+	})
+
+	t.Run("missing garageId returns bad request", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffHTTPTestServer(t)
+		rec := garageHTTPRequest(t, f.srv, "acc-1", nil, http.MethodDelete, "/staff/staff-1", "")
+
+		require.Equal(t, http.StatusBadRequest, rec.Code)
+	})
+
+	t.Run("garageId can come from the request body", func(t *testing.T) {
+		t.Parallel()
+
+		f := newStaffHTTPTestServer(t)
+		f.garages.EXPECT().FindByID(mock.Anything, "garage-1").Return(testGarage(), nil).Once()
+		f.staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(&domain.GarageStaff{
+			ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
+		}, nil).Once()
+		f.staff.EXPECT().Update(mock.Anything, mock.Anything).Return(nil).Once()
+
+		rec := garageHTTPRequest(t, f.srv, "acc-1", nil, http.MethodDelete, "/staff/staff-1", `{"garageId":"garage-1"}`)
+
+		require.Equal(t, http.StatusOK, rec.Code)
+		assert.Contains(t, rec.Body.String(), `"status":"inactive"`)
 	})
 }

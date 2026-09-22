@@ -170,6 +170,74 @@ func (_c *MockGarageStaffRepository_FindByGarageAndAccount_Call) RunAndReturn(ru
 	return _c
 }
 
+// FindByID provides a mock function for the type MockGarageStaffRepository
+func (_mock *MockGarageStaffRepository) FindByID(ctx context.Context, staffID string) (*domain.GarageStaff, error) {
+	ret := _mock.Called(ctx, staffID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindByID")
+	}
+
+	var r0 *domain.GarageStaff
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (*domain.GarageStaff, error)); ok {
+		return returnFunc(ctx, staffID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) *domain.GarageStaff); ok {
+		r0 = returnFunc(ctx, staffID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*domain.GarageStaff)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, staffID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockGarageStaffRepository_FindByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindByID'
+type MockGarageStaffRepository_FindByID_Call struct {
+	*mock.Call
+}
+
+// FindByID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - staffID string
+func (_e *MockGarageStaffRepository_Expecter) FindByID(ctx any, staffID any) *MockGarageStaffRepository_FindByID_Call {
+	return &MockGarageStaffRepository_FindByID_Call{Call: _e.mock.On("FindByID", ctx, staffID)}
+}
+
+func (_c *MockGarageStaffRepository_FindByID_Call) Run(run func(ctx context.Context, staffID string)) *MockGarageStaffRepository_FindByID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockGarageStaffRepository_FindByID_Call) Return(garageStaff *domain.GarageStaff, err error) *MockGarageStaffRepository_FindByID_Call {
+	_c.Call.Return(garageStaff, err)
+	return _c
+}
+
+func (_c *MockGarageStaffRepository_FindByID_Call) RunAndReturn(run func(ctx context.Context, staffID string) (*domain.GarageStaff, error)) *MockGarageStaffRepository_FindByID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListByGarageID provides a mock function for the type MockGarageStaffRepository
 func (_mock *MockGarageStaffRepository) ListByGarageID(ctx context.Context, garageID string) ([]*domain.GarageStaff, error) {
 	ret := _mock.Called(ctx, garageID)
@@ -302,6 +370,63 @@ func (_c *MockGarageStaffRepository_ListRolesForAccount_Call) Return(roleAssignm
 }
 
 func (_c *MockGarageStaffRepository_ListRolesForAccount_Call) RunAndReturn(run func(ctx context.Context, accountID string) ([]usecase.RoleAssignment, error)) *MockGarageStaffRepository_ListRolesForAccount_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Update provides a mock function for the type MockGarageStaffRepository
+func (_mock *MockGarageStaffRepository) Update(ctx context.Context, s *domain.GarageStaff) error {
+	ret := _mock.Called(ctx, s)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Update")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.GarageStaff) error); ok {
+		r0 = returnFunc(ctx, s)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockGarageStaffRepository_Update_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Update'
+type MockGarageStaffRepository_Update_Call struct {
+	*mock.Call
+}
+
+// Update is a helper method to define mock.On call
+//   - ctx context.Context
+//   - s *domain.GarageStaff
+func (_e *MockGarageStaffRepository_Expecter) Update(ctx any, s any) *MockGarageStaffRepository_Update_Call {
+	return &MockGarageStaffRepository_Update_Call{Call: _e.mock.On("Update", ctx, s)}
+}
+
+func (_c *MockGarageStaffRepository_Update_Call) Run(run func(ctx context.Context, s *domain.GarageStaff)) *MockGarageStaffRepository_Update_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.GarageStaff
+		if args[1] != nil {
+			arg1 = args[1].(*domain.GarageStaff)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockGarageStaffRepository_Update_Call) Return(err error) *MockGarageStaffRepository_Update_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockGarageStaffRepository_Update_Call) RunAndReturn(run func(ctx context.Context, s *domain.GarageStaff) error) *MockGarageStaffRepository_Update_Call {
 	_c.Call.Return(run)
 	return _c
 }

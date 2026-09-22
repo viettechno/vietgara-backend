@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -242,6 +243,108 @@ func TestPostgresGarageStaffRepository_ListRolesForAccount(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, got, len(tt.want))
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestPostgresGarageStaffRepository_FindByID(t *testing.T) {
+	tests := []struct {
+		name    string
+		staffID string
+		want    *domain.GarageStaff
+		wantErr error
+	}{
+		{
+			name:    "returns the staff member",
+			staffID: "staff-1",
+			want: &domain.GarageStaff{
+				ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
+			},
+		},
+		{
+			name:    "propagates errors untouched (no ErrNoRows mapping here)",
+			staffID: "missing",
+			wantErr: pgx.ErrNoRows,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conn, pool := newQuerier(t)
+			repo := repository.NewPostgresGarageStaffRepository(pool)
+
+			if tt.wantErr == nil {
+				conn.EXPECT().
+					QueryRow(t.Context(), sqlContaining("FROM garage_staff WHERE id = $1"), []any{"staff-1"}).
+					Return(valuesRow(t, staffScanValues("staff-1", "garage-1", "acc-2", "technician", "active")))
+			} else {
+				conn.EXPECT().
+					QueryRow(mock.Anything, sqlContaining("FROM garage_staff WHERE id = $1"), mock.Anything).
+					Return(errRow(t, pgx.ErrNoRows))
+			}
+
+			got, err := repo.FindByID(t.Context(), tt.staffID)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.want.GarageID, got.GarageID)
+			assert.Equal(t, tt.want.Role, got.Role)
+			assert.Equal(t, tt.want.Status, got.Status)
+		})
+	}
+}
+
+func TestPostgresGarageStaffRepository_Update(t *testing.T) {
+	boom := errors.New("boom")
+
+	tests := []struct {
+		name    string
+		staff   *domain.GarageStaff
+		args    []any
+		execErr error
+		wantErr error
+	}{
+		{
+			name: "persists the role and status",
+			staff: &domain.GarageStaff{
+				ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2",
+				Role: domain.RoleAccountant, Status: domain.StaffStatusInactive,
+			},
+			args: []any{"accountant", "inactive", "staff-1"},
+		},
+		{
+			name:    "propagates errors",
+			staff:   &domain.GarageStaff{ID: "staff-1"},
+			execErr: boom,
+			wantErr: boom,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			conn, pool := newQuerier(t)
+			repo := repository.NewPostgresGarageStaffRepository(pool)
+
+			if tt.wantErr != nil {
+				conn.EXPECT().
+					Exec(mock.Anything, sqlContaining("UPDATE garage_staff SET"), mock.Anything).
+					Return(pgconn.CommandTag{}, tt.execErr)
+			} else {
+				conn.EXPECT().
+					Exec(t.Context(), sqlContaining("UPDATE garage_staff SET"), tt.args).
+					Return(pgconn.CommandTag{}, nil)
+			}
+
+			err := repo.Update(t.Context(), tt.staff)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+				return
+			}
+
+			require.NoError(t, err)
 		})
 	}
 }

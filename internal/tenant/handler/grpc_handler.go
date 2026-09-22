@@ -17,10 +17,6 @@ import (
 
 // Server implements tenantv1.GarageServiceServer and
 // tenantv1.StaffServiceServer.
-//
-// UpdateStaff and RemoveStaff are not implemented yet: the StaffUseCase /
-// repository layers have no update/remove operations, so calls fall through
-// to the embedded Unimplemented servers and return codes.Unimplemented.
 type Server struct {
 	tenantv1.UnimplementedGarageServiceServer
 	tenantv1.UnimplementedStaffServiceServer

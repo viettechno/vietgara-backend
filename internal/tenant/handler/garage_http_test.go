@@ -187,4 +187,34 @@ func TestServer_UpdateHTTPGarage(t *testing.T) {
 
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
+
+	t.Run("owning account deactivates and reactivates a garage", func(t *testing.T) {
+		t.Parallel()
+
+		for _, tc := range []struct {
+			body string
+			want string
+		}{
+			{body: `{"status":"inactive"}`, want: `"status":"GARAGE_STATUS_INACTIVE"`},
+			{body: `{"status":"active"}`, want: `"status":"GARAGE_STATUS_ACTIVE"`},
+		} {
+			srv, garages, _, _ := newTestServer(t)
+			garages.EXPECT().FindByID(mock.Anything, "garage-1").Return(testGarage(), nil).Twice()
+			garages.EXPECT().Update(mock.Anything, mock.Anything).Return(nil).Once()
+
+			rec := garageHTTPRequest(t, srv, "acc-1", nil, http.MethodPatch, "/garages/garage-1", tc.body)
+
+			require.Equal(t, http.StatusOK, rec.Code)
+			assert.Contains(t, rec.Body.String(), tc.want)
+		}
+	})
+
+	t.Run("invalid status returns bad request", func(t *testing.T) {
+		t.Parallel()
+
+		srv := handler.NewServer(nil, nil)
+		rec := garageHTTPRequest(t, srv, "acc-1", nil, http.MethodPatch, "/garages/garage-1", `{"status":"archived"}`)
+
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+	})
 }

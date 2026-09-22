@@ -22,6 +22,8 @@ func (s *Server) registerStaffHTTPRoutes(router *echo.Group) {
 	router.GET("/staff", s.listHTTPStaff)
 	router.GET("/staff/lookup", s.lookupHTTPStaff)
 	router.POST("/staff", s.addHTTPStaff)
+	router.PATCH("/staff/:id", s.updateHTTPStaff)
+	router.DELETE("/staff/:id", s.removeHTTPStaff)
 }
 
 type staffHTTPRequest struct {
@@ -170,6 +172,148 @@ func (s *Server) addHTTPStaff(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusCreated, toStaffHTTPResponse(member))
+}
+
+type staffStatusHTTPRequest struct {
+	GarageID string  `json:"garageId"`
+	Role     *string `json:"role"`
+	Status   *string `json:"status"`
+}
+
+// updateHTTPStaff changes a membership's role and/or status (deactivate by
+// sending {"status":"inactive"}, reactivate with {"status":"active"}).
+// Owners only. At least one of role/status is required.
+func (s *Server) updateHTTPStaff(c echo.Context) error {
+	staffID := c.Param("id")
+
+	var payload staffStatusHTTPRequest
+
+	body, err := io.ReadAll(http.MaxBytesReader(c.Response(), c.Request().Body, maxGarageBodyBytes))
+	if err != nil || json.Unmarshal(body, &payload) != nil {
+		return writeGarageHTTPError(c, status.Error(codes.InvalidArgument, "invalid request body"))
+	}
+
+	req, err := parseUpdateStaffRequest(staffID, payload)
+	if err != nil {
+		return writeGarageHTTPError(c, err)
+	}
+
+	var member usecase.StaffMember
+
+	err = s.inGarageTx(c.Request().Context(), payload.GarageID, func(ctx context.Context) error {
+		if _, err := s.authorizedGarage(ctx, payload.GarageID, true); err != nil {
+			return err
+		}
+
+		updated, err := s.staff.Update(ctx, req)
+		if err != nil {
+			return err
+		}
+
+		member, err = s.enrichStaffMember(ctx, payload.GarageID, updated)
+
+		return err
+	})
+	if err != nil {
+		return writeGarageHTTPError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, toStaffHTTPResponse(member))
+}
+
+// parseUpdateStaffRequest validates the PATCH /staff/:id body and maps it to
+// a use case request.
+func parseUpdateStaffRequest(staffID string, payload staffStatusHTTPRequest) (usecase.UpdateStaffRequest, error) {
+	if strings.TrimSpace(payload.GarageID) == "" {
+		return usecase.UpdateStaffRequest{}, status.Error(codes.InvalidArgument, "garageId is required")
+	}
+
+	if payload.Role == nil && payload.Status == nil {
+		return usecase.UpdateStaffRequest{}, status.Error(codes.InvalidArgument, "role or status is required")
+	}
+
+	req := usecase.UpdateStaffRequest{StaffID: staffID, GarageID: payload.GarageID}
+
+	if payload.Role != nil {
+		role := domain.Role(*payload.Role)
+		if role == domain.RoleOwner {
+			return usecase.UpdateStaffRequest{}, status.Error(codes.InvalidArgument, "owners cannot be invited")
+		}
+
+		req.Role = &role
+	}
+
+	if payload.Status != nil {
+		staffStatus := domain.StaffStatus(*payload.Status)
+		req.Status = &staffStatus
+	}
+
+	return req, nil
+}
+
+// enrichStaffMember attaches the account details to an updated membership.
+// Memberships missing from the active list (e.g. just deactivated) are
+// returned without account details.
+func (s *Server) enrichStaffMember(ctx context.Context, garageID string, updated *domain.GarageStaff) (usecase.StaffMember, error) {
+	member := usecase.StaffMember{Staff: updated}
+
+	members, err := s.staff.ListMembers(ctx, garageID)
+	if err != nil {
+		return usecase.StaffMember{}, err
+	}
+
+	for _, listed := range members {
+		if listed.Staff.ID == updated.ID {
+			return listed, nil
+		}
+	}
+
+	return member, nil
+}
+
+// removeHTTPStaff deactivates a staff membership (sets status to inactive).
+// Owners only. The owner membership itself cannot be removed.
+func (s *Server) removeHTTPStaff(c echo.Context) error {
+	staffID := c.Param("id")
+	garageID := c.QueryParam("garageId")
+
+	if strings.TrimSpace(garageID) == "" {
+		var payload struct {
+			GarageID string `json:"garageId"`
+		}
+
+		body, err := io.ReadAll(http.MaxBytesReader(c.Response(), c.Request().Body, maxGarageBodyBytes))
+		if err == nil && len(body) > 0 {
+			_ = json.Unmarshal(body, &payload)
+			garageID = payload.GarageID
+		}
+	}
+
+	if strings.TrimSpace(garageID) == "" {
+		return writeGarageHTTPError(c, status.Error(codes.InvalidArgument, "garageId is required"))
+	}
+
+	var member usecase.StaffMember
+
+	err := s.inGarageTx(c.Request().Context(), garageID, func(ctx context.Context) error {
+		if _, err := s.authorizedGarage(ctx, garageID, true); err != nil {
+			return err
+		}
+
+		removed, err := s.staff.Deactivate(ctx, garageID, staffID)
+		if err != nil {
+			return err
+		}
+
+		member = usecase.StaffMember{Staff: removed}
+
+		return nil
+	})
+	if err != nil {
+		return writeGarageHTTPError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, toStaffHTTPResponse(member))
 }
 
 func toStaffHTTPResponse(member usecase.StaffMember) staffHTTPResponse {

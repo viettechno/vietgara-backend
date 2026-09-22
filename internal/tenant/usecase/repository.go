@@ -18,6 +18,11 @@ type GarageRepository interface {
 // memberships.
 type GarageStaffRepository interface {
 	Create(ctx context.Context, s *domain.GarageStaff) error
+	// FindByID returns the membership with the given id, or pgx.ErrNoRows
+	// when absent.
+	FindByID(ctx context.Context, staffID string) (*domain.GarageStaff, error)
+	// Update persists role/status changes of an existing membership.
+	Update(ctx context.Context, s *domain.GarageStaff) error
 	ListByGarageID(ctx context.Context, garageID string) ([]*domain.GarageStaff, error)
 	FindByGarageAndAccount(ctx context.Context, garageID, accountID string) (*domain.GarageStaff, error)
 	// ListRolesForAccount returns every (garage_id, role) pair for an

@@ -65,6 +65,39 @@ func (r *PostgresGarageStaffRepository) ListByGarageID(ctx context.Context, gara
 	return result, rows.Err()
 }
 
+// FindByID returns the staff record with the given id, or pgx.ErrNoRows
+// when absent.
+func (r *PostgresGarageStaffRepository) FindByID(ctx context.Context, staffID string) (*domain.GarageStaff, error) {
+	q := platformdb.QuerierFromContext(ctx, r.pool)
+	row := q.QueryRow(ctx, `SELECT id, garage_id, account_id, role, status, created_at, updated_at
+		FROM garage_staff WHERE id = $1`, staffID)
+
+	var (
+		s            domain.GarageStaff
+		role, status string
+	)
+
+	if err := row.Scan(&s.ID, &s.GarageID, &s.AccountID, &role, &status, &s.CreatedAt, &s.UpdatedAt); err != nil {
+		return nil, err
+	}
+
+	s.Role, s.Status = domain.Role(role), domain.StaffStatus(status)
+
+	return &s, nil
+}
+
+// Update persists the role and status of s.
+func (r *PostgresGarageStaffRepository) Update(ctx context.Context, s *domain.GarageStaff) error {
+	q := platformdb.QuerierFromContext(ctx, r.pool)
+	_, err := q.Exec(ctx, `
+		UPDATE garage_staff SET role=$1, status=$2, updated_at=now()
+		WHERE id = $3`,
+		string(s.Role), string(s.Status), s.ID,
+	)
+
+	return err
+}
+
 // FindByGarageAndAccount returns the staff record matching garageID and
 // accountID, or the underlying pgx error (e.g. pgx.ErrNoRows) when absent.
 func (r *PostgresGarageStaffRepository) FindByGarageAndAccount(ctx context.Context, garageID, accountID string) (*domain.GarageStaff, error) {

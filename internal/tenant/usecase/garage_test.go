@@ -389,6 +389,36 @@ func TestGarageUseCase_Get(t *testing.T) {
 	}
 }
 
+func TestGarageUseCase_UpdateStatus(t *testing.T) {
+	t.Run("deactivates and reactivates a garage", func(t *testing.T) {
+		repo := mocks.NewMockGarageRepository(t)
+		uc := usecase.NewGarageUseCase(repo, nil, nil)
+
+		repo.EXPECT().FindByID(mock.Anything, "g-1").Return(testGarage(), nil).Once()
+		repo.EXPECT().Update(mock.Anything, mock.MatchedBy(func(g *domain.Garage) bool {
+			return g.ID == "g-1" && g.Status == domain.GarageStatusInactive
+		})).Return(nil).Once()
+
+		g, err := uc.Update(context.Background(), usecase.UpdateGarageRequest{
+			GarageID: "g-1", Status: new(domain.GarageStatusInactive),
+		})
+		require.NoError(t, err)
+		assert.Equal(t, domain.GarageStatusInactive, g.Status)
+	})
+
+	t.Run("rejects an invalid status", func(t *testing.T) {
+		repo := mocks.NewMockGarageRepository(t)
+		uc := usecase.NewGarageUseCase(repo, nil, nil)
+
+		repo.EXPECT().FindByID(mock.Anything, "g-1").Return(testGarage(), nil).Once()
+
+		_, err := uc.Update(context.Background(), usecase.UpdateGarageRequest{
+			GarageID: "g-1", Status: new(domain.GarageStatus("archived")),
+		})
+		assertAppError(t, err, apperror.CodeInvalidArgument)
+	})
+}
+
 func TestGarageUseCase_Update(t *testing.T) {
 	tests := []struct {
 		name         string

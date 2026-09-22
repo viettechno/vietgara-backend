@@ -30,6 +30,9 @@ type UpdateGarageRequest struct {
 	LogoURL  *string
 	Timezone *string
 	Currency *string
+	// Status transitions the garage lifecycle (e.g. deactivate/reactivate);
+	// nil keeps the current status.
+	Status *domain.GarageStatus
 }
 
 // Option configures a GarageUseCase.
@@ -185,6 +188,14 @@ func (uc *GarageUseCase) Update(ctx context.Context, req UpdateGarageRequest) (*
 
 	if req.Currency != nil {
 		g.Currency = *req.Currency
+	}
+
+	if req.Status != nil {
+		if !req.Status.IsValid() {
+			return nil, apperror.Wrap(apperror.CodeInvalidArgument, "invalid garage status", domain.ErrInvalidGarageStatus)
+		}
+
+		g.Status = *req.Status
 	}
 
 	if err := uc.garageRepo.Update(ctx, g); err != nil {

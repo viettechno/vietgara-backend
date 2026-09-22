@@ -146,3 +146,55 @@ func TestStaffUseCase_AddRequiresActiveAccount(t *testing.T) {
 		assert.Equal(t, apperror.CodeNotFound, appErr.Code)
 	})
 }
+
+func TestStaffUseCase_ListMembers(t *testing.T) {
+	t.Parallel()
+
+	membership := &domain.GarageStaff{
+		ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
+	}
+
+	t.Run("returns staff without accounts when no directory is configured", func(t *testing.T) {
+		t.Parallel()
+
+		staff := mocks.NewMockGarageStaffRepository(t)
+		staff.EXPECT().ListByGarageID(mock.Anything, "garage-1").Return([]*domain.GarageStaff{membership}, nil).Once()
+
+		members, err := usecase.NewStaffUseCase(staff).ListMembers(t.Context(), "garage-1")
+
+		require.NoError(t, err)
+		require.Len(t, members, 1)
+		assert.Equal(t, membership, members[0].Staff)
+		assert.Nil(t, members[0].Account)
+	})
+
+	t.Run("attaches account details", func(t *testing.T) {
+		t.Parallel()
+
+		staff := mocks.NewMockGarageStaffRepository(t)
+		staff.EXPECT().ListByGarageID(mock.Anything, "garage-1").Return([]*domain.GarageStaff{membership}, nil).Once()
+
+		account := &usecase.AccountSummary{ID: "acc-2", FullName: "Tran Binh", Active: true}
+		directory := mocks.NewMockAccountDirectory(t)
+		directory.EXPECT().ListByIDs(mock.Anything, []string{"acc-2"}).Return(map[string]*usecase.AccountSummary{"acc-2": account}, nil).Once()
+
+		members, err := usecase.NewStaffUseCase(staff, usecase.WithAccountDirectory(directory)).ListMembers(t.Context(), "garage-1")
+
+		require.NoError(t, err)
+		require.Len(t, members, 1)
+		assert.Equal(t, account, members[0].Account)
+	})
+
+	t.Run("fails when accounts cannot be loaded", func(t *testing.T) {
+		t.Parallel()
+
+		staff := mocks.NewMockGarageStaffRepository(t)
+		staff.EXPECT().ListByGarageID(mock.Anything, "garage-1").Return([]*domain.GarageStaff{membership}, nil).Once()
+
+		directory := mocks.NewMockAccountDirectory(t)
+		directory.EXPECT().ListByIDs(mock.Anything, []string{"acc-2"}).Return(nil, errors.New("boom")).Once()
+
+		_, err := usecase.NewStaffUseCase(staff, usecase.WithAccountDirectory(directory)).ListMembers(t.Context(), "garage-1")
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+}

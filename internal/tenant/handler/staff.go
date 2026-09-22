@@ -39,6 +39,32 @@ func (s *Server) ListStaff(ctx context.Context, req *tenantv1.ListStaffRequest) 
 	return resp, nil
 }
 
+// UpdateStaff changes the role/status of a staff membership; absent fields
+// keep their current value.
+func (s *Server) UpdateStaff(ctx context.Context, req *tenantv1.UpdateStaffRequest) (*tenantv1.UpdateStaffResponse, error) {
+	st, err := s.staff.Update(ctx, usecase.UpdateStaffRequest{
+		StaffID:  req.GetStaffId(),
+		GarageID: req.GetGarageId(),
+		Role:     rolePtrFromProto(req.Role),
+		Status:   staffStatusPtrFromProto(req.Status),
+	})
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return &tenantv1.UpdateStaffResponse{Staff: staffToProto(st)}, nil
+}
+
+// RemoveStaff deactivates a staff membership (sets its status to inactive).
+func (s *Server) RemoveStaff(ctx context.Context, req *tenantv1.RemoveStaffRequest) (*tenantv1.RemoveStaffResponse, error) {
+	st, err := s.staff.Deactivate(ctx, req.GetGarageId(), req.GetStaffId())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return &tenantv1.RemoveStaffResponse{GarageId: st.GarageID, StaffId: st.ID}, nil
+}
+
 func staffToProto(s *domain.GarageStaff) *tenantv1.GarageStaff {
 	return &tenantv1.GarageStaff{
 		Id:        s.ID,
@@ -98,4 +124,39 @@ func roleFromProto(r tenantv1.Role) domain.Role {
 	default:
 		return domain.Role("")
 	}
+}
+
+// rolePtrFromProto maps an optional role field to a domain pointer; nil (or
+// UNSPECIFIED) means "keep the current role".
+func rolePtrFromProto(r *tenantv1.Role) *domain.Role {
+	if r == nil || *r == tenantv1.Role_ROLE_UNSPECIFIED {
+		return nil
+	}
+
+	role := roleFromProto(*r)
+
+	return &role
+}
+
+// staffStatusPtrFromProto maps an optional status field to a domain pointer;
+// nil (or UNSPECIFIED) means "keep the current status".
+func staffStatusPtrFromProto(s *tenantv1.StaffStatus) *domain.StaffStatus {
+	if s == nil {
+		return nil
+	}
+
+	var status domain.StaffStatus
+
+	switch *s {
+	case tenantv1.StaffStatus_STAFF_STATUS_ACTIVE:
+		status = domain.StaffStatusActive
+	case tenantv1.StaffStatus_STAFF_STATUS_INACTIVE:
+		status = domain.StaffStatusInactive
+	case tenantv1.StaffStatus_STAFF_STATUS_SUSPENDED:
+		status = domain.StaffStatusSuspended
+	case tenantv1.StaffStatus_STAFF_STATUS_UNSPECIFIED:
+		return nil
+	}
+
+	return &status
 }

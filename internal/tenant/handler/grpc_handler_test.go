@@ -668,34 +668,106 @@ func TestServer_ListStaff_RoleAndStatusMapping(t *testing.T) {
 	}
 }
 
-func TestServer_UnimplementedMethods(t *testing.T) {
-	s, _, _, _ := newTestServer(t)
+func TestServer_UpdateAndRemoveStaff(t *testing.T) {
+	t.Parallel()
 
-	tests := []struct {
-		name string
-		call func() error
-	}{
-		{
-			name: "UpdateStaff",
-			call: func() error {
-				_, err := s.UpdateStaff(t.Context(), &tenantv1.UpdateStaffRequest{GarageId: "garage-1", StaffId: "staff-1"})
-				return err
-			},
-		},
-		{
-			name: "RemoveStaff",
-			call: func() error {
-				_, err := s.RemoveStaff(t.Context(), &tenantv1.RemoveStaffRequest{GarageId: "garage-1", StaffId: "staff-1"})
-				return err
-			},
-		},
-	}
+	t.Run("UpdateStaff changes the role", func(t *testing.T) {
+		t.Parallel()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.call()
-			require.Error(t, err)
-			assert.Equal(t, codes.Unimplemented, status.Code(err))
+		s, _, staff, _ := newTestServer(t)
+		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(&domain.GarageStaff{
+			ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
+		}, nil).Once()
+		staff.EXPECT().Update(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
+			return s.ID == "staff-1" && s.Role == domain.RoleAccountant
+		})).Return(nil).Once()
+
+		resp, err := s.UpdateStaff(t.Context(), &tenantv1.UpdateStaffRequest{
+			GarageId: "garage-1", StaffId: "staff-1", Role: tenantv1.Role_ROLE_ACCOUNTANT.Enum(),
 		})
-	}
+
+		require.NoError(t, err)
+		assert.Equal(t, tenantv1.Role_ROLE_ACCOUNTANT, resp.GetStaff().GetRole())
+	})
+
+	t.Run("UpdateStaff changes the status", func(t *testing.T) {
+		t.Parallel()
+
+		for _, tc := range []struct {
+			name   string
+			status tenantv1.StaffStatus
+			want   domain.StaffStatus
+		}{
+			{name: "inactive", status: tenantv1.StaffStatus_STAFF_STATUS_INACTIVE, want: domain.StaffStatusInactive},
+			{name: "suspended", status: tenantv1.StaffStatus_STAFF_STATUS_SUSPENDED, want: domain.StaffStatusSuspended},
+		} {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+
+				s, _, staff, _ := newTestServer(t)
+				staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(&domain.GarageStaff{
+					ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
+				}, nil).Once()
+				staff.EXPECT().Update(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
+					return s.ID == "staff-1" && s.Status == tc.want
+				})).Return(nil).Once()
+
+				resp, err := s.UpdateStaff(t.Context(), &tenantv1.UpdateStaffRequest{
+					GarageId: "garage-1", StaffId: "staff-1", Status: tc.status.Enum(),
+				})
+
+				require.NoError(t, err)
+				assert.Equal(t, tc.status, resp.GetStaff().GetStatus())
+			})
+		}
+	})
+
+	t.Run("UpdateStaff keeps unset fields", func(t *testing.T) {
+		t.Parallel()
+
+		s, _, staff, _ := newTestServer(t)
+		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(&domain.GarageStaff{
+			ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
+		}, nil).Once()
+		staff.EXPECT().Update(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
+			return s.Role == domain.RoleTechnician && s.Status == domain.StaffStatusActive
+		})).Return(nil).Once()
+
+		resp, err := s.UpdateStaff(t.Context(), &tenantv1.UpdateStaffRequest{GarageId: "garage-1", StaffId: "staff-1"})
+
+		require.NoError(t, err)
+		assert.Equal(t, tenantv1.Role_ROLE_TECHNICIAN, resp.GetStaff().GetRole())
+	})
+
+	t.Run("RemoveStaff deactivates the membership", func(t *testing.T) {
+		t.Parallel()
+
+		s, _, staff, _ := newTestServer(t)
+		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(&domain.GarageStaff{
+			ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
+		}, nil).Once()
+		staff.EXPECT().Update(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
+			return s.ID == "staff-1" && s.Status == domain.StaffStatusInactive
+		})).Return(nil).Once()
+
+		resp, err := s.RemoveStaff(t.Context(), &tenantv1.RemoveStaffRequest{GarageId: "garage-1", StaffId: "staff-1"})
+
+		require.NoError(t, err)
+		assert.Equal(t, "garage-1", resp.GetGarageId())
+		assert.Equal(t, "staff-1", resp.GetStaffId())
+	})
+
+	t.Run("RemoveStaff rejects the owner", func(t *testing.T) {
+		t.Parallel()
+
+		s, _, staff, _ := newTestServer(t)
+		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(&domain.GarageStaff{
+			ID: "staff-1", GarageID: "garage-1", AccountID: "acc-1", Role: domain.RoleOwner, Status: domain.StaffStatusActive,
+		}, nil).Once()
+
+		_, err := s.RemoveStaff(t.Context(), &tenantv1.RemoveStaffRequest{GarageId: "garage-1", StaffId: "staff-1"})
+
+		require.Error(t, err)
+		assert.Equal(t, codes.FailedPrecondition, status.Code(err))
+	})
 }

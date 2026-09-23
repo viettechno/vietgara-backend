@@ -60,6 +60,13 @@ FOR ALL
 USING (garage_id = current_setting('app.current_garage_id')::uuid)
 ```
 
+### 000005–000007: Customer & Vehicle module (Release 1.1)
+- **customers** — per-garage customer profiles (Database Design 3.1). `phone` is stored normalized and unique per garage among live rows; `consent_log` is an append-only JSON array of personal-data consent decisions (Decree 13/2023/ND-CP); soft-deleted via `deleted_at`; `pg_trgm` indexes back fuzzy search.
+- **vehicles** — vehicles of a customer (Database Design 3.2). `license_plate_key` is a generated column (plate reduced to A–Z/0–9) used for uniqueness and plate search; the `(garage_id, customer_id)` foreign key guarantees a vehicle and its owner share a garage.
+- **partners** — parts suppliers and insurers (Database Design 3.3), `contact_info` JSONB, name unique per garage and type (case-insensitive).
+
+All three have `FORCE ROW LEVEL SECURITY` with the same `app.current_garage_id` policy as `garage_staff`.
+
 ## Running Migrations
 
 ### Using golang-migrate CLI

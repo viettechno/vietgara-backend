@@ -16,7 +16,7 @@ import (
 
 const (
 	MIGRATIONS_PATH           = "file://migrations"
-	MIGRATION_CURRENT_VERSION = 4
+	MIGRATION_CURRENT_VERSION = 7
 
 	POSTGRES_TEST_DB       = "vietgara_test"
 	POSTGRES_TEST_USER     = "postgres"

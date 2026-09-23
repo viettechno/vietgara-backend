@@ -1,0 +1,77 @@
+package domain
+
+import (
+	"strings"
+	"time"
+)
+
+// Model year bounds; the lower one is the first production automobile and
+// matches the CHECK constraint on vehicles.year.
+const (
+	MinVehicleYear = 1886
+
+	minPlateKeyLen = 4
+	maxPlateKeyLen = 12
+	maxPlateLen    = 20
+)
+
+// Vehicle is a vehicle owned by one customer of a garage (FR-CUS-02).
+// See: Database Design Section 3.2.
+type Vehicle struct {
+	ID           string
+	GarageID     string
+	CustomerID   string
+	LicensePlate string
+	Make         *string
+	Model        *string
+	Year         *int
+	VIN          *string
+	EngineNumber *string
+	// CustomerName is derived when reading and never persisted.
+	CustomerName string
+	CreatedBy    *string
+	UpdatedBy    *string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+// NormalizeLicensePlate upper-cases a plate and collapses inner whitespace,
+// keeping separators such as "-" and "." for display ("51F-123.45"). The
+// plate must hold 4 to 12 letters or digits once separators are removed.
+func NormalizeLicensePlate(plate string) (string, error) {
+	p := strings.ToUpper(strings.Join(strings.Fields(plate), " "))
+	if p == "" {
+		return "", ErrLicensePlateRequired
+	}
+
+	key := LicensePlateKey(p)
+	if len(key) < minPlateKeyLen || len(key) > maxPlateKeyLen || len(p) > maxPlateLen {
+		return "", ErrInvalidLicensePlate
+	}
+
+	return p, nil
+}
+
+// LicensePlateKey reduces a plate to its upper-case ASCII letters and
+// digits. It mirrors the vehicles.license_plate_key generated column, so
+// "51f-123.45" and "51F 12345" share the key "51F12345".
+func LicensePlateKey(plate string) string {
+	var b strings.Builder
+
+	for _, r := range strings.ToUpper(plate) {
+		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		}
+	}
+
+	return b.String()
+}
+
+// ValidateYear checks a model year is between MinVehicleYear and next year.
+func ValidateYear(year int, now time.Time) error {
+	if year < MinVehicleYear || year > now.Year()+1 {
+		return ErrInvalidYear
+	}
+
+	return nil
+}

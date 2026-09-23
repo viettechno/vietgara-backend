@@ -64,3 +64,23 @@ packages:
         config:
           filename: "identity_usecase_otp_verifier.go"
           dir: "./internal/mocks"
+  github.com/viettechno/vietgara-backend/internal/customer/usecase:
+    interfaces:
+      CustomerRepository:
+        config:
+          filename: "customer_usecase_customer_repository.go"
+          dir: "./internal/mocks"
+      VehicleRepository:
+        config:
+          filename: "customer_usecase_vehicle_repository.go"
+          dir: "./internal/mocks"
+      PartnerRepository:
+        config:
+          filename: "customer_usecase_partner_repository.go"
+          dir: "./internal/mocks"
+  github.com/viettechno/vietgara-backend/internal/customer/handler:
+    interfaces:
+      MembershipReader:
+        config:
+          filename: "customer_handler_membership_reader.go"
+          dir: "./internal/mocks"

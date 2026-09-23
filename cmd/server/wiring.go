@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 
+	"github.com/jackc/pgx/v5"
+
+	customerDomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
 	"github.com/viettechno/vietgara-backend/internal/identity/domain"
 	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
 	identityUsecase "github.com/viettechno/vietgara-backend/internal/identity/usecase"
@@ -64,6 +67,31 @@ func (a *identityToTenantAccountDirectoryAdapter) ListByIDs(ctx context.Context,
 	}
 
 	return result, nil
+}
+
+// tenantToCustomerMembershipAdapter gives the Customer & Vehicle module the
+// caller's role in a garage, read from the Tenant module's staff
+// memberships, without importing the Tenant module. Only active
+// memberships grant access.
+type tenantToCustomerMembershipAdapter struct {
+	staffRepo *tenantRepo.PostgresGarageStaffRepository
+}
+
+func (a *tenantToCustomerMembershipAdapter) RoleInGarage(ctx context.Context, garageID, accountID string) (string, error) {
+	staff, err := a.staffRepo.FindByGarageAndAccount(ctx, garageID, accountID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return "", customerDomain.ErrNoAccessToGarage
+		}
+
+		return "", err
+	}
+
+	if staff.Status != tenantDomain.StaffStatusActive {
+		return "", customerDomain.ErrNoAccessToGarage
+	}
+
+	return string(staff.Role), nil
 }
 
 func summaryOrNotFound(acc *domain.Account, err error) (*tenantUsecase.AccountSummary, error) {

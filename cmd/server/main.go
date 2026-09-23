@@ -18,11 +18,15 @@ import (
 	"github.com/labstack/echo/v4"
 	"google.golang.org/grpc/reflection"
 
+	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 	"google.golang.org/grpc"
 
 	appdb "github.com/viettechno/vietgara-backend/db"
+	customerHandler "github.com/viettechno/vietgara-backend/internal/customer/handler"
+	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
+	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
 	identityHandler "github.com/viettechno/vietgara-backend/internal/identity/handler"
 	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
 	identityUsecase "github.com/viettechno/vietgara-backend/internal/identity/usecase"
@@ -125,6 +129,17 @@ func buildServices(pool *platformdb.Pool, signingKey []byte) (*grpc.Server, *htt
 		refreshTTL,
 	)
 
+	customerRepo := customerRepository.NewPostgresCustomerRepository(pool)
+	vehicleRepo := customerRepository.NewPostgresVehicleRepository(pool)
+	partnerRepo := customerRepository.NewPostgresPartnerRepository(pool)
+	customerSrv := customerHandler.NewServer(
+		customerUsecase.NewCustomerUseCase(customerRepo, vehicleRepo),
+		customerUsecase.NewVehicleUseCase(vehicleRepo, customerRepo),
+		customerUsecase.NewPartnerUseCase(partnerRepo),
+		&tenantToCustomerMembershipAdapter{staffRepo: staffRepo},
+		customerHandler.WithTxManager(txManager),
+	)
+
 	tenantSrv := tenantHandler.NewServer(garageUC, staffUC, tenantHandler.WithTxManager(txManager))
 	identitySrv := identityHandler.NewServer(identityUC, &stubSocialIdentityVerifier{})
 	identitySrv.ConfigureGoogleOAuth(identityHandler.GoogleOAuthConfig{
@@ -154,6 +169,9 @@ func buildServices(pool *platformdb.Pool, signingKey []byte) (*grpc.Server, *htt
 	identityv1.RegisterAuthServiceServer(grpcServer, identitySrv)
 	tenantv1.RegisterGarageServiceServer(grpcServer, tenantSrv)
 	tenantv1.RegisterStaffServiceServer(grpcServer, tenantSrv)
+	customerv1.RegisterCustomerServiceServer(grpcServer, customerSrv)
+	customerv1.RegisterVehicleServiceServer(grpcServer, customerSrv)
+	customerv1.RegisterPartnerServiceServer(grpcServer, customerSrv)
 	reflection.Register(grpcServer)
 
 	e := echo.New()
@@ -162,6 +180,7 @@ func buildServices(pool *platformdb.Pool, signingKey []byte) (*grpc.Server, *htt
 		return middleware.HTTPAuth(tokenIssuer, next)
 	}))
 	tenantSrv.RegisterHTTPRoutes(staffGroup)
+	customerSrv.RegisterHTTPRoutes(staffGroup)
 
 	return grpcServer, &http.Server{
 		Addr:              ":" + envOr("HTTP_PORT", "8080"),

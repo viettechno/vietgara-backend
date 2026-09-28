@@ -3,101 +3,160 @@ package usecase
 import (
 	"context"
 	"errors"
+	"log/slog"
+	"slices"
 
-	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/viettechno/vietgara-backend/internal/identity/domain"
+	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-// RegisterRequest is the input for IdentityUseCase.Register.
-// See: FRD FR-IAM-01.
+// RegisterRequest is the input for IdentityUseCase.Register (FR-IAM-01).
 type RegisterRequest struct {
-	Email    *string
-	Phone    *string
-	Password string // required when registering via email; empty for phone/OTP-only accounts
+	Email    string
+	Password string
 	FullName string
+	Phone    *string
+	Locale   domain.Locale
 }
 
-// Register validates the request, rejects duplicate identifiers, persists
-// the new account, and issues a full session (access + refresh token) so
-// the frontend can go straight from registration into the authenticated
-// app.
-func (uc *IdentityUseCase) Register(ctx context.Context, req RegisterRequest) (*AuthResult, error) {
-	if req.Email == nil && req.Phone == nil {
-		return nil, apperror.New(apperror.CodeInvalidArgument, "email or phone is required")
+// Register creates an unverified owner account, e-mails the verification
+// OTP once the account is stored, and signs the new owner in: until the
+// e-mail is verified only the profile and verification APIs are usable.
+func (uc *IdentityUseCase) Register(ctx context.Context, req RegisterRequest) (*Session, error) {
+	acc, password, err := newAccount(req)
+	if err != nil {
+		return nil, err
 	}
 
-	if req.FullName == "" {
-		return nil, apperror.New(apperror.CodeInvalidArgument, "full_name is required")
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, apperror.Internal("hash password", err)
 	}
 
-	if req.Email != nil {
-		if err := uc.ensureEmailAvailable(ctx, *req.Email); err != nil {
-			return nil, err
-		}
-	}
+	passwordHash := string(hash)
+	acc.PasswordHash = &passwordHash
 
-	if req.Phone != nil {
-		if err := uc.ensurePhoneAvailable(ctx, *req.Phone); err != nil {
-			return nil, err
-		}
-	}
-
-	var passwordHash *string
-
-	if req.Password != "" {
-		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-		if err != nil {
-			return nil, apperror.Wrap(apperror.CodeInternal, "hash password", err)
+	err = uc.tx.WithTransaction(ctx, platformdb.Scope{}, func(ctx context.Context) error {
+		if err := uc.ensureAvailable(ctx, acc.Email, acc.Phone); err != nil {
+			return err
 		}
 
-		s := string(hash)
-		passwordHash = &s
-	}
+		if err := uc.accounts.Create(ctx, acc); err != nil {
+			return mapCreateError(err)
+		}
 
-	acc := &domain.Account{
-		ID:           uuid.NewString(),
-		Email:        req.Email,
-		Phone:        req.Phone,
-		AuthProvider: domain.AuthProviderEmail,
-		FullName:     req.FullName,
-		PasswordHash: passwordHash,
-		Status:       domain.AccountStatusActive,
-	}
+		platformdb.AfterCommit(ctx, func() {
+			if _, err := uc.sendOTP(context.WithoutCancel(ctx), domain.OTPEmailVerification, acc); err != nil {
+				slog.Warn("identity: sending the verification e-mail after sign-up failed", "account_id", acc.ID, "error", err)
+			}
+		})
 
-	if err := uc.accountRepo.Create(ctx, acc); err != nil {
-		return nil, apperror.Wrap(apperror.CodeInternal, "create account", err)
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return uc.issueSession(ctx, acc)
 }
 
-// ensureEmailAvailable rejects an email that is already registered.
-func (uc *IdentityUseCase) ensureEmailAvailable(ctx context.Context, email string) error {
-	existing, err := uc.accountRepo.FindByEmail(ctx, email)
-	if err != nil && !errors.Is(err, domain.ErrAccountNotFound) {
-		return apperror.Wrap(apperror.CodeInternal, "check existing email", err)
+func newAccount(req RegisterRequest) (*domain.Account, string, error) {
+	email, ok := domain.NormalizeEmail(req.Email)
+	if !ok {
+		return nil, "", apperror.Validation("email", apperror.IssueInvalid, "email is invalid")
 	}
 
-	if existing != nil {
-		return apperror.Wrap(apperror.CodeAlreadyExists, "email already registered", domain.ErrEmailAlreadyExists)
+	fullName, ok := domain.NormalizeFullName(req.FullName)
+	if !ok {
+		return nil, "", apperror.Validation("fullName", apperror.IssueRequired, "full name is required")
+	}
+
+	if !domain.ValidPassword(req.Password) {
+		return nil, "", apperror.Validation("password", apperror.IssueTooShort, "password must have at least 8 characters")
+	}
+
+	phone, err := normalizeOptionalPhone(req.Phone)
+	if err != nil {
+		return nil, "", err
+	}
+
+	return &domain.Account{
+		Email:        email,
+		Phone:        phone,
+		AuthProvider: domain.AuthProviderEmail,
+		FullName:     fullName,
+		Status:       domain.AccountStatusActive,
+		Locale:       req.Locale.OrDefault(),
+	}, req.Password, nil
+}
+
+// normalizeOptionalPhone validates an optional phone; "" clears it.
+func normalizeOptionalPhone(raw *string) (*string, error) {
+	if raw == nil || *raw == "" {
+		return nil, nil //nolint:nilnil // no phone is a valid answer
+	}
+
+	phone, ok := domain.NormalizePhone(*raw)
+	if !ok {
+		return nil, apperror.Validation("phone", apperror.IssueInvalid, "phone number is invalid")
+	}
+
+	return &phone, nil
+}
+
+// ensureAvailable rejects an e-mail or phone that is already registered
+// (to another account than exceptID).
+func (uc *IdentityUseCase) ensureAvailable(ctx context.Context, email string, phone *string, exceptID ...string) error {
+	if email != "" {
+		existing, err := uc.accounts.FindByEmail(ctx, email)
+		if err != nil && !errors.Is(err, domain.ErrAccountNotFound) {
+			return apperror.Internal("check existing email", err)
+		}
+
+		if existing != nil && !isOneOf(existing.ID, exceptID) {
+			return emailTaken()
+		}
+	}
+
+	if phone != nil {
+		existing, err := uc.accounts.FindByPhone(ctx, *phone)
+		if err != nil && !errors.Is(err, domain.ErrAccountNotFound) {
+			return apperror.Internal("check existing phone", err)
+		}
+
+		if existing != nil && !isOneOf(existing.ID, exceptID) {
+			return phoneTaken()
+		}
 	}
 
 	return nil
 }
 
-// ensurePhoneAvailable rejects a phone that is already registered.
-func (uc *IdentityUseCase) ensurePhoneAvailable(ctx context.Context, phone string) error {
-	existing, err := uc.accountRepo.FindByPhone(ctx, phone)
-	if err != nil && !errors.Is(err, domain.ErrAccountNotFound) {
-		return apperror.Wrap(apperror.CodeInternal, "check existing phone", err)
-	}
+func isOneOf(id string, ids []string) bool {
+	return slices.Contains(ids, id)
+}
 
-	if existing != nil {
-		return apperror.Wrap(apperror.CodeAlreadyExists, "phone already registered", domain.ErrPhoneAlreadyExists)
-	}
+func emailTaken() error {
+	return apperror.Wrap(apperror.CodeAlreadyExists, domain.ErrEmailAlreadyExists.Error(), domain.ErrEmailAlreadyExists).
+		WithReason(domain.ReasonEmailTaken).WithField("email", apperror.IssueTaken)
+}
 
-	return nil
+func phoneTaken() error {
+	return apperror.Wrap(apperror.CodeAlreadyExists, domain.ErrPhoneAlreadyExists.Error(), domain.ErrPhoneAlreadyExists).
+		WithReason(domain.ReasonPhoneTaken).WithField("phone", apperror.IssueTaken)
+}
+
+// mapCreateError turns a unique-constraint race into the matching error.
+func mapCreateError(err error) error {
+	switch {
+	case errors.Is(err, domain.ErrEmailAlreadyExists):
+		return emailTaken()
+	case errors.Is(err, domain.ErrPhoneAlreadyExists):
+		return phoneTaken()
+	default:
+		return apperror.Internal("create account", err)
+	}
 }

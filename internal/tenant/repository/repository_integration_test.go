@@ -14,16 +14,17 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
+	"github.com/stretchr/testify/assert"
 	dbpkg "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/internal/tenant/repository"
-	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
+
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
 )
 
 const (
@@ -36,15 +37,16 @@ type testEnv struct {
 	superPool *dbpkg.Pool
 	appPool   *dbpkg.Pool
 	accountID string
+	staffID   string
 	garageA   string
 	garageB   string
 }
 
 // startPostgres boots a disposable Postgres, applies the real migrations
-// from db/migrations, seeds an account with two garages (plus their owner
-// staff records), and returns two pools: one bound to the superuser (which
-// bypasses RLS) and one bound to a plain LOGIN role (which is subject to
-// the FORCE ROW LEVEL SECURITY policies).
+// from db/migrations, seeds an owner with two garages and a second
+// account, and returns two pools: one bound to the superuser (which
+// bypasses RLS) and one bound to a LOGIN member of vietgara_app -- the role
+// the backend runs as, subject to every FORCE ROW LEVEL SECURITY policy.
 func startPostgres(t *testing.T) *testEnv {
 	t.Helper()
 
@@ -89,6 +91,7 @@ func startPostgres(t *testing.T) *testEnv {
 
 	env := &testEnv{admin: admin}
 	env.accountID, env.garageA, env.garageB = seedGarages(t, ctx, admin)
+	env.staffID = seedAccount(t, ctx, admin, "staff@example.com")
 
 	superConn, err := dbpkg.NewPgxPool(ctx, dsn)
 	require.NoError(t, err)
@@ -114,11 +117,13 @@ func applyMigrations(t *testing.T, ctx context.Context, admin *sql.DB) {
 	require.NoError(t, err)
 
 	var up []string
+
 	for _, entry := range entries {
 		if strings.HasSuffix(entry.Name(), ".up.sql") {
 			up = append(up, entry.Name())
 		}
 	}
+
 	sort.Strings(up)
 
 	for _, name := range up {
@@ -130,240 +135,223 @@ func applyMigrations(t *testing.T, ctx context.Context, admin *sql.DB) {
 	}
 }
 
+// createAppRole creates a login in vietgara_app, whose grants come from the
+// migrations themselves.
 func createAppRole(t *testing.T, ctx context.Context, admin *sql.DB) {
 	t.Helper()
 
-	stmts := []string{
-		`CREATE ROLE ` + appRoleName + ` LOGIN PASSWORD '` + appRolePass + `'`,
-		"GRANT USAGE ON SCHEMA public TO " + appRoleName,
-		"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO " + appRoleName,
-		"GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO " + appRoleName,
-	}
-	for _, stmt := range stmts {
-		_, err := admin.ExecContext(ctx, stmt)
-		require.NoError(t, err, "executing %s", stmt)
-	}
+	_, err := admin.ExecContext(ctx, `CREATE ROLE `+appRoleName+` LOGIN PASSWORD '`+appRolePass+`' IN ROLE vietgara_app`)
+	require.NoError(t, err)
+}
+
+func seedAccount(t *testing.T, ctx context.Context, admin *sql.DB, email string) string {
+	t.Helper()
+
+	id := uuid.NewString()
+	_, err := admin.ExecContext(ctx, `INSERT INTO accounts (id, email, full_name) VALUES ($1, $2, $2)`, id, email)
+	require.NoError(t, err)
+
+	return id
 }
 
 func seedGarages(t *testing.T, ctx context.Context, admin *sql.DB) (accountID, garageA, garageB string) {
 	t.Helper()
 
-	accountID = uuid.NewString()
-	_, err := admin.ExecContext(ctx,
-		`INSERT INTO accounts (id, auth_provider, identity_platform_uid, full_name)
-		 VALUES ($1, 'email', $2, 'Test Account')`,
-		accountID, "uid-"+accountID,
-	)
-	require.NoError(t, err)
-
+	accountID = seedAccount(t, ctx, admin, "owner@example.com")
 	garageA, garageB = uuid.NewString(), uuid.NewString()
+
 	for _, id := range []string{garageA, garageB} {
-		_, err = admin.ExecContext(ctx,
-			`INSERT INTO garages (id, account_id, name) VALUES ($1, $2, $3)`,
-			id, accountID, "garage-"+id[:8],
-		)
+		_, err := admin.ExecContext(ctx, `INSERT INTO garages (id, account_id, name) VALUES ($1, $2, $3)`, id, accountID, "garage-"+id[:8])
+		require.NoError(t, err)
+		_, err = admin.ExecContext(ctx, `INSERT INTO garage_staff (garage_id, account_id) VALUES ($1, $2)`, id, accountID)
 		require.NoError(t, err)
 	}
-
-	_, err = admin.ExecContext(ctx,
-		`INSERT INTO garage_staff (garage_id, account_id, role) VALUES ($1, $2, 'owner'), ($3, $2, 'owner')`,
-		garageA, accountID, garageB,
-	)
-	require.NoError(t, err)
 
 	return accountID, garageA, garageB
 }
 
-// ---------------------------------------------------------------------------
-// Superuser path (simulates a BYPASSRLS production role): RLS policies do
-// not apply, so all rows are visible regardless of tenant context.
-// ---------------------------------------------------------------------------
-
-func TestPostgresGarageRepository_CRUD(t *testing.T) {
+// TestRLS_TenantModel walks the owner/staff lifecycle through the
+// repositories as the application role and checks every RLS boundary.
+func TestRLS_TenantModel(t *testing.T) {
 	env := startPostgres(t)
-	repo := repository.NewPostgresGarageRepository(env.superPool)
 	ctx := t.Context()
-
-	t.Run("create, find, update, list round trip", func(t *testing.T) {
-		created := &domain.Garage{
-			ID:        uuid.NewString(),
-			AccountID: env.accountID,
-			Name:      "Gara Alpha",
-			Timezone:  "Asia/Ho_Chi_Minh",
-			Currency:  "VND",
-			Status:    domain.GarageStatusActive,
-		}
-		require.NoError(t, repo.Create(ctx, created))
-		require.NotZero(t, created.CreatedAt)
-		require.NotZero(t, created.UpdatedAt)
-
-		got, err := repo.FindByID(ctx, created.ID)
-		require.NoError(t, err)
-		require.Equal(t, created.ID, got.ID)
-		require.Equal(t, "Gara Alpha", got.Name)
-		require.Equal(t, "Asia/Ho_Chi_Minh", got.Timezone)
-		require.Equal(t, domain.GarageStatusActive, got.Status)
-		require.Nil(t, got.TaxCode)
-
-		got.Name = "Gara Alpha Renamed"
-		require.NoError(t, repo.Update(ctx, got))
-
-		got, err = repo.FindByID(ctx, created.ID)
-		require.NoError(t, err)
-		require.Equal(t, "Gara Alpha Renamed", got.Name)
-
-		list, err := repo.ListByAccountID(ctx, env.accountID)
-		require.NoError(t, err)
-		require.Len(t, list, 3)
-	})
-
-	t.Run("missing garage maps to ErrGarageNotFound", func(t *testing.T) {
-		_, err := repo.FindByID(ctx, uuid.NewString())
-		require.ErrorIs(t, err, domain.ErrGarageNotFound)
-	})
-}
-
-func TestPostgresGarageStaffRepository_CRUD(t *testing.T) {
-	env := startPostgres(t)
-
-	repo := repository.NewPostgresGarageStaffRepository(env.superPool)
-	ctx := t.Context()
-	techID := uuid.NewString()
-	techAccountID := uuid.NewString()
-
-	t.Run("create, list, find, and list roles", func(t *testing.T) {
-		_, err := env.admin.ExecContext(ctx,
-			`INSERT INTO accounts (id, auth_provider, identity_platform_uid, full_name)
-			 VALUES ($1, 'email', $2, 'Technician')`,
-			techAccountID, "uid-tech-"+techAccountID,
-		)
-		require.NoError(t, err)
-
-		tech := &domain.GarageStaff{
-			ID:        techID,
-			GarageID:  env.garageA,
-			AccountID: techAccountID,
-			Role:      domain.RoleTechnician,
-			Status:    domain.StaffStatusActive,
-		}
-		require.NoError(t, repo.Create(ctx, tech))
-		require.NotZero(t, tech.CreatedAt)
-
-		list, err := repo.ListByGarageID(ctx, env.garageA)
-		require.NoError(t, err)
-		require.Len(t, list, 2)
-
-		got, err := repo.FindByGarageAndAccount(ctx, env.garageA, tech.AccountID)
-		require.NoError(t, err)
-		require.Equal(t, domain.RoleTechnician, got.Role)
-
-		roles, err := repo.ListRolesForAccount(ctx, tech.AccountID)
-		require.NoError(t, err)
-		require.Equal(t, []usecase.RoleAssignment{{GarageID: env.garageA, Role: "technician"}}, roles)
-	})
-
-	t.Run("missing membership returns pgx.ErrNoRows untouched", func(t *testing.T) {
-		_, err := repo.FindByGarageAndAccount(ctx, env.garageA, uuid.NewString())
-		require.ErrorIs(t, err, pgx.ErrNoRows)
-	})
-}
-
-// ---------------------------------------------------------------------------
-// RLS path (plain login role): the FORCE ROW LEVEL SECURITY policies on
-// garages/garage_staff only admit rows for the CURRENT app.current_garage_id
-// session variable, which repository code relies on the TxManager to set.
-// ---------------------------------------------------------------------------
-
-func TestRepositories_RLSIsolation(t *testing.T) {
-	env := startPostgres(t)
+	tx := dbpkg.NewTxManager(env.appPool)
 
 	garages := repository.NewPostgresGarageRepository(env.appPool)
-	staff := repository.NewPostgresGarageStaffRepository(env.appPool)
-	txm := dbpkg.NewTxManager(env.appPool)
-	ctx := t.Context()
+	staff := repository.NewPostgresStaffRepository(env.appPool)
+	roles := repository.NewPostgresRoleRepository(env.appPool)
+	groups := repository.NewPostgresGroupRepository(env.appPool)
+	invitations := repository.NewPostgresInvitationRepository(env.appPool)
+	reader := repository.NewPostgresAccessReader(env.appPool)
 
-	t.Run("no tenant context hides every garage", func(t *testing.T) {
-		_, err := garages.FindByID(ctx, env.garageA)
-		require.ErrorIs(t, err, domain.ErrGarageNotFound)
+	owner := dbpkg.AccountScope(env.accountID)
+	member := dbpkg.AccountScope(env.staffID)
+
+	t.Run("nothing is visible without a scope", func(t *testing.T) {
+		err := tx.WithTransaction(ctx, dbpkg.Scope{}, func(ctx context.Context) error {
+			list, err := garages.ListForAccount(ctx, env.accountID)
+			assert.Empty(t, list)
+
+			return err
+		})
+		require.NoError(t, err)
 	})
 
-	t.Run("own garage is visible inside its tenant context", func(t *testing.T) {
-		err := txm.WithTransaction(ctx, &env.garageA, func(tx context.Context) error {
-			got, err := garages.FindByID(tx, env.garageA)
+	var role *domain.Role
+
+	t.Run("the owner lists their garages and manages roles", func(t *testing.T) {
+		err := tx.WithTransaction(ctx, owner, func(ctx context.Context) error {
+			list, err := garages.ListForAccount(ctx, env.accountID)
 			require.NoError(t, err)
-			require.Equal(t, "garage-"+env.garageA[:8], got.Name)
+			assert.Len(t, list, 2)
+
+			key := domain.DefaultServiceAdvisor
+			role = &domain.Role{OwnerAccountID: env.accountID, Name: "Advisor", DefaultKey: &key,
+				Permissions: []access.Permission{access.CustomerRead, access.CustomerWrite}}
+			inserted, err := roles.CreateDefault(ctx, role)
+			require.NoError(t, err)
+			assert.True(t, inserted)
+
+			inserted, err = roles.CreateDefault(ctx, &domain.Role{OwnerAccountID: env.accountID, Name: "Again", DefaultKey: &key})
+			require.NoError(t, err)
+			assert.False(t, inserted, "one default role per key")
 
 			return nil
 		})
 		require.NoError(t, err)
 	})
 
-	t.Run("other tenant's garage stays invisible", func(t *testing.T) {
-		err := txm.WithTransaction(ctx, &env.garageA, func(tx context.Context) error {
-			_, err := garages.FindByID(tx, env.garageB)
-			require.ErrorIs(t, err, domain.ErrGarageNotFound)
+	var group *domain.StaffGroup
 
-			list, err := garages.ListByAccountID(tx, env.accountID)
+	t.Run("a new garage gets its owner membership and groups", func(t *testing.T) {
+		garage := &domain.Garage{ID: uuid.NewString(), OwnerAccountID: env.accountID, Name: "New", Timezone: domain.DefaultTimezone,
+			Currency: domain.DefaultCurrency, Status: domain.GarageStatusActive, OperatingHours: domain.DefaultOperatingHours(),
+			QuoteNumberTemplate: domain.DefaultQuoteNumberTemplate, RepairOrderNumberTemplate: domain.DefaultRepairOrderNumberTemplate}
+
+		err := tx.WithTransaction(ctx, owner.Garage(garage.ID), func(ctx context.Context) error {
+			require.NoError(t, garages.Create(ctx, garage))
+			require.NoError(t, staff.Create(ctx, &domain.Staff{GarageID: garage.ID, AccountID: env.accountID, Status: domain.StaffStatusActive}))
+
+			return nil
+		})
+		require.NoError(t, err)
+
+		err = tx.WithTransaction(ctx, owner.Garage(env.garageA), func(ctx context.Context) error {
+			group = &domain.StaffGroup{GarageID: env.garageA, Name: "Front desk", RoleID: role.ID}
+			require.NoError(t, groups.Create(ctx, group))
+
+			list, err := groups.List(ctx, env.garageA)
+			require.NoError(t, err)
+			assert.Len(t, list, 1)
+			assert.Equal(t, "Advisor", list[0].RoleName)
+
+			return nil
+		})
+		require.NoError(t, err)
+
+		err = tx.WithTransaction(ctx, owner.Garage(env.garageA), func(ctx context.Context) error {
+			foreign := &domain.Garage{ID: uuid.NewString(), OwnerAccountID: env.accountID, Name: "Sneaky", Timezone: "UTC",
+				Currency: "VND", Status: domain.GarageStatusActive}
+
+			return garages.Create(ctx, foreign)
+		})
+		require.Error(t, err, "a garage can only be inserted in its own scope")
+	})
+
+	var invitation *domain.Invitation
+
+	t.Run("the invitee sees the invitation and its garage", func(t *testing.T) {
+		err := tx.WithTransaction(ctx, owner.Garage(env.garageA), func(ctx context.Context) error {
+			invitation = &domain.Invitation{GarageID: env.garageA, AccountID: env.staffID, GroupIDs: []string{group.ID},
+				Status: domain.InvitationPending, InvitedBy: env.accountID, ExpiresAt: time.Now().Add(domain.InvitationTTL)}
+
+			return invitations.Create(ctx, invitation)
+		})
+		require.NoError(t, err)
+
+		err = tx.WithTransaction(ctx, member, func(ctx context.Context) error {
+			mine, err := invitations.ListByAccount(ctx, env.staffID)
+			require.NoError(t, err)
+			require.Len(t, mine, 1)
+			assert.NotEmpty(t, mine[0].GarageName, "the invited garage is readable")
+
+			_, err = reader.GarageAccess(ctx, env.garageA, env.staffID)
+			assert.ErrorIs(t, err, access.ErrNoMembership, "an invitation grants no access")
+
+			return nil
+		})
+		require.NoError(t, err)
+	})
+
+	t.Run("accepting grants the group's permissions", func(t *testing.T) {
+		err := tx.WithTransaction(ctx, member.Garage(env.garageA), func(ctx context.Context) error {
+			m := &domain.Staff{GarageID: env.garageA, AccountID: env.staffID, Status: domain.StaffStatusActive}
+			require.NoError(t, staff.Create(ctx, m))
+			require.NoError(t, staff.SetGroups(ctx, env.garageA, m.ID, []string{group.ID}))
+
+			now := time.Now()
+			invitation.Status, invitation.RespondedAt = domain.InvitationAccepted, &now
+
+			return invitations.Update(ctx, invitation)
+		})
+		require.NoError(t, err)
+
+		err = tx.WithTransaction(ctx, member, func(ctx context.Context) error {
+			list, err := garages.ListForAccount(ctx, env.staffID)
 			require.NoError(t, err)
 			require.Len(t, list, 1)
-			require.Equal(t, env.garageA, list[0].ID)
+			assert.Equal(t, env.garageA, list[0].ID)
+
+			acc, err := reader.GarageAccess(ctx, env.garageA, env.staffID)
+			require.NoError(t, err)
+			assert.False(t, acc.Owner)
+			assert.Equal(t, []access.Permission{access.CustomerRead, access.CustomerWrite}, acc.Permissions)
+
+			_, err = reader.GarageAccess(ctx, env.garageB, env.staffID)
+			assert.ErrorIs(t, err, access.ErrNoMembership)
+
+			garageCount, staffCount, err := reader.OwnerUsage(ctx, env.accountID)
+			require.NoError(t, err)
+			assert.Equal(t, 3, garageCount, "owner_usage sees past the caller's scope")
+			assert.Equal(t, 1, staffCount)
 
 			return nil
 		})
 		require.NoError(t, err)
 	})
 
-	t.Run("staff lists are scoped to the tenant context", func(t *testing.T) {
-		err := txm.WithTransaction(ctx, &env.garageA, func(tx context.Context) error {
-			list, err := staff.ListByGarageID(tx, env.garageA)
-			require.NoError(t, err)
-			require.Len(t, list, 1)
-			require.Equal(t, domain.RoleOwner, list[0].Role)
-
-			empty, err := staff.ListByGarageID(tx, env.garageB)
-			require.NoError(t, err)
-			require.Empty(t, empty)
-
-			return nil
+	t.Run("staff cannot cross tenants or edit the owner's roles", func(t *testing.T) {
+		err := tx.WithTransaction(ctx, member.Garage(env.garageB), func(ctx context.Context) error {
+			return staff.Create(ctx, &domain.Staff{GarageID: env.garageA, AccountID: env.staffID, Status: domain.StaffStatusActive})
 		})
-		require.NoError(t, err)
+		require.Error(t, err, "writes are limited to the scoped garage")
+
+		err = tx.WithTransaction(ctx, member, func(ctx context.Context) error {
+			members, err := staff.List(ctx, env.garageB)
+			require.NoError(t, err)
+			assert.Empty(t, members)
+
+			visible, err := roles.FindByID(ctx, role.ID)
+			require.NoError(t, err, "the role of one's own group is readable")
+
+			visible.Name = "Hijacked"
+
+			return roles.Update(ctx, visible)
+		})
+		require.ErrorIs(t, err, domain.ErrRoleNotFound, "roles are writable by their owner only")
 	})
 
-	t.Run("creating a garage inside its own tenant context succeeds", func(t *testing.T) {
-		newGarageID := uuid.NewString()
+	t.Run("audit log is append-only", func(t *testing.T) {
+		err := tx.WithTransaction(ctx, owner, func(ctx context.Context) error {
+			q := dbpkg.QuerierFromContext(ctx, env.appPool)
+			if _, err := q.Exec(ctx, `INSERT INTO audit_log (action, entity_type, entity_id) VALUES ('x', 'y', 'z')`); err != nil {
+				return err
+			}
 
-		err := txm.WithTransaction(ctx, &newGarageID, func(tx context.Context) error {
-			return garages.Create(tx, &domain.Garage{
-				ID:        newGarageID,
-				AccountID: env.accountID,
-				Name:      "Gara From App Role",
-				Timezone:  "UTC",
-				Currency:  "VND",
-				Status:    domain.GarageStatusActive,
-			})
+			_, err := q.Exec(ctx, `UPDATE audit_log SET action = 'tampered'`)
+
+			return err
 		})
-		require.NoError(t, err)
-	})
-
-	t.Run("cross-tenant staff creation is rejected by RLS", func(t *testing.T) {
-		err := txm.WithTransaction(ctx, &env.garageA, func(tx context.Context) error {
-			return staff.Create(tx, &domain.GarageStaff{
-				ID:        uuid.NewString(),
-				GarageID:  env.garageB,
-				AccountID: env.accountID,
-				Role:      domain.RoleOwner,
-				Status:    domain.StaffStatusActive,
-			})
-		})
-		require.Error(t, err)
-		require.ErrorContains(t, err, "row-level security")
-
-		var count int
-		err = env.admin.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM garage_staff WHERE garage_id = $1 AND account_id = $2`,
-			env.garageB, env.accountID,
-		).Scan(&count)
-		require.NoError(t, err)
-		require.Equal(t, 1, count)
+		require.ErrorContains(t, err, "permission denied")
 	})
 }

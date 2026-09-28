@@ -1,15 +1,21 @@
--- Create outbox_events table for the Outbox Pattern (Event Design Section 2).
--- Writes happen inside the same transaction as the business data change;
--- a background relay worker polls 'pending' rows and publishes them to
--- Cloud Pub/Sub, then marks them 'published'.
+-- Outbox Pattern (Event Design Section 2): events are written in the same
+-- transaction as the business change; the relay publishes pending rows to
+-- Kafka and marks them published, counting failed deliveries. An event
+-- belongs to a garage, or to an account for account-level events.
+CREATE TYPE outbox_status AS ENUM ('pending', 'published', 'failed');
+
 CREATE TABLE outbox_events (
     id UUID PRIMARY KEY,
     event_type VARCHAR(255) NOT NULL,
-    garage_id UUID NOT NULL,
+    garage_id UUID,
+    account_id UUID,
     payload JSONB NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'pending',
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    status outbox_status NOT NULL DEFAULT 'pending',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    last_error TEXT,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    published_at TIMESTAMP WITH TIME ZONE
 );
 
--- Index for the relay worker's pending-row polling loop
-CREATE INDEX idx_outbox_events_status ON outbox_events (status);
+-- The relay's polling loop: oldest pending events first
+CREATE INDEX idx_outbox_events_pending ON outbox_events (created_at) WHERE status = 'pending';

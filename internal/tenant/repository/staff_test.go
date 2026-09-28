@@ -1,350 +1,251 @@
 package repository_test
 
 import (
-	"errors"
 	"testing"
-	"time"
 
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
+	"github.com/viettechno/vietgara-backend/internal/platform/db/dbtest"
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/internal/tenant/repository"
-	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 )
 
-func TestPostgresGarageStaffRepository_Create(t *testing.T) {
-	tests := []struct {
-		name string
-		args struct {
-			staff *domain.GarageStaff
-		}
-		wantID      string
-		wantCreated time.Time
-		wantUpdated time.Time
-		wantErr     error
-	}{
-		{
-			name: "inserts the staff member and returns back id and timestamps",
-			args: struct{ staff *domain.GarageStaff }{
-				staff: &domain.GarageStaff{
-					ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2",
-					Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
-				},
-			},
-			wantID:      "staff-1",
-			wantCreated: time.Date(2026, 8, 9, 14, 0, 0, 0, time.UTC),
-			wantUpdated: time.Date(2026, 8, 9, 14, 0, 0, 0, time.UTC),
-		},
-		{
-			name: "propagates scan errors",
-			args: struct{ staff *domain.GarageStaff }{
-				staff: &domain.GarageStaff{ID: "s", GarageID: "g", AccountID: "a"},
-			},
-			wantErr: errors.New("insert boom"),
-		},
-	}
+func TestStaffRepository(t *testing.T) {
+	t.Parallel()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			conn, pool := newQuerier(t)
-			repo := repository.NewPostgresGarageStaffRepository(pool)
+	repo := repository.NewPostgresStaffRepository(nil)
+	member := &domain.Staff{GarageID: "g-1", AccountID: "acc-1", Status: domain.StaffStatusActive}
 
-			if tt.wantErr == nil {
-				createdAt := tt.wantCreated
-				conn.EXPECT().
-					QueryRow(t.Context(), sqlContaining("INSERT INTO garage_staff"), []any{"staff-1", "garage-1", "acc-2", "technician", "active"}).
-					Return(valuesRow(t, []any{"staff-1", createdAt, createdAt}))
-			} else {
-				conn.EXPECT().
-					QueryRow(mock.Anything, sqlContaining("INSERT INTO garage_staff"), mock.Anything).
-					Return(errRow(t, tt.wantErr))
-			}
+	tx := dbtest.New(t).
+		ExpectQueryRow("s.id = $2", dbtest.Row(staffRow()...)).
+		ExpectQueryRow("s.account_id = $2", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectQuery("WHERE s.garage_id = $1", dbtest.NewRows(staffRow()), nil).
+		ExpectQuery("WHERE s.garage_id = $1", nil, errBoom).
+		ExpectQuery("WHERE s.garage_id = $1", dbtest.NewRows([]any{"x"}), nil).
+		ExpectQueryRow("INSERT INTO garage_staff", dbtest.Row("s-2", now, now)).
+		ExpectQueryRow("INSERT INTO garage_staff", dbtest.ErrRow(dbtest.UniqueViolation("idx_garage_staff_garage_account_unique"))).
+		ExpectQueryRow("UPDATE garage_staff", dbtest.Row(now)).
+		ExpectQueryRow("UPDATE garage_staff", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectExec("DELETE FROM staff_group_members", dbtest.Tag(1), nil).
+		ExpectExec("INSERT INTO staff_group_members", dbtest.Tag(1), nil).
+		ExpectExec("DELETE FROM staff_group_members", dbtest.Tag(0), nil).
+		ExpectExec("DELETE FROM staff_group_members", dbtest.Tag(0), errBoom).
+		ExpectExec("DELETE FROM garage_staff", dbtest.Tag(1), nil).
+		ExpectExec("DELETE FROM garage_staff", dbtest.Tag(0), nil).
+		ExpectExec("DELETE FROM garage_staff", dbtest.Tag(0), errBoom)
+	ctx := tx.Context(t.Context())
 
-			err := repo.Create(t.Context(), tt.args.staff)
-			if tt.wantErr != nil {
-				require.ErrorIs(t, err, tt.wantErr)
-				return
-			}
+	s, err := repo.FindByID(ctx, "g-1", "s-1")
+	require.NoError(t, err)
+	assert.Equal(t, []access.Permission{access.CustomerRead, access.ReportRead}, s.Permissions)
+	assert.Equal(t, []string{"grp-1"}, s.GroupIDs)
 
-			require.NoError(t, err)
-			assert.Equal(t, tt.wantID, tt.args.staff.ID)
-			assert.Equal(t, tt.wantCreated, tt.args.staff.CreatedAt)
-			assert.Equal(t, tt.wantUpdated, tt.args.staff.UpdatedAt)
-		})
-	}
+	_, err = repo.FindByAccount(ctx, "g-1", "acc-1")
+	require.ErrorIs(t, err, domain.ErrStaffNotFound)
+
+	list, err := repo.List(ctx, "g-1")
+	require.NoError(t, err)
+	assert.Len(t, list, 1)
+
+	_, err = repo.List(ctx, "g-1")
+	require.ErrorIs(t, err, errBoom)
+	_, err = repo.List(ctx, "g-1")
+	require.Error(t, err)
+
+	require.NoError(t, repo.Create(ctx, member))
+	assert.Equal(t, "s-2", member.ID)
+	require.ErrorIs(t, repo.Create(ctx, member), domain.ErrAlreadyMember)
+
+	require.NoError(t, repo.UpdateStatus(ctx, member))
+	require.ErrorIs(t, repo.UpdateStatus(ctx, member), domain.ErrStaffNotFound)
+
+	require.NoError(t, repo.SetGroups(ctx, "g-1", "s-2", []string{"grp-1"}))
+	require.NoError(t, repo.SetGroups(ctx, "g-1", "s-2", nil))
+	require.ErrorIs(t, repo.SetGroups(ctx, "g-1", "s-2", nil), errBoom)
+
+	require.NoError(t, repo.Delete(ctx, "g-1", "s-2"))
+	require.ErrorIs(t, repo.Delete(ctx, "g-1", "s-2"), domain.ErrStaffNotFound)
+	require.ErrorIs(t, repo.Delete(ctx, "g-1", "s-2"), errBoom)
 }
 
-func TestPostgresGarageStaffRepository_ListByGarageID(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    struct{ garageID string }
-		want    []domain.GarageStaff
-		wantErr error
-	}{
-		{
-			name: "returns active staff with roles and statuses mapped",
-			args: struct{ garageID string }{garageID: "garage-1"},
-			want: []domain.GarageStaff{
-				{ID: "staff-1", GarageID: "garage-1", AccountID: "acc-1", Role: domain.RoleOwner, Status: domain.StaffStatusActive},
-				{ID: "staff-2", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleServiceAdvisor, Status: domain.StaffStatusActive},
-			},
-		},
-		{
-			name:    "propagates query errors",
-			args:    struct{ garageID string }{garageID: "garage-1"},
-			wantErr: errors.New("query boom"),
-		},
-	}
+func TestRoleRepository(t *testing.T) {
+	t.Parallel()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			conn, pool := newQuerier(t)
-			repo := repository.NewPostgresGarageStaffRepository(pool)
+	repo := repository.NewPostgresRoleRepository(nil)
+	key := domain.DefaultAccountant
+	role := &domain.Role{OwnerAccountID: "owner", Name: "Kế toán", Permissions: []access.Permission{access.BillingRead}, DefaultKey: &key}
+	empty := &domain.Role{OwnerAccountID: "owner", Name: "Empty"}
 
-			if tt.wantErr == nil {
-				rows := resultRows(t, newRowsState([][]any{
-					staffScanValues("staff-1", "garage-1", "acc-1", "owner", "active"),
-					staffScanValues("staff-2", "garage-1", "acc-2", "service_advisor", "active"),
-				}))
-				conn.EXPECT().
-					Query(t.Context(), sqlContaining("FROM garage_staff WHERE garage_id = $1"), []any{"garage-1"}).
-					Return(rows, nil)
-			} else {
-				conn.EXPECT().
-					Query(mock.Anything, sqlContaining("FROM garage_staff WHERE garage_id = $1"), []any{"garage-1"}).
-					Return(nil, tt.wantErr)
-			}
+	tx := dbtest.New(t).
+		ExpectQuery("r.owner_account_id = $1", dbtest.NewRows(roleRow()), nil).
+		ExpectQuery("r.owner_account_id = $1", nil, errBoom).
+		ExpectQuery("r.owner_account_id = $1", dbtest.NewRows([]any{1}), nil).
+		ExpectQueryRow("r.id = $1", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectQueryRow("INSERT INTO roles", dbtest.Row("r-2", now, now)).
+		ExpectExec("INSERT INTO role_permissions", dbtest.Tag(1), nil).
+		ExpectQueryRow("INSERT INTO roles", dbtest.ErrRow(dbtest.UniqueViolation("idx_roles_owner_name_unique"))).
+		ExpectQueryRow("INSERT INTO roles", dbtest.ErrRow(errBoom)).
+		ExpectQueryRow("ON CONFLICT DO NOTHING", dbtest.Row("r-3", now, now)).
+		ExpectExec("INSERT INTO role_permissions", dbtest.Tag(1), nil).
+		ExpectQueryRow("ON CONFLICT DO NOTHING", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectQueryRow("ON CONFLICT DO NOTHING", dbtest.ErrRow(errBoom)).
+		ExpectQueryRow("UPDATE roles", dbtest.Row(now)).
+		ExpectExec("DELETE FROM role_permissions", dbtest.Tag(1), nil).
+		ExpectQueryRow("UPDATE roles", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectQueryRow("UPDATE roles", dbtest.ErrRow(dbtest.UniqueViolation("x"))).
+		ExpectQueryRow("UPDATE roles", dbtest.ErrRow(errBoom)).
+		ExpectQueryRow("UPDATE roles", dbtest.Row(now)).
+		ExpectExec("DELETE FROM role_permissions", dbtest.Tag(0), errBoom).
+		ExpectExec("DELETE FROM roles", dbtest.Tag(1), nil).
+		ExpectExec("DELETE FROM roles", dbtest.Tag(0), dbtest.ForeignKeyViolation()).
+		ExpectExec("DELETE FROM roles", dbtest.Tag(0), nil).
+		ExpectExec("DELETE FROM roles", dbtest.Tag(0), errBoom)
+	ctx := tx.Context(t.Context())
 
-			got, err := repo.ListByGarageID(t.Context(), tt.args.garageID)
-			if tt.wantErr != nil {
-				require.ErrorIs(t, err, tt.wantErr)
-				return
-			}
+	roles, err := repo.ListByOwner(ctx, "owner")
+	require.NoError(t, err)
+	require.Len(t, roles, 1)
+	assert.Equal(t, domain.DefaultAccountant, *roles[0].DefaultKey)
+	assert.Equal(t, 2, roles[0].GroupCount)
 
-			require.NoError(t, err)
-			require.Len(t, got, len(tt.want))
-			assert.Equal(t, tt.want[0].Role, got[0].Role)
-			assert.Equal(t, tt.want[1].Role, got[1].Role)
-			assert.Equal(t, tt.want[0].Status, got[0].Status)
-		})
-	}
+	_, err = repo.ListByOwner(ctx, "owner")
+	require.ErrorIs(t, err, errBoom)
+	_, err = repo.ListByOwner(ctx, "owner")
+	require.Error(t, err)
+
+	_, err = repo.FindByID(ctx, "r-1")
+	require.ErrorIs(t, err, domain.ErrRoleNotFound)
+
+	require.NoError(t, repo.Create(ctx, role))
+	require.ErrorIs(t, repo.Create(ctx, role), domain.ErrRoleNameTaken)
+	require.ErrorIs(t, repo.Create(ctx, role), errBoom)
+
+	inserted, err := repo.CreateDefault(ctx, role)
+	require.NoError(t, err)
+	assert.True(t, inserted)
+	inserted, err = repo.CreateDefault(ctx, role)
+	require.NoError(t, err)
+	assert.False(t, inserted)
+
+	_, err = repo.CreateDefault(ctx, role)
+	require.ErrorIs(t, err, errBoom)
+
+	require.NoError(t, repo.Update(ctx, empty))
+	require.ErrorIs(t, repo.Update(ctx, empty), domain.ErrRoleNotFound)
+	require.ErrorIs(t, repo.Update(ctx, empty), domain.ErrRoleNameTaken)
+	require.ErrorIs(t, repo.Update(ctx, empty), errBoom)
+	require.ErrorIs(t, repo.Update(ctx, empty), errBoom)
+
+	require.NoError(t, repo.Delete(ctx, "r-1"))
+	require.ErrorIs(t, repo.Delete(ctx, "r-1"), domain.ErrRoleInUse)
+	require.ErrorIs(t, repo.Delete(ctx, "r-1"), domain.ErrRoleNotFound)
+	require.ErrorIs(t, repo.Delete(ctx, "r-1"), errBoom)
 }
 
-func TestPostgresGarageStaffRepository_FindByGarageAndAccount(t *testing.T) {
-	tests := []struct {
-		name string
-		args struct {
-			garageID  string
-			accountID string
-		}
-		want    *domain.GarageStaff
-		wantErr error
-	}{
-		{
-			name: "returns the staff member",
-			args: struct {
-				garageID  string
-				accountID string
-			}{garageID: "garage-1", accountID: "acc-2"},
-			want: &domain.GarageStaff{
-				ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
-			},
-		},
-		{
-			name: "propagates errors untouched (no ErrNoRows mapping here)",
-			args: struct {
-				garageID  string
-				accountID string
-			}{garageID: "garage-1", accountID: "nobody"},
-			wantErr: pgx.ErrNoRows,
-		},
-	}
+func TestGroupRepository(t *testing.T) {
+	t.Parallel()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			conn, pool := newQuerier(t)
-			repo := repository.NewPostgresGarageStaffRepository(pool)
+	repo := repository.NewPostgresGroupRepository(nil)
+	key := domain.DefaultTechnician
+	group := &domain.StaffGroup{GarageID: "g-1", Name: "Kỹ thuật", RoleID: "r-1", DefaultKey: &key}
+	withKey := groupRow()
+	withKey[6] = "technician"
 
-			if tt.wantErr == nil {
-				conn.EXPECT().
-					QueryRow(t.Context(), sqlContaining("FROM garage_staff WHERE garage_id = $1 AND account_id = $2"), []any{"garage-1", "acc-2"}).
-					Return(valuesRow(t, staffScanValues("staff-1", "garage-1", "acc-2", "technician", "active")))
-			} else {
-				conn.EXPECT().
-					QueryRow(mock.Anything, sqlContaining("FROM garage_staff WHERE garage_id = $1 AND account_id = $2"), mock.Anything).
-					Return(errRow(t, pgx.ErrNoRows))
-			}
+	tx := dbtest.New(t).
+		ExpectQuery("WHERE sg.garage_id = $1", dbtest.NewRows(groupRow(), withKey), nil).
+		ExpectQuery("WHERE sg.garage_id = $1", nil, errBoom).
+		ExpectQuery("WHERE sg.garage_id = $1", dbtest.NewRows([]any{1}), nil).
+		ExpectQueryRow("sg.id = $2", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectQueryRow("INSERT INTO staff_groups", dbtest.Row("grp-2", now, now)).
+		ExpectQueryRow("INSERT INTO staff_groups", dbtest.ErrRow(dbtest.UniqueViolation("x"))).
+		ExpectQueryRow("ON CONFLICT DO NOTHING", dbtest.Row("grp-3", now, now)).
+		ExpectQueryRow("ON CONFLICT DO NOTHING", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectQueryRow("UPDATE staff_groups", dbtest.Row(now)).
+		ExpectQueryRow("UPDATE staff_groups", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectQueryRow("UPDATE staff_groups", dbtest.ErrRow(dbtest.UniqueViolation("x"))).
+		ExpectExec("DELETE FROM staff_groups", dbtest.Tag(1), nil).
+		ExpectExec("DELETE FROM staff_groups", dbtest.Tag(0), nil).
+		ExpectExec("DELETE FROM staff_groups", dbtest.Tag(0), errBoom)
+	ctx := tx.Context(t.Context())
 
-			got, err := repo.FindByGarageAndAccount(t.Context(), tt.args.garageID, tt.args.accountID)
-			if tt.wantErr != nil {
-				require.ErrorIs(t, err, tt.wantErr)
-				return
-			}
+	groups, err := repo.List(ctx, "g-1")
+	require.NoError(t, err)
+	require.Len(t, groups, 2)
+	assert.Nil(t, groups[0].DefaultKey)
+	assert.Equal(t, domain.DefaultTechnician, *groups[1].DefaultKey)
+	assert.Equal(t, 3, groups[0].MemberCount)
 
-			require.NoError(t, err)
-			assert.Equal(t, tt.want.GarageID, got.GarageID)
-			assert.Equal(t, tt.want.Role, got.Role)
-			assert.Equal(t, tt.want.Status, got.Status)
-		})
-	}
+	_, err = repo.List(ctx, "g-1")
+	require.ErrorIs(t, err, errBoom)
+	_, err = repo.List(ctx, "g-1")
+	require.Error(t, err)
+
+	_, err = repo.FindByID(ctx, "g-1", "x")
+	require.ErrorIs(t, err, domain.ErrGroupNotFound)
+
+	require.NoError(t, repo.Create(ctx, group))
+	require.ErrorIs(t, repo.Create(ctx, group), domain.ErrGroupNameTaken)
+
+	inserted, err := repo.CreateDefault(ctx, group)
+	require.NoError(t, err)
+	assert.True(t, inserted)
+	inserted, err = repo.CreateDefault(ctx, group)
+	require.NoError(t, err)
+	assert.False(t, inserted)
+
+	require.NoError(t, repo.Update(ctx, group))
+	require.ErrorIs(t, repo.Update(ctx, group), domain.ErrGroupNotFound)
+	require.ErrorIs(t, repo.Update(ctx, group), domain.ErrGroupNameTaken)
+
+	require.NoError(t, repo.Delete(ctx, "g-1", "grp-2"))
+	require.ErrorIs(t, repo.Delete(ctx, "g-1", "grp-2"), domain.ErrGroupNotFound)
+	require.ErrorIs(t, repo.Delete(ctx, "g-1", "grp-2"), errBoom)
 }
 
-func TestPostgresGarageStaffRepository_ListRolesForAccount(t *testing.T) {
-	tests := []struct {
-		name    string
-		args    struct{ accountID string }
-		want    []usecase.RoleAssignment
-		wantErr error
-	}{
-		{
-			name: "returns the role assignments for every active membership",
-			args: struct{ accountID string }{accountID: "acc-2"},
-			want: []usecase.RoleAssignment{
-				{GarageID: "garage-1", Role: "owner"},
-				{GarageID: "garage-2", Role: "accountant"},
-			},
-		},
-		{
-			name:    "propagates query errors",
-			args:    struct{ accountID string }{accountID: "acc-2"},
-			wantErr: errors.New("query boom"),
-		},
-	}
+func TestInvitationRepository(t *testing.T) {
+	t.Parallel()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			conn, pool := newQuerier(t)
-			repo := repository.NewPostgresGarageStaffRepository(pool)
+	repo := repository.NewPostgresInvitationRepository(nil)
+	inv := &domain.Invitation{GarageID: "g-1", AccountID: "acc-1", Status: domain.InvitationPending, InvitedBy: "owner", ExpiresAt: now}
 
-			if tt.wantErr == nil {
-				rows := resultRows(t, newRowsState([][]any{
-					{"garage-1", "owner"},
-					{"garage-2", "accountant"},
-				}))
-				conn.EXPECT().
-					Query(t.Context(), sqlContaining("FROM garage_staff WHERE account_id = $1 AND status = 'active'"), []any{"acc-2"}).
-					Return(rows, nil)
-			} else {
-				conn.EXPECT().
-					Query(mock.Anything, sqlContaining("FROM garage_staff WHERE account_id = $1"), []any{"acc-2"}).
-					Return(nil, tt.wantErr)
-			}
+	tx := dbtest.New(t).
+		ExpectQueryRow("WHERE i.id = $1", dbtest.Row(invitationRow()...)).
+		ExpectQueryRow("WHERE i.id = $1", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectQuery("i.garage_id = $1", dbtest.NewRows(invitationRow()), nil).
+		ExpectQuery("i.account_id = $1", nil, errBoom).
+		ExpectQuery("i.account_id = $1", dbtest.NewRows([]any{1}), nil).
+		ExpectQueryRow("INSERT INTO staff_invitations", dbtest.Row("i-2", now, now)).WithArgs(func(args []any) {
+		assert.Equal(t, []string{}, args[2])
+	}).
+		ExpectQueryRow("INSERT INTO staff_invitations", dbtest.ErrRow(dbtest.UniqueViolation("idx_staff_invitations_pending_unique"))).
+		ExpectQueryRow("UPDATE staff_invitations", dbtest.Row(now)).
+		ExpectQueryRow("UPDATE staff_invitations", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectExec("SET status = 'expired'", dbtest.Tag(1), nil)
+	ctx := tx.Context(t.Context())
 
-			got, err := repo.ListRolesForAccount(t.Context(), tt.args.accountID)
-			if tt.wantErr != nil {
-				require.ErrorIs(t, err, tt.wantErr)
-				return
-			}
+	got, err := repo.FindByID(ctx, "i-1")
+	require.NoError(t, err)
+	assert.Equal(t, domain.InvitationPending, got.Status)
+	assert.Equal(t, "Gara", got.GarageName)
 
-			require.NoError(t, err)
-			require.Len(t, got, len(tt.want))
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
+	_, err = repo.FindByID(ctx, "x")
+	require.ErrorIs(t, err, domain.ErrInvitationNotFound)
 
-func TestPostgresGarageStaffRepository_FindByID(t *testing.T) {
-	tests := []struct {
-		name    string
-		staffID string
-		want    *domain.GarageStaff
-		wantErr error
-	}{
-		{
-			name:    "returns the staff member",
-			staffID: "staff-1",
-			want: &domain.GarageStaff{
-				ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
-			},
-		},
-		{
-			name:    "propagates errors untouched (no ErrNoRows mapping here)",
-			staffID: "missing",
-			wantErr: pgx.ErrNoRows,
-		},
-	}
+	list, err := repo.ListByGarage(ctx, "g-1")
+	require.NoError(t, err)
+	assert.Len(t, list, 1)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			conn, pool := newQuerier(t)
-			repo := repository.NewPostgresGarageStaffRepository(pool)
+	_, err = repo.ListByAccount(ctx, "acc-1")
+	require.ErrorIs(t, err, errBoom)
+	_, err = repo.ListByAccount(ctx, "acc-1")
+	require.Error(t, err)
 
-			if tt.wantErr == nil {
-				conn.EXPECT().
-					QueryRow(t.Context(), sqlContaining("FROM garage_staff WHERE id = $1"), []any{"staff-1"}).
-					Return(valuesRow(t, staffScanValues("staff-1", "garage-1", "acc-2", "technician", "active")))
-			} else {
-				conn.EXPECT().
-					QueryRow(mock.Anything, sqlContaining("FROM garage_staff WHERE id = $1"), mock.Anything).
-					Return(errRow(t, pgx.ErrNoRows))
-			}
-
-			got, err := repo.FindByID(t.Context(), tt.staffID)
-			if tt.wantErr != nil {
-				require.ErrorIs(t, err, tt.wantErr)
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.want.GarageID, got.GarageID)
-			assert.Equal(t, tt.want.Role, got.Role)
-			assert.Equal(t, tt.want.Status, got.Status)
-		})
-	}
-}
-
-func TestPostgresGarageStaffRepository_Update(t *testing.T) {
-	boom := errors.New("boom")
-
-	tests := []struct {
-		name    string
-		staff   *domain.GarageStaff
-		args    []any
-		execErr error
-		wantErr error
-	}{
-		{
-			name: "persists the role and status",
-			staff: &domain.GarageStaff{
-				ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2",
-				Role: domain.RoleAccountant, Status: domain.StaffStatusInactive,
-			},
-			args: []any{"accountant", "inactive", "staff-1"},
-		},
-		{
-			name:    "propagates errors",
-			staff:   &domain.GarageStaff{ID: "staff-1"},
-			execErr: boom,
-			wantErr: boom,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			conn, pool := newQuerier(t)
-			repo := repository.NewPostgresGarageStaffRepository(pool)
-
-			if tt.wantErr != nil {
-				conn.EXPECT().
-					Exec(mock.Anything, sqlContaining("UPDATE garage_staff SET"), mock.Anything).
-					Return(pgconn.CommandTag{}, tt.execErr)
-			} else {
-				conn.EXPECT().
-					Exec(t.Context(), sqlContaining("UPDATE garage_staff SET"), tt.args).
-					Return(pgconn.CommandTag{}, nil)
-			}
-
-			err := repo.Update(t.Context(), tt.staff)
-			if tt.wantErr != nil {
-				require.ErrorIs(t, err, tt.wantErr)
-				return
-			}
-
-			require.NoError(t, err)
-		})
-	}
+	require.NoError(t, repo.Create(ctx, inv))
+	require.ErrorIs(t, repo.Create(ctx, inv), domain.ErrAlreadyInvited)
+	require.NoError(t, repo.Update(ctx, inv))
+	require.ErrorIs(t, repo.Update(ctx, inv), domain.ErrInvitationNotFound)
+	require.NoError(t, repo.ExpireStale(ctx, "g-1", "acc-1"))
 }

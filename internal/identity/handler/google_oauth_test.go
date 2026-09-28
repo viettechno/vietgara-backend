@@ -5,365 +5,150 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"regexp"
 	"testing"
 
-	"github.com/labstack/echo/v4"
-	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/viettechno/vietgara-backend/internal/identity/domain"
+
 	"github.com/viettechno/vietgara-backend/internal/identity/handler"
-	"github.com/viettechno/vietgara-backend/internal/mocks"
+	"github.com/viettechno/vietgara-backend/internal/platform/httpapi"
 )
 
-// googleStateCookieName mirrors the unexported cookie name google_oauth.go
-// uses to persist the CSRF state between the login redirect and the
-// callback.
-const googleStateCookieName = "vietgara_google_oauth_state"
-
-func newGoogleTestBackend(t *testing.T, tokenHandler, userinfoHandler http.HandlerFunc) *httptest.Server {
+// fakeGoogle serves the token and userinfo endpoints.
+func fakeGoogle(t *testing.T, tokenStatus int, userinfo string) *httptest.Server {
 	t.Helper()
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/token", tokenHandler)
-	mux.HandleFunc("/userinfo", userinfoHandler)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/token":
+			assert.Equal(t, "the-code", r.FormValue("code"))
+			w.WriteHeader(tokenStatus)
+			_, _ = w.Write([]byte(`{"access_token":"at"}`))
+		case "/userinfo":
+			assert.Equal(t, "Bearer at", r.Header.Get("Authorization"))
 
-	srv := httptest.NewServer(mux)
+			_, _ = w.Write([]byte(userinfo))
+		}
+	}))
 	t.Cleanup(srv.Close)
 
 	return srv
 }
 
-func jsonHandler(t *testing.T, status int, body any) http.HandlerFunc {
+func config(google *httptest.Server) handler.GoogleOAuthConfig {
+	return handler.GoogleOAuthConfig{
+		ClientID: "cid", ClientSecret: "secret", AuthEndpoint: "https://accounts.example/auth",
+		TokenEndpoint: google.URL + "/token", UserInfoURL: google.URL + "/userinfo",
+		RedirectURI: "http://localhost:8000/api/v1/auth/google/callback", FrontendOrigin: "http://localhost:8000",
+	}
+}
+
+var messagePattern = regexp.MustCompile(`postMessage\((\{.*\}),"`)
+
+// popupMessage extracts the JSON posted to the opener.
+func popupMessage(t *testing.T, rec *httptest.ResponseRecorder) map[string]any {
 	t.Helper()
 
-	return func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(status)
-		_ = json.NewEncoder(w).Encode(body)
-	}
+	m := messagePattern.FindStringSubmatch(rec.Body.String())
+	require.Len(t, m, 2, rec.Body.String())
+
+	var msg map[string]any
+	require.NoError(t, json.Unmarshal([]byte(m[1]), &msg))
+	assert.Equal(t, "vietgara-google-auth", msg["type"])
+
+	return msg
 }
 
-func newConfiguredGoogleHandler(t *testing.T, accounts *mocks.MockAccountRepository, garages *mocks.MockGarageMembershipReader, tokens *mocks.MockRefreshTokenStore, backend *httptest.Server) *handler.Server {
+func serve(t *testing.T, e *env, path string, cookie *http.Cookie) *httptest.ResponseRecorder {
 	t.Helper()
 
-	srv := newTestHandler(t, accounts, garages, tokens)
-	srv.ConfigureGoogleOAuth(handler.GoogleOAuthConfig{
-		ClientID:       "client-id",
-		ClientSecret:   "client-secret",
-		AuthEndpoint:   "https://accounts.google.com/o/oauth2/v2/auth",
-		TokenEndpoint:  backend.URL + "/token",
-		UserInfoURL:    backend.URL + "/userinfo",
-		RedirectURI:    "https://app.example.com/auth/google/callback",
-		FrontendOrigin: "https://app.example.com",
-	})
+	mux := httpapi.NewMux()
+	require.NoError(t, e.srv.RegisterHTTPRoutes(mux))
 
-	return srv
-}
-
-// googleStateCookie returns a cookie carrying the given OAuth state value,
-// matching the flags google_oauth.go sets on the real cookie.
-func googleStateCookie(value string) *http.Cookie {
-	return &http.Cookie{
-		Name:     googleStateCookieName,
-		Value:    value,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   true,
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, nil)
+	if cookie != nil {
+		req.AddCookie(cookie)
 	}
-}
 
-func TestServer_GoogleLogin(t *testing.T) {
-	t.Parallel()
-
-	t.Run("not configured returns 501", func(t *testing.T) {
-		t.Parallel()
-
-		srv := newTestHandler(t, mocks.NewMockAccountRepository(t), mocks.NewMockGarageMembershipReader(t), mocks.NewMockRefreshTokenStore(t))
-
-		e := echo.New()
-		srv.RegisterHTTPRoutes(e.Group(""))
-
-		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/auth/google/login", nil)
-		rec := httptest.NewRecorder()
-		e.ServeHTTP(rec, req)
-
-		require.Equal(t, http.StatusNotImplemented, rec.Code)
-	})
-
-	t.Run("configured redirects to google with a matching state cookie", func(t *testing.T) {
-		t.Parallel()
-
-		srv := newTestHandler(t, mocks.NewMockAccountRepository(t), mocks.NewMockGarageMembershipReader(t), mocks.NewMockRefreshTokenStore(t))
-		srv.ConfigureGoogleOAuth(handler.GoogleOAuthConfig{
-			ClientID:     "client-id",
-			ClientSecret: "client-secret",
-			AuthEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
-			RedirectURI:  "https://app.example.com/auth/google/callback",
-		})
-
-		e := echo.New()
-		srv.RegisterHTTPRoutes(e.Group(""))
-
-		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/auth/google/login", nil)
-		rec := httptest.NewRecorder()
-		e.ServeHTTP(rec, req)
-
-		require.Equal(t, http.StatusFound, rec.Code)
-
-		loc, err := url.Parse(rec.Header().Get("Location"))
-		require.NoError(t, err)
-		require.Equal(t, "accounts.google.com", loc.Host)
-		require.Equal(t, "client-id", loc.Query().Get("client_id"))
-
-		state := loc.Query().Get("state")
-		require.NotEmpty(t, state)
-
-		cookies := rec.Result().Cookies()
-		require.Len(t, cookies, 1)
-		require.Equal(t, googleStateCookieName, cookies[0].Name)
-		require.Equal(t, state, cookies[0].Value)
-	})
-}
-
-func TestServer_GoogleCallback_NotConfigured(t *testing.T) {
-	t.Parallel()
-
-	srv := newTestHandler(t, mocks.NewMockAccountRepository(t), mocks.NewMockGarageMembershipReader(t), mocks.NewMockRefreshTokenStore(t))
-
-	e := echo.New()
-	srv.RegisterHTTPRoutes(e.Group(""))
-
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/auth/google/callback", nil)
 	rec := httptest.NewRecorder()
-	e.ServeHTTP(rec, req)
+	mux.ServeHTTP(rec, req)
 
-	require.Equal(t, http.StatusNotImplemented, rec.Code)
+	return rec
 }
 
-func TestServer_GoogleCallback_State(t *testing.T) {
+func TestGoogleLoginFlow(t *testing.T) {
 	t.Parallel()
 
-	backend := newGoogleTestBackend(t,
-		jsonHandler(t, http.StatusOK, map[string]string{"access_token": "access-token"}),
-		jsonHandler(t, http.StatusOK, map[string]string{"sub": "google-sub-1", "email": "social@example.com", "name": "Social User"}),
-	)
+	google := fakeGoogle(t, http.StatusOK, `{"sub":"g-1","email":"New@Gmail.com","email_verified":true,"name":"Người Mới","locale":"en-US"}`)
+	e := newEnv(t, config(google))
+
+	rec := serve(t, e, handler.GoogleLoginPath, nil)
+	require.Equal(t, http.StatusFound, rec.Code)
+
+	location, err := url.Parse(rec.Header().Get("Location"))
+	require.NoError(t, err)
+
+	state := location.Query().Get("state")
+	assert.Equal(t, "cid", location.Query().Get("client_id"))
+	require.NotEmpty(t, state)
+
+	cookie := rec.Result().Cookies()[0]
+	rec = serve(t, e, handler.GoogleCallbackPath+"?code=the-code&state="+state, cookie)
+	require.Equal(t, http.StatusOK, rec.Code)
+
+	session, ok := popupMessage(t, rec)["session"].(map[string]any)
+	require.True(t, ok)
+	account, ok := session["account"].(map[string]any)
+	require.True(t, ok)
+	assert.Equal(t, "new@gmail.com", account["email"])
+	assert.Equal(t, true, account["emailVerified"])
+	assert.Equal(t, "LOCALE_EN", account["locale"])
+	assert.Equal(t, "AUTH_PROVIDER_GOOGLE", account["authProvider"])
+}
+
+func TestGoogleCallbackErrors(t *testing.T) {
+	t.Parallel()
+
+	good := `{"sub":"g","email":"a@b.vn","email_verified":true,"name":"A"}`
+	cookie := &http.Cookie{Name: "vietgara_google_oauth_state", Value: "s", Secure: true, HttpOnly: true, SameSite: http.SameSiteLaxMode}
 
 	tests := []struct {
-		name        string
-		queryString string
-		cookie      *http.Cookie
-		wantStatus  int
-		wantBody    string
+		name   string
+		cfg    func() handler.GoogleOAuthConfig
+		path   string
+		cookie *http.Cookie
+		want   string
 	}{
-		{
-			name:        "missing state cookie is rejected",
-			queryString: "state=abc&code=xyz",
-			wantStatus:  http.StatusBadRequest,
-			wantBody:    "invalid OAuth state",
-		},
-		{
-			name:        "mismatched state is rejected",
-			queryString: "state=abc&code=xyz",
-			cookie:      googleStateCookie("different"),
-			wantStatus:  http.StatusBadRequest,
-			wantBody:    "invalid OAuth state",
-		},
-		{
-			name:        "provider error is surfaced",
-			queryString: "state=abc&error=access_denied",
-			cookie:      googleStateCookie("abc"),
-			wantStatus:  http.StatusBadRequest,
-			wantBody:    "Google authorization failed: access_denied",
-		},
-		{
-			name:        "missing code is rejected",
-			queryString: "state=abc",
-			cookie:      googleStateCookie("abc"),
-			wantStatus:  http.StatusBadRequest,
-			wantBody:    "missing authorization code",
-		},
+		{name: "not configured", cfg: func() handler.GoogleOAuthConfig { return handler.GoogleOAuthConfig{} }, path: handler.GoogleCallbackPath, want: "GOOGLE_NOT_CONFIGURED"},
+		{name: "missing state cookie", cfg: func() handler.GoogleOAuthConfig { return config(fakeGoogle(t, 200, good)) }, path: handler.GoogleCallbackPath + "?state=s&code=the-code", want: "GOOGLE_STATE_INVALID"},
+		{name: "denied", cfg: func() handler.GoogleOAuthConfig { return config(fakeGoogle(t, 200, good)) }, path: handler.GoogleCallbackPath + "?state=s&error=access_denied", cookie: cookie, want: "GOOGLE_DENIED"},
+		{name: "token endpoint fails", cfg: func() handler.GoogleOAuthConfig { return config(fakeGoogle(t, 500, good)) }, path: handler.GoogleCallbackPath + "?state=s&code=the-code", cookie: cookie, want: "GOOGLE_EXCHANGE_FAILED"},
+		{name: "profile without e-mail", cfg: func() handler.GoogleOAuthConfig { return config(fakeGoogle(t, 200, `{"sub":"g"}`)) }, path: handler.GoogleCallbackPath + "?state=s&code=the-code", cookie: cookie, want: "GOOGLE_EXCHANGE_FAILED"},
+		{name: "userinfo garbage", cfg: func() handler.GoogleOAuthConfig { return config(fakeGoogle(t, 200, `nope`)) }, path: handler.GoogleCallbackPath + "?state=s&code=the-code", cookie: cookie, want: "GOOGLE_EXCHANGE_FAILED"},
+		{name: "unverified e-mail", cfg: func() handler.GoogleOAuthConfig { return config(fakeGoogle(t, 200, `{"sub":"g","email":"a@b.vn"}`)) }, path: handler.GoogleCallbackPath + "?state=s&code=the-code", cookie: cookie, want: "INVALID_CREDENTIALS"},
+		{name: "unreachable google", cfg: func() handler.GoogleOAuthConfig {
+			c := config(fakeGoogle(t, 200, good))
+			c.TokenEndpoint = "http://127.0.0.1:1/token"
+
+			return c
+		}, path: handler.GoogleCallbackPath + "?state=s&code=the-code", cookie: cookie, want: "GOOGLE_EXCHANGE_FAILED"},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			srv := newConfiguredGoogleHandler(t, mocks.NewMockAccountRepository(t), mocks.NewMockGarageMembershipReader(t), mocks.NewMockRefreshTokenStore(t), backend)
-
-			e := echo.New()
-			srv.RegisterHTTPRoutes(e.Group(""))
-
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/auth/google/callback?"+tc.queryString, nil)
-			if tc.cookie != nil {
-				req.AddCookie(tc.cookie)
-			}
-
-			rec := httptest.NewRecorder()
-			e.ServeHTTP(rec, req)
-
-			require.Equal(t, tc.wantStatus, rec.Code)
-			require.Contains(t, rec.Body.String(), tc.wantBody)
+			rec := serve(t, newEnv(t, tt.cfg()), tt.path, tt.cookie)
+			assert.Equal(t, tt.want, popupMessage(t, rec)["error"])
 		})
 	}
-}
 
-func TestServer_GoogleCallback_TokenExchangeFailures(t *testing.T) {
-	t.Parallel()
+	rec := serve(t, newEnv(t, handler.GoogleOAuthConfig{}), handler.GoogleLoginPath, nil)
+	assert.Equal(t, "GOOGLE_NOT_CONFIGURED", popupMessage(t, rec)["error"])
 
-	tests := []struct {
-		name    string
-		backend *httptest.Server
-	}{
-		{
-			name: "token endpoint errors",
-			backend: newGoogleTestBackend(t,
-				func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusInternalServerError) },
-				jsonHandler(t, http.StatusOK, map[string]string{}),
-			),
-		},
-		{
-			name: "token endpoint omits access_token",
-			backend: newGoogleTestBackend(t,
-				jsonHandler(t, http.StatusOK, map[string]string{}),
-				jsonHandler(t, http.StatusOK, map[string]string{}),
-			),
-		},
-		{
-			name: "userinfo endpoint errors",
-			backend: newGoogleTestBackend(t,
-				jsonHandler(t, http.StatusOK, map[string]string{"access_token": "access-token"}),
-				func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusInternalServerError) },
-			),
-		},
-		{
-			name: "profile missing required fields",
-			backend: newGoogleTestBackend(t,
-				jsonHandler(t, http.StatusOK, map[string]string{"access_token": "access-token"}),
-				jsonHandler(t, http.StatusOK, map[string]string{"email": "social@example.com"}),
-			),
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			srv := newConfiguredGoogleHandler(t, mocks.NewMockAccountRepository(t), mocks.NewMockGarageMembershipReader(t), mocks.NewMockRefreshTokenStore(t), tc.backend)
-
-			e := echo.New()
-			srv.RegisterHTTPRoutes(e.Group(""))
-
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/auth/google/callback?state=abc&code=xyz", nil)
-			req.AddCookie(googleStateCookie("abc"))
-
-			rec := httptest.NewRecorder()
-			e.ServeHTTP(rec, req)
-
-			require.Equal(t, http.StatusBadGateway, rec.Code)
-			require.Contains(t, rec.Body.String(), "Google token exchange failed")
-		})
-	}
-}
-
-func TestServer_GoogleCallback_UsecaseFailure(t *testing.T) {
-	t.Parallel()
-
-	backend := newGoogleTestBackend(t,
-		jsonHandler(t, http.StatusOK, map[string]string{"access_token": "access-token"}),
-		jsonHandler(t, http.StatusOK, map[string]string{"sub": "google-sub-1", "email": "social@example.com", "name": "Social User"}),
-	)
-
-	accounts := mocks.NewMockAccountRepository(t)
-	garages := mocks.NewMockGarageMembershipReader(t)
-	tokens := mocks.NewMockRefreshTokenStore(t)
-	srv := newConfiguredGoogleHandler(t, accounts, garages, tokens, backend)
-	accounts.EXPECT().FindByIdentityPlatformUID(mock.Anything, "google-sub-1").Return(nil, domain.ErrAccountNotFound).Once()
-	accounts.EXPECT().Create(mock.Anything, mock.Anything).Return(domain.ErrAccountNotFound).Once()
-
-	e := echo.New()
-	srv.RegisterHTTPRoutes(e.Group(""))
-
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/auth/google/callback?state=abc&code=xyz", nil)
-	req.AddCookie(googleStateCookie("abc"))
-
-	rec := httptest.NewRecorder()
-	e.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusInternalServerError, rec.Code)
-}
-
-func TestServer_GoogleCallback_Success(t *testing.T) {
-	t.Parallel()
-
-	backend := newGoogleTestBackend(t,
-		jsonHandler(t, http.StatusOK, map[string]string{"access_token": "access-token"}),
-		jsonHandler(t, http.StatusOK, map[string]string{"sub": "google-sub-1", "email": "social@example.com", "name": "Social User"}),
-	)
-
-	accounts := mocks.NewMockAccountRepository(t)
-	garages := mocks.NewMockGarageMembershipReader(t)
-	tokens := mocks.NewMockRefreshTokenStore(t)
-	srv := newConfiguredGoogleHandler(t, accounts, garages, tokens, backend)
-	accounts.EXPECT().FindByIdentityPlatformUID(mock.Anything, "google-sub-1").Return(nil, domain.ErrAccountNotFound).Once()
-	accounts.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
-	garages.EXPECT().ListGarageRolesForAccount(mock.Anything, mock.Anything).Return(nil, nil).Once()
-	tokens.EXPECT().Store(mock.Anything, mock.Anything, mock.Anything, 86400).Return(nil).Once()
-
-	e := echo.New()
-	srv.RegisterHTTPRoutes(e.Group(""))
-
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/auth/google/callback?state=abc&code=xyz", nil)
-	req.AddCookie(googleStateCookie("abc"))
-
-	rec := httptest.NewRecorder()
-	e.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.Equal(t, "text/html; charset=utf-8", rec.Header().Get("Content-Type"))
-	require.Contains(t, rec.Body.String(), "vietgara-google-auth")
-	require.Contains(t, rec.Body.String(), "https://app.example.com")
-	require.Contains(t, rec.Body.String(), "social@example.com")
-
-	cookies := rec.Result().Cookies()
-	require.Len(t, cookies, 1)
-	require.Equal(t, googleStateCookieName, cookies[0].Name)
-	require.Negative(t, cookies[0].MaxAge)
-}
-
-func TestServer_GoogleCallback_DefaultFrontendOrigin(t *testing.T) {
-	t.Parallel()
-
-	backend := newGoogleTestBackend(t,
-		jsonHandler(t, http.StatusOK, map[string]string{"access_token": "access-token"}),
-		jsonHandler(t, http.StatusOK, map[string]string{"sub": "google-sub-1", "email": "social@example.com", "name": "Social User"}),
-	)
-
-	accounts := mocks.NewMockAccountRepository(t)
-	garages := mocks.NewMockGarageMembershipReader(t)
-	tokens := mocks.NewMockRefreshTokenStore(t)
-	srv := newTestHandler(t, accounts, garages, tokens)
-	srv.ConfigureGoogleOAuth(handler.GoogleOAuthConfig{
-		ClientID:      "client-id",
-		ClientSecret:  "client-secret",
-		AuthEndpoint:  "https://accounts.google.com/o/oauth2/v2/auth",
-		TokenEndpoint: backend.URL + "/token",
-		UserInfoURL:   backend.URL + "/userinfo",
-		RedirectURI:   "https://app.example.com/auth/google/callback",
-	})
-	accounts.EXPECT().FindByIdentityPlatformUID(mock.Anything, "google-sub-1").Return(nil, domain.ErrAccountNotFound).Once()
-	accounts.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
-	garages.EXPECT().ListGarageRolesForAccount(mock.Anything, mock.Anything).Return(nil, nil).Once()
-	tokens.EXPECT().Store(mock.Anything, mock.Anything, mock.Anything, 86400).Return(nil).Once()
-
-	e := echo.New()
-	srv.RegisterHTTPRoutes(e.Group(""))
-
-	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/auth/google/callback?state=abc&code=xyz", nil)
-	req.AddCookie(googleStateCookie("abc"))
-
-	rec := httptest.NewRecorder()
-	e.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusOK, rec.Code)
-	require.Contains(t, rec.Body.String(), "http://localhost:8000")
+	cfg := handler.GoogleOAuthConfig{ClientID: "c", ClientSecret: "s", //nolint:gosec // test fixture, not a credential
+		RedirectURI: "r", UserInfoURL: "http://127.0.0.1:1/u", TokenEndpoint: "http://127.0.0.1:1/t"}
+	rec = serve(t, newEnv(t, cfg), handler.GoogleCallbackPath+"?state=s&code=x", cookie)
+	assert.Contains(t, rec.Body.String(), `"http://localhost:8000"`, "default origin")
 }

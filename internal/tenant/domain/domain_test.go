@@ -1,7 +1,9 @@
 package domain_test
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -9,145 +11,114 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 )
 
-func TestRoleIsValid(t *testing.T) {
-	tests := []struct {
-		name string
-		role domain.Role
-		want bool
-	}{
-		{name: "owner", role: domain.RoleOwner, want: true},
-		{name: "accountant", role: domain.RoleAccountant, want: true},
-		{name: "technician", role: domain.RoleTechnician, want: true},
-		{name: "service advisor", role: domain.RoleServiceAdvisor, want: true},
-		{name: "inventory staff", role: domain.RoleInventoryStaff, want: true},
-		{name: "empty", role: domain.Role(""), want: false},
-		{name: "unrecognized", role: domain.Role("admin"), want: false},
-		{name: "wrong case", role: domain.Role("OWNER"), want: false},
-		{name: "trailing whitespace", role: domain.Role("owner "), want: false},
+func TestStatuses(t *testing.T) {
+	t.Parallel()
+
+	assert.True(t, domain.GarageStatusActive.IsValid())
+	assert.False(t, domain.GarageStatus("suspended").IsValid())
+	assert.True(t, domain.StaffStatusInactive.IsValid())
+	assert.False(t, domain.StaffStatus("removed").IsValid())
+
+	for _, s := range []domain.InvitationStatus{domain.InvitationPending, domain.InvitationAccepted, domain.InvitationDeclined, domain.InvitationRevoked, domain.InvitationExpired} {
+		assert.True(t, s.IsValid())
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.role.IsValid())
-		})
+	assert.False(t, domain.InvitationStatus("x").IsValid())
+}
+
+func TestGarageValidation(t *testing.T) {
+	t.Parallel()
+
+	assert.True(t, domain.ValidName("Gara"))
+	assert.False(t, domain.ValidName(""))
+	assert.False(t, domain.ValidName(strings.Repeat("x", 256)))
+
+	assert.True(t, domain.ValidTimezone("Asia/Ho_Chi_Minh"))
+	assert.False(t, domain.ValidTimezone("Mars/Base"))
+	assert.False(t, domain.ValidTimezone(""))
+	assert.False(t, domain.ValidTimezone("Local"))
+	assert.False(t, domain.ValidTimezone(strings.Repeat("x", 65)))
+
+	assert.True(t, domain.ValidCurrency("VND"))
+	assert.False(t, domain.ValidCurrency("vnd"))
+
+	hours := domain.DefaultOperatingHours()
+	assert.Len(t, hours, 7)
+	assert.True(t, domain.ValidOperatingHours(hours))
+	assert.True(t, hours[6].Closed)
+
+	for _, bad := range [][]domain.DailyHours{
+		{{Day: 0, Open: "08:00", Close: "09:00"}},
+		{{Day: 1, Open: "08:00", Close: "09:00"}, {Day: 1, Closed: true}},
+		{{Day: 2, Open: "8:00", Close: "09:00"}},
+		{{Day: 3, Open: "10:00", Close: "09:00"}},
+	} {
+		assert.False(t, domain.ValidOperatingHours(bad), bad)
+	}
+
+	for tmpl, want := range map[string]bool{
+		domain.DefaultQuoteNumberTemplate:   true,
+		"Q-{YY}{DD}-{SEQ:3}":                true,
+		"Q-{SEQ:3}-{SEQ:2}":                 false,
+		"Q-{YYYY}":                          false,
+		"Q-{HH}-{SEQ:3}":                    false,
+		"Q-{SEQ:0}":                         false,
+		"Q-{SEQ:3}}":                        false,
+		"":                                  false,
+		strings.Repeat("x", 45) + "{SEQ:3}": false,
+	} {
+		assert.Equal(t, want, domain.ValidNumberingTemplate(tmpl), tmpl)
 	}
 }
 
-func TestRoleValues(t *testing.T) {
-	tests := []struct {
-		name string
-		got  domain.Role
-		want string
-	}{
-		{name: "owner", got: domain.RoleOwner, want: "owner"},
-		{name: "accountant", got: domain.RoleAccountant, want: "accountant"},
-		{name: "technician", got: domain.RoleTechnician, want: "technician"},
-		{name: "service advisor", got: domain.RoleServiceAdvisor, want: "service_advisor"},
-		{name: "inventory staff", got: domain.RoleInventoryStaff, want: "inventory_staff"},
-	}
+func TestDefaultRoles(t *testing.T) {
+	t.Parallel()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, string(tt.got))
-		})
-	}
+	assert.Len(t, domain.DefaultRoleTemplates, 5)
+	assert.Len(t, domain.DefaultRoleTemplates[0].Permissions, 17)
+
+	name, desc := domain.DefaultRoleTemplates[1].Localized("en")
+	assert.Equal(t, "Accountant", name)
+	assert.NotEmpty(t, desc)
+
+	name, _ = domain.DefaultRoleTemplates[1].Localized("fr")
+	assert.Equal(t, "Kế toán", name)
+
+	tmpl, ok := domain.DefaultTechnician.Template()
+	require.True(t, ok)
+	assert.Equal(t, domain.DefaultTechnician, tmpl.Key)
+
+	_, ok = domain.DefaultRole("cashier").Template()
+	assert.False(t, ok)
+
+	assert.True(t, domain.ValidRoleName("Kỹ thuật", domain.MaxRoleNameLength))
+	assert.False(t, domain.ValidRoleName("", domain.MaxRoleNameLength))
 }
 
-func TestGarageStatusValues(t *testing.T) {
-	tests := []struct {
-		name string
-		got  domain.GarageStatus
-		want string
-	}{
-		{name: "active", got: domain.GarageStatusActive, want: "active"},
-		{name: "inactive", got: domain.GarageStatusInactive, want: "inactive"},
-		{name: "suspended", got: domain.GarageStatusSuspended, want: "suspended"},
+func TestInvitationLifecycle(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	inv := func() *domain.Invitation {
+		return &domain.Invitation{Status: domain.InvitationPending, ExpiresAt: now.Add(domain.InvitationTTL)}
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, string(tt.got))
-		})
-	}
-}
+	accepted := inv()
+	require.NoError(t, accepted.Accept(now))
+	assert.Equal(t, domain.InvitationAccepted, accepted.Status)
+	assert.Equal(t, now, *accepted.RespondedAt)
+	require.ErrorIs(t, accepted.Decline(now), domain.ErrInvitationNotPending)
 
-func TestGarageStatusIsValid(t *testing.T) {
-	tests := []struct {
-		name   string
-		status domain.GarageStatus
-		want   bool
-	}{
-		{name: "active", status: domain.GarageStatusActive, want: true},
-		{name: "inactive", status: domain.GarageStatusInactive, want: true},
-		{name: "suspended", status: domain.GarageStatusSuspended, want: true},
-		{name: "empty", status: domain.GarageStatus(""), want: false},
-		{name: "unrecognized", status: domain.GarageStatus("archived"), want: false},
-		{name: "wrong case", status: domain.GarageStatus("ACTIVE"), want: false},
-	}
+	declined := inv()
+	require.NoError(t, declined.Decline(now))
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.status.IsValid())
-		})
-	}
-}
+	revoked := inv()
+	require.NoError(t, revoked.Revoke(now))
+	assert.Equal(t, domain.InvitationRevoked, revoked.Status)
 
-func TestStaffStatusValues(t *testing.T) {
-	tests := []struct {
-		name string
-		got  domain.StaffStatus
-		want string
-	}{
-		{name: "active", got: domain.StaffStatusActive, want: "active"},
-		{name: "inactive", got: domain.StaffStatusInactive, want: "inactive"},
-		{name: "suspended", got: domain.StaffStatusSuspended, want: "suspended"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, string(tt.got))
-		})
-	}
-}
-
-func TestStaffStatusIsValid(t *testing.T) {
-	tests := []struct {
-		name   string
-		status domain.StaffStatus
-		want   bool
-	}{
-		{name: "active", status: domain.StaffStatusActive, want: true},
-		{name: "inactive", status: domain.StaffStatusInactive, want: true},
-		{name: "suspended", status: domain.StaffStatusSuspended, want: true},
-		{name: "empty", status: domain.StaffStatus(""), want: false},
-		{name: "unrecognized", status: domain.StaffStatus("removed"), want: false},
-		{name: "wrong case", status: domain.StaffStatus("ACTIVE"), want: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.status.IsValid())
-		})
-	}
-}
-
-func TestSentinelErrors(t *testing.T) {
-	tests := []struct {
-		name string
-		err  error
-		want string
-	}{
-		{name: "garage not found", err: domain.ErrGarageNotFound, want: "garage not found"},
-		{name: "garage name required", err: domain.ErrGarageNameRequired, want: "garage name is required"},
-		{name: "invalid role", err: domain.ErrInvalidRole, want: "invalid staff role"},
-		{name: "staff already exists", err: domain.ErrStaffAlreadyExists, want: "this account is already a staff member of this garage"},
-		{name: "no access to garage", err: domain.ErrNoAccessToGarage, want: "account has no access to this garage"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			require.Error(t, tt.err)
-			assert.Equal(t, tt.want, tt.err.Error())
-		})
-	}
+	expired := inv()
+	later := now.Add(domain.InvitationTTL)
+	assert.Equal(t, domain.InvitationExpired, expired.EffectiveStatus(later))
+	require.ErrorIs(t, expired.Accept(later), domain.ErrInvitationExpired)
+	assert.Equal(t, domain.InvitationPending, expired.EffectiveStatus(now))
 }

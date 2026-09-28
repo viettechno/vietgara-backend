@@ -4,8 +4,10 @@ include make/install.mk
 include make/test.mk
 include make/lint.mk
 include make/docker.mk
+include make/image.mk
 include make/build.mk
 include make/mock.mk
+include make/migrate.mk
 
 # Styles
 BOLD 	:= \033[1m

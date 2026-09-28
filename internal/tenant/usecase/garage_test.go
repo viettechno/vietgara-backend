@@ -1,500 +1,221 @@
 package usecase_test
 
 import (
-	"context"
-	"errors"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/viettechno/vietgara-backend/internal/mocks"
-	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-// assertAppError asserts that err is an AppError carrying wantCode.
-func assertAppError(t *testing.T, err error, wantCode apperror.Code) {
-	t.Helper()
+func TestCreateGarage(t *testing.T) {
+	t.Parallel()
 
-	appErr, ok := apperror.As(err)
-	require.True(t, ok, "expected an AppError, got %v", err)
-	assert.Equal(t, wantCode, appErr.Code)
-}
+	e := newEnv(t, limits{Garages: 1, Staff: 5})
+	ctx := e.as(t, owner, "")
 
-// newGarageCreateMatcher matches the garage passed to repository.Create.
-func newGarageCreateMatcher(accountID, name string) any {
-	return mock.MatchedBy(func(g *domain.Garage) bool {
-		return g.AccountID == accountID && g.Name == name && g.Status == domain.GarageStatusActive
+	g, err := e.UC.CreateGarage(ctx, owner, usecase.GarageFields{
+		Name: new(" Gara Minh "), TaxCode: new("0101"), Address: new("1 Lê Lợi"), Phone: new("0901"), Email: new("A@B.VN"),
+		Status: new(domain.GarageStatusInactive),
 	})
+	require.NoError(t, err)
+	assert.Equal(t, "Gara Minh", g.Garage.Name)
+	assert.Equal(t, domain.DefaultTimezone, g.Garage.Timezone)
+	assert.Equal(t, domain.GarageStatusActive, g.Garage.Status, "status is ignored on create")
+	assert.Equal(t, "a@b.vn", *g.Garage.Email)
+	assert.True(t, g.Access.Owner)
+
+	roles, err := e.UC.ListRoles(ctx, owner)
+	require.NoError(t, err)
+	assert.Len(t, roles, 5)
+	assert.Equal(t, "Accountant", roles[0].Name, "owner's locale")
+
+	groups, err := e.UC.ListGroups(ctx, g.Garage.ID)
+	require.NoError(t, err)
+	assert.Len(t, groups, 5)
+
+	members, err := e.UC.ListStaff(ctx, g.Garage.ID)
+	require.NoError(t, err)
+	require.Len(t, members, 1)
+	assert.True(t, members[0].Owner)
+	assert.Equal(t, "Minh", members[0].FullName)
+
+	assert.Contains(t, e.Events.Types, usecase.EventGarageCreated)
+	assert.Contains(t, e.Audit.Actions, "garage.created")
+
+	_, err = e.UC.CreateGarage(ctx, owner, usecase.GarageFields{Name: new("Second")})
+	requireReason(t, err, "PLAN_LIMIT_REACHED")
+
+	list, err := e.UC.ListGarages(ctx, owner)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.True(t, list[0].Access.Owner)
 }
 
-// newOwnerStaffCreateMatcher matches the owner staff record passed to
-// repository.Create.
-func newOwnerStaffCreateMatcher(accountID string) any {
-	return mock.MatchedBy(func(s *domain.GarageStaff) bool {
-		return s.AccountID == accountID && s.GarageID != "" && s.Role == domain.RoleOwner && s.Status == domain.StaffStatusActive
-	})
-}
+func TestCreateGarageValidation(t *testing.T) {
+	t.Parallel()
 
-// newCreatedEventMatcher matches the payload of a garage.created event.
-func newCreatedEventMatcher(accountID string) any {
-	return mock.MatchedBy(func(payload any) bool {
-		m, ok := payload.(map[string]string)
-		return ok && m["garage_id"] != "" && m["account_id"] == accountID
-	})
-}
+	e := newEnv(t, limits{Garages: 5, Staff: 5})
+	ctx := e.as(t, owner, "")
 
-func testGarage() *domain.Garage {
-	return &domain.Garage{
-		ID:        "g-1",
-		AccountID: "acc-1",
-		Name:      "Old name",
-		Timezone:  "Asia/Ho_Chi_Minh",
-		Currency:  "VND",
-		Status:    domain.GarageStatusActive,
-	}
-}
-
-func TestGarageUseCase_Create(t *testing.T) {
-	tests := []struct {
-		name               string
-		req                usecase.CreateGarageRequest
-		withEvents         bool
-		expectGarageCreate bool
-		expectStaffCreate  bool
-		expectPublish      bool
-		garageErr          error
-		staffErr           error
-		publishErr         error
-		wantCode           apperror.Code
-		wantTimezone       string
-		wantCurrency       string
-	}{
-		{
-			name:               "creates garage, owner staff record, and publishes garage.created",
-			req:                usecase.CreateGarageRequest{AccountID: "acc-1", Name: "Gara A"},
-			withEvents:         true,
-			expectGarageCreate: true,
-			expectStaffCreate:  true,
-			expectPublish:      true,
-			wantTimezone:       "Asia/Ho_Chi_Minh",
-			wantCurrency:       "VND",
-		},
-		{
-			name: "applies the requested timezone and currency",
-			req: usecase.CreateGarageRequest{
-				AccountID: "acc-1",
-				Name:      "Gara A",
-				Timezone:  new("Asia/Tokyo"),
-				Currency:  new("JPY"),
-			},
-			withEvents:         true,
-			expectGarageCreate: true,
-			expectStaffCreate:  true,
-			expectPublish:      true,
-			wantTimezone:       "Asia/Tokyo",
-			wantCurrency:       "JPY",
-		},
-		{
-			name:               "proceeds without an event publisher",
-			req:                usecase.CreateGarageRequest{AccountID: "acc-1", Name: "Gara A"},
-			expectGarageCreate: true,
-			expectStaffCreate:  true,
-			wantTimezone:       "Asia/Ho_Chi_Minh",
-			wantCurrency:       "VND",
-		},
-		{
-			name:     "rejects an empty name",
-			req:      usecase.CreateGarageRequest{AccountID: "acc-1"},
-			wantCode: apperror.CodeInvalidArgument,
-		},
-		{
-			name:               "fails when the garage cannot be created",
-			req:                usecase.CreateGarageRequest{AccountID: "acc-1", Name: "Gara A"},
-			expectGarageCreate: true,
-			garageErr:          errors.New("boom"),
-			wantCode:           apperror.CodeInternal,
-		},
-		{
-			name:               "fails when the owner staff record cannot be created",
-			req:                usecase.CreateGarageRequest{AccountID: "acc-1", Name: "Gara A"},
-			expectGarageCreate: true,
-			expectStaffCreate:  true,
-			staffErr:           errors.New("boom"),
-			wantCode:           apperror.CodeInternal,
-		},
-		{
-			name:               "fails when the event cannot be published",
-			req:                usecase.CreateGarageRequest{AccountID: "acc-1", Name: "Gara A"},
-			withEvents:         true,
-			expectGarageCreate: true,
-			expectStaffCreate:  true,
-			expectPublish:      true,
-			publishErr:         errors.New("boom"),
-			wantCode:           apperror.CodeInternal,
-		},
+	for _, f := range []usecase.GarageFields{
+		{},
+		{Name: new(" ")},
+		{Name: new("G"), TaxCode: new("012345678901234567890")},
+		{Name: new("G"), Phone: new("012345678901234567890")},
+		{Name: new("G"), Email: new("nope")},
+		{Name: new("G"), Timezone: new("Mars/Base")},
+		{Name: new("G"), Currency: new("dong")},
+		{Name: new("G"), OperatingHours: &[]domain.DailyHours{{Day: 9}}},
+		{Name: new("G"), QuoteNumberTemplate: new("{SEQ}")},
+		{Name: new("G"), RepairOrderNumberTemplate: new("x")},
+	} {
+		_, err := e.UC.CreateGarage(ctx, owner, f)
+		requireReason(t, err, apperror.ReasonValidation)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			garages := mocks.NewMockGarageRepository(t)
-			staff := mocks.NewMockGarageStaffRepository(t)
-			events := mocks.NewMockEventPublisher(t)
+	e.Store.Fail["usage"] = errBoom
+	_, err := e.UC.CreateGarage(ctx, owner, usecase.GarageFields{Name: new("G")})
+	requireReason(t, err, apperror.ReasonInternal)
 
-			var publisher usecase.EventPublisher
-
-			if tt.withEvents {
-				publisher = events
-			}
-
-			uc := usecase.NewGarageUseCase(garages, staff, publisher)
-
-			if tt.expectGarageCreate {
-				garages.EXPECT().Create(mock.Anything, newGarageCreateMatcher(tt.req.AccountID, tt.req.Name)).Return(tt.garageErr).Once()
-			}
-
-			if tt.expectStaffCreate {
-				staff.EXPECT().Create(mock.Anything, newOwnerStaffCreateMatcher(tt.req.AccountID)).Return(tt.staffErr).Once()
-			}
-
-			if tt.expectPublish {
-				events.EXPECT().Publish(mock.Anything, "garage.created", mock.Anything, newCreatedEventMatcher(tt.req.AccountID)).Return(tt.publishErr).Once()
-			}
-
-			g, err := uc.Create(context.Background(), tt.req)
-			if tt.wantCode != "" {
-				assertAppError(t, err, tt.wantCode)
-				return
-			}
-
-			require.NoError(t, err)
-			require.NotNil(t, g)
-			assert.NotEmpty(t, g.ID)
-			assert.Equal(t, tt.wantTimezone, g.Timezone)
-			assert.Equal(t, tt.wantCurrency, g.Currency)
-		})
-	}
+	delete(e.Store.Fail, "usage")
+	e.Store.Fail["garage.create"] = errBoom
+	_, err = e.UC.CreateGarage(ctx, owner, usecase.GarageFields{Name: new("G")})
+	requireReason(t, err, apperror.ReasonInternal)
 }
 
-// txCtxMatcher matches contexts that carry an active transaction opened
-// by db.TxManager.WithTransaction.
-var txCtxMatcher = mock.MatchedBy(func(ctx context.Context) bool {
-	_, ok := ctx.Value(platformdb.TxKey{}).(pgx.Tx)
+func TestUpdateGarage(t *testing.T) {
+	t.Parallel()
 
-	return ok
-})
+	e := newEnv(t, limits{Garages: 1, Staff: 5})
+	id := e.garage(t)
+	ctx := e.as(t, owner, id)
 
-// TestGarageUseCase_CreateInTransaction covers the WithTransactionManager
-// option: Create must run every insert inside one tenant-scoped
-// transaction whose app.current_garage_id is the freshly generated garage
-// id -- otherwise the Row-Level Security policies block the writes.
-func TestGarageUseCase_CreateInTransaction(t *testing.T) {
-	t.Run("persists garage, owner, and event in one tenant-scoped transaction", func(t *testing.T) {
-		garages := mocks.NewMockGarageRepository(t)
-		staff := mocks.NewMockGarageStaffRepository(t)
-		events := mocks.NewMockEventPublisher(t)
-		connPool := mocks.NewMockConnPool(t)
-		tx := mocks.NewMockTx(t)
-		ctx := t.Context()
-
-		uc := usecase.NewGarageUseCase(garages, staff, events,
-			usecase.WithTransactionManager(platformdb.NewTxManager(platformdb.NewPool(t.Context(), connPool))))
-
-		var createdGarage *domain.Garage
-
-		var createdOwner *domain.GarageStaff
-
-		var setTenantIDs []string
-
-		connPool.EXPECT().Begin(ctx).Return(tx, nil).Once()
-
-		tx.EXPECT().Exec(ctx, platformdb.SetTenantSQL, mock.Anything).Run(func(_ context.Context, _ string, arguments ...any) {
-			if id, ok := arguments[0].(string); ok {
-				setTenantIDs = append(setTenantIDs, id)
-			}
-		}).Return(pgconn.CommandTag{}, nil).Once()
-
-		garages.EXPECT().Create(txCtxMatcher, mock.Anything).Run(func(_ context.Context, g *domain.Garage) {
-			createdGarage = g
-		}).Return(nil).Once()
-
-		staff.EXPECT().Create(txCtxMatcher, mock.Anything).Run(func(_ context.Context, s *domain.GarageStaff) {
-			createdOwner = s
-		}).Return(nil).Once()
-
-		events.EXPECT().Publish(txCtxMatcher, "garage.created", mock.Anything, newCreatedEventMatcher("acc-1")).Return(nil).Once()
-
-		tx.EXPECT().Commit(ctx).Return(nil).Once()
-
-		tx.EXPECT().Rollback(ctx).Return(pgx.ErrTxClosed).Once()
-
-		g, err := uc.Create(ctx, usecase.CreateGarageRequest{AccountID: "acc-1", Name: "Gara A"})
-
-		require.NoError(t, err)
-		require.NotNil(t, g)
-		require.NotNil(t, createdGarage)
-		require.NotNil(t, createdOwner)
-		assert.Equal(t, []string{g.ID}, setTenantIDs)
-		assert.Equal(t, g.ID, createdGarage.ID)
-		assert.Equal(t, g.ID, createdOwner.GarageID)
-		assert.Equal(t, domain.RoleOwner, createdOwner.Role)
+	hours := []domain.DailyHours{{Day: 1, Open: "07:00", Close: "19:00"}}
+	g, err := e.UC.UpdateGarage(ctx, id, usecase.GarageFields{
+		Timezone: new("Asia/Bangkok"), Currency: new(" usd "), OperatingHours: &hours,
+		QuoteNumberTemplate: new("Q-{SEQ:3}"), RepairOrderNumberTemplate: new("R-{YY}-{SEQ:5}"), Address: new(""),
 	})
+	require.NoError(t, err)
+	assert.Equal(t, "USD", g.Garage.Currency)
+	assert.Nil(t, g.Garage.Address)
+	assert.Equal(t, hours, g.Garage.OperatingHours)
+	assert.Equal(t, owner, *g.Garage.UpdatedBy)
 
-	t.Run("rolls back without committing when the garage insert fails", func(t *testing.T) {
-		garages := mocks.NewMockGarageRepository(t)
-		staff := mocks.NewMockGarageStaffRepository(t)
-		events := mocks.NewMockEventPublisher(t)
-		connPool := mocks.NewMockConnPool(t)
-		tx := mocks.NewMockTx(t)
-		ctx := t.Context()
+	g, err = e.UC.UpdateGarage(ctx, id, usecase.GarageFields{Status: new(domain.GarageStatusInactive)})
+	require.NoError(t, err)
+	assert.Equal(t, domain.GarageStatusInactive, g.Garage.Status)
 
-		uc := usecase.NewGarageUseCase(garages, staff, events,
-			usecase.WithTransactionManager(platformdb.NewTxManager(platformdb.NewPool(t.Context(), connPool))))
-		insertErr := errors.New("boom")
+	_, err = e.UC.UpdateGarage(ctx, id, usecase.GarageFields{Status: new(domain.GarageStatus("bogus"))})
+	requireReason(t, err, apperror.ReasonValidation)
 
-		connPool.EXPECT().Begin(ctx).Return(tx, nil).Once()
+	_, err = e.UC.UpdateGarage(ctx, id, usecase.GarageFields{Status: new(domain.GarageStatusActive)})
+	require.NoError(t, err, "reactivating within the limit")
 
-		tx.EXPECT().Exec(ctx, platformdb.SetTenantSQL, mock.Anything).Return(pgconn.CommandTag{}, nil).Once()
+	_, err = e.UC.UpdateGarage(e.as(t, staff, ""), id, usecase.GarageFields{Status: new(domain.GarageStatusInactive)})
+	requireReason(t, err, "OWNER_ONLY")
 
-		garages.EXPECT().Create(txCtxMatcher, mock.Anything).Return(insertErr).Once()
-		tx.EXPECT().Rollback(ctx).Return(nil).Once()
+	got, err := e.UC.GetGarage(ctx, id)
+	require.NoError(t, err)
+	assert.Equal(t, "Asia/Bangkok", got.Garage.Timezone)
 
-		g, err := uc.Create(ctx, usecase.CreateGarageRequest{AccountID: "acc-1", Name: "Gara A"})
+	_, err = e.UC.GetGarage(ctx, "missing")
+	requireReason(t, err, apperror.ReasonNotFound)
+	_, err = e.UC.UpdateGarage(ctx, "missing", usecase.GarageFields{})
+	requireReason(t, err, apperror.ReasonNotFound)
 
-		assertAppError(t, err, apperror.CodeInternal)
-		assert.Nil(t, g)
-		tx.AssertNotCalled(t, "Commit", ctx)
-		staff.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
-		events.AssertNotCalled(t, "Publish", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
-	})
+	e.Store.Fail["garage.update"] = errBoom
+	_, err = e.UC.UpdateGarage(ctx, id, usecase.GarageFields{})
+	requireReason(t, err, apperror.ReasonInternal)
 
-	t.Run("validates the request before opening any transaction", func(t *testing.T) {
-		garages := mocks.NewMockGarageRepository(t)
-		connPool := mocks.NewMockConnPool(t)
-
-		uc := usecase.NewGarageUseCase(garages, nil, nil,
-			usecase.WithTransactionManager(platformdb.NewTxManager(platformdb.NewPool(t.Context(), connPool))))
-
-		g, err := uc.Create(t.Context(), usecase.CreateGarageRequest{AccountID: "acc-1"})
-
-		assertAppError(t, err, apperror.CodeInvalidArgument)
-		assert.Nil(t, g)
-		connPool.AssertNotCalled(t, "Begin", mock.Anything)
-	})
+	delete(e.Store.Fail, "garage.update")
+	e.Audit.Err = errBoom
+	_, err = e.UC.UpdateGarage(ctx, id, usecase.GarageFields{})
+	requireReason(t, err, apperror.ReasonInternal)
 }
 
-// TestGarageUseCase_CreateMultipleGarages documents FR-TEN-01: one account
-// can own several independent garages, each with its own owner record and
-// its own event.
-func TestGarageUseCase_CreateMultipleGarages(t *testing.T) {
-	garages := mocks.NewMockGarageRepository(t)
-	staff := mocks.NewMockGarageStaffRepository(t)
-	events := mocks.NewMockEventPublisher(t)
-	uc := usecase.NewGarageUseCase(garages, staff, events)
+func TestReactivationRespectsLimit(t *testing.T) {
+	t.Parallel()
 
-	for _, garageName := range []string{"Gara A", "Gara B"} {
-		garages.EXPECT().Create(mock.Anything, mock.MatchedBy(func(g *domain.Garage) bool {
-			return g.Name == garageName && g.AccountID == "acc-1"
-		})).Return(nil).Once()
-		staff.EXPECT().Create(mock.Anything, newOwnerStaffCreateMatcher("acc-1")).Return(nil).Once()
-		events.EXPECT().Publish(mock.Anything, "garage.created", mock.Anything, mock.Anything).Return(nil).Once()
-	}
+	e := newEnv(t, limits{Garages: 1, Staff: 5})
+	first := e.garage(t)
+	ctx := e.as(t, owner, first)
 
-	g1, err := uc.Create(context.Background(), usecase.CreateGarageRequest{AccountID: "acc-1", Name: "Gara A"})
+	_, err := e.UC.UpdateGarage(ctx, first, usecase.GarageFields{Status: new(domain.GarageStatusInactive)})
 	require.NoError(t, err)
 
-	g2, err := uc.Create(context.Background(), usecase.CreateGarageRequest{AccountID: "acc-1", Name: "Gara B"})
+	second, err := e.UC.CreateGarage(e.as(t, owner, ""), owner, usecase.GarageFields{Name: new("Second")})
 	require.NoError(t, err)
+	require.NotNil(t, second)
 
-	assert.NotEqual(t, g1.ID, g2.ID)
+	_, err = e.UC.UpdateGarage(ctx, first, usecase.GarageFields{Status: new(domain.GarageStatusActive)})
+	requireReason(t, err, "PLAN_LIMIT_REACHED")
 }
 
-func TestGarageUseCase_List(t *testing.T) {
-	tests := []struct {
-		name      string
-		accountID string
-		garages   []*domain.Garage
-		listErr   error
-		wantCode  apperror.Code
+var png = []byte("\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01")
+
+func TestLogo(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t, limits{Garages: 1, Staff: 5})
+	id := e.garage(t)
+	ctx := e.as(t, owner, id)
+
+	g, err := e.UC.UploadGarageLogo(ctx, id, png, "IMAGE/PNG")
+	require.NoError(t, err)
+	require.NotNil(t, g.Garage.LogoURL)
+	first := *g.Garage.LogoURL
+
+	g, err = e.UC.UploadGarageLogo(ctx, id, png, "image/png")
+	require.NoError(t, err)
+	assert.NotEqual(t, first, *g.Garage.LogoURL)
+	assert.Len(t, e.Logos.Deleted, 1, "old logo removed")
+
+	g, err = e.UC.DeleteGarageLogo(ctx, id)
+	require.NoError(t, err)
+	assert.Nil(t, g.Garage.LogoURL)
+	assert.Len(t, e.Logos.Deleted, 2)
+
+	for _, tc := range []struct {
+		content []byte
+		kind    string
 	}{
-		{
-			name:      "returns garages for account",
-			accountID: "acc-1",
-			garages: []*domain.Garage{
-				{ID: "g-1", AccountID: "acc-1", Name: "Gara A", Status: domain.GarageStatusActive},
-				{ID: "g-2", AccountID: "acc-1", Name: "Gara B", Status: domain.GarageStatusActive},
-			},
-		},
-		{name: "returns nil list when account has no garages", accountID: "acc-2"},
-		{name: "fails when the garage list cannot be loaded", accountID: "acc-1", listErr: errors.New("boom"), wantCode: apperror.CodeInternal},
+		{png, "image/gif"},
+		{nil, "image/png"},
+		{[]byte("not an image"), "image/png"},
+		{make([]byte, usecase.MaxLogoBytes+1), "image/png"},
+	} {
+		_, err := e.UC.UploadGarageLogo(ctx, id, tc.content, tc.kind)
+		requireReason(t, err, domain.ReasonInvalidLogo)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			repo := mocks.NewMockGarageRepository(t)
-			uc := usecase.NewGarageUseCase(repo, nil, nil)
+	e.Logos.Err = errBoom
+	_, err = e.UC.UploadGarageLogo(ctx, id, png, "image/png")
+	requireReason(t, err, apperror.ReasonInternal)
 
-			repo.EXPECT().ListByAccountID(mock.Anything, tt.accountID).Return(tt.garages, tt.listErr).Once()
+	e.Logos.Err = nil
+	e.Store.Fail["garage.update"] = errBoom
+	_, err = e.UC.UploadGarageLogo(ctx, id, png, "image/png")
+	requireReason(t, err, apperror.ReasonInternal)
 
-			result, err := uc.List(context.Background(), tt.accountID)
-			if tt.wantCode != "" {
-				assertAppError(t, err, tt.wantCode)
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.garages, result)
-		})
-	}
+	_, err = e.UC.DeleteGarageLogo(ctx, "missing")
+	requireReason(t, err, apperror.ReasonNotFound)
 }
 
-func TestGarageUseCase_Get(t *testing.T) {
-	tests := []struct {
-		name     string
-		garageID string
-		garage   *domain.Garage
-		findErr  error
-		wantCode apperror.Code
-	}{
-		{
-			name:     "returns the garage",
-			garageID: "g-1",
-			garage:   &domain.Garage{ID: "g-1", AccountID: "acc-1", Name: "Gara A", Status: domain.GarageStatusActive},
-		},
-		{name: "returns not found for a missing garage", garageID: "missing-garage", findErr: domain.ErrGarageNotFound, wantCode: apperror.CodeNotFound},
-	}
+func TestListGaragesFailures(t *testing.T) {
+	t.Parallel()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			repo := mocks.NewMockGarageRepository(t)
-			uc := usecase.NewGarageUseCase(repo, nil, nil)
+	e := newEnv(t, limits{Garages: 1, Staff: 5})
+	e.garage(t)
 
-			repo.EXPECT().FindByID(mock.Anything, tt.garageID).Return(tt.garage, tt.findErr).Once()
+	e.Store.Fail["access"] = errBoom
+	_, err := e.UC.ListGarages(t.Context(), owner)
+	requireReason(t, err, apperror.ReasonInternal)
 
-			g, err := uc.Get(context.Background(), tt.garageID)
-			if tt.wantCode != "" {
-				assertAppError(t, err, tt.wantCode)
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.garage, g)
-		})
-	}
-}
-
-func TestGarageUseCase_UpdateStatus(t *testing.T) {
-	t.Run("deactivates and reactivates a garage", func(t *testing.T) {
-		repo := mocks.NewMockGarageRepository(t)
-		uc := usecase.NewGarageUseCase(repo, nil, nil)
-
-		repo.EXPECT().FindByID(mock.Anything, "g-1").Return(testGarage(), nil).Once()
-		repo.EXPECT().Update(mock.Anything, mock.MatchedBy(func(g *domain.Garage) bool {
-			return g.ID == "g-1" && g.Status == domain.GarageStatusInactive
-		})).Return(nil).Once()
-
-		g, err := uc.Update(context.Background(), usecase.UpdateGarageRequest{
-			GarageID: "g-1", Status: new(domain.GarageStatusInactive),
-		})
-		require.NoError(t, err)
-		assert.Equal(t, domain.GarageStatusInactive, g.Status)
-	})
-
-	t.Run("rejects an invalid status", func(t *testing.T) {
-		repo := mocks.NewMockGarageRepository(t)
-		uc := usecase.NewGarageUseCase(repo, nil, nil)
-
-		repo.EXPECT().FindByID(mock.Anything, "g-1").Return(testGarage(), nil).Once()
-
-		_, err := uc.Update(context.Background(), usecase.UpdateGarageRequest{
-			GarageID: "g-1", Status: new(domain.GarageStatus("archived")),
-		})
-		assertAppError(t, err, apperror.CodeInvalidArgument)
-	})
-}
-
-func TestGarageUseCase_Update(t *testing.T) {
-	tests := []struct {
-		name         string
-		req          usecase.UpdateGarageRequest
-		findErr      error
-		expectUpdate bool
-		updateErr    error
-		checkUpdate  func(*domain.Garage) bool
-		wantCode     apperror.Code
-	}{
-		{
-			name: "updates every field on an existing garage",
-			req: usecase.UpdateGarageRequest{
-				GarageID: "g-1",
-				Name:     new("Updated Gara"),
-				TaxCode:  new("TAX-123"),
-				Address:  new("123 Main St"),
-				LogoURL:  new("https://cdn.example.com/logo.png"),
-				Timezone: new("Asia/Tokyo"),
-				Currency: new("JPY"),
-			},
-			expectUpdate: true,
-			checkUpdate: func(g *domain.Garage) bool {
-				return g.ID == "g-1" && g.Name == "Updated Gara" &&
-					g.TaxCode != nil && *g.TaxCode == "TAX-123" &&
-					g.Address != nil && *g.Address == "123 Main St" &&
-					g.LogoURL != nil && *g.LogoURL == "https://cdn.example.com/logo.png" &&
-					g.Timezone == "Asia/Tokyo" && g.Currency == "JPY"
-			},
-		},
-		{
-			name:         "empty request leaves the garage unchanged",
-			req:          usecase.UpdateGarageRequest{GarageID: "g-1"},
-			expectUpdate: true,
-			checkUpdate: func(g *domain.Garage) bool {
-				return g.ID == "g-1" && g.Name == "Old name" &&
-					g.TaxCode == nil && g.Address == nil && g.LogoURL == nil &&
-					g.Timezone == "Asia/Ho_Chi_Minh" && g.Currency == "VND"
-			},
-		},
-		{
-			name:     "returns not found when the garage is missing",
-			req:      usecase.UpdateGarageRequest{GarageID: "missing-garage"},
-			findErr:  domain.ErrGarageNotFound,
-			wantCode: apperror.CodeNotFound,
-		},
-		{
-			name:         "fails when the update is rejected",
-			req:          usecase.UpdateGarageRequest{GarageID: "g-1", Name: new("Updated Gara")},
-			expectUpdate: true,
-			updateErr:    errors.New("boom"),
-			checkUpdate:  func(*domain.Garage) bool { return true },
-			wantCode:     apperror.CodeInternal,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			repo := mocks.NewMockGarageRepository(t)
-			uc := usecase.NewGarageUseCase(repo, nil, nil)
-
-			repo.EXPECT().FindByID(mock.Anything, tt.req.GarageID).Return(testGarage(), tt.findErr).Once()
-
-			if tt.expectUpdate {
-				repo.EXPECT().Update(mock.Anything, mock.MatchedBy(tt.checkUpdate)).Return(tt.updateErr).Once()
-			}
-
-			g, err := uc.Update(context.Background(), tt.req)
-			if tt.wantCode != "" {
-				assertAppError(t, err, tt.wantCode)
-				return
-			}
-
-			require.NoError(t, err)
-			require.NotNil(t, g)
-			assert.True(t, tt.checkUpdate(g))
-		})
-	}
+	e.Store.Fail["garage.list"] = errBoom
+	_, err = e.UC.ListGarages(t.Context(), owner)
+	requireReason(t, err, apperror.ReasonInternal)
 }

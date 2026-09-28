@@ -163,6 +163,74 @@ func (_c *MockAccountRepository_FindByEmail_Call) RunAndReturn(run func(ctx cont
 	return _c
 }
 
+// FindByGoogleSubject provides a mock function for the type MockAccountRepository
+func (_mock *MockAccountRepository) FindByGoogleSubject(ctx context.Context, subject string) (*domain.Account, error) {
+	ret := _mock.Called(ctx, subject)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindByGoogleSubject")
+	}
+
+	var r0 *domain.Account
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (*domain.Account, error)); ok {
+		return returnFunc(ctx, subject)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) *domain.Account); ok {
+		r0 = returnFunc(ctx, subject)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*domain.Account)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, subject)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockAccountRepository_FindByGoogleSubject_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindByGoogleSubject'
+type MockAccountRepository_FindByGoogleSubject_Call struct {
+	*mock.Call
+}
+
+// FindByGoogleSubject is a helper method to define mock.On call
+//   - ctx context.Context
+//   - subject string
+func (_e *MockAccountRepository_Expecter) FindByGoogleSubject(ctx any, subject any) *MockAccountRepository_FindByGoogleSubject_Call {
+	return &MockAccountRepository_FindByGoogleSubject_Call{Call: _e.mock.On("FindByGoogleSubject", ctx, subject)}
+}
+
+func (_c *MockAccountRepository_FindByGoogleSubject_Call) Run(run func(ctx context.Context, subject string)) *MockAccountRepository_FindByGoogleSubject_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockAccountRepository_FindByGoogleSubject_Call) Return(account *domain.Account, err error) *MockAccountRepository_FindByGoogleSubject_Call {
+	_c.Call.Return(account, err)
+	return _c
+}
+
+func (_c *MockAccountRepository_FindByGoogleSubject_Call) RunAndReturn(run func(ctx context.Context, subject string) (*domain.Account, error)) *MockAccountRepository_FindByGoogleSubject_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // FindByID provides a mock function for the type MockAccountRepository
 func (_mock *MockAccountRepository) FindByID(ctx context.Context, id string) (*domain.Account, error) {
 	ret := _mock.Called(ctx, id)
@@ -227,74 +295,6 @@ func (_c *MockAccountRepository_FindByID_Call) Return(account *domain.Account, e
 }
 
 func (_c *MockAccountRepository_FindByID_Call) RunAndReturn(run func(ctx context.Context, id string) (*domain.Account, error)) *MockAccountRepository_FindByID_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// FindByIdentityPlatformUID provides a mock function for the type MockAccountRepository
-func (_mock *MockAccountRepository) FindByIdentityPlatformUID(ctx context.Context, uid string) (*domain.Account, error) {
-	ret := _mock.Called(ctx, uid)
-
-	if len(ret) == 0 {
-		panic("no return value specified for FindByIdentityPlatformUID")
-	}
-
-	var r0 *domain.Account
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (*domain.Account, error)); ok {
-		return returnFunc(ctx, uid)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) *domain.Account); ok {
-		r0 = returnFunc(ctx, uid)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*domain.Account)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, uid)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockAccountRepository_FindByIdentityPlatformUID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindByIdentityPlatformUID'
-type MockAccountRepository_FindByIdentityPlatformUID_Call struct {
-	*mock.Call
-}
-
-// FindByIdentityPlatformUID is a helper method to define mock.On call
-//   - ctx context.Context
-//   - uid string
-func (_e *MockAccountRepository_Expecter) FindByIdentityPlatformUID(ctx any, uid any) *MockAccountRepository_FindByIdentityPlatformUID_Call {
-	return &MockAccountRepository_FindByIdentityPlatformUID_Call{Call: _e.mock.On("FindByIdentityPlatformUID", ctx, uid)}
-}
-
-func (_c *MockAccountRepository_FindByIdentityPlatformUID_Call) Run(run func(ctx context.Context, uid string)) *MockAccountRepository_FindByIdentityPlatformUID_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockAccountRepository_FindByIdentityPlatformUID_Call) Return(account *domain.Account, err error) *MockAccountRepository_FindByIdentityPlatformUID_Call {
-	_c.Call.Return(account, err)
-	return _c
-}
-
-func (_c *MockAccountRepository_FindByIdentityPlatformUID_Call) RunAndReturn(run func(ctx context.Context, uid string) (*domain.Account, error)) *MockAccountRepository_FindByIdentityPlatformUID_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -367,65 +367,125 @@ func (_c *MockAccountRepository_FindByPhone_Call) RunAndReturn(run func(ctx cont
 	return _c
 }
 
-// UpdatePasswordHash provides a mock function for the type MockAccountRepository
-func (_mock *MockAccountRepository) UpdatePasswordHash(ctx context.Context, accountID string, hash string) error {
-	ret := _mock.Called(ctx, accountID, hash)
+// GrantPlatformAdmins provides a mock function for the type MockAccountRepository
+func (_mock *MockAccountRepository) GrantPlatformAdmins(ctx context.Context, emails []string) (int, error) {
+	ret := _mock.Called(ctx, emails)
 
 	if len(ret) == 0 {
-		panic("no return value specified for UpdatePasswordHash")
+		panic("no return value specified for GrantPlatformAdmins")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []string) (int, error)); ok {
+		return returnFunc(ctx, emails)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []string) int); ok {
+		r0 = returnFunc(ctx, emails)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, []string) error); ok {
+		r1 = returnFunc(ctx, emails)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockAccountRepository_GrantPlatformAdmins_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GrantPlatformAdmins'
+type MockAccountRepository_GrantPlatformAdmins_Call struct {
+	*mock.Call
+}
+
+// GrantPlatformAdmins is a helper method to define mock.On call
+//   - ctx context.Context
+//   - emails []string
+func (_e *MockAccountRepository_Expecter) GrantPlatformAdmins(ctx any, emails any) *MockAccountRepository_GrantPlatformAdmins_Call {
+	return &MockAccountRepository_GrantPlatformAdmins_Call{Call: _e.mock.On("GrantPlatformAdmins", ctx, emails)}
+}
+
+func (_c *MockAccountRepository_GrantPlatformAdmins_Call) Run(run func(ctx context.Context, emails []string)) *MockAccountRepository_GrantPlatformAdmins_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 []string
+		if args[1] != nil {
+			arg1 = args[1].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockAccountRepository_GrantPlatformAdmins_Call) Return(n int, err error) *MockAccountRepository_GrantPlatformAdmins_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockAccountRepository_GrantPlatformAdmins_Call) RunAndReturn(run func(ctx context.Context, emails []string) (int, error)) *MockAccountRepository_GrantPlatformAdmins_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Update provides a mock function for the type MockAccountRepository
+func (_mock *MockAccountRepository) Update(ctx context.Context, acc *domain.Account) error {
+	ret := _mock.Called(ctx, acc)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Update")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
-		r0 = returnFunc(ctx, accountID, hash)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.Account) error); ok {
+		r0 = returnFunc(ctx, acc)
 	} else {
 		r0 = ret.Error(0)
 	}
 	return r0
 }
 
-// MockAccountRepository_UpdatePasswordHash_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdatePasswordHash'
-type MockAccountRepository_UpdatePasswordHash_Call struct {
+// MockAccountRepository_Update_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Update'
+type MockAccountRepository_Update_Call struct {
 	*mock.Call
 }
 
-// UpdatePasswordHash is a helper method to define mock.On call
+// Update is a helper method to define mock.On call
 //   - ctx context.Context
-//   - accountID string
-//   - hash string
-func (_e *MockAccountRepository_Expecter) UpdatePasswordHash(ctx any, accountID any, hash any) *MockAccountRepository_UpdatePasswordHash_Call {
-	return &MockAccountRepository_UpdatePasswordHash_Call{Call: _e.mock.On("UpdatePasswordHash", ctx, accountID, hash)}
+//   - acc *domain.Account
+func (_e *MockAccountRepository_Expecter) Update(ctx any, acc any) *MockAccountRepository_Update_Call {
+	return &MockAccountRepository_Update_Call{Call: _e.mock.On("Update", ctx, acc)}
 }
 
-func (_c *MockAccountRepository_UpdatePasswordHash_Call) Run(run func(ctx context.Context, accountID string, hash string)) *MockAccountRepository_UpdatePasswordHash_Call {
+func (_c *MockAccountRepository_Update_Call) Run(run func(ctx context.Context, acc *domain.Account)) *MockAccountRepository_Update_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
-		var arg1 string
+		var arg1 *domain.Account
 		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
+			arg1 = args[1].(*domain.Account)
 		}
 		run(
 			arg0,
 			arg1,
-			arg2,
 		)
 	})
 	return _c
 }
 
-func (_c *MockAccountRepository_UpdatePasswordHash_Call) Return(err error) *MockAccountRepository_UpdatePasswordHash_Call {
+func (_c *MockAccountRepository_Update_Call) Return(err error) *MockAccountRepository_Update_Call {
 	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *MockAccountRepository_UpdatePasswordHash_Call) RunAndReturn(run func(ctx context.Context, accountID string, hash string) error) *MockAccountRepository_UpdatePasswordHash_Call {
+func (_c *MockAccountRepository_Update_Call) RunAndReturn(run func(ctx context.Context, acc *domain.Account) error) *MockAccountRepository_Update_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -16,7 +16,7 @@ import (
 
 const (
 	MIGRATIONS_PATH           = "file://migrations"
-	MIGRATION_CURRENT_VERSION = 7
+	MIGRATION_CURRENT_VERSION = 13
 
 	POSTGRES_TEST_DB       = "vietgara_test"
 	POSTGRES_TEST_USER     = "postgres"
@@ -138,7 +138,7 @@ func (s *MigrationsTestSuite) SetupSuite() {
 	for _, statement := range []string{
 		"CREATE ROLE " + rlsTestRole + " NOLOGIN NOSUPERUSER NOBYPASSRLS",
 		"GRANT USAGE ON SCHEMA public TO " + rlsTestRole,
-		"GRANT SELECT ON garages, garage_staff TO " + rlsTestRole,
+		"GRANT SELECT ON ALL TABLES IN SCHEMA public TO " + rlsTestRole,
 	} {
 		_, err = s.pgContainer.DB.ExecContext(s.ctx, statement)
 		s.Require().NoError(err)
@@ -308,8 +308,8 @@ func (s *MigrationsTestSuite) TestRLS_GarageStaffRowLevelSecurity() {
 	s.Require().NoError(err)
 
 	insertStaff := fmt.Sprintf(
-		`INSERT INTO garage_staff (id, garage_id, account_id, role, status)
-		 VALUES ('%s', '%s', '%s', 'owner', 'active')`,
+		`INSERT INTO garage_staff (id, garage_id, account_id, status)
+		 VALUES ('%s', '%s', '%s', 'active')`,
 		staffID, garageID, accountID,
 	)
 	_, err = s.pgContainer.DB.ExecContext(s.ctx, insertStaff)
@@ -331,11 +331,11 @@ func (s *MigrationsTestSuite) TestRLS_GarageStaffRowLevelSecurity() {
 	s.Require().NoError(err)
 	s.Equalf(1, count, "expected 1 row with session variable")
 
-	var role string
+	var status string
 
-	err = rlsConn.QueryRowContext(s.ctx, "SELECT role FROM garage_staff").Scan(&role)
+	err = rlsConn.QueryRowContext(s.ctx, "SELECT status FROM garage_staff").Scan(&status)
 	s.Require().NoError(err)
-	s.Equalf("owner", role, "expected staff role to be 'owner'")
+	s.Equalf("active", status, "expected staff status to be 'active'")
 }
 
 func (s *MigrationsTestSuite) TestRLS_SessionVariableHandling() {
@@ -517,6 +517,23 @@ func (s *MigrationsTestSuite) TestForceMigrationVersion() {
 			s.False(dirty, "expected migration state not dirty after Force")
 		})
 	}
+}
+
+func (s *MigrationsTestSuite) TestEnsureAppLogin() {
+	s.Require().NoError(db.EnsureAppLogin(s.pgContainer.ConnStr, "vietgara_local", "pa'ss"))
+	s.Require().NoError(db.EnsureAppLogin(s.pgContainer.ConnStr, "vietgara_local", "rotated"), "idempotent")
+
+	var bypass, member bool
+
+	err := s.pgContainer.DB.QueryRowContext(s.ctx, `
+		SELECT r.rolbypassrls, pg_has_role(r.oid, 'vietgara_app', 'member')
+		FROM pg_roles r WHERE r.rolname = 'vietgara_local'`).Scan(&bypass, &member)
+	s.Require().NoError(err)
+	s.False(bypass)
+	s.True(member)
+
+	s.Require().Error(db.EnsureAppLogin(s.pgContainer.ConnStr, "Bad-Name", "x"))
+	s.Require().Error(db.EnsureAppLogin("postgres://nobody@127.0.0.1:1/x?sslmode=disable&connect_timeout=1", "ok_name", "x"))
 }
 
 func TestMigrationsSuite(t *testing.T) {

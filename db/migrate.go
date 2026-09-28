@@ -2,12 +2,16 @@
 package db
 
 import (
+	"context"
+	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres" // Register the PostgreSQL migration driver.
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	_ "github.com/lib/pq" // database/sql driver for EnsureAppLogin.
 )
 
 // RunMigrations runs all pending migrations
@@ -93,4 +97,61 @@ func ForceMigrationVersion(connectionString, migrationsPath string, version int)
 	}
 
 	return nil
+}
+
+// EnsureAppLogin creates (or updates the password of) the LOGIN role the
+// backend connects as and makes it a member of vietgara_app, the
+// NOBYPASSRLS role the migrations grant privileges to. For local and CI
+// environments; staging and production manage database users with
+// Terraform. connectionString must belong to a role allowed to create
+// roles (the migration owner).
+func EnsureAppLogin(connectionString, user, password string) error {
+	if !validRoleName(user) {
+		return fmt.Errorf("invalid database user name %q", user)
+	}
+
+	conn, err := sql.Open("postgres", connectionString)
+	if err != nil {
+		return fmt.Errorf("open database: %w", err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	quotedPassword := "'" + strings.ReplaceAll(password, "'", "''") + "'"
+
+	// DDL takes no bind parameters: the role name is validated above and the
+	// password is quoted as a SQL literal.
+	//nolint:gosec // G201: identifiers cannot be bound; inputs are validated/quoted above.
+	statement := fmt.Sprintf(`DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '%[1]s') THEN
+        CREATE ROLE %[1]s LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD %[2]s;
+    ELSE
+        ALTER ROLE %[1]s WITH LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD %[2]s;
+    END IF;
+    GRANT vietgara_app TO %[1]s;
+END
+$$;`, user, quotedPassword)
+
+	if _, err := conn.ExecContext(context.Background(), statement); err != nil {
+		return fmt.Errorf("ensure database user %s: %w", user, err)
+	}
+
+	return nil
+}
+
+func validRoleName(name string) bool {
+	if name == "" || len(name) > 63 {
+		return false
+	}
+
+	for i, r := range name {
+		switch {
+		case r == '_', r >= 'a' && r <= 'z':
+		case r >= '0' && r <= '9' && i > 0:
+		default:
+			return false
+		}
+	}
+
+	return true
 }

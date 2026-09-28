@@ -3,6 +3,7 @@ package handler
 import (
 	"math"
 
+	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/customer/domain"
@@ -113,8 +114,8 @@ func partnerTypeFromProto(t customerv1.PartnerType) domain.PartnerType {
 	}
 }
 
-func paginationToProto[T any](p *usecase.Page[T]) *customerv1.Pagination {
-	return &customerv1.Pagination{Total: toInt32(p.Total), Page: toInt32(p.Page), PageSize: toInt32(p.PageSize)}
+func paginationToProto[T any](p *usecase.Page[T]) *commonv1.Pagination {
+	return &commonv1.Pagination{Total: toInt32(p.Total), Page: toInt32(p.Page), PageSize: toInt32(p.PageSize)}
 }
 
 func pageRequest(page, pageSize int32) usecase.PageRequest {

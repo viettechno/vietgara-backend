@@ -1,55 +1,34 @@
 package middleware_test
 
 import (
-	"net/http"
-	"net/http/httptest"
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/metadata"
+
 	"github.com/viettechno/vietgara-backend/internal/middleware"
 )
 
-func TestHTTPAuth(t *testing.T) {
+// TestClientIP covers the request metadata forwarded by the REST gateway.
+func TestClientIP(t *testing.T) {
 	t.Parallel()
 
-	issuer := newTestIssuer(t)
-	validToken := issueToken(t, issuer, "acc-1", nil)
-
 	tests := []struct {
-		name       string
-		authHeader string
-		wantStatus int
+		name string
+		ctx  context.Context
+		want string
 	}{
-		{name: "missing header", authHeader: "", wantStatus: http.StatusUnauthorized},
-		{name: "missing bearer prefix", authHeader: "Token abc", wantStatus: http.StatusUnauthorized},
-		{name: "header shorter than prefix", authHeader: "Bear", wantStatus: http.StatusUnauthorized},
-		{name: "invalid token", authHeader: "Bearer not-a-jwt", wantStatus: http.StatusUnauthorized},
-		{name: "valid token", authHeader: "Bearer " + validToken, wantStatus: http.StatusOK},
+		{name: "no metadata", ctx: context.Background()},
+		{name: "no header", ctx: metadata.NewIncomingContext(context.Background(), metadata.Pairs("a", "b"))},
+		{name: "single address", ctx: metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-forwarded-for", " 10.0.0.1 ")), want: "10.0.0.1"},
+		{name: "proxy chain", ctx: metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-forwarded-for", "1.2.3.4, 10.0.0.1")), want: "1.2.3.4"},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-
-			var gotClaims bool
-
-			next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				_, gotClaims = middleware.ClaimsFromContext(r.Context())
-
-				w.WriteHeader(http.StatusOK)
-			})
-
-			req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/protected", nil)
-			if tc.authHeader != "" {
-				req.Header.Set("Authorization", tc.authHeader)
-			}
-
-			rec := httptest.NewRecorder()
-			middleware.HTTPAuth(issuer, next).ServeHTTP(rec, req)
-
-			require.Equal(t, tc.wantStatus, rec.Code)
-			assert.Equal(t, tc.wantStatus == http.StatusOK, gotClaims)
+			assert.Equal(t, tt.want, middleware.ClientIP(tt.ctx))
 		})
 	}
 }

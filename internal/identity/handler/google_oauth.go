@@ -1,24 +1,30 @@
 package handler
 
 import (
-	"context"
-	"crypto/rand"
-	"encoding/base64"
 	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 
-	"github.com/viettechno/vietgara-backend/internal/identity/domain"
-	"github.com/viettechno/vietgara-backend/internal/identity/usecase"
 	"google.golang.org/protobuf/encoding/protojson"
+
+	"github.com/viettechno/vietgara-backend/internal/platform/auth"
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-const googleStateCookie = "vietgara_google_oauth_state"
+const (
+	googleStateCookie = "vietgara_google_oauth_state"
+	popupErrorKey     = "error"
+)
+
+// Popup error codes posted to the web admin.
+const (
+	googleErrorNotConfigured = "GOOGLE_NOT_CONFIGURED"
+	googleErrorState         = "GOOGLE_STATE_INVALID"
+	googleErrorDenied        = "GOOGLE_DENIED"
+	googleErrorExchange      = "GOOGLE_EXCHANGE_FAILED"
+)
 
 // GoogleOAuthConfig contains the provider endpoints and the public callback.
 // Client credentials must come from environment or secret management.
@@ -32,212 +38,99 @@ type GoogleOAuthConfig struct {
 	FrontendOrigin string
 }
 
-type googleTokenResponse struct {
-	AccessToken string `json:"access_token"`
+func (c GoogleOAuthConfig) configured() bool {
+	return c.ClientID != "" && c.ClientSecret != "" && c.RedirectURI != ""
 }
 
-type googleUserInfo struct {
-	Sub   string `json:"sub"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
-}
-
+// googleLogin starts the authorization-code flow in the sign-in popup.
 func (s *Server) googleLogin(w http.ResponseWriter, r *http.Request) {
-	config, ok := s.googleConfig(w)
-	if !ok {
+	if !s.googleOAuth.configured() {
+		s.writeGooglePopup(w, map[string]any{popupErrorKey: googleErrorNotConfigured})
+
 		return
 	}
 
-	state, err := randomState()
-	if err != nil {
-		http.Error(w, "unable to start Google login", http.StatusInternalServerError)
-		return
-	}
-
+	state := auth.NewOpaqueToken()
 	http.SetCookie(w, &http.Cookie{
-		Name:     googleStateCookie,
-		Value:    state,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   true,
+		Name: googleStateCookie, Value: state, Path: "/", MaxAge: 600,
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: true,
 	})
 
 	query := url.Values{
-		"client_id": {config.ClientID}, "redirect_uri": {config.RedirectURI},
+		"client_id": {s.googleOAuth.ClientID}, "redirect_uri": {s.googleOAuth.RedirectURI},
 		"response_type": {"code"}, "scope": {"openid email profile"},
-		"state": {state}, "access_type": {"offline"}, "prompt": {"select_account"},
+		"state": {state}, "prompt": {"select_account"},
 	}
-	http.Redirect(w, r, config.AuthEndpoint+"?"+query.Encode(), http.StatusFound)
+	http.Redirect(w, r, s.googleOAuth.AuthEndpoint+"?"+query.Encode(), http.StatusFound)
 }
 
+// googleCallback finishes the flow and posts the session (or an error
+// code) to the web admin window that opened the popup.
 func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
-	config, ok := s.googleConfig(w)
-	if !ok {
+	if !s.googleOAuth.configured() {
+		s.writeGooglePopup(w, map[string]any{popupErrorKey: googleErrorNotConfigured})
+
 		return
 	}
 
 	stateCookie, err := r.Cookie(googleStateCookie)
-	if err != nil || stateCookie.Value == "" || stateCookie.Value != r.URL.Query().Get("state") {
-		http.Error(w, "invalid OAuth state", http.StatusBadRequest)
-		return
-	}
-
 	http.SetCookie(w, &http.Cookie{
-		Name:     googleStateCookie,
-		Value:    "",
-		Path:     "/",
-		MaxAge:   -1,
-		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
-		Secure:   true,
+		Name: googleStateCookie, Value: "", Path: "/", MaxAge: -1,
+		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: true,
 	})
 
-	if providerError := r.URL.Query().Get("error"); providerError != "" {
-		http.Error(w, "Google authorization failed: "+providerError, http.StatusBadRequest)
+	if err != nil || stateCookie.Value == "" || stateCookie.Value != r.URL.Query().Get("state") {
+		s.writeGooglePopup(w, map[string]any{popupErrorKey: googleErrorState})
+
 		return
 	}
 
 	code := r.URL.Query().Get("code")
-	if code == "" {
-		http.Error(w, "missing authorization code", http.StatusBadRequest)
+	if r.URL.Query().Get("error") != "" || code == "" {
+		s.writeGooglePopup(w, map[string]any{popupErrorKey: googleErrorDenied})
+
 		return
 	}
 
-	profile, err := exchangeGoogleCode(r.Context(), config, code)
+	profile, err := exchangeGoogleCode(r.Context(), s.googleOAuth, code)
 	if err != nil {
-		http.Error(w, "Google token exchange failed", http.StatusBadGateway)
+		s.writeGooglePopup(w, map[string]any{popupErrorKey: googleErrorExchange})
+
 		return
 	}
 
-	result, err := s.uc.SocialLogin(r.Context(), usecase.VerifiedSocialProfile{
-		IdentityPlatformUID: profile.Sub,
-		Provider:            domain.AuthProviderGoogle,
-		Email:               optionalString(profile.Email),
-		FullName:            profile.Name,
-	})
+	session, err := s.uc.GoogleLogin(r.Context(), profile)
 	if err != nil {
-		writeGRPCHTTPError(w, err)
+		s.writeGooglePopup(w, map[string]any{popupErrorKey: apperror.ReasonOf(err)})
+
 		return
 	}
 
-	authJSON, err := protojson.Marshal(s.authToProto(result))
+	sessionJSON, err := protojson.MarshalOptions{EmitDefaultValues: true}.Marshal(s.sessionToProto(session))
 	if err != nil {
-		http.Error(w, "unable to create session", http.StatusInternalServerError)
+		s.writeGooglePopup(w, map[string]any{popupErrorKey: apperror.ReasonInternal})
+
 		return
 	}
 
-	writeGooglePopupResponse(w, config.FrontendOrigin, authJSON)
+	s.writeGooglePopup(w, map[string]any{"session": json.RawMessage(sessionJSON)})
 }
 
-func (s *Server) googleConfig(w http.ResponseWriter) (GoogleOAuthConfig, bool) {
-	if s.googleOAuth == nil || s.googleOAuth.ClientID == "" || s.googleOAuth.ClientSecret == "" || s.googleOAuth.RedirectURI == "" {
-		http.Error(w, "Google login is not configured", http.StatusNotImplemented)
-		return GoogleOAuthConfig{}, false
-	}
-
-	return *s.googleOAuth, true
-}
-
-func exchangeGoogleCode(ctx context.Context, config GoogleOAuthConfig, code string) (googleUserInfo, error) {
-	token, err := fetchGoogleToken(ctx, config, code)
-	if err != nil {
-		return googleUserInfo{}, err
-	}
-
-	profile, err := fetchGoogleUserInfo(ctx, config, token.AccessToken)
-	if err != nil {
-		return googleUserInfo{}, err
-	}
-
-	if profile.Sub == "" || profile.Name == "" {
-		return googleUserInfo{}, errors.New("google profile is missing required fields")
-	}
-
-	return profile, nil
-}
-
-func fetchGoogleToken(ctx context.Context, config GoogleOAuthConfig, code string) (googleTokenResponse, error) {
-	form := url.Values{
-		"code": {code}, "client_id": {config.ClientID}, "client_secret": {config.ClientSecret},
-		"redirect_uri": {config.RedirectURI}, "grant_type": {"authorization_code"},
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, config.TokenEndpoint, strings.NewReader(form.Encode()))
-	if err != nil {
-		return googleTokenResponse{}, err
-	}
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return googleTokenResponse{}, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return googleTokenResponse{}, fmt.Errorf("token endpoint returned %s", resp.Status)
-	}
-
-	var token googleTokenResponse
-	if err := json.NewDecoder(resp.Body).Decode(&token); err != nil || token.AccessToken == "" {
-		return googleTokenResponse{}, errors.New("invalid token response")
-	}
-
-	return token, nil
-}
-
-func fetchGoogleUserInfo(ctx context.Context, config GoogleOAuthConfig, accessToken string) (googleUserInfo, error) {
-	userinfoReq, err := http.NewRequestWithContext(ctx, http.MethodGet, config.UserInfoURL, nil)
-	if err != nil {
-		return googleUserInfo{}, err
-	}
-
-	userinfoReq.Header.Set("Authorization", "Bearer "+accessToken)
-
-	userinfoResp, err := http.DefaultClient.Do(userinfoReq)
-	if err != nil {
-		return googleUserInfo{}, err
-	}
-	defer func() { _ = userinfoResp.Body.Close() }()
-
-	if userinfoResp.StatusCode < http.StatusOK || userinfoResp.StatusCode >= http.StatusMultipleChoices {
-		return googleUserInfo{}, fmt.Errorf("userinfo endpoint returned %s", userinfoResp.Status)
-	}
-
-	var profile googleUserInfo
-	if err := json.NewDecoder(io.LimitReader(userinfoResp.Body, 1<<20)).Decode(&profile); err != nil {
-		return googleUserInfo{}, err
-	}
-
-	return profile, nil
-}
-
-func randomState() (string, error) {
-	value := make([]byte, 32)
-	if _, err := rand.Read(value); err != nil {
-		return "", err
-	}
-
-	return base64.RawURLEncoding.EncodeToString(value), nil
-}
-
-func optionalString(value string) *string {
-	if value == "" {
-		return nil
-	}
-
-	return &value
-}
-
-func writeGooglePopupResponse(w http.ResponseWriter, origin string, authJSON []byte) {
+// writeGooglePopup posts {type: "vietgara-google-auth", ...payload} to the
+// opener (restricted to the web admin origin) and closes the popup.
+func (s *Server) writeGooglePopup(w http.ResponseWriter, payload map[string]any) {
+	origin := s.googleOAuth.FrontendOrigin
 	if origin == "" {
 		origin = "http://localhost:8000"
 	}
 
-	page := `<!doctype html><meta charset="utf-8"><title>Google login</title><script>window.opener.postMessage({type:"vietgara-google-auth",auth:JSON.parse(` + strconv.Quote(string(authJSON)) + `)},` + strconv.Quote(origin) + `);window.close();</script>`
+	payload["type"] = "vietgara-google-auth"
+	message, _ := json.Marshal(payload)
+
+	page := `<!doctype html><meta charset="utf-8"><title>Google</title><script>` +
+		`if(window.opener){window.opener.postMessage(` + string(message) + `,` + strconv.Quote(origin) + `);}window.close();</script>`
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-store")
 	_, _ = io.WriteString(w, page)
 }

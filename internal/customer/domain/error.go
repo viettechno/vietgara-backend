@@ -24,7 +24,4 @@ var (
 	ErrPhoneTaken        = errors.New("another customer already uses this phone number")
 	ErrLicensePlateTaken = errors.New("another vehicle already uses this license plate")
 	ErrPartnerNameTaken  = errors.New("a partner with this name and type already exists")
-
-	ErrNoAccessToGarage = errors.New("account has no access to this garage")
-	ErrPermissionDenied = errors.New("your role cannot perform this action")
 )

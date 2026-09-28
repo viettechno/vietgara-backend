@@ -1,0 +1,317 @@
+package repository
+
+import (
+	"context"
+	"errors"
+	"strconv"
+	"sync"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+
+	"github.com/viettechno/vietgara-backend/internal/identity/domain"
+)
+
+// RedisStore keeps refresh tokens, password-reset tokens and OTPs in
+// Redis (Memorystore): every instance of the backend sees the same
+// sessions and they survive restarts (Security Architecture Section 2.2).
+type RedisStore struct {
+	client redis.UniversalClient
+}
+
+// NewRedisStore returns a RedisStore on client.
+func NewRedisStore(client redis.UniversalClient) *RedisStore {
+	return &RedisStore{client: client}
+}
+
+func refreshKey(token string) string             { return "identity:refresh:" + token }
+func accountSessionsKey(accountID string) string { return "identity:sessions:" + accountID }
+func resetKey(token string) string               { return "identity:reset:" + token }
+func otpKey(key string) string                   { return "identity:otp:" + key }
+
+// SaveRefreshToken stores token for accountID and indexes it by account so
+// every session can be revoked.
+func (s *RedisStore) SaveRefreshToken(ctx context.Context, token, accountID string, ttl time.Duration) error {
+	_, err := s.client.TxPipelined(ctx, func(p redis.Pipeliner) error {
+		p.Set(ctx, refreshKey(token), accountID, ttl)
+		p.SAdd(ctx, accountSessionsKey(accountID), token)
+		p.Expire(ctx, accountSessionsKey(accountID), ttl)
+
+		return nil
+	})
+
+	return err
+}
+
+// RefreshTokenAccount returns the account of token.
+func (s *RedisStore) RefreshTokenAccount(ctx context.Context, token string) (string, error) {
+	accountID, err := s.client.Get(ctx, refreshKey(token)).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", domain.ErrRefreshTokenInvalid
+	}
+
+	return accountID, err
+}
+
+// RevokeRefreshToken deletes token.
+func (s *RedisStore) RevokeRefreshToken(ctx context.Context, token string) error {
+	accountID, err := s.client.GetDel(ctx, refreshKey(token)).Result()
+	if errors.Is(err, redis.Nil) {
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	return s.client.SRem(ctx, accountSessionsKey(accountID), token).Err()
+}
+
+// RevokeAllRefreshTokens deletes every refresh token of accountID.
+func (s *RedisStore) RevokeAllRefreshTokens(ctx context.Context, accountID string) error {
+	tokens, err := s.client.SMembers(ctx, accountSessionsKey(accountID)).Result()
+	if err != nil {
+		return err
+	}
+
+	keys := make([]string, 0, len(tokens)+1)
+	for _, token := range tokens {
+		keys = append(keys, refreshKey(token))
+	}
+
+	keys = append(keys, accountSessionsKey(accountID))
+
+	return s.client.Del(ctx, keys...).Err()
+}
+
+// SaveResetToken stores a password-reset token.
+func (s *RedisStore) SaveResetToken(ctx context.Context, token, accountID string, ttl time.Duration) error {
+	return s.client.Set(ctx, resetKey(token), accountID, ttl).Err()
+}
+
+// ConsumeResetToken returns and deletes a password-reset token.
+func (s *RedisStore) ConsumeResetToken(ctx context.Context, token string) (string, error) {
+	accountID, err := s.client.GetDel(ctx, resetKey(token)).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", domain.ErrResetTokenInvalid
+	}
+
+	return accountID, err
+}
+
+// Get returns the OTP stored under key.
+func (s *RedisStore) Get(ctx context.Context, key string) (*domain.OTP, error) {
+	fields, err := s.client.HGetAll(ctx, otpKey(key)).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(fields) == 0 {
+		return nil, nil //nolint:nilnil // no OTP
+	}
+
+	expires, _ := strconv.ParseInt(fields["expires_at"], 10, 64)
+	resend, _ := strconv.ParseInt(fields["resend_at"], 10, 64)
+	attempts, _ := strconv.Atoi(fields["attempts"])
+
+	return &domain.OTP{
+		CodeHash:  fields["code_hash"],
+		ExpiresAt: time.UnixMilli(expires).UTC(),
+		ResendAt:  time.UnixMilli(resend).UTC(),
+		Attempts:  attempts,
+	}, nil
+}
+
+// Put stores otp until it expires, replacing any previous one.
+func (s *RedisStore) Put(ctx context.Context, key string, otp *domain.OTP) error {
+	_, err := s.client.TxPipelined(ctx, func(p redis.Pipeliner) error {
+		p.Del(ctx, otpKey(key))
+		p.HSet(ctx, otpKey(key), map[string]any{
+			"code_hash":  otp.CodeHash,
+			"expires_at": otp.ExpiresAt.UnixMilli(),
+			"resend_at":  otp.ResendAt.UnixMilli(),
+			"attempts":   otp.Attempts,
+		})
+		p.PExpireAt(ctx, otpKey(key), otp.ExpiresAt)
+
+		return nil
+	})
+
+	return err
+}
+
+// IncrementAttempts counts a wrong code atomically.
+func (s *RedisStore) IncrementAttempts(ctx context.Context, key string) (int, error) {
+	n, err := s.client.HIncrBy(ctx, otpKey(key), "attempts", 1).Result()
+
+	return int(n), err
+}
+
+// Delete removes the OTP under key.
+func (s *RedisStore) Delete(ctx context.Context, key string) error {
+	return s.client.Del(ctx, otpKey(key)).Err()
+}
+
+// MemoryStore is the in-process SessionStore and OTPStore used when no
+// Redis is configured. It does not survive restarts nor work across
+// replicas: local development only.
+type MemoryStore struct {
+	mu       sync.Mutex
+	now      func() time.Time
+	refresh  map[string]entry
+	resets   map[string]entry
+	otps     map[string]*domain.OTP
+	sessions map[string]map[string]bool
+}
+
+type entry struct {
+	value   string
+	expires time.Time
+}
+
+// NewMemoryStore returns an empty MemoryStore.
+func NewMemoryStore() *MemoryStore {
+	return &MemoryStore{
+		now: time.Now, refresh: map[string]entry{}, resets: map[string]entry{},
+		otps: map[string]*domain.OTP{}, sessions: map[string]map[string]bool{},
+	}
+}
+
+func (m *MemoryStore) live(e entry, ok bool) (string, bool) {
+	if !ok || !m.now().Before(e.expires) {
+		return "", false
+	}
+
+	return e.value, true
+}
+
+// SaveRefreshToken stores token.
+func (m *MemoryStore) SaveRefreshToken(_ context.Context, token, accountID string, ttl time.Duration) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.refresh[token] = entry{value: accountID, expires: m.now().Add(ttl)}
+	if m.sessions[accountID] == nil {
+		m.sessions[accountID] = map[string]bool{}
+	}
+
+	m.sessions[accountID][token] = true
+
+	return nil
+}
+
+// RefreshTokenAccount returns the account of token.
+func (m *MemoryStore) RefreshTokenAccount(_ context.Context, token string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	e, ok := m.refresh[token]
+	if accountID, live := m.live(e, ok); live {
+		return accountID, nil
+	}
+
+	return "", domain.ErrRefreshTokenInvalid
+}
+
+// RevokeRefreshToken deletes token.
+func (m *MemoryStore) RevokeRefreshToken(_ context.Context, token string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	if e, ok := m.refresh[token]; ok {
+		delete(m.sessions[e.value], token)
+		delete(m.refresh, token)
+	}
+
+	return nil
+}
+
+// RevokeAllRefreshTokens deletes every refresh token of accountID.
+func (m *MemoryStore) RevokeAllRefreshTokens(_ context.Context, accountID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for token := range m.sessions[accountID] {
+		delete(m.refresh, token)
+	}
+
+	delete(m.sessions, accountID)
+
+	return nil
+}
+
+// SaveResetToken stores a password-reset token.
+func (m *MemoryStore) SaveResetToken(_ context.Context, token, accountID string, ttl time.Duration) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.resets[token] = entry{value: accountID, expires: m.now().Add(ttl)}
+
+	return nil
+}
+
+// ConsumeResetToken returns and deletes a password-reset token.
+func (m *MemoryStore) ConsumeResetToken(_ context.Context, token string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	e, ok := m.resets[token]
+	delete(m.resets, token)
+
+	if accountID, live := m.live(e, ok); live {
+		return accountID, nil
+	}
+
+	return "", domain.ErrResetTokenInvalid
+}
+
+// Get returns a copy of the OTP under key.
+func (m *MemoryStore) Get(_ context.Context, key string) (*domain.OTP, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	otp, ok := m.otps[key]
+	if !ok || otp.Expired(m.now()) {
+		return nil, nil //nolint:nilnil // no OTP
+	}
+
+	copied := *otp
+
+	return &copied, nil
+}
+
+// Put stores otp.
+func (m *MemoryStore) Put(_ context.Context, key string, otp *domain.OTP) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	copied := *otp
+	m.otps[key] = &copied
+
+	return nil
+}
+
+// IncrementAttempts counts a wrong code.
+func (m *MemoryStore) IncrementAttempts(_ context.Context, key string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	otp, ok := m.otps[key]
+	if !ok {
+		return 1, nil
+	}
+
+	otp.Attempts++
+
+	return otp.Attempts, nil
+}
+
+// Delete removes the OTP under key.
+func (m *MemoryStore) Delete(_ context.Context, key string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.otps, key)
+
+	return nil
+}

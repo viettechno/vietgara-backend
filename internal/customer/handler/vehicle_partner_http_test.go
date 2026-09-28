@@ -1,240 +1,154 @@
 package handler_test
 
 import (
-	"net/http"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
+
+	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/customer/domain"
-	"github.com/viettechno/vietgara-backend/internal/customer/usecase"
 )
 
-const vehicleJSON = `{"id":"` + vehicleID + `","garageId":"` + garageID + `","customerId":"` + customerID + `",` +
-	`"customerName":"Tran Binh","licensePlate":"51F-123.45","make":"Toyota","year":2020,` +
-	`"createdAt":"2026-01-02T03:04:05Z","updatedAt":"2026-01-02T03:04:05Z"}`
+func existingVehicle() *domain.Vehicle {
+	year, mk := 2020, "Toyota"
 
-func TestServer_HTTPVehicles(t *testing.T) {
-	t.Parallel()
-
-	t.Run("register a vehicle for the customer in the path", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "service_advisor")
-		f.customers.EXPECT().FindByID(mock.Anything, garageID, customerID).Return(testCustomer(), nil).Once()
-		f.vehicles.EXPECT().Create(mock.Anything, mock.MatchedBy(func(v *domain.Vehicle) bool {
-			return v.CustomerID == customerID && v.LicensePlate == "51F-123.45" && *v.Year == 2020
-		})).Return(nil).Once()
-
-		rec := f.do(t, http.MethodPost, garagePath+"/customers/"+customerID+"/vehicles",
-			`{"customerId":"someone-else","licensePlate":"51f-123.45","year":2020}`)
-
-		require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
-		assert.Contains(t, rec.Body.String(), `"customerName":"Tran Binh"`)
-	})
-
-	t.Run("list a customer's vehicles", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "technician")
-		f.vehicles.EXPECT().List(mock.Anything, garageID, usecase.VehicleFilter{
-			ListFilter: usecase.ListFilter{Limit: 20}, CustomerID: customerID,
-		}).Return([]*domain.Vehicle{testVehicle()}, 1, nil).Once()
-
-		rec := f.do(t, http.MethodGet, garagePath+"/customers/"+customerID+"/vehicles", "")
-
-		require.Equal(t, http.StatusOK, rec.Code)
-		assert.JSONEq(t, `{"vehicles":[`+vehicleJSON+`],"pagination":{"total":1,"page":1,"pageSize":20}}`, rec.Body.String())
-	})
-
-	t.Run("search the garage's vehicles by plate", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "owner")
-		f.vehicles.EXPECT().List(mock.Anything, garageID, usecase.VehicleFilter{
-			ListFilter: usecase.ListFilter{Query: "51F", Limit: 20},
-		}).Return(nil, 0, nil).Once()
-
-		rec := f.do(t, http.MethodGet, garagePath+"/vehicles?query=51F", "")
-
-		require.Equal(t, http.StatusOK, rec.Code)
-		assert.JSONEq(t, `{"pagination":{"page":1,"pageSize":20}}`, rec.Body.String(), "protojson omits zero values")
-	})
-
-	t.Run("get, update and delete a vehicle", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "owner")
-		f.vehicles.EXPECT().FindByID(mock.Anything, garageID, vehicleID).Return(testVehicle(), nil).Twice()
-		f.vehicles.EXPECT().Update(mock.Anything, mock.MatchedBy(func(v *domain.Vehicle) bool { return v.Year == nil })).Return(nil).Once()
-		f.vehicles.EXPECT().SoftDelete(mock.Anything, garageID, vehicleID, accountID).Return(nil).Once()
-
-		rec := f.do(t, http.MethodGet, garagePath+"/vehicles/"+vehicleID, "")
-		require.Equal(t, http.StatusOK, rec.Code)
-		assert.JSONEq(t, vehicleJSON, rec.Body.String())
-
-		rec = f.do(t, http.MethodPatch, garagePath+"/vehicles/"+vehicleID, `{"year":0}`)
-		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-		assert.NotContains(t, rec.Body.String(), `"year"`)
-
-		rec = f.do(t, http.MethodDelete, garagePath+"/vehicles/"+vehicleID, "")
-		require.Equal(t, http.StatusNoContent, rec.Code)
-	})
-
-	t.Run("a duplicate plate is a conflict", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "owner")
-		f.customers.EXPECT().FindByID(mock.Anything, garageID, customerID).Return(testCustomer(), nil).Once()
-		f.vehicles.EXPECT().Create(mock.Anything, mock.Anything).Return(domain.ErrLicensePlateTaken).Once()
-
-		rec := f.do(t, http.MethodPost, garagePath+"/vehicles", `{"customerId":"`+customerID+`","licensePlate":"51F12345"}`)
-
-		require.Equal(t, http.StatusConflict, rec.Code)
-		assert.JSONEq(t, `{"message":"another vehicle already uses this license plate"}`, rec.Body.String())
-	})
+	return &domain.Vehicle{ID: "v-1", GarageID: garageID, CustomerID: "c-1", CustomerName: "Khách", LicensePlate: "51A-123.45", Year: &year, Make: &mk}
 }
 
-func TestServer_HTTPPartners(t *testing.T) {
+func TestVehicleRPCs(t *testing.T) {
 	t.Parallel()
 
-	t.Run("the owner adds a supplier", func(t *testing.T) {
-		t.Parallel()
+	e := newEnv(t)
+	ctx := signedIn(t)
 
-		f := newFixture(t, "owner")
-		f.partners.EXPECT().Create(mock.Anything, mock.MatchedBy(func(p *domain.Partner) bool {
-			return p.Type == domain.PartnerTypeSupplier && p.Name == "Phu Tung Sai Gon" && *p.Contact.ContactPerson == "Ms. Lan"
-		})).Return(nil).Once()
+	e.customers.EXPECT().FindByID(anyArg, garageID, "c-1").Return(existingCustomer(), nil)
+	e.vehicles.EXPECT().Create(anyArg, anyArg).Return(nil).Once()
 
-		rec := f.do(t, http.MethodPost, garagePath+"/partners",
-			`{"type":"PARTNER_TYPE_SUPPLIER","name":"Phu Tung Sai Gon","contact":{"contactPerson":"Ms. Lan"}}`)
+	year := int32(2020)
+	created, err := e.srv.CreateVehicle(ctx, &customerv1.CreateVehicleRequest{GarageId: garageID, Vehicle: &customerv1.Vehicle{CustomerId: "c-1", LicensePlate: "51a12345", Year: &year}})
+	require.NoError(t, err)
+	assert.EqualValues(t, 2020, created.GetVehicle().GetYear())
 
-		require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
-		assert.Contains(t, rec.Body.String(), `"type":"PARTNER_TYPE_SUPPLIER"`)
+	_, err = e.srv.CreateVehicle(ctx, &customerv1.CreateVehicleRequest{GarageId: garageID, Vehicle: &customerv1.Vehicle{CustomerId: "c-1"}})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err))
+
+	e.vehicles.EXPECT().FindByID(anyArg, garageID, "v-1").Return(existingVehicle(), nil)
+	got, err := e.srv.GetVehicle(ctx, &customerv1.GetVehicleRequest{GarageId: garageID, VehicleId: "v-1"})
+	require.NoError(t, err)
+	assert.Equal(t, "Toyota", got.GetVehicle().GetMake())
+
+	e.vehicles.EXPECT().Update(anyArg, anyArg).Return(nil)
+
+	model, vin, engine := "Vios", "VIN123", "E1"
+	updated, err := e.srv.UpdateVehicle(ctx, &customerv1.UpdateVehicleRequest{
+		GarageId: garageID, VehicleId: "v-1",
+		Vehicle: &customerv1.Vehicle{CustomerId: "c-1", LicensePlate: "51A-999.99", Model: &model, Vin: &vin, EngineNumber: &engine},
 	})
+	require.NoError(t, err)
+	assert.Equal(t, "Vios", updated.GetVehicle().GetModel())
+	assert.Nil(t, updated.GetVehicle().Year, "0 year clears it")
 
-	t.Run("service advisors cannot change partners", func(t *testing.T) {
-		t.Parallel()
+	_, err = e.srv.UpdateVehicle(ctx, &customerv1.UpdateVehicleRequest{GarageId: garageID, VehicleId: "v-1", Vehicle: &customerv1.Vehicle{}, UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"id"}}})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err))
 
-		f := newFixture(t, "service_advisor")
-		rec := f.do(t, http.MethodPost, garagePath+"/partners", `{"type":"PARTNER_TYPE_SUPPLIER","name":"X"}`)
+	e.vehicles.EXPECT().List(anyArg, garageID, anyArg).Return([]*domain.Vehicle{existingVehicle()}, 1, nil).Once()
+	list, err := e.srv.ListVehicles(ctx, &customerv1.ListVehiclesRequest{GarageId: garageID, CustomerId: "c-1"})
+	require.NoError(t, err)
+	assert.Len(t, list.GetData(), 1)
 
-		require.Equal(t, http.StatusForbidden, rec.Code)
-	})
+	e.vehicles.EXPECT().List(anyArg, garageID, anyArg).Return(nil, 0, assert.AnError).Once()
+	_, err = e.srv.ListVehicles(ctx, &customerv1.ListVehiclesRequest{GarageId: garageID})
+	require.Error(t, err)
 
-	t.Run("a partner type is required", func(t *testing.T) {
-		t.Parallel()
+	e.vehicles.EXPECT().SoftDelete(anyArg, garageID, "v-1", anyArg).Return(nil).Once()
+	_, err = e.srv.DeleteVehicle(ctx, &customerv1.DeleteVehicleRequest{GarageId: garageID, VehicleId: "v-1"})
+	require.NoError(t, err)
 
-		f := newFixture(t, "owner")
-		rec := f.do(t, http.MethodPost, garagePath+"/partners", `{"name":"X"}`)
+	e.vehicles.EXPECT().SoftDelete(anyArg, garageID, "v-2", anyArg).Return(domain.ErrVehicleNotFound).Once()
+	_, err = e.srv.DeleteVehicle(ctx, &customerv1.DeleteVehicleRequest{GarageId: garageID, VehicleId: "v-2"})
+	assert.Equal(t, "NOT_FOUND", reason(err))
 
-		require.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.JSONEq(t, `{"message":"partner type must be supplier or insurer"}`, rec.Body.String())
-	})
-
-	t.Run("list filters by type given in short or full form", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "inventory_staff")
-		filter := usecase.PartnerFilter{ListFilter: usecase.ListFilter{Limit: 20}, Type: domain.PartnerTypeInsurer}
-		f.partners.EXPECT().List(mock.Anything, garageID, filter).Return([]*domain.Partner{testPartner()}, 1, nil).Twice()
-
-		for _, param := range []string{"insurer", "PARTNER_TYPE_INSURER"} {
-			rec := f.do(t, http.MethodGet, garagePath+"/partners?type="+param, "")
-			require.Equal(t, http.StatusOK, rec.Code, param)
-			assert.Contains(t, rec.Body.String(), `"contact":{"phone":"0281234567"}`)
-		}
-
-		rec := f.do(t, http.MethodGet, garagePath+"/partners?type=bank", "")
-		require.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.JSONEq(t, `{"message":"type is invalid"}`, rec.Body.String())
-	})
-
-	t.Run("get, update and delete a partner", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "owner")
-		f.partners.EXPECT().FindByID(mock.Anything, garageID, partnerID).Return(testPartner(), nil).Twice()
-		f.partners.EXPECT().Update(mock.Anything, mock.MatchedBy(func(p *domain.Partner) bool {
-			return p.Type == domain.PartnerTypeInsurer && p.Contact.Phone == nil && *p.Contact.Email == "claims@example.com"
-		})).Return(nil).Once()
-		f.partners.EXPECT().SoftDelete(mock.Anything, garageID, partnerID, accountID).Return(nil).Once()
-
-		rec := f.do(t, http.MethodGet, garagePath+"/partners/"+partnerID, "")
-		require.Equal(t, http.StatusOK, rec.Code)
-		assert.Contains(t, rec.Body.String(), `"name":"Phu Tung Sai Gon"`)
-
-		rec = f.do(t, http.MethodPatch, garagePath+"/partners/"+partnerID,
-			`{"type":"PARTNER_TYPE_INSURER","contact":{"email":"claims@example.com"}}`)
-		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-
-		rec = f.do(t, http.MethodDelete, garagePath+"/partners/"+partnerID, "")
-		require.Equal(t, http.StatusNoContent, rec.Code)
-	})
+	e.vehicles.EXPECT().FindByID(anyArg, garageID, "v-3").Return(nil, domain.ErrVehicleNotFound)
+	_, err = e.srv.GetVehicle(ctx, &customerv1.GetVehicleRequest{GarageId: garageID, VehicleId: "v-3"})
+	assert.Equal(t, "NOT_FOUND", reason(err))
+	_, err = e.srv.UpdateVehicle(ctx, &customerv1.UpdateVehicleRequest{GarageId: garageID, VehicleId: "v-3", Vehicle: &customerv1.Vehicle{}, UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"make"}}})
+	assert.Equal(t, "NOT_FOUND", reason(err))
 }
 
-func TestServer_HTTPUseCaseErrors(t *testing.T) {
+func existingPartner() *domain.Partner {
+	person := "Anh Ba"
+
+	return &domain.Partner{ID: "p-1", GarageID: garageID, Type: domain.PartnerTypeSupplier, Name: "Phụ tùng A", Contact: domain.PartnerContact{ContactPerson: &person}}
+}
+
+func TestPartnerRPCs(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		name   string
-		method string
-		path   string
-		body   string
-		setup  func(f fixture)
-		want   int
-	}{
-		{name: "list customers fails", method: http.MethodGet, path: "/customers", want: http.StatusInternalServerError, setup: func(f fixture) {
-			f.customers.EXPECT().List(mock.Anything, garageID, mock.Anything).Return(nil, 0, errBoom).Once()
-		}},
-		{name: "update unknown customer", method: http.MethodPatch, path: "/customers/" + customerID, body: `{}`, want: http.StatusNotFound, setup: func(f fixture) {
-			f.customers.EXPECT().FindByID(mock.Anything, garageID, customerID).Return(nil, domain.ErrCustomerNotFound).Once()
-		}},
-		{name: "delete unknown customer", method: http.MethodDelete, path: "/customers/" + customerID, want: http.StatusNotFound, setup: func(f fixture) {
-			f.customers.EXPECT().SoftDelete(mock.Anything, garageID, customerID, accountID).Return(domain.ErrCustomerNotFound).Once()
-		}},
-		{name: "list vehicles fails", method: http.MethodGet, path: "/vehicles", want: http.StatusInternalServerError, setup: func(f fixture) {
-			f.vehicles.EXPECT().List(mock.Anything, garageID, mock.Anything).Return(nil, 0, errBoom).Once()
-		}},
-		{name: "get unknown vehicle", method: http.MethodGet, path: "/vehicles/" + vehicleID, want: http.StatusNotFound, setup: func(f fixture) {
-			f.vehicles.EXPECT().FindByID(mock.Anything, garageID, vehicleID).Return(nil, domain.ErrVehicleNotFound).Once()
-		}},
-		{name: "update unknown vehicle", method: http.MethodPatch, path: "/vehicles/" + vehicleID, body: `{}`, want: http.StatusNotFound, setup: func(f fixture) {
-			f.vehicles.EXPECT().FindByID(mock.Anything, garageID, vehicleID).Return(nil, domain.ErrVehicleNotFound).Once()
-		}},
-		{name: "delete unknown vehicle", method: http.MethodDelete, path: "/vehicles/" + vehicleID, want: http.StatusNotFound, setup: func(f fixture) {
-			f.vehicles.EXPECT().SoftDelete(mock.Anything, garageID, vehicleID, accountID).Return(domain.ErrVehicleNotFound).Once()
-		}},
-		{name: "list partners fails", method: http.MethodGet, path: "/partners", want: http.StatusInternalServerError, setup: func(f fixture) {
-			f.partners.EXPECT().List(mock.Anything, garageID, mock.Anything).Return(nil, 0, errBoom).Once()
-		}},
-		{name: "get unknown partner", method: http.MethodGet, path: "/partners/" + partnerID, want: http.StatusNotFound, setup: func(f fixture) {
-			f.partners.EXPECT().FindByID(mock.Anything, garageID, partnerID).Return(nil, domain.ErrPartnerNotFound).Once()
-		}},
-		{name: "update unknown partner", method: http.MethodPatch, path: "/partners/" + partnerID, body: `{"name":"X"}`, want: http.StatusNotFound, setup: func(f fixture) {
-			f.partners.EXPECT().FindByID(mock.Anything, garageID, partnerID).Return(nil, domain.ErrPartnerNotFound).Once()
-		}},
-		{name: "delete unknown partner", method: http.MethodDelete, path: "/partners/" + partnerID, want: http.StatusNotFound, setup: func(f fixture) {
-			f.partners.EXPECT().SoftDelete(mock.Anything, garageID, partnerID, accountID).Return(domain.ErrPartnerNotFound).Once()
-		}},
-		{name: "create partner with an unknown type name", method: http.MethodPost, path: "/partners", body: `{"type":"PARTNER_TYPE_BANK","name":"X"}`, want: http.StatusBadRequest},
-		{name: "list with an out-of-range page size", method: http.MethodGet, path: "/partners?pageSize=99999999999", want: http.StatusBadRequest},
-	}
+	e := newEnv(t)
+	ctx := signedIn(t)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
+	e.partners.EXPECT().Create(anyArg, anyArg).Return(nil).Once()
+	created, err := e.srv.CreatePartner(ctx, &customerv1.CreatePartnerRequest{GarageId: garageID, Partner: &customerv1.Partner{
+		Type: customerv1.PartnerType_PARTNER_TYPE_INSURER, Name: "Bảo Việt",
+	}})
+	require.NoError(t, err)
+	assert.Equal(t, customerv1.PartnerType_PARTNER_TYPE_INSURER, created.GetPartner().GetType())
 
-			f := newFixture(t, "owner")
-			if tt.setup != nil {
-				tt.setup(f)
-			}
+	_, err = e.srv.CreatePartner(ctx, &customerv1.CreatePartnerRequest{GarageId: garageID, Partner: &customerv1.Partner{Name: "X"}})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err))
 
-			rec := f.do(t, tt.method, garagePath+tt.path, tt.body)
+	e.partners.EXPECT().FindByID(anyArg, garageID, "p-1").Return(existingPartner(), nil)
+	got, err := e.srv.GetPartner(ctx, &customerv1.GetPartnerRequest{GarageId: garageID, PartnerId: "p-1"})
+	require.NoError(t, err)
+	assert.Equal(t, customerv1.PartnerType_PARTNER_TYPE_SUPPLIER, got.GetPartner().GetType())
+	assert.Equal(t, "Anh Ba", got.GetPartner().GetContact().GetContactPerson())
 
-			assert.Equal(t, tt.want, rec.Code, rec.Body.String())
-		})
-	}
+	e.partners.EXPECT().Update(anyArg, anyArg).Return(nil)
+
+	phone, tax, note := "0909123456", "0101", "n"
+	updated, err := e.srv.UpdatePartner(ctx, &customerv1.UpdatePartnerRequest{
+		GarageId: garageID, PartnerId: "p-1",
+		Partner: &customerv1.Partner{
+			Type: customerv1.PartnerType_PARTNER_TYPE_INSURER, Name: "B", TaxCode: &tax, Note: &note,
+			Contact: &customerv1.PartnerContact{Phone: &phone},
+		},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "0909123456", updated.GetPartner().GetContact().GetPhone())
+
+	updated, err = e.srv.UpdatePartner(ctx, &customerv1.UpdatePartnerRequest{
+		GarageId: garageID, PartnerId: "p-1", Partner: &customerv1.Partner{Contact: &customerv1.PartnerContact{}},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"contact.phone", "contact.email"}},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, updated.GetPartner().GetContact().GetPhone(), "the contact block is replaced")
+
+	_, err = e.srv.UpdatePartner(ctx, &customerv1.UpdatePartnerRequest{GarageId: garageID, PartnerId: "p-1", Partner: &customerv1.Partner{}, UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"garage_id"}}})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err))
+
+	e.partners.EXPECT().List(anyArg, garageID, anyArg).Return([]*domain.Partner{existingPartner()}, 1, nil).Once()
+	list, err := e.srv.ListPartners(ctx, &customerv1.ListPartnersRequest{GarageId: garageID, Type: customerv1.PartnerType_PARTNER_TYPE_SUPPLIER})
+	require.NoError(t, err)
+	assert.Len(t, list.GetData(), 1)
+
+	e.partners.EXPECT().List(anyArg, garageID, anyArg).Return(nil, 0, assert.AnError).Once()
+	_, err = e.srv.ListPartners(ctx, &customerv1.ListPartnersRequest{GarageId: garageID})
+	require.Error(t, err)
+
+	e.partners.EXPECT().SoftDelete(anyArg, garageID, "p-1", anyArg).Return(nil).Once()
+	_, err = e.srv.DeletePartner(ctx, &customerv1.DeletePartnerRequest{GarageId: garageID, PartnerId: "p-1"})
+	require.NoError(t, err)
+
+	e.partners.EXPECT().SoftDelete(anyArg, garageID, "p-2", anyArg).Return(domain.ErrPartnerNotFound).Once()
+	_, err = e.srv.DeletePartner(ctx, &customerv1.DeletePartnerRequest{GarageId: garageID, PartnerId: "p-2"})
+	assert.Equal(t, "NOT_FOUND", reason(err))
+
+	e.partners.EXPECT().FindByID(anyArg, garageID, "p-3").Return(nil, domain.ErrPartnerNotFound)
+	_, err = e.srv.GetPartner(ctx, &customerv1.GetPartnerRequest{GarageId: garageID, PartnerId: "p-3"})
+	assert.Equal(t, "NOT_FOUND", reason(err))
+	_, err = e.srv.UpdatePartner(ctx, &customerv1.UpdatePartnerRequest{GarageId: garageID, PartnerId: "p-3", Partner: &customerv1.Partner{}, UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"name"}}})
+	assert.Equal(t, "NOT_FOUND", reason(err))
 }

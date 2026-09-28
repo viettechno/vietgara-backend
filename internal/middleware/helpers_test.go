@@ -6,51 +6,67 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/viettechno/vietgara-backend/internal/middleware"
-	"github.com/viettechno/vietgara-backend/internal/platform/auth"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+
+	"github.com/viettechno/vietgara-backend/internal/platform/auth"
 )
 
-const testSigningKey = "test-signing-key"
+const (
+	methodPublic   = "/test.v1.Svc/Public"
+	methodAccount  = "/test.v1.Svc/GetAccount"
+	methodGarage   = "/test.v1.Svc/UpdateGarage"
+	methodGarageRO = "/test.v1.Svc/ListThings"
+	garageID       = "11111111-1111-4111-8111-111111111111"
+)
 
-func newTestIssuer(t *testing.T) *auth.TokenIssuer {
+var issuer = auth.NewTokenIssuer([]byte("test-key"), time.Minute, time.Hour)
+
+func token(t *testing.T, id auth.Identity) string {
 	t.Helper()
-	return auth.NewTokenIssuer([]byte(testSigningKey), 15*time.Minute, 24*time.Hour)
-}
 
-func issueToken(t *testing.T, issuer *auth.TokenIssuer, accountID string, garages []auth.GarageClaim) string {
-	t.Helper()
-
-	token, _, err := issuer.IssueAccessToken(accountID, garages)
+	signed, _, err := issuer.IssueAccessToken(id)
 	require.NoError(t, err)
 
-	return token
+	return signed
 }
 
-// authedCtx returns the context produced by AuthInterceptor for the given
-// issuer's token, mirroring how service entrypoints seed authenticated
-// contexts from gRPC metadata.
-func authedCtx(t *testing.T, issuer *auth.TokenIssuer, token string) context.Context {
-	t.Helper()
-	ctx := metadata.NewIncomingContext(t.Context(), metadata.Pairs("authorization", token))
-
-	gotCtx := make(chan context.Context, 1)
-	interceptor := middleware.AuthInterceptor(issuer)
-	_, err := interceptor(ctx, nil, &grpc.UnaryServerInfo{}, func(ctx context.Context, req any) (any, error) {
-		gotCtx <- ctx
-		return nil, nil
-	})
-	require.NoError(t, err)
-
-	return <-gotCtx
+func withToken(ctx context.Context, tok string) context.Context {
+	return metadata.NewIncomingContext(ctx, metadata.Pairs("authorization", "Bearer "+tok))
 }
 
-// testHandler returns a handler that delivers the context it receives to
-// captured, so tests can inspect the context built by the interceptor.
-func testHandler(captured chan<- context.Context) grpc.UnaryHandler {
-	return func(ctx context.Context, req any) (any, error) {
-		captured <- ctx
-		return "handled", nil
+func info(method string) *grpc.UnaryServerInfo {
+	return &grpc.UnaryServerInfo{FullMethod: method}
+}
+
+// okHandler records that it ran and returns "ok".
+func okHandler(ran *bool) grpc.UnaryHandler {
+	return func(context.Context, any) (any, error) {
+		*ran = true
+
+		return "ok", nil
 	}
 }
+
+func reasonOf(err error) string {
+	for _, d := range status.Convert(err).Details() {
+		if info, ok := d.(*errdetails.ErrorInfo); ok {
+			return info.GetReason()
+		}
+	}
+
+	return ""
+}
+
+func requireCode(t *testing.T, err error, code codes.Code, reason string) {
+	t.Helper()
+	require.Equal(t, code, status.Code(err), err)
+	require.Equal(t, reason, reasonOf(err))
+}
+
+type garageReq struct{ id string }
+
+func (r garageReq) GetGarageId() string { return r.id }

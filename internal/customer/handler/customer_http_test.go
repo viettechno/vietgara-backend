@@ -1,243 +1,100 @@
 package handler_test
 
 import (
-	"errors"
-	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/customer/domain"
-	"github.com/viettechno/vietgara-backend/internal/customer/usecase"
+	"github.com/viettechno/vietgara-backend/internal/customer/handler"
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
 )
 
-const customerJSON = `{"id":"` + customerID + `","garageId":"` + garageID + `","fullName":"Tran Binh","phone":"0912345678",` +
-	`"personalDataConsent":true,"personalDataConsentAt":"2026-01-02T03:04:05Z","vehicleCount":1,` +
-	`"createdAt":"2026-01-02T03:04:05Z","updatedAt":"2026-01-02T03:04:05Z"}`
-
-func TestServer_RegisterHTTPRoutes(t *testing.T) {
+func TestPolicies(t *testing.T) {
 	t.Parallel()
 
-	f := newFixture(t, "owner")
-	rec := f.do(t, http.MethodGet, "/garages/"+garageID+"/unknown", "")
-
-	assert.Equal(t, http.StatusNotFound, rec.Code)
+	p := handler.Policies()
+	assert.Len(t, p, 15)
+	assert.Equal(t, access.CustomerWrite, p[customerv1.CustomerService_CreateCustomer_FullMethodName].Garage.Permission)
+	assert.Equal(t, access.PartnerRead, p[customerv1.PartnerService_ListPartners_FullMethodName].Garage.Permission)
 }
 
-func TestServer_ListHTTPCustomers(t *testing.T) {
-	t.Parallel()
+func existingCustomer() *domain.Customer {
+	phone := "0901234567"
 
-	t.Run("any member can search with paging", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "technician")
-		f.customers.EXPECT().List(mock.Anything, garageID, usecase.ListFilter{Query: "binh", Limit: 5, Offset: 5}).
-			Return([]*domain.Customer{testCustomer()}, 6, nil).Once()
-
-		rec := f.do(t, http.MethodGet, garagePath+"/customers?query=binh&page=2&pageSize=5&unknown=1", "")
-
-		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-		assert.JSONEq(t, `{"customers":[`+customerJSON+`],"pagination":{"total":6,"page":2,"pageSize":5}}`, rec.Body.String())
-	})
-
-	t.Run("rejects a non-numeric page", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "owner")
-		rec := f.do(t, http.MethodGet, garagePath+"/customers?page=two", "")
-
-		require.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.JSONEq(t, `{"message":"page must be a number"}`, rec.Body.String())
-	})
-
-	t.Run("non-members are forbidden", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "")
-		rec := f.do(t, http.MethodGet, garagePath+"/customers", "")
-
-		require.Equal(t, http.StatusForbidden, rec.Code)
-		assert.JSONEq(t, `{"message":"account has no access to this garage"}`, rec.Body.String())
-	})
-
-	t.Run("a malformed garage id is rejected", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "owner")
-		rec := f.do(t, http.MethodGet, "/garages/not-a-uuid/customers", "")
-
-		require.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.JSONEq(t, `{"message":"garage_id is invalid"}`, rec.Body.String())
-	})
-
-	t.Run("membership lookup failures are internal errors", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "")
-		f.members.EXPECT().RoleInGarage(mock.Anything, "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", accountID).Return("", errors.New("db down")).Once()
-
-		rec := f.do(t, http.MethodGet, "/garages/bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb/customers", "")
-
-		require.Equal(t, http.StatusInternalServerError, rec.Code)
-		assert.JSONEq(t, `{"message":"internal error"}`, rec.Body.String())
-	})
+	return &domain.Customer{
+		ID: "c-1", GarageID: garageID, FullName: "Khách", Phone: &phone, VehicleCount: 2,
+		ConsentLog: []domain.ConsentRecord{{Granted: true, RecordedAt: time.Now()}},
+	}
 }
 
-func TestServer_CreateHTTPCustomer(t *testing.T) {
+func TestCustomerRPCs(t *testing.T) {
 	t.Parallel()
 
-	t.Run("a service advisor creates a customer in the path's garage", func(t *testing.T) {
-		t.Parallel()
+	e := newEnv(t)
+	ctx := signedIn(t)
 
-		f := newFixture(t, "service_advisor")
-		f.customers.EXPECT().Create(mock.Anything, mock.MatchedBy(func(c *domain.Customer) bool {
-			return c.GarageID == garageID && c.FullName == "Le Chi" && *c.Phone == "0901234567" && *c.CreatedBy == accountID
-		})).Return(nil).Once()
+	e.customers.EXPECT().Create(anyArg, anyArg).Return(nil).Once()
 
-		rec := f.do(t, http.MethodPost, garagePath+"/customers",
-			`{"garageId":"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb","fullName":"Le Chi","phone":"090 123 4567","personalDataConsent":true,"extra":1}`)
+	phone := "0901 234 567"
+	created, err := e.srv.CreateCustomer(ctx, &customerv1.CreateCustomerRequest{GarageId: garageID, Customer: &customerv1.Customer{FullName: "Khách", Phone: &phone, PersonalDataConsent: true}})
+	require.NoError(t, err)
+	assert.Equal(t, "0901234567", created.GetCustomer().GetPhone())
+	assert.True(t, created.GetCustomer().GetPersonalDataConsent())
 
-		require.Equal(t, http.StatusCreated, rec.Code, rec.Body.String())
-		assert.Contains(t, rec.Body.String(), `"fullName":"Le Chi"`)
-		assert.Contains(t, rec.Body.String(), `"personalDataConsent":true`)
+	_, err = e.srv.CreateCustomer(ctx, &customerv1.CreateCustomerRequest{GarageId: garageID, Customer: &customerv1.Customer{}})
+	assert.NotEmpty(t, reason(err))
+
+	e.customers.EXPECT().FindByID(anyArg, garageID, "c-1").Return(existingCustomer(), nil).Times(3)
+	got, err := e.srv.GetCustomer(ctx, &customerv1.GetCustomerRequest{GarageId: garageID, CustomerId: "c-1"})
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, got.GetCustomer().GetVehicleCount())
+
+	e.customers.EXPECT().Update(anyArg, anyArg).Return(nil).Times(2)
+	updated, err := e.srv.UpdateCustomer(ctx, &customerv1.UpdateCustomerRequest{GarageId: garageID, CustomerId: "c-1", Customer: &customerv1.Customer{FullName: "Mới"}})
+	require.NoError(t, err)
+	assert.Equal(t, "Mới", updated.GetCustomer().GetFullName())
+	assert.Nil(t, updated.GetCustomer().Phone, "unset optional fields are cleared without a mask")
+
+	email := "k@b.vn"
+	updated, err = e.srv.UpdateCustomer(ctx, &customerv1.UpdateCustomerRequest{
+		GarageId: garageID, CustomerId: "c-1", Customer: &customerv1.Customer{Email: &email, PersonalDataConsent: false},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"email", "personal_data_consent", "address"}},
 	})
+	require.NoError(t, err)
+	assert.Equal(t, "k@b.vn", updated.GetCustomer().GetEmail())
+	assert.False(t, updated.GetCustomer().GetPersonalDataConsent())
 
-	t.Run("a technician may not create customers", func(t *testing.T) {
-		t.Parallel()
+	_, err = e.srv.UpdateCustomer(ctx, &customerv1.UpdateCustomerRequest{GarageId: garageID, CustomerId: "c-1", Customer: &customerv1.Customer{}, UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"garage_id"}}})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err))
 
-		f := newFixture(t, "technician")
-		rec := f.do(t, http.MethodPost, garagePath+"/customers", `{"fullName":"Le Chi"}`)
+	e.customers.EXPECT().List(anyArg, garageID, anyArg).Return([]*domain.Customer{existingCustomer()}, 1, nil).Once()
+	list, err := e.srv.ListCustomers(ctx, &customerv1.ListCustomersRequest{GarageId: garageID, Query: "kh", PageSize: 5})
+	require.NoError(t, err)
+	assert.Len(t, list.GetData(), 1)
+	assert.EqualValues(t, 5, list.GetPagination().GetPageSize())
 
-		require.Equal(t, http.StatusForbidden, rec.Code)
-		assert.JSONEq(t, `{"message":"your role cannot perform this action"}`, rec.Body.String())
-	})
+	e.customers.EXPECT().List(anyArg, garageID, anyArg).Return(nil, 0, assert.AnError).Once()
+	_, err = e.srv.ListCustomers(ctx, &customerv1.ListCustomersRequest{GarageId: garageID})
+	require.Error(t, err)
 
-	t.Run("validation errors are bad requests", func(t *testing.T) {
-		t.Parallel()
+	e.customers.EXPECT().SoftDelete(anyArg, garageID, "c-1", anyArg).Return(nil).Once()
+	e.vehicles.EXPECT().SoftDeleteByCustomer(anyArg, garageID, "c-1", anyArg).Return(nil).Once()
+	_, err = e.srv.DeleteCustomer(ctx, &customerv1.DeleteCustomerRequest{GarageId: garageID, CustomerId: "c-1"})
+	require.NoError(t, err)
 
-		f := newFixture(t, "owner")
-		rec := f.do(t, http.MethodPost, garagePath+"/customers", `{"fullName":" "}`)
+	e.customers.EXPECT().SoftDelete(anyArg, garageID, "c-2", anyArg).Return(domain.ErrCustomerNotFound).Once()
+	_, err = e.srv.DeleteCustomer(ctx, &customerv1.DeleteCustomerRequest{GarageId: garageID, CustomerId: "c-2"})
+	assert.Equal(t, "NOT_FOUND", reason(err))
 
-		require.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.JSONEq(t, `{"message":"full name is required"}`, rec.Body.String())
-	})
-
-	t.Run("malformed JSON is a bad request", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "owner")
-		rec := f.do(t, http.MethodPost, garagePath+"/customers", `{"fullName":`)
-
-		require.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.JSONEq(t, `{"message":"invalid request body"}`, rec.Body.String())
-	})
-
-	t.Run("a duplicate phone is a conflict", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "owner")
-		f.customers.EXPECT().Create(mock.Anything, mock.Anything).Return(domain.ErrPhoneTaken).Once()
-
-		rec := f.do(t, http.MethodPost, garagePath+"/customers", `{"fullName":"Le Chi","phone":"0912345678"}`)
-
-		require.Equal(t, http.StatusConflict, rec.Code)
-		assert.JSONEq(t, `{"message":"another customer already uses this phone number"}`, rec.Body.String())
-	})
-}
-
-func TestServer_GetUpdateDeleteHTTPCustomer(t *testing.T) {
-	t.Parallel()
-
-	t.Run("get", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "accountant")
-		f.customers.EXPECT().FindByID(mock.Anything, garageID, customerID).Return(testCustomer(), nil).Once()
-
-		rec := f.do(t, http.MethodGet, garagePath+"/customers/"+customerID, "")
-
-		require.Equal(t, http.StatusOK, rec.Code)
-		assert.JSONEq(t, customerJSON, rec.Body.String())
-	})
-
-	t.Run("get unknown", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "owner")
-		f.customers.EXPECT().FindByID(mock.Anything, garageID, "missing").Return(nil, domain.ErrCustomerNotFound).Once()
-
-		rec := f.do(t, http.MethodGet, garagePath+"/customers/missing", "")
-
-		require.Equal(t, http.StatusNotFound, rec.Code)
-		assert.JSONEq(t, `{"message":"customer not found"}`, rec.Body.String())
-	})
-
-	t.Run("patch clears the phone and withdraws consent", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "owner")
-		f.customers.EXPECT().FindByID(mock.Anything, garageID, customerID).Return(testCustomer(), nil).Once()
-		f.customers.EXPECT().Update(mock.Anything, mock.MatchedBy(func(c *domain.Customer) bool {
-			return c.Phone == nil && len(c.ConsentLog) == 2 && !c.ConsentLog[1].Granted
-		})).Return(nil).Once()
-
-		rec := f.do(t, http.MethodPatch, garagePath+"/customers/"+customerID, `{"phone":"","personalDataConsent":false}`)
-
-		require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
-		assert.NotContains(t, rec.Body.String(), `"phone"`)
-		assert.NotContains(t, rec.Body.String(), `"personalDataConsent"`)
-	})
-
-	t.Run("delete", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "service_advisor")
-		f.customers.EXPECT().SoftDelete(mock.Anything, garageID, customerID, accountID).Return(nil).Once()
-		f.vehicles.EXPECT().SoftDeleteByCustomer(mock.Anything, garageID, customerID, accountID).Return(nil).Once()
-
-		rec := f.do(t, http.MethodDelete, garagePath+"/customers/"+customerID, "")
-
-		require.Equal(t, http.StatusNoContent, rec.Code)
-		assert.Empty(t, rec.Body.String())
-	})
-}
-
-func TestServer_HTTPTransactions(t *testing.T) {
-	t.Parallel()
-
-	t.Run("requests run in a transaction scoped to the path's garage", func(t *testing.T) {
-		t.Parallel()
-
-		tenant := garageID
-		f := newFixture(t, "owner", withTx(t, &tenant))
-		f.customers.EXPECT().FindByID(mock.Anything, garageID, customerID).Return(testCustomer(), nil).Once()
-
-		rec := f.do(t, http.MethodGet, garagePath+"/customers/"+customerID, "")
-
-		require.Equal(t, http.StatusOK, rec.Code)
-	})
-
-	t.Run("a malformed garage id never becomes the tenant", func(t *testing.T) {
-		t.Parallel()
-
-		f := newFixture(t, "owner", withTx(t, nil))
-		rec := f.do(t, http.MethodGet, "/garages/x/customers/"+customerID, "")
-
-		require.Equal(t, http.StatusBadRequest, rec.Code)
-	})
-}
-
-func TestServer_GRPCWithoutClaims(t *testing.T) {
-	t.Parallel()
-
-	f := newFixture(t, "owner")
-	_, err := f.srv.GetCustomer(t.Context(), &customerv1.GetCustomerRequest{GarageId: garageID, CustomerId: customerID})
-
-	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+	e.customers.EXPECT().FindByID(anyArg, garageID, "c-3").Return(nil, domain.ErrCustomerNotFound).Twice()
+	_, err = e.srv.GetCustomer(ctx, &customerv1.GetCustomerRequest{GarageId: garageID, CustomerId: "c-3"})
+	assert.Equal(t, "NOT_FOUND", reason(err))
+	_, err = e.srv.UpdateCustomer(ctx, &customerv1.UpdateCustomerRequest{GarageId: garageID, CustomerId: "c-3", Customer: &customerv1.Customer{}})
+	assert.Equal(t, "NOT_FOUND", reason(err))
 }

@@ -3,160 +3,163 @@ package handler
 import (
 	"context"
 
-	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
+	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
+
+	"github.com/viettechno/vietgara-backend/internal/middleware"
+	"github.com/viettechno/vietgara-backend/internal/platform/httpapi"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
-	"github.com/viettechno/vietgara-backend/pkg/converter"
-	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 )
 
-// AddStaff adds the given account as a staff member of a garage.
-func (s *Server) AddStaff(ctx context.Context, req *tenantv1.AddStaffRequest) (*tenantv1.AddStaffResponse, error) {
-	st, err := s.staff.Add(ctx, usecase.AddStaffRequest{
-		GarageID:  req.GetGarageId(),
-		AccountID: req.GetAccountId(),
-		Role:      roleFromProto(req.GetRole()),
-	})
-	if err != nil {
-		return nil, apperror.ToGRPCError(err)
-	}
-
-	return &tenantv1.AddStaffResponse{Staff: staffToProto(st)}, nil
-}
-
-// ListStaff returns the active staff members of a garage.
+// ListStaff lists the garage's members.
 func (s *Server) ListStaff(ctx context.Context, req *tenantv1.ListStaffRequest) (*tenantv1.ListStaffResponse, error) {
-	list, err := s.staff.List(ctx, req.GetGarageId())
+	members, err := s.uc.ListStaff(ctx, req.GetGarageId())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	resp := &tenantv1.ListStaffResponse{}
-	for _, st := range list {
-		resp.Staff = append(resp.Staff, staffToProto(st))
+	resp := &tenantv1.ListStaffResponse{Data: make([]*tenantv1.Staff, 0, len(members))}
+	for _, m := range members {
+		resp.Data = append(resp.Data, staffToProto(m))
 	}
 
 	return resp, nil
 }
 
-// UpdateStaff changes the role/status of a staff membership; absent fields
-// keep their current value.
+// UpdateStaff changes a member's status or groups.
 func (s *Server) UpdateStaff(ctx context.Context, req *tenantv1.UpdateStaffRequest) (*tenantv1.UpdateStaffResponse, error) {
-	st, err := s.staff.Update(ctx, usecase.UpdateStaffRequest{
-		StaffID:  req.GetStaffId(),
-		GarageID: req.GetGarageId(),
-		Role:     rolePtrFromProto(req.Role),
-		Status:   staffStatusPtrFromProto(req.Status),
-	})
+	var fields usecase.StaffFields
+
+	for _, path := range maskPaths(req.GetUpdateMask().GetPaths(), "status", "group_ids") {
+		switch path {
+		case "status":
+			status := staffStatusFromProto(req.GetStaff().GetStatus())
+			fields.Status = &status
+		case "group_ids":
+			groupIDs := req.GetStaff().GetGroupIds()
+			fields.GroupIDs = &groupIDs
+		default:
+			return nil, apperror.ToGRPCError(apperror.Validation("updateMask", apperror.IssueInvalid, "field "+path+" cannot be updated"))
+		}
+	}
+
+	member, err := s.uc.UpdateStaff(ctx, req.GetGarageId(), req.GetStaffId(), fields)
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	return &tenantv1.UpdateStaffResponse{Staff: staffToProto(st)}, nil
+	return &tenantv1.UpdateStaffResponse{Staff: staffToProto(member)}, nil
 }
 
-// RemoveStaff deactivates a staff membership (sets its status to inactive).
-func (s *Server) RemoveStaff(ctx context.Context, req *tenantv1.RemoveStaffRequest) (*tenantv1.RemoveStaffResponse, error) {
-	st, err := s.staff.Deactivate(ctx, req.GetGarageId(), req.GetStaffId())
+// DeleteStaff removes a member.
+func (s *Server) DeleteStaff(ctx context.Context, req *tenantv1.DeleteStaffRequest) (*tenantv1.DeleteStaffResponse, error) {
+	if err := s.uc.DeleteStaff(ctx, req.GetGarageId(), req.GetStaffId()); err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return &tenantv1.DeleteStaffResponse{}, nil
+}
+
+var candidateMemberships = map[string]tenantv1.CandidateMembership{
+	usecase.CandidateNone:    tenantv1.CandidateMembership_CANDIDATE_MEMBERSHIP_NONE,
+	usecase.CandidateMember:  tenantv1.CandidateMembership_CANDIDATE_MEMBERSHIP_MEMBER,
+	usecase.CandidateInvited: tenantv1.CandidateMembership_CANDIDATE_MEMBERSHIP_INVITED,
+}
+
+// LookupStaffCandidate finds an account to invite by e-mail or phone.
+func (s *Server) LookupStaffCandidate(ctx context.Context, req *tenantv1.LookupStaffCandidateRequest) (*tenantv1.LookupStaffCandidateResponse, error) {
+	candidate, err := s.uc.LookupCandidate(ctx, req.GetGarageId(), req.GetQuery())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	return &tenantv1.RemoveStaffResponse{GarageId: st.GarageID, StaffId: st.ID}, nil
+	return &tenantv1.LookupStaffCandidateResponse{Candidate: &tenantv1.StaffCandidate{
+		AccountId:  candidate.Account.ID,
+		FullName:   candidate.Account.FullName,
+		Email:      candidate.Account.Email,
+		Phone:      candidate.Account.Phone,
+		Membership: candidateMemberships[candidate.Membership],
+	}}, nil
 }
 
-func staffToProto(s *domain.GarageStaff) *tenantv1.GarageStaff {
-	return &tenantv1.GarageStaff{
-		Id:        s.ID,
-		GarageId:  s.GarageID,
-		AccountId: s.AccountID,
-		Role:      roleToProto(s.Role),
-		Status:    staffStatusToProto(s.Status),
-		CreatedAt: converter.TimeToProto(s.CreatedAt),
-		UpdatedAt: converter.TimeToProto(s.UpdatedAt),
+// CreateInvitation invites an existing account; answers 201.
+func (s *Server) CreateInvitation(ctx context.Context, req *tenantv1.CreateInvitationRequest) (*tenantv1.CreateInvitationResponse, error) {
+	inv, err := s.uc.CreateInvitation(ctx, req.GetGarageId(), req.GetAccountId(), req.GetGroupIds())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
 	}
+
+	httpapi.Created(ctx)
+
+	return &tenantv1.CreateInvitationResponse{Invitation: invitationToProto(inv)}, nil
 }
 
-func staffStatusToProto(s domain.StaffStatus) tenantv1.StaffStatus {
-	switch s {
-	case domain.StaffStatusActive:
-		return tenantv1.StaffStatus_STAFF_STATUS_ACTIVE
-	case domain.StaffStatusInactive:
-		return tenantv1.StaffStatus_STAFF_STATUS_INACTIVE
-	case domain.StaffStatusSuspended:
-		return tenantv1.StaffStatus_STAFF_STATUS_SUSPENDED
-	default:
-		return tenantv1.StaffStatus_STAFF_STATUS_UNSPECIFIED
+// ListInvitations lists the garage's invitations.
+func (s *Server) ListInvitations(ctx context.Context, req *tenantv1.ListInvitationsRequest) (*tenantv1.ListInvitationsResponse, error) {
+	invitations, err := s.uc.ListInvitations(ctx, req.GetGarageId(), invitationStatusFromProto(req.GetStatus()))
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
 	}
+
+	resp := &tenantv1.ListInvitationsResponse{Data: make([]*tenantv1.Invitation, 0, len(invitations))}
+	for _, inv := range invitations {
+		resp.Data = append(resp.Data, invitationToProto(inv))
+	}
+
+	return resp, nil
 }
 
-func roleToProto(r domain.Role) tenantv1.Role {
-	switch r {
-	case domain.RoleOwner:
-		return tenantv1.Role_ROLE_OWNER
-	case domain.RoleAccountant:
-		return tenantv1.Role_ROLE_ACCOUNTANT
-	case domain.RoleTechnician:
-		return tenantv1.Role_ROLE_TECHNICIAN
-	case domain.RoleServiceAdvisor:
-		return tenantv1.Role_ROLE_SERVICE_ADVISOR
-	case domain.RoleInventoryStaff:
-		return tenantv1.Role_ROLE_INVENTORY_STAFF
-	default:
-		return tenantv1.Role_ROLE_UNSPECIFIED
+// RevokeInvitation cancels a pending invitation.
+func (s *Server) RevokeInvitation(ctx context.Context, req *tenantv1.RevokeInvitationRequest) (*tenantv1.RevokeInvitationResponse, error) {
+	inv, err := s.uc.RevokeInvitation(ctx, req.GetGarageId(), req.GetInvitationId())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
 	}
+
+	return &tenantv1.RevokeInvitationResponse{Invitation: invitationToProto(inv)}, nil
 }
 
-func roleFromProto(r tenantv1.Role) domain.Role {
-	switch r {
-	case tenantv1.Role_ROLE_UNSPECIFIED:
-		return domain.Role("")
-	case tenantv1.Role_ROLE_OWNER:
-		return domain.RoleOwner
-	case tenantv1.Role_ROLE_ACCOUNTANT:
-		return domain.RoleAccountant
-	case tenantv1.Role_ROLE_TECHNICIAN:
-		return domain.RoleTechnician
-	case tenantv1.Role_ROLE_SERVICE_ADVISOR:
-		return domain.RoleServiceAdvisor
-	case tenantv1.Role_ROLE_INVENTORY_STAFF:
-		return domain.RoleInventoryStaff
-	default:
-		return domain.Role("")
+// ListMyInvitations lists the caller's invitations.
+func (s *Server) ListMyInvitations(ctx context.Context, req *tenantv1.ListMyInvitationsRequest) (*tenantv1.ListMyInvitationsResponse, error) {
+	invitations, err := s.uc.ListMyInvitations(ctx, middleware.AccountID(ctx), invitationStatusFromProto(req.GetStatus()))
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
 	}
+
+	resp := &tenantv1.ListMyInvitationsResponse{Data: make([]*tenantv1.Invitation, 0, len(invitations))}
+	for _, inv := range invitations {
+		resp.Data = append(resp.Data, invitationToProto(inv))
+	}
+
+	return resp, nil
 }
 
-// rolePtrFromProto maps an optional role field to a domain pointer; nil (or
-// UNSPECIFIED) means "keep the current role".
-func rolePtrFromProto(r *tenantv1.Role) *domain.Role {
-	if r == nil || *r == tenantv1.Role_ROLE_UNSPECIFIED {
-		return nil
+// GetMyInvitation returns one of the caller's invitations.
+func (s *Server) GetMyInvitation(ctx context.Context, req *tenantv1.GetMyInvitationRequest) (*tenantv1.GetMyInvitationResponse, error) {
+	inv, err := s.uc.GetMyInvitation(ctx, middleware.AccountID(ctx), req.GetInvitationId())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
 	}
 
-	role := roleFromProto(*r)
-
-	return &role
+	return &tenantv1.GetMyInvitationResponse{Invitation: invitationToProto(inv)}, nil
 }
 
-// staffStatusPtrFromProto maps an optional status field to a domain pointer;
-// nil (or UNSPECIFIED) means "keep the current status".
-func staffStatusPtrFromProto(s *tenantv1.StaffStatus) *domain.StaffStatus {
-	if s == nil {
-		return nil
+// AcceptInvitation joins the garage.
+func (s *Server) AcceptInvitation(ctx context.Context, req *tenantv1.AcceptInvitationRequest) (*tenantv1.AcceptInvitationResponse, error) {
+	inv, err := s.uc.AcceptInvitation(ctx, middleware.AccountID(ctx), req.GetInvitationId())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
 	}
 
-	var status domain.StaffStatus
+	return &tenantv1.AcceptInvitationResponse{Invitation: invitationToProto(inv)}, nil
+}
 
-	switch *s {
-	case tenantv1.StaffStatus_STAFF_STATUS_ACTIVE:
-		status = domain.StaffStatusActive
-	case tenantv1.StaffStatus_STAFF_STATUS_INACTIVE:
-		status = domain.StaffStatusInactive
-	case tenantv1.StaffStatus_STAFF_STATUS_SUSPENDED:
-		status = domain.StaffStatusSuspended
-	case tenantv1.StaffStatus_STAFF_STATUS_UNSPECIFIED:
-		return nil
+// DeclineInvitation turns an invitation down.
+func (s *Server) DeclineInvitation(ctx context.Context, req *tenantv1.DeclineInvitationRequest) (*tenantv1.DeclineInvitationResponse, error) {
+	inv, err := s.uc.DeclineInvitation(ctx, middleware.AccountID(ctx), req.GetInvitationId())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
 	}
 
-	return &status
+	return &tenantv1.DeclineInvitationResponse{Invitation: invitationToProto(inv)}, nil
 }

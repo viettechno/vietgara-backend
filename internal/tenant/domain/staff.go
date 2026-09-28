@@ -1,57 +1,42 @@
 package domain
 
-import "time"
+import (
+	"time"
 
-// Role is a staff member's role within one specific garage.
-// See: FRD FR-IAM-03, Security Architecture Section 3.1.
-type Role string
-
-// Valid Role values within a garage.
-const (
-	RoleOwner          Role = "owner"
-	RoleAccountant     Role = "accountant"
-	RoleTechnician     Role = "technician"
-	RoleServiceAdvisor Role = "service_advisor"
-	RoleInventoryStaff Role = "inventory_staff"
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
 )
-
-// IsValid reports whether r is one of the defined Role values.
-func (r Role) IsValid() bool {
-	switch r {
-	case RoleOwner, RoleAccountant, RoleTechnician, RoleServiceAdvisor, RoleInventoryStaff:
-		return true
-	}
-
-	return false
-}
 
 // StaffStatus is the lifecycle state of a staff membership within a garage.
 type StaffStatus string
 
 // Valid StaffStatus values.
 const (
-	StaffStatusActive    StaffStatus = "active"
-	StaffStatusInactive  StaffStatus = "inactive"
-	StaffStatusSuspended StaffStatus = "suspended"
+	StaffStatusActive   StaffStatus = "active"
+	StaffStatusInactive StaffStatus = "inactive"
 )
 
 // IsValid reports whether s is one of the defined StaffStatus values.
 func (s StaffStatus) IsValid() bool {
-	switch s {
-	case StaffStatusActive, StaffStatusInactive, StaffStatusSuspended:
-		return true
-	}
-
-	return false
+	return s == StaffStatusActive || s == StaffStatusInactive
 }
 
-// GarageStaff assigns an Account a Role within exactly one Garage.
-type GarageStaff struct {
+// Staff is an account's membership of one garage (FR-TEN-04). The garage
+// owner also has a membership, flagged Owner.
+type Staff struct {
 	ID        string
 	GarageID  string
 	AccountID string
-	Role      Role
 	Status    StaffStatus
+	// GroupIDs are the staff groups of the garage the member belongs to.
+	GroupIDs []string
+	// Owner is true for the garage owner's own membership.
+	Owner bool
+	// Permissions is the union of the member's groups' role permissions.
+	Permissions []access.Permission
+	// Account details, loaded for listings.
+	FullName  string
+	Email     string
+	Phone     *string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }

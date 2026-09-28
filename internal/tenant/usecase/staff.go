@@ -2,175 +2,155 @@ package usecase
 
 import (
 	"context"
-	"errors"
-
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
+	"slices"
 
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-// AddStaffRequest is the input for StaffUseCase.Add.
-type AddStaffRequest struct {
-	GarageID  string
-	AccountID string
-	Role      domain.Role
-}
-
-// UpdateStaffRequest is the input for StaffUseCase.Update; nil pointer
-// fields keep their current value.
-type UpdateStaffRequest struct {
-	StaffID  string
-	GarageID string
-	Role     *domain.Role
+// StaffFields are the settable membership fields; nil fields are left
+// unchanged.
+type StaffFields struct {
 	Status   *domain.StaffStatus
+	GroupIDs *[]string
 }
 
-// StaffUseCase (FR-TEN-04) implements the staff membership operations that
-// share the same repository and are used together in garage management
-// flows.
-type StaffUseCase struct {
-	staff   GarageStaffRepository
-	account AccountDirectory
-}
-
-// NewStaffUseCase wires the staff use case to its repository.
-func NewStaffUseCase(staff GarageStaffRepository, opts ...StaffOption) *StaffUseCase {
-	uc := &StaffUseCase{staff: staff}
-
-	for _, opt := range opts {
-		opt(uc)
+// ListStaff returns the garage's members with account details, groups and
+// effective permissions.
+func (uc *TenantUseCase) ListStaff(ctx context.Context, garageID string) ([]*domain.Staff, error) {
+	members, err := uc.Staff.List(ctx, garageID)
+	if err != nil {
+		return nil, toAppError("list staff", err)
 	}
 
-	return uc
-}
-
-// Add validates the role, rejects duplicate active memberships, and
-// persists the new staff record.
-func (uc *StaffUseCase) Add(ctx context.Context, req AddStaffRequest) (*domain.GarageStaff, error) {
-	if !req.Role.IsValid() {
-		return nil, apperror.Wrap(apperror.CodeInvalidArgument, "invalid role", domain.ErrInvalidRole)
-	}
-
-	if err := uc.requireActiveAccount(ctx, req.AccountID); err != nil {
+	if err := uc.withAccounts(ctx, members...); err != nil {
 		return nil, err
 	}
 
-	existing, err := uc.staff.FindByGarageAndAccount(ctx, req.GarageID, req.AccountID)
-	if err == nil && existing != nil && existing.Status == domain.StaffStatusActive {
-		return nil, apperror.Wrap(apperror.CodeAlreadyExists, "account is already staff at this garage", domain.ErrStaffAlreadyExists)
-	}
-
-	s := &domain.GarageStaff{
-		ID:        uuid.NewString(),
-		GarageID:  req.GarageID,
-		AccountID: req.AccountID,
-		Role:      req.Role,
-		Status:    domain.StaffStatusActive,
-	}
-	if err := uc.staff.Create(ctx, s); err != nil {
-		return nil, apperror.Wrap(apperror.CodeInternal, "add staff", err)
-	}
-
-	return s, nil
+	return members, nil
 }
 
-// List returns the active staff members of garageID.
-func (uc *StaffUseCase) List(ctx context.Context, garageID string) ([]*domain.GarageStaff, error) {
-	list, err := uc.staff.ListByGarageID(ctx, garageID)
+// UpdateStaff activates/deactivates a member or replaces their groups
+// (FR-TEN-04). The owner's own membership cannot change; reactivating a
+// member counts against the plan's staff limit.
+func (uc *TenantUseCase) UpdateStaff(ctx context.Context, garageID, staffID string, fields StaffFields) (*domain.Staff, error) {
+	member, err := uc.Staff.FindByID(ctx, garageID, staffID)
 	if err != nil {
-		return nil, apperror.Wrap(apperror.CodeInternal, "list staff", err)
+		return nil, toAppError("update staff", err)
 	}
 
-	return list, nil
-}
+	if member.Owner {
+		return nil, toAppError("update staff", domain.ErrOwnerMembership)
+	}
 
-// Update applies the partial updates in req to a staff membership. The
-// garage ID must match the membership's own garage so IDs cannot be mixed
-// across tenants. Deactivating the garage owner is rejected: the owner is
-// whoever created the garage and must always retain access.
-func (uc *StaffUseCase) Update(ctx context.Context, req UpdateStaffRequest) (*domain.GarageStaff, error) {
-	s, err := uc.staff.FindByID(ctx, req.StaffID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, apperror.Wrap(apperror.CodeNotFound, "staff membership not found", domain.ErrStaffNotFound)
+	before := *member
+
+	if fields.Status != nil && *fields.Status != member.Status {
+		if err := uc.changeStaffStatus(ctx, garageID, member, *fields.Status); err != nil {
+			return nil, err
+		}
+	}
+
+	if fields.GroupIDs != nil {
+		groupIDs, err := uc.validGroupIDs(ctx, garageID, *fields.GroupIDs)
+		if err != nil {
+			return nil, err
 		}
 
-		return nil, apperror.Wrap(apperror.CodeInternal, "find staff", err)
+		if err := uc.Staff.SetGroups(ctx, garageID, staffID, groupIDs); err != nil {
+			return nil, toAppError("update staff groups", err)
+		}
 	}
 
-	if s.GarageID != req.GarageID {
-		return nil, apperror.Wrap(apperror.CodeNotFound, "staff membership not found", domain.ErrStaffNotFound)
+	updated, err := uc.Staff.FindByID(ctx, garageID, staffID)
+	if err != nil {
+		return nil, toAppError("reload staff", err)
 	}
 
-	if err := applyStaffUpdate(s, req); err != nil {
+	if err := uc.withAccounts(ctx, updated); err != nil {
 		return nil, err
 	}
 
-	if err := uc.staff.Update(ctx, s); err != nil {
-		return nil, apperror.Wrap(apperror.CodeInternal, "update staff", err)
+	if err := uc.audit(ctx, garageID, "staff.updated", "staff", staffID, before, updated); err != nil {
+		return nil, toAppError("audit staff", err)
 	}
 
-	return s, nil
+	return updated, nil
 }
 
-func applyStaffUpdate(s *domain.GarageStaff, req UpdateStaffRequest) error {
-	wasOwner := s.Role == domain.RoleOwner
-
-	if req.Role != nil {
-		if err := validateRoleUpdate(*req.Role, wasOwner); err != nil {
-			return err
-		}
-
-		s.Role = *req.Role
-	}
-
-	if req.Status != nil {
-		if err := validateStatusUpdate(*req.Status, wasOwner); err != nil {
-			return err
-		}
-
-		s.Status = *req.Status
-	}
-
-	return nil
-}
-
-func validateRoleUpdate(role domain.Role, wasOwner bool) error {
-	if !role.IsValid() {
-		return apperror.Wrap(apperror.CodeInvalidArgument, "invalid role", domain.ErrInvalidRole)
-	}
-
-	if role == domain.RoleOwner && !wasOwner {
-		return apperror.Wrap(apperror.CodeInvalidArgument, "owners cannot be invited", domain.ErrInvalidRole)
-	}
-
-	if wasOwner && role != domain.RoleOwner {
-		return apperror.Wrap(apperror.CodeFailedPrecondition, "the garage owner's role cannot be changed", domain.ErrOwnerRoleChange)
-	}
-
-	return nil
-}
-
-func validateStatusUpdate(status domain.StaffStatus, wasOwner bool) error {
+// changeStaffStatus (de)activates a member; reactivation counts against
+// the plan's staff limit.
+func (uc *TenantUseCase) changeStaffStatus(ctx context.Context, garageID string, member *domain.Staff, status domain.StaffStatus) error {
 	if !status.IsValid() {
-		return apperror.Wrap(apperror.CodeInvalidArgument, "invalid staff status", domain.ErrInvalidStaffStatus)
+		return apperror.Validation("status", apperror.IssueInvalid, "status is invalid")
 	}
 
-	// Use the pre-update role so a combined {role, status} request
-	// cannot demote-then-deactivate the owner in a single call.
-	if status != domain.StaffStatusActive && wasOwner {
-		return apperror.Wrap(apperror.CodeFailedPrecondition, "the garage owner cannot be deactivated", domain.ErrOwnerDeactivation)
+	if status == domain.StaffStatusActive {
+		if err := uc.checkGarageOwnerUsage(ctx, garageID, LimitStaff); err != nil {
+			return err
+		}
+	}
+
+	member.Status = status
+	if err := uc.Staff.UpdateStatus(ctx, member); err != nil {
+		return toAppError("update staff", err)
 	}
 
 	return nil
 }
 
-// Deactivate marks a staff membership inactive. It is idempotent:
-// deactivating an already-inactive membership succeeds without changes.
-func (uc *StaffUseCase) Deactivate(ctx context.Context, garageID, staffID string) (*domain.GarageStaff, error) {
-	inactive := domain.StaffStatusInactive
+// DeleteStaff removes a member from the garage.
+func (uc *TenantUseCase) DeleteStaff(ctx context.Context, garageID, staffID string) error {
+	member, err := uc.Staff.FindByID(ctx, garageID, staffID)
+	if err != nil {
+		return toAppError("remove staff", err)
+	}
 
-	return uc.Update(ctx, UpdateStaffRequest{StaffID: staffID, GarageID: garageID, Status: &inactive})
+	if member.Owner {
+		return toAppError("remove staff", domain.ErrOwnerMembership)
+	}
+
+	if err := uc.Staff.Delete(ctx, garageID, staffID); err != nil {
+		return toAppError("remove staff", err)
+	}
+
+	if err := uc.audit(ctx, garageID, "staff.removed", "staff", staffID, member, nil); err != nil {
+		return toAppError("audit staff", err)
+	}
+
+	return uc.Events.Publish(ctx, EventStaffRemoved, garageID, member.AccountID, map[string]any{
+		keyGarageID: garageID, "account_id": member.AccountID,
+	})
+}
+
+// validGroupIDs de-duplicates ids and checks they are groups of the garage.
+func (uc *TenantUseCase) validGroupIDs(ctx context.Context, garageID string, ids []string) ([]string, error) {
+	groups, err := uc.Groups.List(ctx, garageID)
+	if err != nil {
+		return nil, toAppError("list staff groups", err)
+	}
+
+	valid := make([]string, 0, len(ids))
+
+	for _, id := range ids {
+		if !slices.ContainsFunc(groups, func(g *domain.StaffGroup) bool { return g.ID == id }) {
+			return nil, apperror.Validation("groupIds", apperror.IssueInvalid, "unknown staff group "+id)
+		}
+
+		if !slices.Contains(valid, id) {
+			valid = append(valid, id)
+		}
+	}
+
+	return valid, nil
+}
+
+// checkGarageOwnerUsage checks limit for the owner of garageID.
+func (uc *TenantUseCase) checkGarageOwnerUsage(ctx context.Context, garageID string, limit Limit) error {
+	garage, err := uc.Garages.FindByID(ctx, garageID)
+	if err != nil {
+		return toAppError("load garage", err)
+	}
+
+	return uc.checkUsage(ctx, garage.OwnerAccountID, limit)
 }

@@ -2,137 +2,67 @@ package apperror_test
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-func TestAppError_Error(t *testing.T) {
-	tests := []struct {
-		name string
-		err  *apperror.AppError
-		want string
-	}{
-		{
-			name: "without cause",
-			err:  &apperror.AppError{Code: apperror.CodeNotFound, Message: "garage not found"},
-			want: "NOT_FOUND: garage not found",
-		},
-		{
-			name: "with cause",
-			err:  &apperror.AppError{Code: apperror.CodeInternal, Message: "create garage", Err: errors.New("db down")},
-			want: "INTERNAL: create garage: db down",
-		},
-	}
+func TestAppError(t *testing.T) {
+	t.Parallel()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := tt.err.Error(); got != tt.want {
-				t.Fatalf("Error() = %q, want %q", got, tt.want)
-			}
-		})
-	}
+	cause := errors.New("db down")
+
+	withCause := apperror.Wrap(apperror.CodeInternal, "load", cause)
+	assert.Equal(t, "INTERNAL: load: db down", withCause.Error())
+	require.ErrorIs(t, withCause, cause)
+
+	plain := apperror.New(apperror.CodeNotFound, "missing")
+	assert.Equal(t, "NOT_FOUND: missing", plain.Error())
+	assert.Equal(t, apperror.ReasonNotFound, plain.ReasonOrDefault())
+	assert.Equal(t, "CUSTOM", plain.WithReason("CUSTOM").ReasonOrDefault())
+
+	validation := apperror.Validation("email", apperror.IssueInvalid, "email is invalid")
+	assert.Equal(t, apperror.ReasonValidation, validation.ReasonOrDefault())
+	assert.Equal(t, []apperror.FieldViolation{{Field: "email", Issue: "invalid"}}, validation.Details)
+
+	assert.Equal(t, apperror.CodeInternal, apperror.Internal("op", cause).Code)
+
+	wrapped := fmt.Errorf("outer: %w", validation)
+	got, ok := apperror.As(wrapped)
+	require.True(t, ok)
+	assert.Same(t, validation, got)
+
+	_, ok = apperror.As(cause)
+	assert.False(t, ok)
+
+	assert.Equal(t, apperror.ReasonValidation, apperror.ReasonOf(wrapped))
+	assert.Empty(t, apperror.ReasonOf(cause))
 }
 
-func TestAppError_Unwrap(t *testing.T) {
-	base := errors.New("db failure")
-	err := &apperror.AppError{Code: apperror.CodeInternal, Message: "create garage", Err: base}
+func TestDefaultReasons(t *testing.T) {
+	t.Parallel()
 
-	if got := err.Unwrap(); !errors.Is(got, base) {
-		t.Fatalf("Unwrap() = %v, want %v", got, base)
-	}
-}
-
-func TestNew(t *testing.T) {
-	err := apperror.New(apperror.CodeInvalidArgument, "name is required")
-	if err == nil {
-		t.Fatal("New() returned nil")
-	}
-
-	if err.Code != apperror.CodeInvalidArgument {
-		t.Fatalf("Code = %q, want %q", err.Code, apperror.CodeInvalidArgument)
+	tests := map[apperror.Code]string{
+		apperror.CodeNotFound:           apperror.ReasonNotFound,
+		apperror.CodeAlreadyExists:      apperror.ReasonAlreadyExists,
+		apperror.CodeInvalidArgument:    apperror.ReasonValidation,
+		apperror.CodePermissionDenied:   apperror.ReasonPermissionDenied,
+		apperror.CodeUnauthenticated:    apperror.ReasonUnauthenticated,
+		apperror.CodeFailedPrecondition: apperror.ReasonFailedPrecondition,
+		apperror.CodeResourceExhausted:  apperror.ReasonRateLimited,
+		apperror.CodeInternal:           apperror.ReasonInternal,
+		apperror.Code("OTHER"):          apperror.ReasonInternal,
 	}
 
-	if err.Message != "name is required" {
-		t.Fatalf("Message = %q, want %q", err.Message, "name is required")
-	}
-
-	if err.Err != nil {
-		t.Fatalf("Err = %v, want nil", err.Err)
-	}
-}
-
-func TestWrap(t *testing.T) {
-	base := errors.New("resource missing")
-
-	err := apperror.Wrap(apperror.CodeNotFound, "garage not found", base)
-	if err == nil {
-		t.Fatal("Wrap() returned nil")
-	}
-
-	if err.Code != apperror.CodeNotFound {
-		t.Fatalf("Code = %q, want %q", err.Code, apperror.CodeNotFound)
-	}
-
-	if err.Message != "garage not found" {
-		t.Fatalf("Message = %q, want %q", err.Message, "garage not found")
-	}
-
-	if !errors.Is(err, base) {
-		t.Fatalf("Wrap() did not preserve wrapped error: %v", base)
-	}
-
-	if !errors.Is(err.Err, base) {
-		t.Fatalf("Err = %v, want %v", err.Err, base)
-	}
-}
-
-func TestAs(t *testing.T) {
-	tests := []struct {
-		name    string
-		err     error
-		wantOK  bool
-		wantMsg string
-	}{
-		{
-			name:    "wrapped app error",
-			err:     apperror.Wrap(apperror.CodePermissionDenied, "forbidden", apperror.ErrPermissionDenied),
-			wantOK:  true,
-			wantMsg: "forbidden",
-		},
-		{
-			name:    "plain error",
-			err:     errors.New("plain error"),
-			wantOK:  false,
-			wantMsg: "",
-		},
-		{
-			name:    "app error without wrap",
-			err:     apperror.New(apperror.CodeUnauthenticated, "missing token"),
-			wantOK:  true,
-			wantMsg: "missing token",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, ok := apperror.As(tt.err)
-			if ok != tt.wantOK {
-				t.Fatalf("As() ok = %v, want %v", ok, tt.wantOK)
-			}
-
-			if !ok {
-				return
-			}
-
-			if got.Message != tt.wantMsg {
-				t.Fatalf("As().Message = %q, want %q", got.Message, tt.wantMsg)
-			}
-		})
+	for code, want := range tests {
+		assert.Equal(t, want, apperror.New(code, "x").ReasonOrDefault(), code)
 	}
 }
 
@@ -140,28 +70,51 @@ func TestToGRPCError(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name     string
-		err      error
-		wantCode codes.Code
+		name       string
+		err        error
+		wantCode   codes.Code
+		wantMsg    string
+		wantReason string
+		wantFields int
 	}{
-		{name: "not found", err: apperror.New(apperror.CodeNotFound, "missing"), wantCode: codes.NotFound},
-		{name: "already exists", err: apperror.New(apperror.CodeAlreadyExists, "dup"), wantCode: codes.AlreadyExists},
-		{name: "invalid argument", err: apperror.New(apperror.CodeInvalidArgument, "bad"), wantCode: codes.InvalidArgument},
-		{name: "permission denied", err: apperror.New(apperror.CodePermissionDenied, "denied"), wantCode: codes.PermissionDenied},
-		{name: "unauthenticated", err: apperror.New(apperror.CodeUnauthenticated, "who"), wantCode: codes.Unauthenticated},
-		{name: "failed precondition", err: apperror.New(apperror.CodeFailedPrecondition, "precond"), wantCode: codes.FailedPrecondition},
-		{name: "internal", err: apperror.New(apperror.CodeInternal, "boom"), wantCode: codes.Internal},
-		{name: "unknown app error code", err: apperror.New(apperror.Code("SOMETHING_ELSE"), "boom"), wantCode: codes.Internal},
-		{name: "non app error", err: errors.New("plain error"), wantCode: codes.Internal},
+		{name: "not found", err: apperror.New(apperror.CodeNotFound, "gone"), wantCode: codes.NotFound, wantMsg: "gone", wantReason: "NOT_FOUND"},
+		{name: "already exists", err: apperror.New(apperror.CodeAlreadyExists, "dup"), wantCode: codes.AlreadyExists, wantMsg: "dup", wantReason: "ALREADY_EXISTS"},
+		{name: "validation with fields", err: apperror.Validation("a", "required", "bad").WithField("b", "invalid"), wantCode: codes.InvalidArgument, wantMsg: "bad", wantReason: "VALIDATION_ERROR", wantFields: 2},
+		{name: "permission denied", err: apperror.New(apperror.CodePermissionDenied, "no"), wantCode: codes.PermissionDenied, wantMsg: "no", wantReason: "PERMISSION_DENIED"},
+		{name: "unauthenticated", err: apperror.New(apperror.CodeUnauthenticated, "who"), wantCode: codes.Unauthenticated, wantMsg: "who", wantReason: "UNAUTHENTICATED"},
+		{name: "failed precondition with reason", err: apperror.New(apperror.CodeFailedPrecondition, "limit").WithReason("PLAN_LIMIT_REACHED"), wantCode: codes.FailedPrecondition, wantMsg: "limit", wantReason: "PLAN_LIMIT_REACHED"},
+		{name: "resource exhausted", err: apperror.New(apperror.CodeResourceExhausted, "slow"), wantCode: codes.ResourceExhausted, wantMsg: "slow", wantReason: "RATE_LIMITED"},
+		{name: "internal hides details", err: apperror.Wrap(apperror.CodeInternal, "secret", errors.New("pg")), wantCode: codes.Internal, wantMsg: "internal error"},
+		{name: "unknown code", err: apperror.New(apperror.Code("WEIRD"), "x"), wantCode: codes.Internal, wantMsg: "internal error"},
+		{name: "plain error", err: errors.New("raw"), wantCode: codes.Internal, wantMsg: "internal error"},
+		{name: "status passes through", err: status.Error(codes.Unavailable, "later"), wantCode: codes.Unavailable, wantMsg: "later"},
 	}
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			err := apperror.ToGRPCError(tc.err)
-			require.Error(t, err)
-			assert.Equal(t, tc.wantCode, status.Code(err))
+			st := status.Convert(apperror.ToGRPCError(tt.err))
+			assert.Equal(t, tt.wantCode, st.Code())
+			assert.Equal(t, tt.wantMsg, st.Message())
+
+			var (
+				reason string
+				fields int
+			)
+
+			for _, d := range st.Details() {
+				switch detail := d.(type) {
+				case *errdetails.ErrorInfo:
+					reason = detail.GetReason()
+					assert.Equal(t, apperror.ErrorDomain, detail.GetDomain())
+				case *errdetails.BadRequest:
+					fields = len(detail.GetFieldViolations())
+				}
+			}
+
+			assert.Equal(t, tt.wantReason, reason)
+			assert.Equal(t, tt.wantFields, fields)
 		})
 	}
 }

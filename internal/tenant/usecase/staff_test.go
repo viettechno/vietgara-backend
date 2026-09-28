@@ -1,298 +1,245 @@
 package usecase_test
 
 import (
-	"context"
-	"errors"
 	"testing"
+	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/viettechno/vietgara-backend/internal/mocks"
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-func TestStaffUseCase_Add(t *testing.T) {
-	tests := []struct {
-		name         string
-		req          usecase.AddStaffRequest
-		existing     *domain.GarageStaff
-		findErr      error
-		createErr    error
-		expectCreate bool
-		wantCode     apperror.Code
-		wantRole     domain.Role
-	}{
-		{
-			name:         "assigns a valid role",
-			req:          usecase.AddStaffRequest{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician},
-			expectCreate: true,
-			wantRole:     domain.RoleTechnician,
-		},
-		{
-			name:     "rejects an invalid role",
-			req:      usecase.AddStaffRequest{GarageID: "garage-1", AccountID: "acc-2", Role: domain.Role("not-a-real-role")},
-			wantCode: apperror.CodeInvalidArgument,
-		},
-		{
-			name:     "rejects an already active membership",
-			req:      usecase.AddStaffRequest{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician},
-			existing: &domain.GarageStaff{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive},
-			wantCode: apperror.CodeAlreadyExists,
-		},
-		{
-			name:         "allows re-adding an inactive membership",
-			req:          usecase.AddStaffRequest{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician},
-			existing:     &domain.GarageStaff{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusInactive},
-			expectCreate: true,
-			wantRole:     domain.RoleTechnician,
-		},
-		{
-			name:         "proceeds when the membership lookup fails",
-			req:          usecase.AddStaffRequest{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician},
-			findErr:      errors.New("boom"),
-			expectCreate: true,
-			wantRole:     domain.RoleTechnician,
-		},
-		{
-			name:         "fails when the staff record cannot be created",
-			req:          usecase.AddStaffRequest{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician},
-			createErr:    errors.New("boom"),
-			expectCreate: true,
-			wantCode:     apperror.CodeInternal,
-		},
-	}
+func TestInvitationFlow(t *testing.T) {
+	t.Parallel()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			staff := mocks.NewMockGarageStaffRepository(t)
-			uc := usecase.NewStaffUseCase(staff)
+	e := newEnv(t, limits{Garages: 1, Staff: 1})
+	id := e.garage(t)
+	ctx := e.as(t, owner, id)
+	advisor := groupNamed(t, e, id, "Service Advisor")
 
-			if tt.wantCode != apperror.CodeInvalidArgument {
-				staff.EXPECT().FindByGarageAndAccount(mock.Anything, tt.req.GarageID, tt.req.AccountID).Return(tt.existing, tt.findErr).Once()
-			}
+	candidate, err := e.UC.LookupCandidate(ctx, id, "LAN@example.com")
+	require.NoError(t, err)
+	assert.Equal(t, usecase.CandidateNone, candidate.Membership)
 
-			if tt.expectCreate {
-				staff.EXPECT().Create(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
-					return s.GarageID == tt.req.GarageID && s.AccountID == tt.req.AccountID && s.Role == tt.req.Role && s.Status == domain.StaffStatusActive
-				})).Return(tt.createErr).Once()
-			}
+	candidate, err = e.UC.LookupCandidate(ctx, id, "0901234567")
+	require.NoError(t, err)
+	assert.Equal(t, staff, candidate.Account.ID)
 
-			s, err := uc.Add(context.Background(), tt.req)
-			if tt.wantCode != "" {
-				assertAppError(t, err, tt.wantCode)
-				return
-			}
+	inv, err := e.UC.CreateInvitation(ctx, id, staff, []string{advisor.ID, advisor.ID})
+	require.NoError(t, err)
+	assert.Equal(t, []string{advisor.ID}, inv.GroupIDs)
+	assert.Equal(t, "Minh", inv.InvitedByName)
+	assert.Equal(t, e.Now.Add(domain.InvitationTTL), inv.ExpiresAt)
 
-			require.NoError(t, err)
-			require.NotNil(t, s)
-			assert.Equal(t, tt.wantRole, s.Role)
-			assert.Equal(t, domain.StaffStatusActive, s.Status)
-		})
-	}
+	require.Len(t, e.Mail.Sent, 1)
+	assert.Contains(t, e.Mail.Sent[0].Text, "https://app.vietgara.vn/invitations/"+inv.ID)
+	assert.Contains(t, e.Mail.Sent[0].Subject, "Gara Minh", "invitee's language (vi)")
+
+	candidate, err = e.UC.LookupCandidate(ctx, id, "lan@example.com")
+	require.NoError(t, err)
+	assert.Equal(t, usecase.CandidateInvited, candidate.Membership)
+
+	_, err = e.UC.CreateInvitation(ctx, id, staff, nil)
+	requireReason(t, err, "PLAN_LIMIT_REACHED")
+
+	pending, err := e.UC.ListInvitations(ctx, id, domain.InvitationPending)
+	require.NoError(t, err)
+	assert.Len(t, pending, 1)
+
+	staffCtx := e.as(t, staff, "")
+
+	mine, err := e.UC.ListMyInvitations(staffCtx, staff, "")
+	require.NoError(t, err)
+	require.Len(t, mine, 1)
+	assert.Equal(t, "Gara Minh", mine[0].GarageName)
+
+	_, err = e.UC.GetMyInvitation(staffCtx, owner, inv.ID)
+	requireReason(t, err, apperror.ReasonNotFound)
+
+	accepted, err := e.UC.AcceptInvitation(staffCtx, staff, inv.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.InvitationAccepted, accepted.Status)
+	assert.Contains(t, e.Events.Types, usecase.EventStaffJoined)
+
+	_, err = e.UC.AcceptInvitation(staffCtx, staff, inv.ID)
+	requireReason(t, err, domain.ReasonInvitationNotPending)
+
+	members, err := e.UC.ListStaff(ctx, id)
+	require.NoError(t, err)
+	require.Len(t, members, 2)
+	assert.Contains(t, members[1].Permissions, access.CustomerWrite)
+
+	candidate, err = e.UC.LookupCandidate(ctx, id, "lan@example.com")
+	require.NoError(t, err)
+	assert.Equal(t, usecase.CandidateMember, candidate.Membership)
+
+	_, err = e.UC.CreateInvitation(ctx, id, staff, nil)
+	requireReason(t, err, domain.ReasonAlreadyMember)
 }
 
-// ---------------------------------------------------------------------------
-// Cross-tenant isolation test (documents the expected RLS behavior at the
-// usecase level using the mock repo -- the REAL guarantee is enforced by
-// Postgres RLS + TenantContextInterceptor, verified separately via an
-// integration test against a real database per LLD Section 6).
-// ---------------------------------------------------------------------------
+func TestInvitationValidation(t *testing.T) {
+	t.Parallel()
 
-func TestStaffUseCase_List(t *testing.T) {
-	tests := []struct {
-		name     string
-		garageID string
-		list     []*domain.GarageStaff
-		listErr  error
-		wantCode apperror.Code
-	}{
-		{
-			name:     "returns only this garage's staff",
-			garageID: "garage-A",
-			list: []*domain.GarageStaff{
-				{ID: "staff-1", GarageID: "garage-A", AccountID: "acc-1", Role: domain.RoleTechnician, Status: domain.StaffStatusActive},
-			},
-		},
-		{
-			name:     "fails when the staff list cannot be loaded",
-			garageID: "garage-A",
-			listErr:  errors.New("boom"),
-			wantCode: apperror.CodeInternal,
-		},
-	}
+	e := newEnv(t, limits{Garages: 1, Staff: 5})
+	id := e.garage(t)
+	ctx := e.as(t, owner, id)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			staff := mocks.NewMockGarageStaffRepository(t)
-			uc := usecase.NewStaffUseCase(staff)
+	_, err := e.UC.CreateInvitation(ctx, id, "ghost", nil)
+	requireReason(t, err, domain.ReasonAccountNotFound)
+	_, err = e.UC.CreateInvitation(ctx, id, "off", nil)
+	requireReason(t, err, domain.ReasonAccountInactive)
+	_, err = e.UC.CreateInvitation(ctx, id, staff, []string{"not-a-group"})
+	requireReason(t, err, apperror.ReasonValidation)
 
-			staff.EXPECT().ListByGarageID(mock.Anything, tt.garageID).Return(tt.list, tt.listErr).Once()
+	_, err = e.UC.LookupCandidate(ctx, id, "ghost@example.com")
+	requireReason(t, err, domain.ReasonAccountNotFound)
+	_, err = e.UC.LookupCandidate(ctx, id, "off@example.com")
+	requireReason(t, err, domain.ReasonAccountInactive)
 
-			result, err := uc.List(context.Background(), tt.garageID)
-			if tt.wantCode != "" {
-				assertAppError(t, err, tt.wantCode)
-				return
-			}
+	inv, err := e.UC.CreateInvitation(ctx, id, staff, nil)
+	require.NoError(t, err)
 
-			require.NoError(t, err)
-			assert.Equal(t, tt.list, result)
-		})
-	}
+	_, err = e.UC.CreateInvitation(ctx, id, staff, nil)
+	requireReason(t, err, domain.ReasonAlreadyInvited)
+
+	revoked, err := e.UC.RevokeInvitation(ctx, id, inv.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.InvitationRevoked, revoked.Status)
+
+	_, err = e.UC.RevokeInvitation(ctx, "other-garage", inv.ID)
+	requireReason(t, err, apperror.ReasonNotFound)
+	_, err = e.UC.RevokeInvitation(ctx, id, inv.ID)
+	requireReason(t, err, domain.ReasonInvitationNotPending)
+
+	second, err := e.UC.CreateInvitation(ctx, id, staff, nil)
+	require.NoError(t, err)
+
+	declined, err := e.UC.DeclineInvitation(e.as(t, staff, ""), staff, second.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.InvitationDeclined, declined.Status)
+	_, err = e.UC.DeclineInvitation(e.as(t, staff, ""), staff, second.ID)
+	requireReason(t, err, domain.ReasonInvitationNotPending)
+	_, err = e.UC.DeclineInvitation(e.as(t, staff, ""), staff, "missing")
+	requireReason(t, err, apperror.ReasonNotFound)
+
+	third, err := e.UC.CreateInvitation(ctx, id, staff, nil)
+	require.NoError(t, err)
+
+	e.Now = e.Now.Add(domain.InvitationTTL + time.Hour)
+
+	expired, err := e.UC.ListMyInvitations(e.as(t, staff, ""), staff, domain.InvitationExpired)
+	require.NoError(t, err)
+	assert.Len(t, expired, 1)
+
+	_, err = e.UC.AcceptInvitation(e.as(t, staff, ""), staff, third.ID)
+	requireReason(t, err, domain.ReasonInvitationExpired)
 }
 
-func activeTechnicianStaff() *domain.GarageStaff {
-	return &domain.GarageStaff{
-		ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
-	}
+func TestStaffManagement(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t, limits{Garages: 1, Staff: 1})
+	id := e.garage(t)
+	ctx := e.as(t, owner, id)
+	accountant := groupNamed(t, e, id, "Accountant")
+
+	inv, err := e.UC.CreateInvitation(ctx, id, staff, nil)
+	require.NoError(t, err)
+	_, err = e.UC.AcceptInvitation(e.as(t, staff, ""), staff, inv.ID)
+	require.NoError(t, err)
+
+	members, err := e.UC.ListStaff(ctx, id)
+	require.NoError(t, err)
+
+	ownerRow, member := members[0], members[1]
+
+	updated, err := e.UC.UpdateStaff(ctx, id, member.ID, usecase.StaffFields{GroupIDs: &[]string{accountant.ID}})
+	require.NoError(t, err)
+	assert.Equal(t, []string{accountant.ID}, updated.GroupIDs)
+	assert.Contains(t, updated.Permissions, access.BillingWrite)
+
+	updated, err = e.UC.UpdateStaff(ctx, id, member.ID, usecase.StaffFields{Status: new(domain.StaffStatusInactive)})
+	require.NoError(t, err)
+	assert.Equal(t, domain.StaffStatusInactive, updated.Status)
+
+	_, err = e.UC.UpdateStaff(ctx, id, member.ID, usecase.StaffFields{Status: new(domain.StaffStatus("gone"))})
+	requireReason(t, err, apperror.ReasonValidation)
+
+	_, err = e.UC.UpdateStaff(ctx, id, member.ID, usecase.StaffFields{Status: new(domain.StaffStatusActive)})
+	require.NoError(t, err, "one staff seat is free again")
+
+	_, err = e.UC.UpdateStaff(ctx, id, ownerRow.ID, usecase.StaffFields{Status: new(domain.StaffStatusInactive)})
+	requireReason(t, err, domain.ReasonOwnerMembership)
+	requireReason(t, e.UC.DeleteStaff(ctx, id, ownerRow.ID), domain.ReasonOwnerMembership)
+
+	_, err = e.UC.UpdateStaff(ctx, id, member.ID, usecase.StaffFields{GroupIDs: &[]string{"bogus"}})
+	requireReason(t, err, apperror.ReasonValidation)
+
+	require.NoError(t, e.UC.DeleteStaff(ctx, id, member.ID))
+	assert.Contains(t, e.Events.Types, usecase.EventStaffRemoved)
+	requireReason(t, e.UC.DeleteStaff(ctx, id, member.ID), apperror.ReasonNotFound)
+	_, err = e.UC.UpdateStaff(ctx, id, member.ID, usecase.StaffFields{})
+	requireReason(t, err, apperror.ReasonNotFound)
 }
 
-func TestStaffUseCase_Update(t *testing.T) {
-	activeTechnician := activeTechnicianStaff
+func TestStaffFailures(t *testing.T) {
+	t.Parallel()
 
-	t.Run("deactivates a technician", func(t *testing.T) {
-		staff := mocks.NewMockGarageStaffRepository(t)
-		uc := usecase.NewStaffUseCase(staff)
+	e := newEnv(t, limits{Garages: 1, Staff: 5})
+	id := e.garage(t)
+	ctx := e.as(t, owner, id)
 
-		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(activeTechnician(), nil).Once()
-		staff.EXPECT().Update(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
-			return s.ID == "staff-1" && s.Status == domain.StaffStatusInactive
-		})).Return(nil).Once()
+	inv, err := e.UC.CreateInvitation(ctx, id, staff, nil)
+	require.NoError(t, err)
+	_, err = e.UC.AcceptInvitation(e.as(t, staff, ""), staff, inv.ID)
+	require.NoError(t, err)
 
-		s, err := uc.Deactivate(context.Background(), "garage-1", "staff-1")
-		require.NoError(t, err)
-		assert.Equal(t, domain.StaffStatusInactive, s.Status)
-	})
+	members, err := e.UC.ListStaff(ctx, id)
+	require.NoError(t, err)
 
-	t.Run("reactivates an inactive membership", func(t *testing.T) {
-		staff := mocks.NewMockGarageStaffRepository(t)
-		uc := usecase.NewStaffUseCase(staff)
+	memberID := members[1].ID
 
-		inactive := &domain.GarageStaff{
-			ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusInactive,
+	for op, call := range map[string]func() error{
+		"staff.list": func() error { _, err := e.UC.ListStaff(ctx, id); return err },
+		"staff.update": func() error {
+			_, err := e.UC.UpdateStaff(ctx, id, memberID, usecase.StaffFields{Status: new(domain.StaffStatusInactive)})
+			return err
+		},
+		"staff.groups": func() error {
+			_, err := e.UC.UpdateStaff(ctx, id, memberID, usecase.StaffFields{GroupIDs: &[]string{}})
+			return err
+		},
+		"staff.delete": func() error { return e.UC.DeleteStaff(ctx, id, memberID) },
+		"group.list": func() error {
+			_, err := e.UC.UpdateStaff(ctx, id, memberID, usecase.StaffFields{GroupIDs: &[]string{}})
+			return err
+		},
+		"invitation.list": func() error {
+			_, err := e.UC.ListInvitations(ctx, id, "")
+			return err
+		},
+		"invitation.expire": func() error { _, err := e.UC.CreateInvitation(ctx, id, "off2", nil); return err },
+		"staff.findByAccount": func() error {
+			_, err := e.UC.LookupCandidate(ctx, id, "lan@example.com")
+			return err
+		},
+	} {
+		e.Store.Fail[op] = errBoom
+		if op == "invitation.expire" {
+			e.Dir.Accounts["off2"] = &usecase.AccountSummary{ID: "off2", Active: true}
 		}
-		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(inactive, nil).Once()
-		staff.EXPECT().Update(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
-			return s.Status == domain.StaffStatusActive
-		})).Return(nil).Once()
 
-		active := domain.StaffStatusActive
-		s, err := uc.Update(context.Background(), usecase.UpdateStaffRequest{StaffID: "staff-1", GarageID: "garage-1", Status: &active})
-		require.NoError(t, err)
-		assert.Equal(t, domain.StaffStatusActive, s.Status)
-	})
+		require.Error(t, call(), op)
+		delete(e.Store.Fail, op)
+	}
 
-	t.Run("rejects deactivating the owner", func(t *testing.T) {
-		staff := mocks.NewMockGarageStaffRepository(t)
-		uc := usecase.NewStaffUseCase(staff)
-
-		owner := &domain.GarageStaff{
-			ID: "staff-1", GarageID: "garage-1", AccountID: "acc-1", Role: domain.RoleOwner, Status: domain.StaffStatusActive,
-		}
-		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(owner, nil).Once()
-
-		_, err := uc.Deactivate(context.Background(), "garage-1", "staff-1")
-		assertAppError(t, err, apperror.CodeFailedPrecondition)
-		staff.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
-	})
-
-	t.Run("rejects an invalid role", func(t *testing.T) {
-		staff := mocks.NewMockGarageStaffRepository(t)
-		uc := usecase.NewStaffUseCase(staff)
-
-		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(activeTechnician(), nil).Once()
-
-		bad := domain.Role("admin")
-		_, err := uc.Update(context.Background(), usecase.UpdateStaffRequest{StaffID: "staff-1", GarageID: "garage-1", Role: &bad})
-		assertAppError(t, err, apperror.CodeInvalidArgument)
-	})
-
-	t.Run("returns not found for a missing membership", func(t *testing.T) {
-		staff := mocks.NewMockGarageStaffRepository(t)
-		uc := usecase.NewStaffUseCase(staff)
-
-		staff.EXPECT().FindByID(mock.Anything, "missing").Return(nil, pgx.ErrNoRows).Once()
-
-		_, err := uc.Deactivate(context.Background(), "garage-1", "missing")
-		assertAppError(t, err, apperror.CodeNotFound)
-	})
-
-	t.Run("returns not found when the garage does not match", func(t *testing.T) {
-		staff := mocks.NewMockGarageStaffRepository(t)
-		uc := usecase.NewStaffUseCase(staff)
-
-		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(activeTechnician(), nil).Once()
-
-		_, err := uc.Deactivate(context.Background(), "garage-other", "staff-1")
-		assertAppError(t, err, apperror.CodeNotFound)
-		staff.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
-	})
-}
-
-func TestStaffUseCase_UpdateRoleAndErrors(t *testing.T) {
-	activeTechnician := activeTechnicianStaff
-
-	t.Run("changes the role", func(t *testing.T) {
-		staff := mocks.NewMockGarageStaffRepository(t)
-		uc := usecase.NewStaffUseCase(staff)
-
-		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(activeTechnician(), nil).Once()
-		staff.EXPECT().Update(mock.Anything, mock.MatchedBy(func(s *domain.GarageStaff) bool {
-			return s.Role == domain.RoleAccountant && s.Status == domain.StaffStatusActive
-		})).Return(nil).Once()
-
-		role := domain.RoleAccountant
-		s, err := uc.Update(context.Background(), usecase.UpdateStaffRequest{StaffID: "staff-1", GarageID: "garage-1", Role: &role})
-		require.NoError(t, err)
-		assert.Equal(t, domain.RoleAccountant, s.Role)
-	})
-
-	t.Run("rejects assigning the owner role", func(t *testing.T) {
-		staff := mocks.NewMockGarageStaffRepository(t)
-		uc := usecase.NewStaffUseCase(staff)
-
-		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(activeTechnician(), nil).Once()
-
-		role := domain.RoleOwner
-		_, err := uc.Update(context.Background(), usecase.UpdateStaffRequest{StaffID: "staff-1", GarageID: "garage-1", Role: &role})
-		assertAppError(t, err, apperror.CodeInvalidArgument)
-		staff.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
-	})
-
-	t.Run("rejects an invalid status", func(t *testing.T) {
-		staff := mocks.NewMockGarageStaffRepository(t)
-		uc := usecase.NewStaffUseCase(staff)
-
-		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(activeTechnician(), nil).Once()
-
-		bad := domain.StaffStatus("removed")
-		_, err := uc.Update(context.Background(), usecase.UpdateStaffRequest{StaffID: "staff-1", GarageID: "garage-1", Status: &bad})
-		assertAppError(t, err, apperror.CodeInvalidArgument)
-		staff.AssertNotCalled(t, "Update", mock.Anything, mock.Anything)
-	})
-
-	t.Run("fails when the lookup fails", func(t *testing.T) {
-		staff := mocks.NewMockGarageStaffRepository(t)
-		uc := usecase.NewStaffUseCase(staff)
-
-		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(nil, errors.New("boom")).Once()
-
-		_, err := uc.Deactivate(context.Background(), "garage-1", "staff-1")
-		assertAppError(t, err, apperror.CodeInternal)
-	})
-
-	t.Run("fails when the update is rejected", func(t *testing.T) {
-		staff := mocks.NewMockGarageStaffRepository(t)
-		uc := usecase.NewStaffUseCase(staff)
-
-		staff.EXPECT().FindByID(mock.Anything, "staff-1").Return(activeTechnician(), nil).Once()
-		staff.EXPECT().Update(mock.Anything, mock.Anything).Return(errors.New("boom")).Once()
-
-		_, err := uc.Deactivate(context.Background(), "garage-1", "staff-1")
-		assertAppError(t, err, apperror.CodeInternal)
-	})
+	e.Dir.Err = errBoom
+	_, err = e.UC.ListStaff(ctx, id)
+	requireReason(t, err, apperror.ReasonInternal)
+	_, err = e.UC.ListMyInvitations(ctx, staff, "")
+	requireReason(t, err, apperror.ReasonInternal)
 }

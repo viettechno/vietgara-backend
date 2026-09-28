@@ -51,12 +51,8 @@ ALTER TABLE partners FORCE ROW LEVEL SECURITY;
 -- Create Row-Level Security policy for partners
 CREATE POLICY partners_rls_policy ON partners
 FOR ALL
-USING (
-    garage_id = current_setting('app.current_garage_id', true)::uuid
-)
-WITH CHECK (
-    garage_id = current_setting('app.current_garage_id', true)::uuid
-);
+USING (garage_id = app_current_garage_id())
+WITH CHECK (garage_id = app_current_garage_id());
 
 COMMENT ON POLICY partners_rls_policy ON partners IS
-'Row-Level Security policy that restricts access based on app.current_garage_id session variable.';
+'Restricts access to the transaction''s garage (app.current_garage_id, see app_current_garage_id()).';

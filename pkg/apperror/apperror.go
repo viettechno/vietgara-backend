@@ -3,6 +3,11 @@
 // errors to the correct status code without leaking raw infrastructure
 // errors (e.g. Postgres errors) to API responses.
 //
+// Every AppError carries a stable Reason (e.g. EMAIL_NOT_VERIFIED) that
+// travels as a google.rpc.ErrorInfo status detail and becomes the "code" of
+// the REST error body (API Specification Section 1.1); clients translate
+// it. Field problems travel as a google.rpc.BadRequest detail.
+//
 // See: Coding_Standards.docx Section 2.3, LLD Section 6.
 package apperror
 
@@ -10,8 +15,10 @@ import (
 	"errors"
 	"fmt"
 
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/protoadapt"
 )
 
 // Code is a stable, machine-readable error category independent of the
@@ -27,7 +34,33 @@ const (
 	CodeUnauthenticated    Code = "UNAUTHENTICATED"
 	CodePermissionDenied   Code = "PERMISSION_DENIED"
 	CodeFailedPrecondition Code = "FAILED_PRECONDITION"
+	CodeResourceExhausted  Code = "RESOURCE_EXHAUSTED"
 	CodeInternal           Code = "INTERNAL"
+)
+
+// ErrorDomain is the google.rpc.ErrorInfo domain of VietGara errors.
+const ErrorDomain = "vietgara.vn"
+
+// Reasons shared across modules. Module-specific reasons (OTP_EXPIRED,
+// ROLE_IN_USE, ...) are declared next to the module's errors.
+const (
+	ReasonValidation         = "VALIDATION_ERROR"
+	ReasonNotFound           = "NOT_FOUND"
+	ReasonAlreadyExists      = "ALREADY_EXISTS"
+	ReasonUnauthenticated    = "UNAUTHENTICATED"
+	ReasonPermissionDenied   = "PERMISSION_DENIED"
+	ReasonFailedPrecondition = "FAILED_PRECONDITION"
+	ReasonRateLimited        = "RATE_LIMITED"
+	ReasonInternal           = "INTERNAL"
+)
+
+// Field issues used in FieldViolation.Issue.
+const (
+	IssueRequired = "required"
+	IssueInvalid  = "invalid"
+	IssueTooLong  = "too_long"
+	IssueTooShort = "too_short"
+	IssueTaken    = "taken"
 )
 
 // Sentinel errors for common business-rule violations shared across
@@ -38,12 +71,23 @@ var (
 	ErrPermissionDenied = errors.New("permission denied")
 )
 
+// FieldViolation is one invalid request field.
+type FieldViolation struct {
+	// Field is the JSON name, e.g. "email" or "garage.name".
+	Field string
+	// Issue is machine-readable: required, invalid, too_long, taken, ...
+	Issue string
+}
+
 // AppError is the standard error type returned by every usecase in the
 // codebase. Never return a raw *pgconn.PgError or similar infrastructure
 // error from a usecase -- always wrap it into an AppError first.
 type AppError struct {
-	Code    Code
+	Code Code
+	// Reason is the client-facing error code; defaults from Code.
+	Reason  string
 	Message string
+	Details []FieldViolation
 	Err     error // underlying cause, for logging only -- never exposed to the API response
 }
 
@@ -57,6 +101,29 @@ func (e *AppError) Error() string {
 
 func (e *AppError) Unwrap() error { return e.Err }
 
+// WithReason sets the client-facing reason and returns e.
+func (e *AppError) WithReason(reason string) *AppError {
+	e.Reason = reason
+
+	return e
+}
+
+// WithField adds a field violation and returns e.
+func (e *AppError) WithField(field, issue string) *AppError {
+	e.Details = append(e.Details, FieldViolation{Field: field, Issue: issue})
+
+	return e
+}
+
+// ReasonOrDefault returns Reason, or the default reason of Code.
+func (e *AppError) ReasonOrDefault() string {
+	if e.Reason != "" {
+		return e.Reason
+	}
+
+	return defaultReason(e.Code)
+}
+
 // New builds an AppError with the given code and message and no underlying
 // cause.
 func New(code Code, message string) *AppError {
@@ -69,6 +136,16 @@ func Wrap(code Code, message string, err error) *AppError {
 	return &AppError{Code: code, Message: message, Err: err}
 }
 
+// Validation builds an INVALID_ARGUMENT/VALIDATION_ERROR for one field.
+func Validation(field, issue, message string) *AppError {
+	return New(CodeInvalidArgument, message).WithReason(ReasonValidation).WithField(field, issue)
+}
+
+// Internal wraps an unexpected error; op names the failed operation.
+func Internal(op string, err error) *AppError {
+	return Wrap(CodeInternal, op, err)
+}
+
 // As is a small convenience wrapper around errors.As for extracting an
 // *AppError from a wrapped error chain.
 func As(err error) (*AppError, bool) {
@@ -79,29 +156,83 @@ func As(err error) (*AppError, bool) {
 	return nil, false
 }
 
-// ToGRPCError translates *AppError into a gRPC status error.
+// ReasonOf returns the reason of an *AppError in err's chain, or "".
+func ReasonOf(err error) string {
+	if appErr, ok := As(err); ok {
+		return appErr.ReasonOrDefault()
+	}
+
+	return ""
+}
+
+var grpcCodes = map[Code]codes.Code{
+	CodeNotFound:           codes.NotFound,
+	CodeAlreadyExists:      codes.AlreadyExists,
+	CodeInvalidArgument:    codes.InvalidArgument,
+	CodePermissionDenied:   codes.PermissionDenied,
+	CodeUnauthenticated:    codes.Unauthenticated,
+	CodeFailedPrecondition: codes.FailedPrecondition,
+	CodeResourceExhausted:  codes.ResourceExhausted,
+	CodeInternal:           codes.Internal,
+}
+
+func defaultReason(code Code) string {
+	switch code {
+	case CodeNotFound:
+		return ReasonNotFound
+	case CodeAlreadyExists:
+		return ReasonAlreadyExists
+	case CodeInvalidArgument:
+		return ReasonValidation
+	case CodePermissionDenied:
+		return ReasonPermissionDenied
+	case CodeUnauthenticated:
+		return ReasonUnauthenticated
+	case CodeFailedPrecondition:
+		return ReasonFailedPrecondition
+	case CodeResourceExhausted:
+		return ReasonRateLimited
+	case CodeInternal:
+		return ReasonInternal
+	default:
+		return ReasonInternal
+	}
+}
+
+// ToGRPCError translates *AppError into a gRPC status error carrying the
+// reason (ErrorInfo) and field violations (BadRequest). Errors that already
+// are gRPC statuses pass through; anything else is an opaque internal error.
 func ToGRPCError(err error) error {
 	appErr, ok := As(err)
 	if !ok {
+		if _, isStatus := status.FromError(err); isStatus {
+			return err
+		}
+
 		return status.Error(codes.Internal, "internal error")
 	}
 
-	switch appErr.Code {
-	case CodeNotFound:
-		return status.Error(codes.NotFound, appErr.Message)
-	case CodeAlreadyExists:
-		return status.Error(codes.AlreadyExists, appErr.Message)
-	case CodeInvalidArgument:
-		return status.Error(codes.InvalidArgument, appErr.Message)
-	case CodePermissionDenied:
-		return status.Error(codes.PermissionDenied, appErr.Message)
-	case CodeUnauthenticated:
-		return status.Error(codes.Unauthenticated, appErr.Message)
-	case CodeFailedPrecondition:
-		return status.Error(codes.FailedPrecondition, appErr.Message)
-	case CodeInternal:
-		return status.Error(codes.Internal, appErr.Message)
-	default:
+	code, known := grpcCodes[appErr.Code]
+	if !known || code == codes.Internal {
 		return status.Error(codes.Internal, "internal error")
 	}
+
+	st := status.New(code, appErr.Message)
+
+	details := []protoadapt.MessageV1{&errdetails.ErrorInfo{Reason: appErr.ReasonOrDefault(), Domain: ErrorDomain}}
+	if len(appErr.Details) > 0 {
+		violations := make([]*errdetails.BadRequest_FieldViolation, 0, len(appErr.Details))
+		for _, d := range appErr.Details {
+			violations = append(violations, &errdetails.BadRequest_FieldViolation{Field: d.Field, Description: d.Issue})
+		}
+
+		details = append(details, &errdetails.BadRequest{FieldViolations: violations})
+	}
+
+	withDetails, detailErr := st.WithDetails(details...)
+	if detailErr != nil {
+		return st.Err()
+	}
+
+	return withDetails.Err()
 }

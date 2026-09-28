@@ -91,7 +91,7 @@ func startIntegrationEnv(t *testing.T) *integrationEnv {
 
 	env := &integrationEnv{admin: admin, accountID: uuid.NewString(), garageA: uuid.NewString(), garageB: uuid.NewString()}
 
-	_, err = admin.ExecContext(ctx, `INSERT INTO accounts (id, full_name) VALUES ($1, 'Owner')`, env.accountID)
+	_, err = admin.ExecContext(ctx, `INSERT INTO accounts (id, email, full_name) VALUES ($1, 'owner@example.com', 'Owner')`, env.accountID)
 	require.NoError(t, err)
 
 	_, err = admin.ExecContext(ctx, `INSERT INTO garages (id, account_id, name) VALUES ($1, $3, 'A'), ($2, $3, 'B')`,
@@ -141,7 +141,7 @@ func applyMigrations(t *testing.T, ctx context.Context, admin *sql.DB) {
 func (env *integrationEnv) inGarage(t *testing.T, garageID string, fn func(ctx context.Context)) {
 	t.Helper()
 
-	require.NoError(t, env.txm.WithTransaction(t.Context(), &garageID, func(ctx context.Context) error {
+	require.NoError(t, env.txm.WithTransaction(t.Context(), dbpkg.GarageScope(garageID), func(ctx context.Context) error {
 		fn(ctx)
 
 		return nil
@@ -186,12 +186,12 @@ func TestCustomerAndVehicleRepositories(t *testing.T) {
 	})
 
 	t.Run("duplicates are rejected with domain errors", func(t *testing.T) {
-		err := env.txm.WithTransaction(t.Context(), &env.garageA, func(ctx context.Context) error {
+		err := env.txm.WithTransaction(t.Context(), dbpkg.GarageScope(env.garageA), func(ctx context.Context) error {
 			return env.customers.Create(ctx, newCustomer(env.garageA, "Copy", "0912345678"))
 		})
 		require.ErrorIs(t, err, domain.ErrPhoneTaken)
 
-		err = env.txm.WithTransaction(t.Context(), &env.garageA, func(ctx context.Context) error {
+		err = env.txm.WithTransaction(t.Context(), dbpkg.GarageScope(env.garageA), func(ctx context.Context) error {
 			return env.vehicles.Create(ctx, newVehicle(bob, "51f 12345"))
 		})
 		require.ErrorIs(t, err, domain.ErrLicensePlateTaken)
@@ -289,13 +289,13 @@ func TestCustomerAndVehicleRepositories(t *testing.T) {
 			assert.Zero(t, total)
 		})
 
-		err := env.txm.WithTransaction(t.Context(), &env.garageB, func(ctx context.Context) error {
+		err := env.txm.WithTransaction(t.Context(), dbpkg.GarageScope(env.garageB), func(ctx context.Context) error {
 			return env.customers.Create(ctx, newCustomer(env.garageA, "Intruder", "0900000000"))
 		})
 		require.ErrorContains(t, err, "row-level security")
 
 		// A garage B vehicle cannot be attached to a garage A customer.
-		err = env.txm.WithTransaction(t.Context(), &env.garageB, func(ctx context.Context) error {
+		err = env.txm.WithTransaction(t.Context(), dbpkg.GarageScope(env.garageB), func(ctx context.Context) error {
 			return env.vehicles.Create(ctx, &domain.Vehicle{ID: uuid.NewString(), GarageID: env.garageB, CustomerID: bob.ID, LicensePlate: "99Z-00000"})
 		})
 		require.ErrorIs(t, err, domain.ErrCustomerNotFound)
@@ -349,7 +349,7 @@ func TestPartnerRepository(t *testing.T) {
 		assert.Equal(t, note, *got.Note)
 	})
 
-	err := env.txm.WithTransaction(t.Context(), &env.garageA, func(ctx context.Context) error {
+	err := env.txm.WithTransaction(t.Context(), dbpkg.GarageScope(env.garageA), func(ctx context.Context) error {
 		return env.partners.Create(ctx, &domain.Partner{
 			ID: uuid.NewString(), GarageID: env.garageA, Type: domain.PartnerTypeSupplier, Name: "phu tung SAI GON",
 		})

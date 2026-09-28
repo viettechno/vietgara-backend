@@ -4,143 +4,136 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/viettechno/vietgara-backend/internal/identity/domain"
-	"github.com/viettechno/vietgara-backend/internal/mocks"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
+
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+
+	"github.com/viettechno/vietgara-backend/internal/identity/handler"
+	"github.com/viettechno/vietgara-backend/internal/middleware"
 )
 
-func TestServer_Register(t *testing.T) {
+func TestPolicies(t *testing.T) {
 	t.Parallel()
 
-	email := "register@example.com"
-
-	t.Run("email/password register returns a session", func(t *testing.T) {
-		t.Parallel()
-		accounts := mocks.NewMockAccountRepository(t)
-		garages := mocks.NewMockGarageMembershipReader(t)
-		tokens := mocks.NewMockRefreshTokenStore(t)
-		srv := newTestHandler(t, accounts, garages, tokens)
-		accounts.On("FindByEmail", mock.Anything, email).Return(nil, domain.ErrAccountNotFound).Once()
-		accounts.On("Create", mock.Anything, mock.Anything).Return(nil).Once()
-		garages.On("ListGarageRolesForAccount", mock.Anything, mock.Anything).Return(nil, nil).Once()
-		tokens.On("Store", mock.Anything, mock.Anything, mock.Anything, 86400).Return(nil).Once()
-
-		resp, err := srv.Register(t.Context(), &identityv1.RegisterRequest{FullName: "Register User", Method: &identityv1.RegisterRequest_EmailPassword{EmailPassword: &identityv1.EmailPasswordCredential{Email: email, Password: "secret123"}}})
-		require.NoError(t, err)
-		require.NotNil(t, resp.GetAuth())
-		assert.NotEmpty(t, resp.GetAuth().GetAccessToken())
-		assert.NotEmpty(t, resp.GetAuth().GetRefreshToken())
-		assert.Equal(t, "Bearer", resp.GetAuth().GetTokenType())
-		assert.Positive(t, resp.GetAuth().GetExpiresIn())
-		require.NotNil(t, resp.GetAuth().GetAccount())
-		assert.Equal(t, email, resp.GetAuth().GetAccount().GetEmail())
-		assert.Equal(t, "Register User", resp.GetAuth().GetAccount().GetFullName())
-		assert.Equal(t, identityv1.AuthProvider_AUTH_PROVIDER_EMAIL, resp.GetAuth().GetAccount().GetAuthProvider())
-		assert.Equal(t, identityv1.AccountStatus_ACCOUNT_STATUS_ACTIVE, resp.GetAuth().GetAccount().GetStatus())
-	})
-	t.Run("duplicate email maps to AlreadyExists", func(t *testing.T) {
-		t.Parallel()
-		accounts := mocks.NewMockAccountRepository(t)
-		garages := mocks.NewMockGarageMembershipReader(t)
-		tokens := mocks.NewMockRefreshTokenStore(t)
-		srv := newTestHandler(t, accounts, garages, tokens)
-		accounts.On("FindByEmail", mock.Anything, email).Return(&domain.Account{ID: "acc-1"}, nil).Once()
-		_, err := srv.Register(t.Context(), &identityv1.RegisterRequest{FullName: "Register User", Method: &identityv1.RegisterRequest_EmailPassword{EmailPassword: &identityv1.EmailPasswordCredential{Email: email, Password: "secret123"}}})
-		require.Error(t, err)
-		assert.Equal(t, codes.AlreadyExists, status.Code(err))
-	})
-	t.Run("missing method is invalid", func(t *testing.T) {
-		t.Parallel()
-		accounts := mocks.NewMockAccountRepository(t)
-		garages := mocks.NewMockGarageMembershipReader(t)
-		tokens := mocks.NewMockRefreshTokenStore(t)
-		srv := newTestHandler(t, accounts, garages, tokens)
-		_, err := srv.Register(t.Context(), &identityv1.RegisterRequest{FullName: "X"})
-		require.Error(t, err)
-		assert.Equal(t, codes.InvalidArgument, status.Code(err))
-	})
-	t.Run("social register works through the verifier", func(t *testing.T) {
-		t.Parallel()
-		accounts := mocks.NewMockAccountRepository(t)
-		garages := mocks.NewMockGarageMembershipReader(t)
-		tokens := mocks.NewMockRefreshTokenStore(t)
-		srv := newTestHandler(t, accounts, garages, tokens)
-		accounts.On("FindByIdentityPlatformUID", mock.Anything, "stub-tok-1").Return(nil, domain.ErrAccountNotFound).Once()
-		accounts.On("Create", mock.Anything, mock.Anything).Return(nil).Once()
-		garages.On("ListGarageRolesForAccount", mock.Anything, mock.Anything).Return(nil, nil).Once()
-		tokens.On("Store", mock.Anything, mock.Anything, mock.Anything, 86400).Return(nil).Once()
-
-		resp, err := srv.Register(t.Context(), &identityv1.RegisterRequest{FullName: "Social User", Method: &identityv1.RegisterRequest_Social{Social: &identityv1.SocialCredential{Provider: identityv1.AuthProvider_AUTH_PROVIDER_GOOGLE, IdToken: "tok-1"}}})
-		require.NoError(t, err)
-		require.NotNil(t, resp.GetAuth())
-	})
-	t.Run("phone provider register succeeds", func(t *testing.T) {
-		t.Parallel()
-
-		phone := "+84901234567"
-		accounts := mocks.NewMockAccountRepository(t)
-		garages := mocks.NewMockGarageMembershipReader(t)
-		tokens := mocks.NewMockRefreshTokenStore(t)
-		srv := newTestHandler(t, accounts, garages, tokens)
-		accounts.On("FindByIdentityPlatformUID", mock.Anything, "stub-"+phone).Return(nil, domain.ErrAccountNotFound).Once()
-		accounts.On("Create", mock.Anything, mock.Anything).Return(nil).Once()
-		garages.On("ListGarageRolesForAccount", mock.Anything, mock.Anything).Return(nil, nil).Once()
-		tokens.On("Store", mock.Anything, mock.Anything, mock.Anything, 86400).Return(nil).Once()
-
-		resp, err := srv.Register(t.Context(), &identityv1.RegisterRequest{
-			FullName: "Phone User",
-			Method: &identityv1.RegisterRequest_Social{Social: &identityv1.SocialCredential{
-				Provider: identityv1.AuthProvider_AUTH_PROVIDER_PHONE,
-				IdToken:  phone,
-			}},
-		})
-		require.NoError(t, err)
-		require.NotNil(t, resp.GetAuth())
-	})
+	p := handler.Policies()
+	assert.True(t, p[identityv1.AuthService_Login_FullMethodName].Public)
+	assert.True(t, p[identityv1.AuthService_VerifyEmail_FullMethodName].AllowUnverified)
+	assert.Equal(t, middleware.UnverifiedMethod(), p[identityv1.AccountService_GetMe_FullMethodName])
+	assert.Len(t, p, 11)
 }
 
-func TestServer_Register_AlternateMethods(t *testing.T) {
+func TestAuthFlow(t *testing.T) {
 	t.Parallel()
-	t.Run("phone otp register succeeds", func(t *testing.T) {
-		t.Parallel()
 
-		phone := "+84901234567"
-		accounts := mocks.NewMockAccountRepository(t)
-		garages := mocks.NewMockGarageMembershipReader(t)
-		tokens := mocks.NewMockRefreshTokenStore(t)
-		srv := newTestHandler(t, accounts, garages, tokens)
-		accounts.On("FindByPhone", mock.Anything, phone).Return(nil, domain.ErrAccountNotFound).Once()
-		accounts.On("Create", mock.Anything, mock.Anything).Return(nil).Once()
-		garages.On("ListGarageRolesForAccount", mock.Anything, mock.Anything).Return(nil, nil).Once()
-		tokens.On("Store", mock.Anything, mock.Anything, mock.Anything, 86400).Return(nil).Once()
+	e := newEnv(t, handler.GoogleOAuthConfig{})
+	ctx := t.Context()
+	phone := "0901234567"
 
-		resp, err := srv.Register(t.Context(), &identityv1.RegisterRequest{FullName: "Phone User", Method: &identityv1.RegisterRequest_PhoneOtp{PhoneOtp: &identityv1.PhoneOtpCredential{Phone: phone}}})
-		require.NoError(t, err)
-		assert.Equal(t, phone, resp.GetAuth().GetAccount().GetPhone())
+	reg, err := e.srv.Register(ctx, &identityv1.RegisterRequest{Email: "a@b.vn", Password: "secret123", FullName: "A", Phone: &phone, Locale: identityv1.Locale_LOCALE_EN})
+	require.NoError(t, err)
+
+	s := reg.GetSession()
+	assert.Equal(t, "Bearer", s.GetTokenType())
+	assert.EqualValues(t, 1200, s.GetExpiresIn())
+	assert.Equal(t, identityv1.Locale_LOCALE_EN, s.GetAccount().GetLocale())
+	assert.Equal(t, identityv1.AuthProvider_AUTH_PROVIDER_EMAIL, s.GetAccount().GetAuthProvider())
+	assert.Equal(t, identityv1.AccountStatus_ACCOUNT_STATUS_ACTIVE, s.GetAccount().GetStatus())
+	assert.False(t, s.GetAccount().GetEmailVerified())
+
+	_, err = e.srv.Register(ctx, &identityv1.RegisterRequest{Email: "bad"})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err))
+
+	me := e.as(t, s.GetAccessToken())
+
+	_, err = e.srv.SendEmailVerificationOtp(me, &identityv1.SendEmailVerificationOtpRequest{})
+	assert.Equal(t, "OTP_RESEND_TOO_SOON", reason(err))
+
+	_, err = e.srv.VerifyEmail(me, &identityv1.VerifyEmailRequest{OtpCode: "000000"})
+	assert.Equal(t, "OTP_INVALID", reason(err))
+
+	verified, err := e.srv.VerifyEmail(me, &identityv1.VerifyEmailRequest{OtpCode: e.mail.lastCode(), RefreshToken: s.GetRefreshToken()})
+	require.NoError(t, err)
+	assert.True(t, verified.GetSession().GetAccount().GetEmailVerified())
+
+	_, err = e.srv.SendEmailVerificationOtp(me, &identityv1.SendEmailVerificationOtpRequest{})
+	assert.Equal(t, "EMAIL_ALREADY_VERIFIED", reason(err))
+
+	login, err := e.srv.Login(ctx, &identityv1.LoginRequest{Email: "a@b.vn", Password: "secret123"})
+	require.NoError(t, err)
+	_, err = e.srv.Login(ctx, &identityv1.LoginRequest{Email: "a@b.vn", Password: "nope"})
+	assert.Equal(t, "INVALID_CREDENTIALS", reason(err))
+
+	refreshed, err := e.srv.RefreshToken(ctx, &identityv1.RefreshTokenRequest{RefreshToken: login.GetSession().GetRefreshToken()})
+	require.NoError(t, err)
+	_, err = e.srv.RefreshToken(ctx, &identityv1.RefreshTokenRequest{RefreshToken: "gone"})
+	assert.Equal(t, "REFRESH_TOKEN_INVALID", reason(err))
+
+	_, err = e.srv.Logout(ctx, &identityv1.LogoutRequest{RefreshToken: refreshed.GetSession().GetRefreshToken()})
+	require.NoError(t, err)
+}
+
+func TestPasswordResetRPCs(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t, handler.GoogleOAuthConfig{})
+	ctx := t.Context()
+
+	_, err := e.srv.Register(ctx, &identityv1.RegisterRequest{Email: "a@b.vn", Password: "secret123", FullName: "A"})
+	require.NoError(t, err)
+
+	_, err = e.srv.RequestPasswordReset(ctx, &identityv1.RequestPasswordResetRequest{Email: "bad"})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err))
+
+	challenge, err := e.srv.RequestPasswordReset(ctx, &identityv1.RequestPasswordResetRequest{Email: "a@b.vn"})
+	require.NoError(t, err)
+	assert.NotNil(t, challenge.GetChallenge().GetExpiresAt())
+
+	_, err = e.srv.VerifyPasswordResetOtp(ctx, &identityv1.VerifyPasswordResetOtpRequest{Email: "a@b.vn", OtpCode: "000000"})
+	assert.Equal(t, "OTP_INVALID", reason(err))
+
+	token, err := e.srv.VerifyPasswordResetOtp(ctx, &identityv1.VerifyPasswordResetOtpRequest{Email: "a@b.vn", OtpCode: e.mail.lastCode()})
+	require.NoError(t, err)
+
+	_, err = e.srv.ResetPassword(ctx, &identityv1.ResetPasswordRequest{ResetToken: token.GetResetToken(), NewPassword: "x"})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err))
+	_, err = e.srv.ResetPassword(ctx, &identityv1.ResetPasswordRequest{ResetToken: token.GetResetToken(), NewPassword: "another-pass"})
+	require.NoError(t, err)
+}
+
+func TestProfileRPCs(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t, handler.GoogleOAuthConfig{})
+	reg, err := e.srv.Register(t.Context(), &identityv1.RegisterRequest{Email: "a@b.vn", Password: "secret123", FullName: "A"})
+	require.NoError(t, err)
+
+	me := e.as(t, reg.GetSession().GetAccessToken())
+
+	got, err := e.srv.GetMe(me, &identityv1.GetMeRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, "a@b.vn", got.GetAccount().GetEmail())
+
+	phone := "0901112222"
+	updated, err := e.srv.UpdateMe(me, &identityv1.UpdateMeRequest{Account: &identityv1.Account{FullName: "B", Phone: &phone, Locale: identityv1.Locale_LOCALE_EN}})
+	require.NoError(t, err)
+	assert.Equal(t, "B", updated.GetAccount().GetFullName())
+	assert.Equal(t, identityv1.Locale_LOCALE_EN, updated.GetAccount().GetLocale())
+
+	masked, err := e.srv.UpdateMe(me, &identityv1.UpdateMeRequest{
+		Account:    &identityv1.Account{FullName: "C", Locale: identityv1.Locale_LOCALE_VI},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"locale"}},
 	})
+	require.NoError(t, err)
+	assert.Equal(t, "B", masked.GetAccount().GetFullName())
+	assert.Equal(t, identityv1.Locale_LOCALE_VI, masked.GetAccount().GetLocale())
 
-	for _, tt := range []struct {
-		name     string
-		provider identityv1.AuthProvider
-		token    string
-		want     codes.Code
-	}{
-		{name: "missing provider", provider: identityv1.AuthProvider_AUTH_PROVIDER_UNSPECIFIED, token: "tok-1", want: codes.InvalidArgument},
-		{name: "invalid id token", provider: identityv1.AuthProvider_AUTH_PROVIDER_FACEBOOK, token: "", want: codes.Internal},
-	} {
-		t.Run("social register with "+tt.name+" is invalid", func(t *testing.T) {
-			t.Parallel()
-			accounts := mocks.NewMockAccountRepository(t)
-			garages := mocks.NewMockGarageMembershipReader(t)
-			tokens := mocks.NewMockRefreshTokenStore(t)
-			srv := newTestHandler(t, accounts, garages, tokens)
-			_, err := srv.Register(t.Context(), &identityv1.RegisterRequest{FullName: "X", Method: &identityv1.RegisterRequest_Social{Social: &identityv1.SocialCredential{Provider: tt.provider, IdToken: tt.token}}})
-			require.Error(t, err)
-			assert.Equal(t, tt.want, status.Code(err))
-		})
-	}
+	_, err = e.srv.UpdateMe(me, &identityv1.UpdateMeRequest{Account: &identityv1.Account{}, UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"email"}}})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err))
+
+	_, err = e.srv.UpdateMe(me, &identityv1.UpdateMeRequest{Account: &identityv1.Account{FullName: " "}})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err))
+
+	_, err = e.srv.GetMe(t.Context(), &identityv1.GetMeRequest{})
+	assert.Equal(t, "UNAUTHENTICATED", reason(err))
 }

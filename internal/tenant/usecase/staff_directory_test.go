@@ -1,200 +1,89 @@
 package usecase_test
 
 import (
+	"context"
 	"errors"
+	"slices"
 	"testing"
+	"time"
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/viettechno/vietgara-backend/internal/mocks"
+	"github.com/viettechno/vietgara-backend/internal/middleware"
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
+	"github.com/viettechno/vietgara-backend/internal/platform/auth"
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
+	"github.com/viettechno/vietgara-backend/internal/tenant/tenanttest"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-func TestStaffUseCase_FindCandidate(t *testing.T) {
-	t.Parallel()
+var errBoom = errors.New("boom")
 
-	account := &usecase.AccountSummary{ID: "acc-2", FullName: "Tran Binh", Active: true}
+type limits = tenanttest.Limits
 
-	tests := []struct {
-		name       string
-		identifier string
-		setup      func(*mocks.MockAccountDirectory, *mocks.MockGarageStaffRepository)
-		wantCode   apperror.Code
-		wantStaff  bool
-	}{
-		{
-			name:       "email goes to the email lookup",
-			identifier: "  Binh@Example.com ",
-			setup: func(d *mocks.MockAccountDirectory, s *mocks.MockGarageStaffRepository) {
-				d.EXPECT().FindByEmail(mock.Anything, "Binh@Example.com").Return(account, nil).Once()
-				s.EXPECT().FindByGarageAndAccount(mock.Anything, "garage-1", "acc-2").Return(nil, errors.New("no rows")).Once()
-			},
-		},
-		{
-			name:       "phone goes to the phone lookup",
-			identifier: "+84 912 345 678",
-			setup: func(d *mocks.MockAccountDirectory, s *mocks.MockGarageStaffRepository) {
-				d.EXPECT().FindByPhone(mock.Anything, "+84 912 345 678").Return(account, nil).Once()
-				s.EXPECT().FindByGarageAndAccount(mock.Anything, "garage-1", "acc-2").
-					Return(&domain.GarageStaff{Status: domain.StaffStatusActive}, nil).Once()
-			},
-			wantStaff: true,
-		},
-		{
-			name:       "inactive membership is not counted as staff",
-			identifier: "0912345678",
-			setup: func(d *mocks.MockAccountDirectory, s *mocks.MockGarageStaffRepository) {
-				d.EXPECT().FindByPhone(mock.Anything, "0912345678").Return(account, nil).Once()
-				s.EXPECT().FindByGarageAndAccount(mock.Anything, "garage-1", "acc-2").
-					Return(&domain.GarageStaff{Status: domain.StaffStatusInactive}, nil).Once()
-			},
-		},
-		{
-			name:       "too short to be a phone number",
-			identifier: "0912",
-			wantCode:   apperror.CodeInvalidArgument,
-		},
-		{
-			name:       "no matching account",
-			identifier: "nobody@example.com",
-			setup: func(d *mocks.MockAccountDirectory, _ *mocks.MockGarageStaffRepository) {
-				d.EXPECT().FindByEmail(mock.Anything, "nobody@example.com").Return(nil, domain.ErrAccountNotFound).Once()
-			},
-			wantCode: apperror.CodeNotFound,
-		},
-		{
-			name:       "directory failure",
-			identifier: "binh@example.com",
-			setup: func(d *mocks.MockAccountDirectory, _ *mocks.MockGarageStaffRepository) {
-				d.EXPECT().FindByEmail(mock.Anything, "binh@example.com").Return(nil, errors.New("db down")).Once()
-			},
-			wantCode: apperror.CodeInternal,
-		},
-	}
+const (
+	owner = tenanttest.Owner
+	staff = tenanttest.Staff
+)
 
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			directory := mocks.NewMockAccountDirectory(t)
-			staffRepo := mocks.NewMockGarageStaffRepository(t)
-
-			if tc.setup != nil {
-				tc.setup(directory, staffRepo)
-			}
-
-			uc := usecase.NewStaffUseCase(staffRepo, usecase.WithAccountDirectory(directory))
-
-			got, err := uc.FindCandidate(t.Context(), "garage-1", tc.identifier)
-			if tc.wantCode != "" {
-				appErr, ok := apperror.As(err)
-				require.True(t, ok)
-				assert.Equal(t, tc.wantCode, appErr.Code)
-
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, "acc-2", got.Account.ID)
-			assert.Equal(t, tc.wantStaff, got.AlreadyStaff)
-		})
-	}
-
-	t.Run("without a directory the lookup is unavailable", func(t *testing.T) {
-		t.Parallel()
-
-		_, err := usecase.NewStaffUseCase(mocks.NewMockGarageStaffRepository(t)).FindCandidate(t.Context(), "garage-1", "binh@example.com")
-
-		appErr, ok := apperror.As(err)
-		require.True(t, ok)
-		assert.Equal(t, apperror.CodeFailedPrecondition, appErr.Code)
-	})
+type env struct {
+	*tenanttest.Env
 }
 
-func TestStaffUseCase_AddRequiresActiveAccount(t *testing.T) {
-	t.Parallel()
+func newEnv(t *testing.T, lim limits) *env {
+	t.Helper()
 
-	req := usecase.AddStaffRequest{GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician}
-
-	t.Run("inactive account is rejected", func(t *testing.T) {
-		t.Parallel()
-
-		directory := mocks.NewMockAccountDirectory(t)
-		directory.EXPECT().ListByIDs(mock.Anything, []string{"acc-2"}).Return(map[string]*usecase.AccountSummary{"acc-2": {ID: "acc-2"}}, nil).Once()
-
-		_, err := usecase.NewStaffUseCase(mocks.NewMockGarageStaffRepository(t), usecase.WithAccountDirectory(directory)).Add(t.Context(), req)
-
-		appErr, ok := apperror.As(err)
-		require.True(t, ok)
-		assert.Equal(t, apperror.CodeFailedPrecondition, appErr.Code)
-	})
-
-	t.Run("unknown account is rejected", func(t *testing.T) {
-		t.Parallel()
-
-		directory := mocks.NewMockAccountDirectory(t)
-		directory.EXPECT().ListByIDs(mock.Anything, []string{"acc-2"}).Return(map[string]*usecase.AccountSummary{}, nil).Once()
-
-		_, err := usecase.NewStaffUseCase(mocks.NewMockGarageStaffRepository(t), usecase.WithAccountDirectory(directory)).Add(t.Context(), req)
-
-		appErr, ok := apperror.As(err)
-		require.True(t, ok)
-		assert.Equal(t, apperror.CodeNotFound, appErr.Code)
-	})
+	return &env{tenanttest.NewEnv(lim)}
 }
 
-func TestStaffUseCase_ListMembers(t *testing.T) {
-	t.Parallel()
+// as signs in accountID and authorizes it for garageID.
+func (e *env) as(t *testing.T, accountID, garageID string) context.Context {
+	t.Helper()
 
-	membership := &domain.GarageStaff{
-		ID: "staff-1", GarageID: "garage-1", AccountID: "acc-2", Role: domain.RoleTechnician, Status: domain.StaffStatusActive,
-	}
+	claims := &auth.Claims{}
+	claims.Subject = accountID
+	ctx := middleware.WithClaims(t.Context(), claims)
 
-	t.Run("returns staff without accounts when no directory is configured", func(t *testing.T) {
-		t.Parallel()
-
-		staff := mocks.NewMockGarageStaffRepository(t)
-		staff.EXPECT().ListByGarageID(mock.Anything, "garage-1").Return([]*domain.GarageStaff{membership}, nil).Once()
-
-		members, err := usecase.NewStaffUseCase(staff).ListMembers(t.Context(), "garage-1")
-
+	if garageID != "" {
+		acc, err := e.Store.GarageAccess(ctx, garageID, accountID)
 		require.NoError(t, err)
-		require.Len(t, members, 1)
-		assert.Equal(t, membership, members[0].Staff)
-		assert.Nil(t, members[0].Account)
-	})
 
-	t.Run("attaches account details", func(t *testing.T) {
-		t.Parallel()
+		ctx = access.WithAccess(ctx, acc)
+	}
 
-		staff := mocks.NewMockGarageStaffRepository(t)
-		staff.EXPECT().ListByGarageID(mock.Anything, "garage-1").Return([]*domain.GarageStaff{membership}, nil).Once()
-
-		account := &usecase.AccountSummary{ID: "acc-2", FullName: "Tran Binh", Active: true}
-		directory := mocks.NewMockAccountDirectory(t)
-		directory.EXPECT().ListByIDs(mock.Anything, []string{"acc-2"}).Return(map[string]*usecase.AccountSummary{"acc-2": account}, nil).Once()
-
-		members, err := usecase.NewStaffUseCase(staff, usecase.WithAccountDirectory(directory)).ListMembers(t.Context(), "garage-1")
-
-		require.NoError(t, err)
-		require.Len(t, members, 1)
-		assert.Equal(t, account, members[0].Account)
-	})
-
-	t.Run("fails when accounts cannot be loaded", func(t *testing.T) {
-		t.Parallel()
-
-		staff := mocks.NewMockGarageStaffRepository(t)
-		staff.EXPECT().ListByGarageID(mock.Anything, "garage-1").Return([]*domain.GarageStaff{membership}, nil).Once()
-
-		directory := mocks.NewMockAccountDirectory(t)
-		directory.EXPECT().ListByIDs(mock.Anything, []string{"acc-2"}).Return(nil, errors.New("boom")).Once()
-
-		_, err := usecase.NewStaffUseCase(staff, usecase.WithAccountDirectory(directory)).ListMembers(t.Context(), "garage-1")
-		assertAppError(t, err, apperror.CodeInternal)
-	})
+	return ctx
 }
+
+// garage creates a garage for the owner.
+func (e *env) garage(t *testing.T) string {
+	t.Helper()
+
+	name := "Gara Minh"
+	g, err := e.UC.CreateGarage(e.as(t, owner, ""), owner, usecase.GarageFields{Name: &name})
+	require.NoError(t, err)
+
+	return g.Garage.ID
+}
+
+func requireReason(t *testing.T, err error, reason string, _ ...string) {
+	t.Helper()
+	require.Error(t, err)
+	require.Equal(t, reason, apperror.ReasonOf(err), err)
+}
+
+//go:fix inline
+
+func groupNamed(t *testing.T, e *env, garageID, name string) *domain.StaffGroup {
+	t.Helper()
+
+	groups, err := e.UC.ListGroups(t.Context(), garageID)
+	require.NoError(t, err)
+
+	i := slices.IndexFunc(groups, func(g *domain.StaffGroup) bool { return g.Name == name })
+	require.GreaterOrEqual(t, i, 0, name)
+
+	return groups[i]
+}
+
+var _ = time.Now

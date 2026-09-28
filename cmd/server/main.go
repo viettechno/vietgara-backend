@@ -1,12 +1,18 @@
 // Command server boots the VietGara backend as a single Modular Monolith
-// binary (ADR-001, Phase 1): every module below runs in one process today,
-// sharing one gRPC server, but each module's internal package structure
-// already respects service boundaries so individual modules can be
-// extracted into standalone services later without a rewrite.
+// binary (ADR-001, Phase 1): every module runs in one process, sharing one
+// gRPC server, but each module's internal package structure already
+// respects service boundaries so modules can be extracted into standalone
+// services later without a rewrite.
+//
+// The browser-facing REST/JSON API (API Specification) is served by
+// grpc-gateway from the same gRPC services, through an in-memory
+// connection, so every REST call passes the same interceptors.
 package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -15,21 +21,36 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	"google.golang.org/grpc/reflection"
-
-	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
-	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/test/bufconn"
+
+	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
+	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
+	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
+	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	appdb "github.com/viettechno/vietgara-backend/db"
+	customerHandler "github.com/viettechno/vietgara-backend/internal/customer/handler"
+	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
+	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
 	identityHandler "github.com/viettechno/vietgara-backend/internal/identity/handler"
 	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
 	identityUsecase "github.com/viettechno/vietgara-backend/internal/identity/usecase"
+	licenseHandler "github.com/viettechno/vietgara-backend/internal/license/handler"
+	licenseUsecase "github.com/viettechno/vietgara-backend/internal/license/usecase"
 	"github.com/viettechno/vietgara-backend/internal/middleware"
+	"github.com/viettechno/vietgara-backend/internal/platform/audit"
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
+	"github.com/viettechno/vietgara-backend/internal/platform/httpapi"
+	"github.com/viettechno/vietgara-backend/internal/platform/kafka"
+	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
+	"github.com/viettechno/vietgara-backend/internal/platform/storage"
 	tenantHandler "github.com/viettechno/vietgara-backend/internal/tenant/handler"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 	tenantUsecase "github.com/viettechno/vietgara-backend/internal/tenant/usecase"
@@ -42,7 +63,6 @@ func main() {
 
 	if err := run(ctx); err != nil {
 		stop()
-
 		slog.Error("server exited with error", "error", err)
 		os.Exit(1)
 	}
@@ -52,35 +72,30 @@ func main() {
 
 func run(ctx context.Context) error {
 	dsn := mustEnv("DATABASE_URL")
-	signingKey := []byte(mustEnv("JWT_SIGNING_KEY"))
-	grpcPort := envOr("GRPC_PORT", "50051")
-	httpPort := envOr("HTTP_PORT", "8080")
 
-	pool, err := initPool(ctx, dsn)
-	if err != nil {
-		return err
-	}
-	defer pool.Close()
-
-	if err := runMigrations(dsn); err != nil {
+	if err := runMigrations(envOr("MIGRATION_DATABASE_URL", dsn)); err != nil {
 		return err
 	}
 
-	grpcServer, httpServer, err := buildServices(pool, signingKey)
-	if err != nil {
-		return err
-	}
-
-	return serve(ctx, grpcPort, httpPort, grpcServer, httpServer)
-}
-
-func initPool(ctx context.Context, dsn string) (*platformdb.Pool, error) {
 	connPool, err := platformdb.NewPgxPool(ctx, dsn)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return platformdb.NewPool(ctx, connPool), nil
+	pool := platformdb.NewPool(ctx, connPool)
+	defer pool.Close()
+
+	app, err := build(ctx, pool)
+	if err != nil {
+		return err
+	}
+	defer app.close()
+
+	for _, worker := range app.workers {
+		go worker(ctx)
+	}
+
+	return serve(ctx, app)
 }
 
 func runMigrations(dsn string) error {
@@ -88,124 +103,327 @@ func runMigrations(dsn string) error {
 		return nil
 	}
 
-	migrationsPath := envOr("MIGRATIONS_PATH", defaultMigrationsPath)
+	if err := appdb.RunMigrations(dsn, envOr("MIGRATIONS_PATH", defaultMigrationsPath)); err != nil {
+		return err
+	}
 
-	return appdb.RunMigrations(dsn, migrationsPath)
+	// Local/CI convenience: create the non-superuser login the backend
+	// connects as (staging/production users come from Terraform).
+	if user := envOr("APP_DB_USER", ""); user != "" {
+		return appdb.EnsureAppLogin(dsn, user, mustEnv("APP_DB_PASSWORD"))
+	}
+
+	return nil
 }
 
-func buildServices(pool *platformdb.Pool, signingKey []byte) (*grpc.Server, *http.Server, error) {
-	txManager := platformdb.NewTxManager(pool)
-	accessTTL := envDuration("JWT_ACCESS_TTL", 20*time.Minute)
-	refreshTTL := envDuration("JWT_REFRESH_TTL", 30*24*time.Hour)
-	tokenIssuer := auth.NewTokenIssuer(signingKey, accessTTL, refreshTTL)
+// worker is a background loop that runs until ctx is cancelled.
+type worker func(ctx context.Context)
 
-	garageRepo := tenantRepo.NewPostgresGarageRepository(pool)
-	staffRepo := tenantRepo.NewPostgresGarageStaffRepository(pool)
-	accountRepo := identityRepo.NewPostgresAccountRepository(pool)
+type application struct {
+	grpcServer *grpc.Server
+	httpServer *http.Server
+	workers    []worker
+	closers    []func()
+}
 
-	eventPublisher := outbox.NewEventPublisher(pool)
-	garageUC := tenantUsecase.NewGarageUseCase(
-		garageRepo,
-		staffRepo,
-		eventPublisher,
-		tenantUsecase.WithTransactionManager(txManager),
-	)
-	staffUC := tenantUsecase.NewStaffUseCase(staffRepo,
-		tenantUsecase.WithAccountDirectory(&identityToTenantAccountDirectoryAdapter{accountRepo: accountRepo}),
-	)
+func (a *application) close() {
+	for _, c := range a.closers {
+		c()
+	}
+}
 
-	refreshStore := newInMemoryRefreshTokenStore()
-	garageReader := &tenantToIdentityGarageReaderAdapter{staffRepo: staffRepo}
-	identityUC := identityUsecase.NewIdentityUseCase(
-		accountRepo,
-		garageReader,
-		refreshStore,
-		&stubOTPVerifier{},
-		tokenIssuer,
-		refreshTTL,
-	)
+//nolint:funlen // the composition root wires every module in one place
+func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
+	app := &application{}
+	tx := platformdb.NewTxManager(pool)
+	issuer := auth.NewTokenIssuer([]byte(mustEnv("JWT_SIGNING_KEY")),
+		envDuration("JWT_ACCESS_TTL", 20*time.Minute), envDuration("JWT_REFRESH_TTL", 30*24*time.Hour))
+	events := outbox.NewEventPublisher(pool)
+	auditLog := audit.NewLogger(pool)
 
-	tenantSrv := tenantHandler.NewServer(garageUC, staffUC, tenantHandler.WithTxManager(txManager))
-	identitySrv := identityHandler.NewServer(identityUC, &stubSocialIdentityVerifier{})
-	identitySrv.ConfigureGoogleOAuth(identityHandler.GoogleOAuthConfig{
+	redisClient, err := newRedis(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if redisClient != nil {
+		app.closers = append(app.closers, func() { _ = redisClient.Close() })
+	}
+
+	mailer, err := mail.New(mail.Config{
+		Provider:         envOr("MAIL_PROVIDER", "smtp"),
+		From:             mail.From{Email: envOr("MAIL_FROM_ADDRESS", "no-reply@vietgara.vn"), Name: envOr("MAIL_FROM_NAME", "VietGara")},
+		SMTPHost:         envOr("SMTP_HOST", "localhost"),
+		SMTPPort:         envInt("SMTP_PORT", 1025),
+		SMTPUsername:     envOr("SMTP_USERNAME", ""),
+		SMTPPassword:     envOr("SMTP_PASSWORD", ""),
+		MailjetAPIKey:    envOr("MAILJET_API_KEY", ""),
+		MailjetSecretKey: envOr("MAILJET_SECRET_KEY", ""),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	files, err := storage.New(ctx, storage.Config{
+		Backend:       envOr("STORAGE_BACKEND", "local"),
+		LocalDir:      envOr("STORAGE_LOCAL_DIR", "./.data/uploads"),
+		PublicBaseURL: envOr("STORAGE_PUBLIC_BASE_URL", ""),
+		Bucket:        envOr("STORAGE_GCS_BUCKET", ""),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	// Identity & Access
+	accounts := identityRepo.NewPostgresAccountRepository(pool)
+
+	var sessions interface {
+		identityUsecase.SessionStore
+		identityUsecase.OTPStore
+	} = identityRepo.NewMemoryStore()
+
+	if redisClient != nil {
+		sessions = identityRepo.NewRedisStore(redisClient)
+	} else {
+		slog.Warn("REDIS_ADDR is not set: sessions, OTPs and the entitlement cache live in memory (single instance only)")
+	}
+
+	identityUC := identityUsecase.NewIdentityUseCase(accounts, sessions, sessions, mailer, events, tx, issuer)
+	if err := identityUC.GrantPlatformAdmins(ctx, envList("PLATFORM_ADMIN_EMAILS")); err != nil {
+		return nil, err
+	}
+
+	identitySrv := identityHandler.NewServer(identityUC, int64(issuer.AccessTTL().Seconds()), identityHandler.GoogleOAuthConfig{
 		ClientID:       envOr("GOOGLE_CLIENT_ID", ""),
 		ClientSecret:   envOr("GOOGLE_CLIENT_SECRET", ""),
 		AuthEndpoint:   envOr("GOOGLE_AUTH_ENDPOINT", "https://accounts.google.com/o/oauth2/v2/auth"),
 		TokenEndpoint:  envOr("GOOGLE_TOKEN_ENDPOINT", "https://oauth2.googleapis.com/token"),
 		UserInfoURL:    envOr("GOOGLE_USERINFO_URL", "https://openidconnect.googleapis.com/v1/userinfo"),
-		RedirectURI:    envOr("GOOGLE_REDIRECT_URI", "http://localhost:8000/api/auth/google/callback"),
+		RedirectURI:    envOr("GOOGLE_REDIRECT_URI", "http://localhost:8000"+identityHandler.GoogleCallbackPath),
 		FrontendOrigin: envOr("FRONTEND_ORIGIN", "http://localhost:8000"),
 	})
 
-	grpcServer := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(
-			middleware.AuthInterceptor(tokenIssuer,
-				middleware.WithSkipMethods(
-					identityv1.AuthService_Register_FullMethodName,
-					identityv1.AuthService_Login_FullMethodName,
-					identityv1.AuthService_RefreshToken_FullMethodName,
-					identityv1.AuthService_Logout_FullMethodName,
-				),
-			),
-			middleware.TenantContextInterceptor(),
-			middleware.TransactionInterceptor(txManager),
-		),
+	// Tenant/Garage Management
+	garages := tenantRepo.NewPostgresGarageRepository(pool)
+	accessReader := tenantRepo.NewPostgresAccessReader(pool)
+	license := buildLicense(pool, tx, redisClient, events, auditLog, accessReader, garages)
+
+	tenantUC := tenantUsecase.NewTenantUseCase(tenantUsecase.Deps{
+		Garages:     garages,
+		Staff:       tenantRepo.NewPostgresStaffRepository(pool),
+		Roles:       tenantRepo.NewPostgresRoleRepository(pool),
+		Groups:      tenantRepo.NewPostgresGroupRepository(pool),
+		Invitations: tenantRepo.NewPostgresInvitationRepository(pool),
+		Access:      accessReader,
+		Usage:       accessReader,
+		Limits:      limitChecker{entitlements: license.entitlements},
+		Accounts:    accountDirectory{accounts: accounts},
+		Logos:       files,
+		Mailer:      mailer,
+		Events:      events,
+		Audit:       auditLog,
+		Tx:          tx,
+		AppBaseURL:  envOr("APP_BASE_URL", envOr("FRONTEND_ORIGIN", "http://localhost:8000")),
+	})
+	tenantSrv := tenantHandler.NewServer(tenantUC)
+
+	// Customer & Vehicle
+	customerRepo := customerRepository.NewPostgresCustomerRepository(pool)
+	vehicleRepo := customerRepository.NewPostgresVehicleRepository(pool)
+	customerSrv := customerHandler.NewServer(
+		customerUsecase.NewCustomerUseCase(customerRepo, vehicleRepo),
+		customerUsecase.NewVehicleUseCase(vehicleRepo, customerRepo),
+		customerUsecase.NewPartnerUseCase(customerRepository.NewPostgresPartnerRepository(pool)),
 	)
-	identityv1.RegisterAuthServiceServer(grpcServer, identitySrv)
-	tenantv1.RegisterGarageServiceServer(grpcServer, tenantSrv)
-	tenantv1.RegisterStaffServiceServer(grpcServer, tenantSrv)
-	reflection.Register(grpcServer)
 
-	e := echo.New()
-	identitySrv.RegisterHTTPRoutes(e.Group(""))
-	staffGroup := e.Group("", echo.WrapMiddleware(func(next http.Handler) http.Handler {
-		return middleware.HTTPAuth(tokenIssuer, next)
-	}))
-	tenantSrv.RegisterHTTPRoutes(staffGroup)
+	// Events: Kafka when brokers are configured, otherwise in-process.
+	if err := wireEvents(app, pool, tx, tenantUC, license); err != nil {
+		return nil, err
+	}
 
-	return grpcServer, &http.Server{
-		Addr:              ":" + envOr("HTTP_PORT", "8080"),
-		Handler:           e,
-		ReadHeaderTimeout: 5 * time.Second,
-	}, nil
+	app.workers = append(app.workers, func(ctx context.Context) {
+		license.expiryJob.Schedule(ctx, envDuration("LICENSE_EXPIRY_JOB_INTERVAL", licenseUsecase.DefaultExpiryJobInterval))
+	})
+
+	// gRPC server with the request pipeline of internal/middleware.
+	policies := middleware.Merge(identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies())
+	app.grpcServer = grpc.NewServer(grpc.ChainUnaryInterceptor(
+		middleware.Auth(issuer, policies),
+		middleware.EmailVerified(),
+		middleware.PlatformAdmin(),
+		middleware.Garage(tx, accessReader, license.enforcement),
+	))
+
+	identityv1.RegisterAuthServiceServer(app.grpcServer, identitySrv)
+	identityv1.RegisterAccountServiceServer(app.grpcServer, identitySrv)
+	tenantv1.RegisterGarageServiceServer(app.grpcServer, tenantSrv)
+	tenantv1.RegisterStaffServiceServer(app.grpcServer, tenantSrv)
+	tenantv1.RegisterInvitationServiceServer(app.grpcServer, tenantSrv)
+	tenantv1.RegisterRoleServiceServer(app.grpcServer, tenantSrv)
+	tenantv1.RegisterStaffGroupServiceServer(app.grpcServer, tenantSrv)
+	licensev1.RegisterLicenseServiceServer(app.grpcServer, license.server)
+	licensev1.RegisterLicenseAdminServiceServer(app.grpcServer, license.server)
+	customerv1.RegisterCustomerServiceServer(app.grpcServer, customerSrv)
+	customerv1.RegisterVehicleServiceServer(app.grpcServer, customerSrv)
+	customerv1.RegisterPartnerServiceServer(app.grpcServer, customerSrv)
+	reflection.Register(app.grpcServer)
+
+	mux, err := buildGateway(ctx, app, identitySrv, files)
+	if err != nil {
+		return nil, err
+	}
+
+	app.httpServer = &http.Server{Handler: httpapi.NoContentForDelete(mux), ReadHeaderTimeout: 5 * time.Second}
+
+	return app, nil
 }
 
-func serve(ctx context.Context, grpcPort, httpPort string, services *grpc.Server, httpServer *http.Server) error {
-	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ":"+grpcPort)
+// wireEvents connects the outbox relay to Kafka (or the in-process
+// dispatcher) and subscribes the module consumers.
+func wireEvents(app *application, pool *platformdb.Pool, tx *platformdb.TxManager, tenantUC *tenantUsecase.TenantUseCase, license *licenseModule) error {
+	processor := outbox.NewProcessor(pool, tx)
+	relayOpts := []outbox.RelayOption{outbox.WithInterval(envDuration("OUTBOX_RELAY_INTERVAL", outbox.DefaultRelayInterval))}
+
+	brokers := envList("KAFKA_BROKERS")
+	if len(brokers) == 0 {
+		slog.Warn("KAFKA_BROKERS is not set: events are delivered in-process")
+
+		dispatcher := outbox.NewDispatcher()
+		tenantHandler.Subscribe(dispatcher, processor, tenantUC)
+		licenseHandler.Subscribe(dispatcher, processor, license.subscriptions)
+		app.workers = append(app.workers, outbox.NewRelay(pool, tx, dispatcher, relayOpts...).Run)
+
+		return nil
+	}
+
+	prefix := envOr("KAFKA_TOPIC_PREFIX", kafka.DefaultTopicPrefix)
+
+	producer, err := kafka.NewProducer(brokers, prefix)
 	if err != nil {
 		return err
 	}
 
-	if httpServer != nil {
-		httpServer.Addr = ":" + httpPort
-		go func() {
-			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				slog.Error("HTTP server exited", "error", err)
+	app.closers = append(app.closers, producer.Close)
+
+	consumer := kafka.NewConsumer(brokers, envOr("KAFKA_CONSUMER_GROUP", "vietgara-backend"), prefix)
+	tenantHandler.Subscribe(consumer, processor, tenantUC)
+	licenseHandler.Subscribe(consumer, processor, license.subscriptions)
+
+	app.workers = append(app.workers,
+		outbox.NewRelay(pool, tx, producer, relayOpts...).Run,
+		func(ctx context.Context) {
+			if err := consumer.Run(ctx); err != nil {
+				slog.Error("kafka consumer stopped", "error", err)
 			}
-		}()
-	}
+		},
+	)
+
+	return nil
+}
+
+// buildGateway serves the REST API from the gRPC server over an in-memory
+// connection, plus the plain HTTP routes (Google OAuth, local files).
+func buildGateway(ctx context.Context, app *application, identitySrv *identityHandler.Server, files storage.Store) (*runtime.ServeMux, error) {
+	listener := bufconn.Listen(1 << 20)
 
 	go func() {
-		<-ctx.Done()
-
-		slog.Info("shutting down gRPC server")
-		services.GracefulStop()
-
-		shutdownCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-
-		if httpServer != nil {
-			if err := httpServer.Shutdown(shutdownCtx); err != nil {
-				slog.Error("HTTP server shutdown failed", "error", err)
-			}
+		if err := app.grpcServer.Serve(listener); err != nil && !errors.Is(err, grpc.ErrServerStopped) {
+			slog.Error("in-memory gRPC listener stopped", "error", err)
 		}
 	}()
 
-	slog.Info("VietGara backend (Modular Monolith, Phase 1) listening", "addr", lis.Addr().String())
+	conn, err := grpc.NewClient("passthrough:///bufnet",
+		grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) { return listener.DialContext(ctx) }),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("gateway connection: %w", err)
+	}
 
-	if err := services.Serve(lis); err != nil {
+	app.closers = append(app.closers, func() { _ = conn.Close() })
+
+	mux := httpapi.NewMux()
+
+	for _, register := range []func(context.Context, *runtime.ServeMux, *grpc.ClientConn) error{
+		identityv1.RegisterAuthServiceHandler, identityv1.RegisterAccountServiceHandler,
+		tenantv1.RegisterGarageServiceHandler, tenantv1.RegisterStaffServiceHandler,
+		tenantv1.RegisterInvitationServiceHandler, tenantv1.RegisterRoleServiceHandler,
+		tenantv1.RegisterStaffGroupServiceHandler,
+		licensev1.RegisterLicenseServiceHandler, licensev1.RegisterLicenseAdminServiceHandler,
+		customerv1.RegisterCustomerServiceHandler, customerv1.RegisterVehicleServiceHandler,
+		customerv1.RegisterPartnerServiceHandler,
+	} {
+		if err := register(ctx, mux, conn); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := identitySrv.RegisterHTTPRoutes(mux); err != nil {
+		return nil, err
+	}
+
+	if local, ok := files.(*storage.LocalStore); ok {
+		serveFiles := local.Handler()
+
+		if err := mux.HandlePath(http.MethodGet, storage.DefaultLocalBaseURL+"/{path=**}", func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
+			serveFiles.ServeHTTP(w, r)
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := mux.HandlePath(http.MethodGet, "/healthz", func(w http.ResponseWriter, _ *http.Request, _ map[string]string) {
+		httpapi.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	}); err != nil {
+		return nil, err
+	}
+
+	return mux, nil
+}
+
+func newRedis(ctx context.Context) (redis.UniversalClient, error) {
+	addr := envOr("REDIS_ADDR", "")
+	if addr == "" {
+		return nil, nil //nolint:nilnil // no Redis configured: in-memory stores
+	}
+
+	client := redis.NewClient(&redis.Options{Addr: addr, Password: envOr("REDIS_PASSWORD", "")})
+	if err := client.Ping(ctx).Err(); err != nil {
+		return nil, fmt.Errorf("connect to redis at %s: %w", addr, err)
+	}
+
+	return client, nil
+}
+
+func serve(ctx context.Context, app *application) error {
+	lis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ":"+envOr("GRPC_PORT", "50051"))
+	if err != nil {
 		return err
 	}
 
-	return nil
+	app.httpServer.Addr = ":" + envOr("HTTP_PORT", "8080")
+
+	go func() {
+		if err := app.httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("HTTP server exited", "error", err)
+		}
+	}()
+
+	go func() {
+		<-ctx.Done()
+		slog.Info("shutting down")
+
+		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+		defer cancel()
+
+		if err := app.httpServer.Shutdown(shutdownCtx); err != nil {
+			slog.Error("HTTP server shutdown failed", "error", err)
+		}
+
+		app.grpcServer.GracefulStop()
+	}()
+
+	slog.Info("VietGara backend listening", "grpc", lis.Addr().String(), "http", app.httpServer.Addr)
+
+	return app.grpcServer.Serve(lis)
 }

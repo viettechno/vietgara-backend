@@ -1,10 +1,18 @@
 // Package auth handles internal JWT issuance and verification.
 //
+// The access token identifies the account only: garage access and
+// permissions are read from the database on every request (Security
+// Architecture Section 3.2), so a membership change or a garage created
+// after sign-in takes effect immediately.
+//
 // See: Security Architecture Section 2.2, ADR-007 (Identity Provider).
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -14,30 +22,26 @@ import (
 // ErrInvalidToken is returned when a token is missing, malformed, or expired.
 var ErrInvalidToken = errors.New("invalid or expired token")
 
-// GarageClaim represents one entry in the "garages" JWT claim: the
-// account's role at a specific garage.
-type GarageClaim struct {
-	GarageID string `json:"garage_id"`
-	Role     string `json:"role"`
-}
-
 // Claims is the internal VietGara JWT payload.
 // See: Security Architecture Section 2.2.
 type Claims struct {
 	jwt.RegisteredClaims
-	Garages []GarageClaim `json:"garages"`
+	// EmailVerified gates every garage, staff and business API (FR-IAM-01).
+	EmailVerified bool `json:"email_verified"`
+	// PlatformAdmin grants the plan administration APIs (FR-LIC-05).
+	PlatformAdmin bool `json:"platform_admin,omitempty"`
 }
 
-// HasAccessToGarage reports whether the token grants access to garageID,
-// and if so, returns the role held there.
-func (c *Claims) HasAccessToGarage(garageID string) (role string, ok bool) {
-	for _, g := range c.Garages {
-		if g.GarageID == garageID {
-			return g.Role, true
-		}
-	}
+// AccountID is the subject of the token.
+func (c *Claims) AccountID() string {
+	return c.Subject
+}
 
-	return "", false
+// Identity is what an access token asserts about its account.
+type Identity struct {
+	AccountID     string
+	EmailVerified bool
+	PlatformAdmin bool
 }
 
 // TokenIssuer signs, issues, and verifies the VietGara JWTs.
@@ -45,30 +49,36 @@ type TokenIssuer struct {
 	signingKey      []byte
 	accessTokenTTL  time.Duration
 	refreshTokenTTL time.Duration
+	now             func() time.Time
 }
 
 // NewTokenIssuer returns a TokenIssuer for the given signing key and TTLs.
 func NewTokenIssuer(signingKey []byte, accessTTL, refreshTTL time.Duration) *TokenIssuer {
-	return &TokenIssuer{signingKey: signingKey, accessTokenTTL: accessTTL, refreshTokenTTL: refreshTTL}
+	return &TokenIssuer{signingKey: signingKey, accessTokenTTL: accessTTL, refreshTokenTTL: refreshTTL, now: time.Now}
 }
 
-// IssueAccessToken creates a short-lived (15-30 min) access token carrying
-// the account_id and the list of garage_id+role the account can access.
-// See: Security Architecture Section 2.2.
-func (i *TokenIssuer) IssueAccessToken(accountID string, garages []GarageClaim) (string, time.Time, error) {
-	expiresAt := time.Now().Add(i.accessTokenTTL)
+// AccessTTL is the lifetime of access tokens.
+func (i *TokenIssuer) AccessTTL() time.Duration { return i.accessTokenTTL }
+
+// RefreshTTL is the lifetime of refresh tokens.
+func (i *TokenIssuer) RefreshTTL() time.Duration { return i.refreshTokenTTL }
+
+// IssueAccessToken creates a short-lived (15-30 min) access token for id.
+func (i *TokenIssuer) IssueAccessToken(id Identity) (string, time.Time, error) {
+	now := i.now()
+	expiresAt := now.Add(i.accessTokenTTL)
 	claims := &Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   accountID,
+			Subject:   id.AccountID,
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			IssuedAt:  jwt.NewNumericDate(now),
 			ID:        uuid.NewString(),
 		},
-		Garages: garages,
+		EmailVerified: id.EmailVerified,
+		PlatformAdmin: id.PlatformAdmin,
 	}
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	signed, err := token.SignedString(i.signingKey)
+	signed, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(i.signingKey)
 	if err != nil {
 		return "", time.Time{}, err
 	}
@@ -76,15 +86,24 @@ func (i *TokenIssuer) IssueAccessToken(accountID string, garages []GarageClaim) 
 	return signed, expiresAt, nil
 }
 
-// NewRefreshToken generates an opaque, unguessable refresh token. Refresh
-// tokens are NOT JWTs -- they are random strings stored server-side (Redis)
-// so they can be revoked on logout. See Security Architecture Section 2.2.
-func NewRefreshToken() string {
-	return uuid.NewString() + "." + uuid.NewString()
+// NewOpaqueToken generates an unguessable random token (256 bits,
+// URL-safe). Refresh and password-reset tokens are opaque strings stored
+// server-side (Redis) so they can be revoked.
+func NewOpaqueToken() string {
+	buf := make([]byte, 32)
+	_, _ = rand.Read(buf) // crypto/rand.Read never fails (Go 1.24+)
+
+	return base64.RawURLEncoding.EncodeToString(buf)
 }
 
-// Verify parses and validates an access token, returning its claims.
+// Verify parses and validates an access token, returning its claims. A
+// leading "Bearer " is accepted.
 func (i *TokenIssuer) Verify(tokenString string) (*Claims, error) {
+	tokenString = strings.TrimSpace(tokenString)
+	if len(tokenString) > len("bearer ") && strings.EqualFold(tokenString[:len("bearer ")], "bearer ") {
+		tokenString = strings.TrimSpace(tokenString[len("bearer "):])
+	}
+
 	claims := &Claims{}
 
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (any, error) {
@@ -93,8 +112,8 @@ func (i *TokenIssuer) Verify(tokenString string) (*Claims, error) {
 		}
 
 		return i.signingKey, nil
-	})
-	if err != nil || !token.Valid {
+	}, jwt.WithTimeFunc(i.now))
+	if err != nil || !token.Valid || claims.Subject == "" {
 		return nil, ErrInvalidToken
 	}
 

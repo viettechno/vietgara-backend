@@ -3,6 +3,8 @@ package main
 import (
 	"log/slog"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -31,6 +33,33 @@ func envBool(key string, fallback bool) bool {
 	}
 
 	return v == "1" || v == "true" || v == "TRUE"
+}
+
+func envInt(key string, fallback int) int {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		slog.Error("invalid integer environment variable", "key", key, "value", v)
+		os.Exit(1)
+	}
+
+	return n
+}
+
+func envList(key string) []string {
+	var out []string
+
+	for item := range strings.SplitSeq(os.Getenv(key), ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			out = append(out, item)
+		}
+	}
+
+	return out
 }
 
 func envDuration(key string, fallback time.Duration) time.Duration {

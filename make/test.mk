@@ -15,7 +15,7 @@ export COVERAGE_FILE	?= $(BUILD_DIR)/coverage.out
 export COVERAGE_HTML	?= $(BUILD_DIR)/coverage.html
 export COVERAGE_JSON	?= $(BUILD_DIR)/coverage.json
 export COVERAGE_OUT		?= $(BUILD_DIR)/toolcover.out
-export TEST_PKGS		?= $(shell go list ./internal/... ./pkg/... 2>/dev/null | grep -v './internal/mocks$$' || true)
+export TEST_PKGS		?= $(shell go list ./internal/... ./pkg/... 2>/dev/null | grep -v -E '/internal/mocks$$|test$$' || true)
 
 define CHECK_COVERAGE
 	{ \

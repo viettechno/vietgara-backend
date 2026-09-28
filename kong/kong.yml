@@ -15,9 +15,20 @@ services:
           - http
           - https
 
-  # The backend currently exposes native gRPC only. Kong routes gRPC clients
-  # on the Compose network to that service; a future HTTP/JSON adapter can be
-  # added under /api without changing the browser-facing SPA route.
+  # The REST/JSON API (API Specification): grpc-gateway in the backend serves
+  # every /api/v1 path itself, so the prefix is kept.
+  - name: backend-http
+    url: http://vietgara-backend:8080
+    routes:
+      - name: backend-http-route
+        paths:
+          - /api
+        strip_path: false
+        protocols:
+          - http
+          - https
+
+  # Native gRPC for service-to-service and tooling clients on the network.
   - name: backend-grpc
     url: grpc://vietgara-backend:50051
     routes:
@@ -26,14 +37,3 @@ services:
           - /
         protocols:
           - grpc
-
-  - name: backend-http
-    url: http://vietgara-backend:8080
-    routes:
-      - name: backend-http-route
-        paths:
-          - /api
-        strip_path: true
-        protocols:
-          - http
-          - https

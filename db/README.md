@@ -1,338 +1,143 @@
 # Database Migrations & Row-Level Security (RLS)
 
-This directory contains golang-migrate compatible PostgreSQL migrations with Row-Level Security (RLS) policies for multi-tenant data isolation.
+golang-migrate migrations (`db/migrations`) for the single VietGara
+PostgreSQL database. Every module keeps its tables in the `public` schema of
+this one database (a modular monolith); module boundaries are kept in code,
+and tenant isolation is enforced by Row-Level Security.
 
-## Overview
+## Migrations
 
-The migrations create three core tables for the Vietgara backend:
-- **accounts** - User accounts with authentication details
-- **garages** - Garage/tenant information
-- **garage_staff** - Staff assignments to garages with roles
+The application has not been deployed yet, so each migration creates its
+objects in their final shape: a change to an existing table is made in the
+migration that created it, not in a new `ALTER` migration. New migrations
+are only added for new tables or objects. (Once staging or production
+exists, schema changes must become new, forward-only migrations.)
 
-Row-Level Security is enabled on `garages` and `garage_staff` tables to automatically enforce data isolation based on a session variable.
+| Version | Module | Creates |
+| --- | --- | --- |
+| 000001 | Identity | `accounts` with enums `account_status` (`active`, `suspended`), `account_auth_provider` (`email`, `google`), `account_locale` (`vi` default, `en`); required e-mail unique case-insensitively; `email_verified_at` |
+| 000002 | Tenant | RLS helpers `app_current_garage_id()` / `app_current_account_id()`; `garages` with `garage_status` (`active`, `inactive`), `Asia/Ho_Chi_Minh` time zone, contact details, operating hours, numbering templates |
+| 000003 | Tenant | `garage_staff` with `staff_status` (`active`, `inactive`); permissions come from staff groups |
+| 000004 | Platform | `outbox_events` (`outbox_status`, garage or account, relay bookkeeping) |
+| 000005–000007 | Customer | `customers` (consent log, trigram search), `vehicles` (normalized plate key), `partners`, each with its tenant RLS policy |
+| 000008 | License | `plans` (limits on garages, staff and transactions per day; `plan_feature[]`; seeded catalogue), `subscriptions` (one per owner account), `entitlements` (per account and feature) |
+| 000009 | Identity | `platform_admins` |
+| 000010 | Tenant | `permission` and `default_role` enums, `roles`, `role_permissions`, `staff_groups`, `staff_group_members`, the shared `set_updated_at()` trigger |
+| 000011 | Tenant | `staff_invitations` (`invitation_status`, one pending invitation per garage and account) |
+| 000012 | Platform | `processed_events` (idempotent consumers), `audit_log` (append-only) |
+| 000013 | Platform | RLS policies of the tenant/access tables, `owner_usage()`, the `vietgara_app` role and its grants |
 
-## Migration Files
+Tables from 000002, 000003, 000010 and 000011 enable `FORCE ROW LEVEL
+SECURITY` when created; their policies are created together in 000013,
+because they reference tables created later (a garage is visible to its
+staff and invitees, a role to the members of the owner's garages, and so on).
 
-### 000001_create_accounts_table
-Creates the `accounts` table with:
-- UUID primary key
-- Email and phone as unique nullable fields
-- Auth provider (enum: email, google, facebook) and identity platform UID tracking
-- Status field (active, inactive, suspended)
-- Password hash for email/password authentication
-- Automatic `updated_at` trigger
-- Indexes on email, phone, identity_platform_uid, auth_provider
+`owner_usage(owner)` returns the owner's active garages and staff (members
+plus live invitations) across all their garages. It is `SECURITY DEFINER`
+because RLS hides the owner's other garages from a single-garage
+transaction, and it returns counts only.
 
-**Relationships**: Accounts are referenced by garages and garage_staff
+## Roles and connections
 
-### 000002_create_garages_table
-Creates the `garages` table with:
-- UUID primary key (used as tenant_id)
-- Foreign key to accounts
-- Tenant-specific configuration (timezone, currency, tax code, etc.)
-- Status field with enum type
-- Automatic `updated_at` trigger
-- **Row-Level Security** enabled with policy checking `app.current_garage_id` session variable
-
-**RLS Policy**: 
-```sql
-CREATE POLICY garages_rls_policy ON garages
-FOR ALL
-USING (id = current_setting('app.current_garage_id')::uuid)
+```mermaid
+flowchart LR
+  O["Schema owner<br/>MIGRATION_DATABASE_URL"] -->|runs migrations,<br/>owns tables| DB[(vietgara DB)]
+  A["APP_DB_USER (LOGIN)<br/>member of vietgara_app"] -->|DATABASE_URL<br/>RLS enforced| DB
 ```
 
-This policy restricts access to only the garage matching the session variable.
+- Migrations run as the schema owner. `FORCE ROW LEVEL SECURITY` also binds
+  the owner, so any future data migration on a tenant table needs a role that
+  bypasses RLS (the local superuser does; in Cloud SQL use a migration user
+  with `BYPASSRLS`).
+- The backend connects as `APP_DB_USER`. When the variable is set, the server
+  creates that login `IN ROLE vietgara_app` on startup if it is missing
+  (`db.EnsureAppLogin`). In staging and production, create it once instead and
+  keep its password in Secret Manager.
 
-### 000003_create_garage_staff_table
-Creates the `garage_staff` table with:
-- UUID primary key
-- Foreign keys to garages and accounts
-- Role field with enum type (owner, accountant, technician, service_advisor, inventory_staff)
-- Status field with enum type
-- Automatic `updated_at` trigger
-- Unique constraint on (garage_id, account_id) pairs
-- **Row-Level Security** enabled with policy checking `app.current_garage_id` session variable
+## Row-Level Security
 
-**RLS Policy**:
+Every tenant table has `ENABLE` and `FORCE ROW LEVEL SECURITY`. The
+application sets the scope per transaction (`db.TxManager.WithTransaction`,
+`db.SetScopeSQL`):
+
 ```sql
-CREATE POLICY garage_staff_rls_policy ON garage_staff
-FOR ALL
-USING (garage_id = current_setting('app.current_garage_id')::uuid)
+SELECT set_config('app.current_garage_id', $1, true),
+       set_config('app.current_account_id', $2, true);
 ```
 
-## Running Migrations
+`true` makes both settings transaction-local, so a pooled connection never
+leaks a tenant to the next request. The `Garage` interceptor opens the
+transaction for garage-scoped RPCs; account-scoped work (listing one's
+garages, invitations, roles) runs with only the account set.
 
-### Using golang-migrate CLI
+| Table | Read | Write |
+| --- | --- | --- |
+| `garages` | Current garage, or garages the caller owns, works in or is invited to | Current garage (insert also requires the caller as owner) |
+| `garage_staff` | Current garage, or the caller's own memberships | Current garage |
+| `staff_groups`, `staff_group_members` | Current garage, the owner's garages, or the caller's own groups | Current garage |
+| `roles`, `role_permissions` | The caller's roles, the current garage owner's roles, roles used by visible groups | The caller's own roles |
+| `staff_invitations` | Current garage, or invitations to the caller | Insert/delete: current garage; update: garage side (revoke) or invitee (accept/decline) |
+| `customers`, `vehicles`, `partners` | Current garage | Current garage |
+
+Platform tables (`accounts`, `plans`, `subscriptions`, `entitlements`,
+`outbox_events`, `processed_events`, `audit_log`, `platform_admins`) have no
+RLS; access to them is enforced by the owning module's service layer.
+
+`internal/tenant/repository` integration tests (`TestRLS_TenantModel`) run as
+a login in `vietgara_app` and check these rules.
+
+## Running migrations
+
+The server applies pending migrations on startup when `RUN_MIGRATIONS=true`.
+To run them by hand, use the make targets. They run the golang-migrate CLI
+pinned in `make/install.mk` through `go run`, so nothing needs installing.
+They connect with `MIGRATION_DATABASE_URL`, taken from the environment or
+`.env`; pass `DATABASE=<url>` to target another database:
 
 ```bash
-# Install golang-migrate
-go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest
-
-# Run migrations up
-migrate -path db/migrations -database "postgres://user:pass@localhost:5432/vietgara?sslmode=disable" up
-
-# Rollback one migration
-migrate -path db/migrations -database "postgres://user:pass@localhost:5432/vietgara?sslmode=disable" down
-
-# Force version
-migrate -path db/migrations -database "postgres://user:pass@localhost:5432/vietgara?sslmode=disable" force 3
+make migrate-up                 # apply all pending migrations
+make migrate-up N=1             # apply the next migration only
+make migrate-down               # roll back the last migration
+make migrate-down N=3           # roll back three migrations
+make migrate-down N=all         # roll back everything
+make migrate-version            # current version, and whether it is dirty
+make migrate-force VERSION=12   # after a failed migration: mark version 12 clean (runs no SQL)
 ```
 
-### Using Go code
+A failed migration leaves the database **dirty** at that version. Fix the
+cause, undo whatever the failed migration partly applied, then run
+`make migrate-force VERSION=<last good version>` and `make migrate-up` again.
 
-```go
-import "github.com/golang-migrate/migrate/v4"
-import _ "github.com/golang-migrate/migrate/v4/source/file"
-import _ "github.com/golang-migrate/migrate/v4/database/postgres"
+Every migration has a tested `down`; `db/migrate_test.go` applies all of them
+up, down and up again against a Postgres container.
 
-m, err := migrate.New(
-    "file://db/migrations",
-    "postgres://user:pass@localhost:5432/vietgara?sslmode=disable")
+## Schema (Release 1.1)
 
-err = m.Up() // Run all up migrations
+```mermaid
+erDiagram
+  accounts ||--o{ garages : owns
+  accounts ||--o{ garage_staff : "works as"
+  accounts ||--o| subscriptions : has
+  accounts ||--o{ roles : defines
+  garages ||--o{ garage_staff : employs
+  garages ||--o{ staff_groups : has
+  garages ||--o{ staff_invitations : sends
+  roles ||--o{ role_permissions : grants
+  roles ||--o{ staff_groups : "assigned to"
+  staff_groups ||--o{ staff_group_members : contains
+  garage_staff ||--o{ staff_group_members : "belongs to"
+  plans ||--o{ subscriptions : "chosen by"
+  accounts ||--o{ entitlements : "entitled to"
+  garages ||--o{ customers : serves
+  customers ||--o{ vehicles : owns
+  garages ||--o{ partners : "works with"
 ```
 
-## Row-Level Security (RLS)
+## Troubleshooting
 
-### How RLS Works
-
-1. Before querying `garages` or `garage_staff` tables, set the session variable:
-   ```sql
-   SELECT set_config('app.current_garage_id', '12345678-1234-1234-1234-123456789012'::text, false);
-   ```
-
-2. All subsequent queries automatically filter rows where the `garage_id` (or `id` for garages) matches the session variable
-
-3. If the session variable is not set, queries return 0 rows (RLS denies access by default)
-
-### Setting Session Variables in Application
-
-**For PostgreSQL connections:**
-
-```go
-// Set session variable for the connection
-ctx := context.Background()
-_, err := db.ExecContext(ctx, 
-    "SELECT set_config('app.current_garage_id', $1::text, false)", 
-    garageID)
-
-// All subsequent queries in this connection use the variable
-// Be careful with connection pooling - variable is per-connection
-```
-
-**In middleware (recommended approach):**
-
-```go
-func RLSMiddleware(garageID string) middleware.Handler {
-    return func(next http.Handler) http.Handler {
-        return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-            // Set RLS session variable for this request
-            ctx := r.Context()
-            _, err := db.ExecContext(ctx,
-                "SELECT set_config('app.current_garage_id', $1::text, false)",
-                garageID)
-            if err != nil {
-                http.Error(w, "Failed to set session", http.StatusInternalServerError)
-                return
-            }
-            
-            next.ServeHTTP(w, r.WithContext(ctx))
-        })
-    }
-}
-```
-
-### RLS Policies Explained
-
-The RLS policies use PostgreSQL's `current_setting()` function to read the session variable:
-
-```sql
--- For garages table
-id = current_setting('app.current_garage_id')::uuid
-
--- For garage_staff table
-garage_id = current_setting('app.current_garage_id')::uuid
-```
-
-**Key behaviors:**
-- If `app.current_garage_id` is not set, `current_setting()` raises an exception (unless handled)
-- We should wrap in a function that defaults safely:
-  ```sql
-  id = (current_setting('app.current_garage_id', true) FILTER (WHERE true))::uuid
-  ```
-
-### Gotchas & Best Practices
-
-1. **Connection pooling**: Session variables are per-connection. Use connection context properly
-2. **Default values**: Set a safe default or handle exceptions
-3. **Admin operations**: Bypass RLS using `SECURITY DEFINER` functions
-4. **Testing**: Always set the session variable in tests
-
-## Testing
-
-### Run RLS Tests
-
-```bash
-# Run all tests (starts PostgreSQL container automatically)
-go test ./db -v -tags=testcontainers
-
-# Run specific test
-go test ./db -run TestRLS_QueryFailsWithoutSessionVariable -v -tags=testcontainers
-
-# Run with coverage
-go test ./db -v -cover -tags=testcontainers
-```
-
-### Test Coverage
-
-The test file (`migrations_test.go`) includes:
-
-1. **TestRLS_QueryFailsWithoutSessionVariable** - Verifies queries return 0 rows without session variable
-2. **TestRLS_QuerySucceedsWithCorrectSessionVariable** - Verifies queries work with matching session variable
-3. **TestRLS_QueryBlockedWithWrongSessionVariable** - Verifies multi-tenant isolation (can't see other garages)
-4. **TestRLS_GarageStaffRowLevelSecurity** - Tests RLS on garage_staff table
-5. **TestRLS_SessionVariableHandling** - Tests session variable set/retrieve
-
-### What Tests Verify
-
-- ✅ Queries return 0 rows when session variable is not set
-- ✅ Queries return correct rows when session variable matches
-- ✅ Users cannot access other garage data (tenant isolation)
-- ✅ RLS works on both `garages` and `garage_staff` tables
-- ✅ Session variables persist correctly per connection
-
-### Using testcontainers-go
-
-The tests use `testcontainers-go` to automatically:
-1. Start a PostgreSQL 15 container
-2. Wait for the database to be ready
-3. Run migrations
-4. Insert test data
-5. Verify RLS behavior
-6. Clean up the container
-
-**Requirements:**
-- Docker must be running
-- `github.com/testcontainers/testcontainers-go` installed
-- `github.com/lib/pq` installed
-
-**Installation:**
-```bash
-go get -u github.com/testcontainers/testcontainers-go
-go get -u github.com/lib/pq
-```
-
-## Database Schema Diagram
-
-```
-┌─────────────────────────────────────────┐
-│            accounts                     │
-├─────────────────────────────────────────┤
-│ id (uuid, PK)                           │
-│ email (varchar, unique)                 │
-│ phone (varchar, unique)                 │
-│ auth_provider (enum, default 'email')   │
-│ identity_platform_uid (varchar, unique) │
-│ full_name (varchar)                     │
-│ password_hash (varchar, nullable)       │
-│ status (varchar)                        │
-│ created_at, updated_at                  │
-└─────────────────────────────────────────┘
-        ▲                        ▲
-        │ (PK ref)              │ (PK ref)
-        │ (account_id)          │ (account_id)
-        │                       │
-┌───────┴─────────────┐    ┌────┴──────────────────┐
-│    garages          │    │  garage_staff         │
-├─────────────────────┤    ├───────────────────────┤
-│ id (uuid, PK)       │◄───│ garage_id (uuid, FK)  │
-│ account_id (uuid,FK)│    │ account_id (uuid, FK) │
-│ name (varchar)      │    │ role (enum)           │
-│ tax_code (varchar)  │    │ status (enum)         │
-│ address (text)      │    │ created_at, updated_at│
-│ logo_url (varchar)  │    └───────────────────────┘
-│ timezone (varchar)  │
-│ currency (varchar)  │
-│ status (enum)       │
-│ created_at,updated_at
-└─────────────────────┘
-
-RLS Enabled:
-- garages: WHERE id = app.current_garage_id
-- garage_staff: WHERE garage_id = app.current_garage_id
-```
-
-## Administration & Maintenance
-
-### Viewing Migrations Status
-
-```bash
-migrate -path db/migrations -database "postgres://..." version
-```
-
-### Viewing RLS Policies
-
-```sql
--- List all policies on garages table
-SELECT * FROM pg_policy WHERE relname = 'garages';
-
--- View policy definition
-SELECT pg_get_expr(qual, relname::regclass) FROM pg_policy 
-WHERE relname = 'garages' AND polname = 'garages_rls_policy';
-```
-
-### Bypassing RLS (Admin Operations)
-
-```sql
--- Temporarily disable RLS for current session
-ALTER TABLE garages DISABLE ROW LEVEL SECURITY;
-
--- Re-enable RLS
-ALTER TABLE garages ENABLE ROW LEVEL SECURITY;
-
--- Or use SECURITY DEFINER function
-CREATE OR REPLACE FUNCTION get_all_garages() 
-RETURNS TABLE (id uuid, name varchar)
-LANGUAGE SQL
-SECURITY DEFINER
-AS $$
-  SELECT id, name FROM garages;
-$$;
-```
-
-### Troubleshooting
-
-**Problem**: "permission denied for schema public"
-- **Solution**: Ensure user has correct schema permissions
-
-**Problem**: "unrecognized configuration parameter 'app.current_garage_id'"
-- **Solution**: The parameter is custom, auto-created on first use
-
-**Problem**: RLS not working (returns all rows)
-- **Solution**: Check if RLS is actually enabled:
-  ```sql
-  SELECT relname, relrowsecurity FROM pg_class WHERE relname IN ('garages', 'garage_staff');
-  ```
-
-**Problem**: Session variable not persisting across connections
-- **Solution**: Session variables are per-connection. Use connection pooling correctly and set before each query batch.
-
-## Performance Considerations
-
-1. **Indexes**: Foreign key columns are indexed for faster filtering
-2. **Unique constraints**: (garage_id, account_id) on garage_staff prevents duplicates
-3. **RLS overhead**: Minimal - adds one equality check per row
-4. **Query optimization**: RLS policies are inline, optimized by query planner
-
-## Future Enhancements
-
-- [ ] Add audit table with RLS
-- [ ] Add invitation flow for staff
-- [ ] Add role-based permissions table
-- [ ] Add activity log with RLS
-- [ ] Add soft-delete columns
-
-## Related Files
-
-- [IDENTITY_IMPLEMENTATION.md](../IDENTITY_IMPLEMENTATION.md) - Identity package setup
-- [IDENTITY_QUICKSTART.md](../IDENTITY_QUICKSTART.md) - Quick start guide
+- **Every query returns no rows**: the scope is not set; run the query inside
+  `WithTransaction` with a garage and/or account scope.
+- **`permission denied for table schema_migrations`**: the application user
+  is running migrations; set `MIGRATION_DATABASE_URL` to the schema owner.
+- **A data migration updates 0 rows**: the migration role is subject to
+  `FORCE ROW LEVEL SECURITY`; run it with a role that bypasses RLS.

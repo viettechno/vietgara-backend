@@ -2,96 +2,134 @@ package middleware
 
 import (
 	"context"
-	"net/http"
-	"slices"
+	"strings"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/metadata"
-	"google.golang.org/grpc/status"
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-// HTTPAuth protects browser-facing JSON endpoints with the same JWT issuer
-// used by the gRPC interceptor.
-func HTTPAuth(issuer *auth.TokenIssuer, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := r.Header.Get("Authorization")
-		if len(token) < len("Bearer ") || token[:len("Bearer ")] != "Bearer " {
-			http.Error(w, "missing authorization token", http.StatusUnauthorized)
-			return
-		}
-
-		claims, err := issuer.Verify(token[len("Bearer "):])
-		if err != nil {
-			http.Error(w, "invalid or expired token", http.StatusUnauthorized)
-			return
-		}
-
-		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ctxKeyClaims{}, claims)))
-	})
-}
+// Reasons reported by the interceptors of this package.
+const (
+	ReasonEmailNotVerified = "EMAIL_NOT_VERIFIED"
+	ReasonNoPolicy         = "NO_POLICY"
+)
 
 type ctxKeyClaims struct{}
 
-// ClaimsFromContext retrieves the verified JWT claims set by AuthInterceptor.
+type ctxKeyPolicy struct{}
+
+// WithClaims stores verified token claims in ctx (tests and background
+// jobs acting for an account).
+func WithClaims(ctx context.Context, claims *auth.Claims) context.Context {
+	return context.WithValue(ctx, ctxKeyClaims{}, claims)
+}
+
+// ClaimsFromContext retrieves the verified JWT claims set by Auth.
 func ClaimsFromContext(ctx context.Context) (*auth.Claims, bool) {
 	c, ok := ctx.Value(ctxKeyClaims{}).(*auth.Claims)
 
 	return c, ok
 }
 
-type authInterceptorConfig struct {
-	// skipMethods lists full gRPC method names (e.g.
-	// "/vietgara.identity.v1.AuthService/Register") that are public and
-	// must NOT be rejected for missing credentials.
-	skipMethods []string
-}
-
-// AuthInterceptorOption customizes AuthInterceptor.
-type AuthInterceptorOption func(*authInterceptorConfig)
-
-// WithSkipMethods marks the given full method names as public, letting
-// them through without a bearer token. Used for unauthenticated endpoints
-// such as Register, Login, RefreshToken and Logout.
-func WithSkipMethods(methods ...string) AuthInterceptorOption {
-	return func(c *authInterceptorConfig) {
-		c.skipMethods = append(c.skipMethods, methods...)
-	}
-}
-
-// AuthInterceptor verifies the bearer token from the "authorization" gRPC
-// metadata and attaches the parsed claims to the context. Methods listed
-// via WithSkipMethods bypass authentication -- everything else requires a
-// valid token.
-func AuthInterceptor(issuer *auth.TokenIssuer, options ...AuthInterceptorOption) grpc.UnaryServerInterceptor {
-	config := &authInterceptorConfig{}
-	for _, opt := range options {
-		opt(config)
+// AccountID returns the signed-in account, or "".
+func AccountID(ctx context.Context) string {
+	if c, ok := ClaimsFromContext(ctx); ok {
+		return c.AccountID()
 	}
 
+	return ""
+}
+
+func policyFromContext(ctx context.Context) Policy {
+	p, _ := ctx.Value(ctxKeyPolicy{}).(Policy)
+
+	return p
+}
+
+// Auth looks up the RPC's policy and, unless it is public, verifies the
+// bearer token from the "authorization" metadata and stores its claims.
+// RPCs missing from policies are rejected (fail closed).
+func Auth(issuer *auth.TokenIssuer, policies Policies) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if info != nil && slices.Contains(config.skipMethods, info.FullMethod) {
+		policy, known := policies[info.FullMethod]
+		if !known {
+			return nil, apperror.ToGRPCError(apperror.New(apperror.CodePermissionDenied, "this method is not available").WithReason(ReasonNoPolicy))
+		}
+
+		ctx = context.WithValue(ctx, ctxKeyPolicy{}, policy)
+		if policy.Public {
 			return handler(ctx, req)
 		}
 
-		md, ok := metadata.FromIncomingContext(ctx)
-		if !ok {
-			return nil, status.Error(codes.Unauthenticated, "missing metadata")
+		token := firstMetadata(ctx, "authorization")
+		if token == "" {
+			return nil, apperror.ToGRPCError(apperror.New(apperror.CodeUnauthenticated, "missing authorization token"))
 		}
 
-		tokens := md.Get("authorization")
-		if len(tokens) == 0 {
-			return nil, status.Error(codes.Unauthenticated, "missing authorization token")
-		}
-
-		claims, err := issuer.Verify(tokens[0])
+		claims, err := issuer.Verify(token)
 		if err != nil {
-			return nil, status.Error(codes.Unauthenticated, "invalid or expired token")
+			return nil, apperror.ToGRPCError(apperror.New(apperror.CodeUnauthenticated, "invalid or expired token"))
 		}
 
-		ctx = context.WithValue(ctx, ctxKeyClaims{}, claims)
+		return handler(WithClaims(ctx, claims), req)
+	}
+}
+
+// EmailVerified rejects accounts that have not verified their e-mail yet,
+// except on RPCs that allow it (FR-IAM-01).
+func EmailVerified() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		policy := policyFromContext(ctx)
+		if policy.Public || policy.AllowUnverified {
+			return handler(ctx, req)
+		}
+
+		if claims, ok := ClaimsFromContext(ctx); !ok || !claims.EmailVerified {
+			return nil, apperror.ToGRPCError(apperror.New(apperror.CodePermissionDenied, "verify your e-mail address first").WithReason(ReasonEmailNotVerified))
+		}
 
 		return handler(ctx, req)
 	}
+}
+
+// PlatformAdmin restricts admin RPCs to platform operators.
+func PlatformAdmin() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		if !policyFromContext(ctx).PlatformAdmin {
+			return handler(ctx, req)
+		}
+
+		if claims, ok := ClaimsFromContext(ctx); !ok || !claims.PlatformAdmin {
+			return nil, apperror.ToGRPCError(apperror.New(apperror.CodePermissionDenied, "platform administrators only"))
+		}
+
+		return handler(ctx, req)
+	}
+}
+
+// ClientIP returns the caller's address as forwarded by the REST gateway
+// (X-Forwarded-For), for the audit log.
+func ClientIP(ctx context.Context) string {
+	forwarded := firstMetadata(ctx, "x-forwarded-for")
+	if first, _, found := strings.Cut(forwarded, ","); found {
+		return strings.TrimSpace(first)
+	}
+
+	return strings.TrimSpace(forwarded)
+}
+
+func firstMetadata(ctx context.Context, key string) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+
+	if values := md.Get(key); len(values) > 0 {
+		return values[0]
+	}
+
+	return ""
 }

@@ -3,61 +3,148 @@ package usecase
 import (
 	"context"
 
+	"github.com/viettechno/vietgara-backend/internal/platform/audit"
+	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
+	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 )
 
-// GarageRepository defines the persistence contract for garages.
+// GarageRepository persists garages. Finders return domain.ErrGarageNotFound.
 type GarageRepository interface {
-	FindByID(ctx context.Context, id string) (*domain.Garage, error)
-	ListByAccountID(ctx context.Context, accountID string) ([]*domain.Garage, error)
+	// Create inserts g (its ID is set by the caller) and fills timestamps.
 	Create(ctx context.Context, g *domain.Garage) error
+	FindByID(ctx context.Context, id string) (*domain.Garage, error)
+	// ListForAccount returns the garages the account owns (any status) or
+	// is an active member of (active garages only), oldest first.
+	ListForAccount(ctx context.Context, accountID string) ([]*domain.Garage, error)
+	// Update persists the mutable fields of g.
 	Update(ctx context.Context, g *domain.Garage) error
 }
 
-// GarageStaffRepository defines the persistence contract for garage staff
-// memberships.
-type GarageStaffRepository interface {
-	Create(ctx context.Context, s *domain.GarageStaff) error
-	// FindByID returns the membership with the given id, or pgx.ErrNoRows
-	// when absent.
-	FindByID(ctx context.Context, staffID string) (*domain.GarageStaff, error)
-	// Update persists role/status changes of an existing membership.
-	Update(ctx context.Context, s *domain.GarageStaff) error
-	ListByGarageID(ctx context.Context, garageID string) ([]*domain.GarageStaff, error)
-	FindByGarageAndAccount(ctx context.Context, garageID, accountID string) (*domain.GarageStaff, error)
-	// ListRolesForAccount returns every (garage_id, role) pair for an
-	// account's active staff memberships -- this is the same data exposed
-	// to the Identity module via the GarageMembershipReader interface it
-	// depends on (see internal/identity/repository.GarageMembershipReader).
-	ListRolesForAccount(ctx context.Context, accountID string) ([]RoleAssignment, error)
+// StaffRepository persists garage memberships. Finders return
+// domain.ErrStaffNotFound.
+type StaffRepository interface {
+	Create(ctx context.Context, s *domain.Staff) error
+	FindByID(ctx context.Context, garageID, staffID string) (*domain.Staff, error)
+	FindByAccount(ctx context.Context, garageID, accountID string) (*domain.Staff, error)
+	// List returns the garage's members with their groups and effective
+	// permissions (account details are not loaded).
+	List(ctx context.Context, garageID string) ([]*domain.Staff, error)
+	UpdateStatus(ctx context.Context, s *domain.Staff) error
+	// SetGroups replaces the member's groups.
+	SetGroups(ctx context.Context, garageID, staffID string, groupIDs []string) error
+	Delete(ctx context.Context, garageID, staffID string) error
 }
 
-// RoleAssignment is a single (garage_id, role) pair from
-// ListRolesForAccount.
-type RoleAssignment struct {
-	GarageID string
-	Role     string
+// RoleRepository persists owner-defined roles. Finders return
+// domain.ErrRoleNotFound; a duplicate name yields domain.ErrRoleNameTaken.
+type RoleRepository interface {
+	ListByOwner(ctx context.Context, ownerAccountID string) ([]*domain.Role, error)
+	FindByID(ctx context.Context, roleID string) (*domain.Role, error)
+	Create(ctx context.Context, r *domain.Role) error
+	// CreateDefault inserts a default role unless the owner already has the
+	// role with that key, and reports whether it inserted.
+	CreateDefault(ctx context.Context, r *domain.Role) (bool, error)
+	Update(ctx context.Context, r *domain.Role) error
+	// Delete returns domain.ErrRoleInUse while groups use the role.
+	Delete(ctx context.Context, roleID string) error
 }
 
-// AccountSummary is the slice of an Identity account the Tenant module needs
-// to show and invite staff.
+// GroupRepository persists staff groups. Finders return
+// domain.ErrGroupNotFound; a duplicate name yields domain.ErrGroupNameTaken.
+type GroupRepository interface {
+	List(ctx context.Context, garageID string) ([]*domain.StaffGroup, error)
+	FindByID(ctx context.Context, garageID, groupID string) (*domain.StaffGroup, error)
+	Create(ctx context.Context, g *domain.StaffGroup) error
+	// CreateDefault inserts a default group unless the garage already has
+	// the group with that key.
+	CreateDefault(ctx context.Context, g *domain.StaffGroup) (bool, error)
+	Update(ctx context.Context, g *domain.StaffGroup) error
+	Delete(ctx context.Context, garageID, groupID string) error
+}
+
+// InvitationRepository persists staff invitations. Finders return
+// domain.ErrInvitationNotFound; a second pending invitation yields
+// domain.ErrAlreadyInvited.
+type InvitationRepository interface {
+	Create(ctx context.Context, inv *domain.Invitation) error
+	FindByID(ctx context.Context, id string) (*domain.Invitation, error)
+	ListByGarage(ctx context.Context, garageID string) ([]*domain.Invitation, error)
+	ListByAccount(ctx context.Context, accountID string) ([]*domain.Invitation, error)
+	// Update persists status and responded_at.
+	Update(ctx context.Context, inv *domain.Invitation) error
+	// ExpireStale marks the account's pending invitations to the garage
+	// that are past their expiry as expired.
+	ExpireStale(ctx context.Context, garageID, accountID string) error
+}
+
+// UsageReader counts what an owner uses of their plan limits across all
+// their garages.
+type UsageReader interface {
+	OwnerUsage(ctx context.Context, ownerAccountID string) (garages, staff int, err error)
+}
+
+// Limit names a plan limit (License Management).
+type Limit string
+
+// Plan limits checked by this module.
+const (
+	LimitGarages Limit = "max_garages"
+	LimitStaff   Limit = "max_staff"
+)
+
+// LimitChecker enforces the owner's plan limits; implemented by the
+// License module. It returns a PLAN_LIMIT_REACHED error when adding one more
+// unit to current would exceed the limit.
+type LimitChecker interface {
+	CheckLimit(ctx context.Context, ownerAccountID string, limit Limit, current int) error
+}
+
+// AccountSummary is the Identity module's view of an account.
 type AccountSummary struct {
-	ID       string
-	FullName string
-	Email    *string
-	Phone    *string
-	Active   bool
+	ID            string
+	FullName      string
+	Email         string
+	Phone         *string
+	Locale        string
+	Active        bool
+	EmailVerified bool
 }
 
-// AccountDirectory is a narrow read-only view into the Identity module's
-// accounts, implemented by an adapter in cmd/server/wiring.go so the two
-// modules stay decoupled. Lookups return domain.ErrAccountNotFound when no
-// account matches.
+// AccountDirectory is a read-only view of Identity accounts, implemented by
+// an adapter in cmd/server so the modules stay decoupled. Finders return
+// domain.ErrAccountNotFound.
 type AccountDirectory interface {
-	// FindByEmail matches the email case-insensitively.
 	FindByEmail(ctx context.Context, email string) (*AccountSummary, error)
-	// FindByPhone matches ignoring spaces, dashes, dots and parentheses.
 	FindByPhone(ctx context.Context, phone string) (*AccountSummary, error)
-	// ListByIDs returns the accounts found, keyed by account id.
+	FindByID(ctx context.Context, id string) (*AccountSummary, error)
 	ListByIDs(ctx context.Context, ids []string) (map[string]*AccountSummary, error)
+}
+
+// LogoStore keeps garage logos (internal/platform/storage).
+type LogoStore interface {
+	Put(ctx context.Context, key, contentType string, data []byte) (string, error)
+	Delete(ctx context.Context, key string) error
+	KeyFromURL(url string) (string, bool)
+}
+
+// Mailer delivers e-mails (internal/platform/mail).
+type Mailer interface {
+	Send(ctx context.Context, msg mail.Message) error
+}
+
+// EventPublisher writes domain events to the outbox in the caller's
+// transaction.
+type EventPublisher interface {
+	Publish(ctx context.Context, eventType, garageID, accountID string, payload any) error
+}
+
+// AuditLogger records audited changes in the caller's transaction.
+type AuditLogger interface {
+	Record(ctx context.Context, e audit.Entry) error
+}
+
+// Transactor runs fn in a scoped transaction (see db.TxManager).
+type Transactor interface {
+	WithTransaction(ctx context.Context, scope platformdb.Scope, fn func(ctx context.Context) error) error
 }

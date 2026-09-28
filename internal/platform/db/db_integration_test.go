@@ -87,7 +87,7 @@ func TestTxManager_WithTransactionReal(t *testing.T) {
 
 		var gotSetting string
 
-		err = m.WithTransaction(t.Context(), &garageID, func(ctx context.Context) error {
+		err = m.WithTransaction(t.Context(), dbpkg.GarageScope(garageID), func(ctx context.Context) error {
 			querier := dbpkg.QuerierFromContext(ctx, pool)
 
 			err := querier.QueryRow(ctx, "SELECT current_setting('app.current_garage_id')").Scan(&gotSetting)
@@ -117,7 +117,7 @@ func TestTxManager_WithTransactionReal(t *testing.T) {
 
 		wantErr := errors.New("callback failed")
 
-		err = m.WithTransaction(t.Context(), &garageID, func(ctx context.Context) error {
+		err = m.WithTransaction(t.Context(), dbpkg.GarageScope(garageID), func(ctx context.Context) error {
 			_, err := dbpkg.QuerierFromContext(ctx, pool).Exec(ctx, "INSERT INTO "+txTestTable+" (id) VALUES (2)")
 			if err != nil {
 				return err
@@ -134,7 +134,7 @@ func TestTxManager_WithTransactionReal(t *testing.T) {
 	t.Run("skips tenant variable when garageID is nil", func(t *testing.T) {
 		var gotSetting string
 
-		err := m.WithTransaction(t.Context(), nil, func(ctx context.Context) error {
+		err := m.WithTransaction(t.Context(), dbpkg.Scope{}, func(ctx context.Context) error {
 			return dbpkg.QuerierFromContext(ctx, pool).
 				QueryRow(ctx, "SELECT COALESCE(current_setting('app.current_garage_id', true), '')").
 				Scan(&gotSetting)

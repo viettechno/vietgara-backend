@@ -1,57 +1,70 @@
-// Package handler wires the Tenant/Garage usecases to the gRPC services
-// generated from vietgara-proto (proto/vietgara/tenant/v1).
+// Package handler exposes the Tenant module as gRPC services (REST through
+// grpc-gateway): garages, staff, invitations, roles and staff groups.
 package handler
 
 import (
-	"context"
-
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/middleware"
-	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
-
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
-// Server implements tenantv1.GarageServiceServer and
-// tenantv1.StaffServiceServer.
+// Server implements the Tenant module's gRPC services.
 type Server struct {
 	tenantv1.UnimplementedGarageServiceServer
 	tenantv1.UnimplementedStaffServiceServer
+	tenantv1.UnimplementedInvitationServiceServer
+	tenantv1.UnimplementedRoleServiceServer
+	tenantv1.UnimplementedStaffGroupServiceServer
 
-	garage *usecase.GarageUseCase
-	staff  *usecase.StaffUseCase
-
-	txManager *platformdb.TxManager
+	uc *usecase.TenantUseCase
 }
 
-// NewServer wires the handler to its use cases and returns a ready Server.
-func NewServer(
-	garage *usecase.GarageUseCase,
-	staff *usecase.StaffUseCase,
-	opts ...ServerOption,
-) *Server {
-	s := &Server{
-		garage: garage,
-		staff:  staff,
-	}
-
-	for _, opt := range opts {
-		opt(s)
-	}
-
-	return s
+// NewServer returns a Server backed by uc.
+func NewServer(uc *usecase.TenantUseCase) *Server {
+	return &Server{uc: uc}
 }
 
-// accountIDFromContext reads the account_id (JWT "sub" claim) attached by
-// middleware.AuthInterceptor.
-func accountIDFromContext(ctx context.Context) (string, error) {
-	claims, ok := middleware.ClaimsFromContext(ctx)
-	if !ok {
-		return "", status.Error(codes.Unauthenticated, "missing account context")
-	}
+// Policies declares what every Tenant RPC requires (see middleware.Policy).
+func Policies() middleware.Policies {
+	return middleware.Policies{
+		tenantv1.GarageService_ListGarages_FullMethodName:      middleware.AccountMethod(),
+		tenantv1.GarageService_CreateGarage_FullMethodName:     middleware.AccountMethod(),
+		tenantv1.GarageService_GetGarage_FullMethodName:        withSkipLicense(middleware.GarageMethod(access.Member())),
+		tenantv1.GarageService_UpdateGarage_FullMethodName:     withSkipLicense(middleware.GarageMethod(access.Requires(access.GarageWrite))),
+		tenantv1.GarageService_UploadGarageLogo_FullMethodName: middleware.GarageMethod(access.Requires(access.GarageWrite)),
+		tenantv1.GarageService_DeleteGarageLogo_FullMethodName: middleware.GarageMethod(access.Requires(access.GarageWrite)),
 
-	return claims.Subject, nil
+		tenantv1.StaffService_ListStaff_FullMethodName:            middleware.GarageMethod(access.Requires(access.StaffRead)),
+		tenantv1.StaffService_UpdateStaff_FullMethodName:          middleware.GarageMethod(access.Requires(access.StaffWrite)),
+		tenantv1.StaffService_DeleteStaff_FullMethodName:          middleware.GarageMethod(access.Requires(access.StaffWrite)),
+		tenantv1.StaffService_LookupStaffCandidate_FullMethodName: middleware.GarageMethod(access.Requires(access.StaffWrite)),
+
+		tenantv1.InvitationService_CreateInvitation_FullMethodName:  middleware.GarageMethod(access.Requires(access.StaffWrite)),
+		tenantv1.InvitationService_ListInvitations_FullMethodName:   middleware.GarageMethod(access.Requires(access.StaffRead)),
+		tenantv1.InvitationService_RevokeInvitation_FullMethodName:  middleware.GarageMethod(access.Requires(access.StaffWrite)),
+		tenantv1.InvitationService_ListMyInvitations_FullMethodName: middleware.AccountMethod(),
+		tenantv1.InvitationService_GetMyInvitation_FullMethodName:   middleware.AccountMethod(),
+		tenantv1.InvitationService_AcceptInvitation_FullMethodName:  middleware.AccountMethod(),
+		tenantv1.InvitationService_DeclineInvitation_FullMethodName: middleware.AccountMethod(),
+
+		tenantv1.RoleService_ListPermissions_FullMethodName: middleware.AccountMethod(),
+		tenantv1.RoleService_ListRoles_FullMethodName:       middleware.AccountMethod(),
+		tenantv1.RoleService_GetRole_FullMethodName:         middleware.AccountMethod(),
+		tenantv1.RoleService_CreateRole_FullMethodName:      middleware.AccountMethod(),
+		tenantv1.RoleService_UpdateRole_FullMethodName:      middleware.AccountMethod(),
+		tenantv1.RoleService_DeleteRole_FullMethodName:      middleware.AccountMethod(),
+
+		tenantv1.StaffGroupService_ListStaffGroups_FullMethodName:  middleware.GarageMethod(access.Requires(access.StaffRead)),
+		tenantv1.StaffGroupService_CreateStaffGroup_FullMethodName: middleware.GarageMethod(access.OwnerOnly()),
+		tenantv1.StaffGroupService_UpdateStaffGroup_FullMethodName: middleware.GarageMethod(access.OwnerOnly()),
+		tenantv1.StaffGroupService_DeleteStaffGroup_FullMethodName: middleware.GarageMethod(access.OwnerOnly()),
+	}
+}
+
+func withSkipLicense(p middleware.Policy) middleware.Policy {
+	p.SkipLicense = true
+
+	return p
 }

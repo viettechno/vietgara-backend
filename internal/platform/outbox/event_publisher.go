@@ -1,6 +1,7 @@
 // Package outbox implements the Outbox Pattern (Event Design Section 2):
 // domain events are written to outbox_events inside the same transaction
-// as the business data change, then published to Cloud Pub/Sub and marked
+// as the business data change, then published to Kafka (ADR-004) -- or,
+// without brokers configured, to in-process subscribers -- and marked
 // published by a background relay worker.
 package outbox
 
@@ -23,11 +24,12 @@ func NewEventPublisher(pool *platformdb.Pool) *EventPublisher {
 	return &EventPublisher{pool: pool}
 }
 
-// Publish inserts eventType for garageID with the marshalled payload into
-// the outbox. It runs on the querier carried in ctx, so when the caller
-// opened a transaction via db.TxManager.WithTransaction the row lands in
-// the same transaction as the business change.
-func (p *EventPublisher) Publish(ctx context.Context, eventType, garageID string, payload any) error {
+// Publish inserts eventType with the marshalled payload into the outbox.
+// garageID and/or accountID name what the event is about: the garage it
+// belongs to (tenant events) or the account (identity and license events);
+// the first non-empty one is the Kafka partition key. It runs on the
+// querier carried in ctx, so the row lands in the caller's transaction.
+func (p *EventPublisher) Publish(ctx context.Context, eventType, garageID, accountID string, payload any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -35,8 +37,9 @@ func (p *EventPublisher) Publish(ctx context.Context, eventType, garageID string
 
 	q := platformdb.QuerierFromContext(ctx, p.pool)
 	_, err = q.Exec(ctx,
-		`INSERT INTO outbox_events (id, event_type, garage_id, payload, status) VALUES ($1, $2, $3, $4, 'pending')`,
-		uuid.NewString(), eventType, garageID, body)
+		`INSERT INTO outbox_events (id, event_type, garage_id, account_id, payload, status)
+		 VALUES ($1, $2, NULLIF($3, '')::uuid, NULLIF($4, '')::uuid, $5, 'pending')`,
+		uuid.NewString(), eventType, garageID, accountID, body)
 
 	return err
 }

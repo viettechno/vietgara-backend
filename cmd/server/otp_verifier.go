@@ -1,13 +1,5 @@
 package main
 
-import "context"
-
-// stubOTPVerifier always accepts the dev code "000000" -- local development
-// only.
-// TODO(Phase 1 hardening, before staging): replace with a real SMS OTP
-// provider integration.
-type stubOTPVerifier struct{}
-
-func (s *stubOTPVerifier) Verify(_ context.Context, _, code string) (bool, error) {
-	return code == "000000", nil
-}
+// Superseded: OTPs, refresh tokens and Google sign-in now live in the
+// Identity module (internal/identity). This file is intentionally empty and
+// can be deleted.

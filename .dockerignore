@@ -1,0 +1,12 @@
+# Keep secrets, VCS data and local artefacts out of the build context.
+.env
+.git
+.github
+.vscode
+.codex
+.opencode
+.tmp
+.data
+out
+testing
+*.md

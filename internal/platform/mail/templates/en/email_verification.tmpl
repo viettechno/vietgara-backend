@@ -1,0 +1,13 @@
+{{define "subject"}}Your VietGara verification code: {{.Code}}{{end}}
+{{define "text"}}Hello {{.Name}},
+
+Your e-mail verification code is: {{.Code}}
+
+The code is valid for {{.Minutes}} minutes. If you did not sign up for VietGara, ignore this e-mail.
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p>Your e-mail verification code is:</p>
+<p style="font-size:28px;font-weight:700;letter-spacing:6px">{{.Code}}</p>
+<p>The code is valid for {{.Minutes}} minutes. If you did not sign up for VietGara, ignore this e-mail.</p>
+<p>VietGara</p>{{end}}

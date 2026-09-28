@@ -108,6 +108,13 @@ linters:
       - testutils$
       - examples$
     rules:
+      # Test-support packages: in-memory fakes shared by tests.
+      - path: (dbtest|tenanttest|licensetest)/
+        linters:
+          - dupl
+          - goconst
+          - gocyclo
+          - revive
       # These integration tests use isolated containers and shared mock-driver state;
       # running them in parallel adds resource pressure without improving coverage.
       - path: _test\.go$

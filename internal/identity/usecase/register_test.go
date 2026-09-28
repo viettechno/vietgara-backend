@@ -1,194 +1,114 @@
 package usecase_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/viettechno/vietgara-backend/internal/identity/domain"
 	"github.com/viettechno/vietgara-backend/internal/identity/usecase"
-	"github.com/viettechno/vietgara-backend/internal/mocks"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-func TestIdentityUseCase_Register(t *testing.T) {
+func TestRegister(t *testing.T) {
 	t.Parallel()
 
-	email := "new@example.com"
+	e := newEnv(t)
+	session := e.register(t)
 
-	t.Run("success with email and password issues a session", func(t *testing.T) {
-		t.Parallel()
+	acc := session.Account
+	assert.Equal(t, "owner@example.com", acc.Email)
+	assert.False(t, acc.EmailVerified())
+	assert.Equal(t, domain.LocaleVI, acc.Locale)
+	assert.NotNil(t, acc.PasswordHash)
+	assert.NotEmpty(t, session.AccessToken)
 
-		accounts := mocks.NewMockAccountRepository(t)
-		garages := mocks.NewMockGarageMembershipReader(t)
-		tokens := mocks.NewMockRefreshTokenStore(t)
-		otp := mocks.NewMockOTPVerifier(t)
-		uc := newIdentityUseCase(accounts, garages, tokens, otp, newTestTokenIssuer())
+	claims, err := e.issuer.Verify(session.AccessToken)
+	require.NoError(t, err)
+	assert.False(t, claims.EmailVerified)
 
-		accounts.On("FindByEmail", mock.Anything, email).Return(nil, domain.ErrAccountNotFound).Once()
-		accounts.On("Create", mock.Anything, mock.MatchedBy(func(acc *domain.Account) bool {
-			return acc.FullName == "New User" &&
-				acc.PasswordHash != nil &&
-				*acc.PasswordHash != "secret123" // password must never be stored in plaintext
-		})).Return(nil).Once()
-		garages.On("ListGarageRolesForAccount", mock.Anything, mock.Anything).Return(nil, nil).Once()
-		tokens.On("Store", mock.Anything, mock.Anything, mock.Anything, 86400).Return(nil).Once()
-
-		result, err := uc.Register(t.Context(), usecase.RegisterRequest{
-			Email:    &email,
-			Password: "secret123",
-			FullName: "New User",
-		})
-		require.NoError(t, err)
-		assert.NotEmpty(t, result.AccessToken)
-		assert.NotEmpty(t, result.RefreshToken)
-		assert.Equal(t, "New User", result.Account.FullName)
-		assert.Equal(t, domain.AuthProviderEmail, result.Account.AuthProvider)
-		assert.Equal(t, domain.AccountStatusActive, result.Account.Status)
-		require.NotNil(t, result.Account.PasswordHash)
-
-		mock.AssertExpectationsForObjects(t, accounts, garages, tokens)
-	})
-
-	t.Run("phone-only registration succeeds without a password", func(t *testing.T) {
-		t.Parallel()
-
-		phone := "+84901234567"
-
-		accounts := mocks.NewMockAccountRepository(t)
-		garages := mocks.NewMockGarageMembershipReader(t)
-		tokens := mocks.NewMockRefreshTokenStore(t)
-		otp := mocks.NewMockOTPVerifier(t)
-		uc := newIdentityUseCase(accounts, garages, tokens, otp, newTestTokenIssuer())
-
-		accounts.On("FindByEmail", mock.Anything, mock.Anything).Maybe().Return(nil, domain.ErrAccountNotFound)
-		accounts.On("FindByPhone", mock.Anything, phone).Return(nil, domain.ErrAccountNotFound).Once()
-		accounts.On("Create", mock.Anything, mock.AnythingOfType("*domain.Account")).Return(nil).Once()
-		garages.On("ListGarageRolesForAccount", mock.Anything, mock.Anything).Return(nil, nil).Once()
-		tokens.On("Store", mock.Anything, mock.Anything, mock.Anything, 86400).Return(nil).Once()
-
-		result, err := uc.Register(t.Context(), usecase.RegisterRequest{Phone: &phone, FullName: "Phone User"})
-		require.NoError(t, err)
-		assert.Equal(t, *result.Account.Phone, phone)
-		assert.Nil(t, result.Account.PasswordHash)
-
-		mock.AssertExpectationsForObjects(t, accounts, garages, tokens)
-	})
-
-	t.Run("duplicate email is rejected", func(t *testing.T) {
-		t.Parallel()
-
-		accounts := mocks.NewMockAccountRepository(t)
-		garages := mocks.NewMockGarageMembershipReader(t)
-		tokens := mocks.NewMockRefreshTokenStore(t)
-		otp := mocks.NewMockOTPVerifier(t)
-		uc := newIdentityUseCase(accounts, garages, tokens, otp, newTestTokenIssuer())
-
-		accounts.On("FindByEmail", mock.Anything, email).Return(activeEmailAccount(t, email), nil).Once()
-
-		_, err := uc.Register(t.Context(), usecase.RegisterRequest{Email: &email, Password: "x", FullName: "N"})
-		assertAppError(t, err, apperror.CodeAlreadyExists)
-	})
-
-	t.Run("duplicate phone is rejected", func(t *testing.T) {
-		t.Parallel()
-
-		phone := "+84901234567"
-
-		accounts := mocks.NewMockAccountRepository(t)
-		garages := mocks.NewMockGarageMembershipReader(t)
-		tokens := mocks.NewMockRefreshTokenStore(t)
-		otp := mocks.NewMockOTPVerifier(t)
-		uc := newIdentityUseCase(accounts, garages, tokens, otp, newTestTokenIssuer())
-
-		accounts.On("FindByEmail", mock.Anything, mock.Anything).Maybe().Return(nil, domain.ErrAccountNotFound)
-		accounts.On("FindByPhone", mock.Anything, phone).Return(&domain.Account{ID: "acc-existing"}, nil).Once()
-
-		_, err := uc.Register(t.Context(), usecase.RegisterRequest{Phone: &phone, FullName: "N"})
-		assertAppError(t, err, apperror.CodeAlreadyExists)
-	})
-
-	t.Run("missing identifiers is invalid", func(t *testing.T) {
-		t.Parallel()
-
-		accounts := mocks.NewMockAccountRepository(t)
-		garages := mocks.NewMockGarageMembershipReader(t)
-		tokens := mocks.NewMockRefreshTokenStore(t)
-		otp := mocks.NewMockOTPVerifier(t)
-		uc := newIdentityUseCase(accounts, garages, tokens, otp, newTestTokenIssuer())
-
-		_, err := uc.Register(t.Context(), usecase.RegisterRequest{FullName: "N"})
-		assertAppError(t, err, apperror.CodeInvalidArgument)
-	})
+	require.Len(t, e.mailer.sent, 1, "verification OTP e-mailed")
+	assert.Equal(t, "email_verification", e.mailer.sent[0].Tag)
+	assert.Contains(t, e.mailer.sent[0].Subject, "Mã xác minh")
 }
 
-func TestIdentityUseCase_Register_ValidationErrors(t *testing.T) {
+func TestRegisterValidation(t *testing.T) {
 	t.Parallel()
 
-	email := "new@example.com"
+	e := newEnv(t)
+	e.register(t)
 
-	t.Run("missing full name is invalid", func(t *testing.T) {
-		t.Parallel()
+	tests := []struct {
+		name   string
+		req    usecase.RegisterRequest
+		reason string
+	}{
+		{name: "bad email", req: usecase.RegisterRequest{Email: "x", Password: "secret123", FullName: "A"}, reason: apperror.ReasonValidation},
+		{name: "no name", req: usecase.RegisterRequest{Email: "a@b.vn", Password: "secret123"}, reason: apperror.ReasonValidation},
+		{name: "short password", req: usecase.RegisterRequest{Email: "a@b.vn", Password: "short", FullName: "A"}, reason: apperror.ReasonValidation},
+		{name: "bad phone", req: usecase.RegisterRequest{Email: "a@b.vn", Password: "secret123", FullName: "A", Phone: new("12")}, reason: apperror.ReasonValidation},
+		{name: "email taken", req: usecase.RegisterRequest{Email: "OWNER@example.com", Password: "secret123", FullName: "A"}, reason: domain.ReasonEmailTaken},
+	}
 
-		accounts := mocks.NewMockAccountRepository(t)
-		garages := mocks.NewMockGarageMembershipReader(t)
-		tokens := mocks.NewMockRefreshTokenStore(t)
-		otp := mocks.NewMockOTPVerifier(t)
-		uc := newIdentityUseCase(accounts, garages, tokens, otp, newTestTokenIssuer())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := e.uc.Register(t.Context(), tt.req)
+			requireReason(t, err, tt.reason)
+		})
+	}
 
-		_, err := uc.Register(t.Context(), usecase.RegisterRequest{Email: &email, Password: "x"})
-		assertAppError(t, err, apperror.CodeInvalidArgument)
-	})
+	_, err := e.uc.Register(t.Context(), usecase.RegisterRequest{Email: "p1@b.vn", Password: "secret123", FullName: "P", Phone: new("+84 90 111 2222")})
+	require.NoError(t, err)
 
-	t.Run("email uniqueness check failure is internal", func(t *testing.T) {
-		t.Parallel()
+	_, err = e.uc.Register(t.Context(), usecase.RegisterRequest{Email: "p2@b.vn", Password: "secret123", FullName: "P", Phone: new("0901112222")})
+	requireReason(t, err, domain.ReasonPhoneTaken)
+}
 
-		accounts := mocks.NewMockAccountRepository(t)
-		garages := mocks.NewMockGarageMembershipReader(t)
-		tokens := mocks.NewMockRefreshTokenStore(t)
-		otp := mocks.NewMockOTPVerifier(t)
-		uc := newIdentityUseCase(accounts, garages, tokens, otp, newTestTokenIssuer())
+func TestRegisterFailures(t *testing.T) {
+	t.Parallel()
 
-		accounts.On("FindByEmail", mock.Anything, email).Return(nil, errors.New("connection refused")).Once()
+	req := usecase.RegisterRequest{Email: "a@b.vn", Password: "secret123", FullName: "A", Locale: domain.LocaleEN}
 
-		_, err := uc.Register(t.Context(), usecase.RegisterRequest{Email: &email, Password: "x", FullName: "N"})
-		assertAppError(t, err, apperror.CodeInternal)
-	})
+	e := newEnv(t)
+	e.accounts.createErr = domain.ErrEmailAlreadyExists
+	_, err := e.uc.Register(t.Context(), req)
+	requireReason(t, err, domain.ReasonEmailTaken)
 
-	t.Run("phone uniqueness check failure is internal", func(t *testing.T) {
-		t.Parallel()
+	e.accounts.createErr = domain.ErrPhoneAlreadyExists
+	_, err = e.uc.Register(t.Context(), req)
+	requireReason(t, err, domain.ReasonPhoneTaken)
 
-		phone := "+84901234567"
+	e.accounts.createErr = errBoom
+	_, err = e.uc.Register(t.Context(), req)
+	requireReason(t, err, apperror.ReasonInternal)
 
-		accounts := mocks.NewMockAccountRepository(t)
-		garages := mocks.NewMockGarageMembershipReader(t)
-		tokens := mocks.NewMockRefreshTokenStore(t)
-		otp := mocks.NewMockOTPVerifier(t)
-		uc := newIdentityUseCase(accounts, garages, tokens, otp, newTestTokenIssuer())
+	e.accounts.createErr, e.accounts.findErr = nil, errBoom
+	_, err = e.uc.Register(t.Context(), req)
+	requireReason(t, err, apperror.ReasonInternal)
 
-		accounts.On("FindByEmail", mock.Anything, mock.Anything).Maybe().Return(nil, domain.ErrAccountNotFound)
-		accounts.On("FindByPhone", mock.Anything, phone).Return(nil, errors.New("connection refused")).Once()
+	req.Phone = new("0901112222")
+	e.accounts.findErr = nil
+	e2 := newEnv(t)
+	e2.accounts.findErr = nil
+	_, err = e2.uc.Register(t.Context(), req)
+	require.NoError(t, err)
 
-		_, err := uc.Register(t.Context(), usecase.RegisterRequest{Phone: &phone, FullName: "N"})
-		assertAppError(t, err, apperror.CodeInternal)
-	})
+	// A failing mail provider does not fail sign-up: the OTP can be resent.
+	e3 := newEnv(t)
+	e3.mailer.err = errBoom
+	_, err = e3.uc.Register(t.Context(), usecase.RegisterRequest{Email: "c@b.vn", Password: "secret123", FullName: "C"})
+	require.NoError(t, err)
+}
 
-	t.Run("account creation failure is internal", func(t *testing.T) {
-		t.Parallel()
+func TestGrantPlatformAdmins(t *testing.T) {
+	t.Parallel()
 
-		accounts := mocks.NewMockAccountRepository(t)
-		garages := mocks.NewMockGarageMembershipReader(t)
-		tokens := mocks.NewMockRefreshTokenStore(t)
-		otp := mocks.NewMockOTPVerifier(t)
-		uc := newIdentityUseCase(accounts, garages, tokens, otp, newTestTokenIssuer())
+	e := newEnv(t)
+	require.NoError(t, e.uc.GrantPlatformAdmins(t.Context(), nil))
+	require.NoError(t, e.uc.GrantPlatformAdmins(t.Context(), []string{" Admin@VietGara.vn ", "bad"}))
+	assert.Equal(t, []string{"admin@vietgara.vn"}, e.accounts.granted)
 
-		accounts.On("FindByEmail", mock.Anything, email).Return(nil, domain.ErrAccountNotFound).Once()
-		accounts.On("Create", mock.Anything, mock.AnythingOfType("*domain.Account")).Return(errors.New("insert boom")).Once()
-
-		_, err := uc.Register(t.Context(), usecase.RegisterRequest{Email: &email, Password: "x", FullName: "N"})
-		assertAppError(t, err, apperror.CodeInternal)
-	})
+	e.accounts.findErr = errBoom
+	require.Error(t, e.uc.GrantPlatformAdmins(t.Context(), []string{"a@b.vn"}))
 }

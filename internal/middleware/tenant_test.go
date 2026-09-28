@@ -5,179 +5,179 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"github.com/viettechno/vietgara-backend/internal/middleware"
 	"github.com/viettechno/vietgara-backend/internal/mocks"
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-const testRoute = "/vietgara.tenant.v1.GarageService/GetGarage"
-
-type garageScopedReq struct {
-	garageID string
+// fakeTx runs fn directly and records the scope.
+type fakeTx struct {
+	scope platformdb.Scope
+	err   error
 }
 
-func (r garageScopedReq) GetGarageId() string {
-	return r.garageID
+func (f *fakeTx) WithTransaction(ctx context.Context, scope platformdb.Scope, fn func(ctx context.Context) error) error {
+	f.scope = scope
+	if f.err != nil {
+		return f.err
+	}
+
+	return fn(ctx)
 }
 
-func TestTenantContextInterceptor(t *testing.T) {
-	issuer := newTestIssuer(t)
-	accessGarage1 := authedCtx(t, issuer, issueToken(t, issuer, "acc-1", []auth.GarageClaim{{GarageID: "garage-1", Role: "owner"}}))
-	accessGarage2 := authedCtx(t, issuer, issueToken(t, issuer, "acc-1", []auth.GarageClaim{{GarageID: "garage-2", Role: "staff"}}))
+// garagePipeline runs Auth then Garage for a verified caller.
+func garagePipeline(t *testing.T, tx middleware.Transactor, reader access.Reader, license middleware.LicenseChecker, policy middleware.Policy, method string) func(req any, h func(ctx context.Context) error) error {
+	t.Helper()
+
+	tok := token(t, auth.Identity{AccountID: "acc-1", EmailVerified: true})
+	pols := middleware.Policies{method: policy}
+	run := middleware.ChainUnaryInterceptors(middleware.Auth(issuer, pols), middleware.Garage(tx, reader, license))
+
+	return func(req any, h func(ctx context.Context) error) error {
+		_, err := run(withToken(context.Background(), tok), req, info(method), func(ctx context.Context, _ any) (any, error) {
+			return nil, h(ctx)
+		})
+
+		return err
+	}
+}
+
+func TestGarage_AccountScope(t *testing.T) {
+	t.Parallel()
+
+	tx := &fakeTx{}
+	call := garagePipeline(t, tx, nil, nil, middleware.AccountMethod(), methodAccount)
+
+	require.NoError(t, call(nil, func(context.Context) error { return nil }))
+	assert.Equal(t, platformdb.AccountScope("acc-1"), tx.scope)
+
+	failing := errors.New("handler failed")
+	err := call(nil, func(context.Context) error { return apperror.New(apperror.CodeNotFound, "gone") })
+	requireCode(t, err, codes.NotFound, "NOT_FOUND")
+
+	err = call(nil, func(context.Context) error { return failing })
+	requireCode(t, err, codes.Internal, "")
+}
+
+func TestGarage_PublicSkipsTransaction(t *testing.T) {
+	t.Parallel()
+
+	tx := &fakeTx{err: errors.New("must not be called")}
+	ran := false
+	_, err := middleware.ChainUnaryInterceptors(
+		middleware.Auth(issuer, middleware.Policies{methodPublic: middleware.PublicMethod()}),
+		middleware.Garage(tx, nil, nil),
+	)(context.Background(), nil, info(methodPublic), okHandler(&ran))
+	require.NoError(t, err)
+	assert.True(t, ran)
+}
+
+func TestGarage_Authorization(t *testing.T) {
+	t.Parallel()
+
+	rule := middleware.GarageMethod(access.Requires(access.CustomerWrite))
+	member := &access.Access{
+		GarageID: garageID, AccountID: "acc-1", OwnerAccountID: "owner", Active: true,
+		Permissions: []access.Permission{access.CustomerWrite},
+	}
 
 	tests := []struct {
-		name          string
-		ctx           context.Context
-		req           any
-		wantCode      codes.Code
-		wantGarageID  string
-		wantHasGarage bool
+		name       string
+		req        any
+		access     *access.Access
+		accessErr  error
+		mode       middleware.LicenseMode
+		modeErr    error
+		method     string
+		policy     *middleware.Policy
+		wantCode   codes.Code
+		wantReason string
 	}{
-		{name: "request not garage scoped passes through", ctx: t.Context(), req: struct{}{}, wantCode: codes.OK},
-		{name: "missing garage id", ctx: t.Context(), req: garageScopedReq{garageID: ""}, wantCode: codes.InvalidArgument},
-		{name: "missing authentication context", ctx: t.Context(), req: garageScopedReq{garageID: "garage-1"}, wantCode: codes.Unauthenticated},
-		{name: "no access to garage", ctx: accessGarage2, req: garageScopedReq{garageID: "garage-1"}, wantCode: codes.PermissionDenied},
-		{name: "access granted stores garage id", ctx: accessGarage1, req: garageScopedReq{garageID: "garage-1"}, wantCode: codes.OK, wantGarageID: "garage-1", wantHasGarage: true},
+		{name: "missing garage id", req: nil, wantCode: codes.InvalidArgument, wantReason: "VALIDATION_ERROR"},
+		{name: "invalid garage id", req: garageReq{id: "nope"}, wantCode: codes.InvalidArgument, wantReason: "VALIDATION_ERROR"},
+		{name: "no membership", req: garageReq{id: garageID}, accessErr: access.ErrNoMembership, wantCode: codes.PermissionDenied, wantReason: middleware.ReasonGarageAccessDenied},
+		{name: "access query fails", req: garageReq{id: garageID}, accessErr: errors.New("db"), wantCode: codes.Internal},
+		{name: "missing permission", req: garageReq{id: garageID}, access: &access.Access{Active: true}, wantCode: codes.PermissionDenied, wantReason: "PERMISSION_DENIED"},
+		{name: "owner only", req: garageReq{id: garageID}, access: member, policy: new(middleware.GarageMethod(access.OwnerOnly())), wantCode: codes.PermissionDenied, wantReason: middleware.ReasonOwnerOnly},
+		{name: "inactive garage", req: garageReq{id: garageID}, access: &access.Access{Permissions: member.Permissions}, wantCode: codes.FailedPrecondition, wantReason: middleware.ReasonGarageInactive},
+		{name: "allowed", req: garageReq{id: garageID}, access: member},
+		{name: "locked subscription", req: garageReq{id: garageID}, access: member, mode: middleware.LicenseLocked, wantCode: codes.FailedPrecondition, wantReason: middleware.ReasonSubscriptionSuspended},
+		{name: "read-only blocks writes", req: garageReq{id: garageID}, access: member, mode: middleware.LicenseReadOnly, wantCode: codes.PermissionDenied, wantReason: middleware.ReasonSubscriptionReadOnly},
+		{name: "read-only allows reads", req: garageReq{id: garageID}, access: member, mode: middleware.LicenseReadOnly, method: methodGarageRO},
+		{name: "license failure lets through", req: garageReq{id: garageID}, access: member, modeErr: errors.New("cache down")},
+		{name: "license skipped", req: garageReq{id: garageID}, access: member, mode: middleware.LicenseLocked, policy: func() *middleware.Policy {
+			p := rule
+			p.SkipLicense = true
+
+			return &p
+		}()},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			interceptor := middleware.TenantContextInterceptor()
-			handlerCtx := make(chan context.Context, 1)
+			reader := mocks.NewMockAccessReader(t)
+			if tt.access != nil || tt.accessErr != nil {
+				reader.EXPECT().GarageAccess(mock.Anything, garageID, "acc-1").Return(tt.access, tt.accessErr)
+			}
 
-			got, err := interceptor(tt.ctx, tt.req, &grpc.UnaryServerInfo{FullMethod: testRoute}, testHandler(handlerCtx))
+			checker := mocks.NewMockLicenseChecker(t)
+
+			policy := rule
+			if tt.policy != nil {
+				policy = *tt.policy
+			}
+
+			if tt.access != nil && tt.access.Check(*policy.Garage) == nil && !policy.SkipLicense {
+				checker.EXPECT().LicenseMode(mock.Anything, garageID).Return(tt.mode, tt.modeErr)
+			}
+
+			method := methodGarage
+			if tt.method != "" {
+				method = tt.method
+			}
+
+			tx := &fakeTx{}
+
+			var gotAccess *access.Access
+
+			err := garagePipeline(t, tx, reader, checker, policy, method)(tt.req, func(ctx context.Context) error {
+				gotAccess, _ = access.FromContext(ctx)
+
+				return nil
+			})
 
 			if tt.wantCode != codes.OK {
-				assert.Equal(t, tt.wantCode, status.Code(err))
-				assert.Nil(t, got)
+				requireCode(t, err, tt.wantCode, tt.wantReason)
 
 				return
 			}
 
 			require.NoError(t, err)
-			assert.Equal(t, "handled", got)
-
-			garageID, ok := middleware.GarageIDFromContext(<-handlerCtx)
-			assert.Equal(t, tt.wantHasGarage, ok)
-			assert.Equal(t, tt.wantGarageID, garageID)
+			assert.Same(t, tt.access, gotAccess)
+			assert.Equal(t, platformdb.Scope{GarageID: garageID, AccountID: "acc-1"}, tx.scope)
 		})
 	}
 }
 
-// garageAuthedCtx builds the context produced by AuthInterceptor followed
-// by TenantContextInterceptor for an account that has access to garageID.
-func garageAuthedCtx(t *testing.T, garageID string) context.Context {
-	t.Helper()
+func TestGarage_NilLicenseChecker(t *testing.T) {
+	t.Parallel()
 
-	issuer := newTestIssuer(t)
-	authed := authedCtx(t, issuer, issueToken(t, issuer, "acc-1", []auth.GarageClaim{{GarageID: garageID, Role: "owner"}}))
+	reader := mocks.NewMockAccessReader(t)
+	reader.EXPECT().GarageAccess(mock.Anything, garageID, "acc-1").Return(&access.Access{Owner: true}, nil)
 
-	gotCtx := make(chan context.Context, 1)
-	_, err := middleware.TenantContextInterceptor()(authed, garageScopedReq{garageID: garageID}, &grpc.UnaryServerInfo{FullMethod: testRoute}, func(ctx context.Context, req any) (any, error) {
-		gotCtx <- ctx
-
-		return nil, nil
-	})
+	err := garagePipeline(t, &fakeTx{}, reader, nil, middleware.GarageMethod(access.Member()), methodGarage)(
+		garageReq{id: garageID}, func(context.Context) error { return nil })
 	require.NoError(t, err)
-
-	return <-gotCtx
 }
 
-func TestTransactionInterceptor(t *testing.T) {
-	t.Run("passes requests without a garage context through untransacted", func(t *testing.T) {
-		connPool := mocks.NewMockConnPool(t)
-		txManager := platformdb.NewTxManager(platformdb.NewPool(t.Context(), connPool))
-		interceptor := middleware.TransactionInterceptor(txManager)
-
-		got, err := interceptor(t.Context(), nil, &grpc.UnaryServerInfo{FullMethod: testRoute}, func(ctx context.Context, req any) (any, error) {
-			return "handled", nil
-		})
-
-		require.NoError(t, err)
-		assert.Equal(t, "handled", got)
-		connPool.AssertNotCalled(t, "Begin", mock.Anything)
-	})
-
-	t.Run("runs garage-scoped requests inside a tenant-scoped transaction", func(t *testing.T) {
-		ctx := garageAuthedCtx(t, "garage-1")
-		connPool := mocks.NewMockConnPool(t)
-		tx := mocks.NewMockTx(t)
-		pool := platformdb.NewPool(t.Context(), connPool)
-		txManager := platformdb.NewTxManager(pool)
-		interceptor := middleware.TransactionInterceptor(txManager)
-
-		connPool.EXPECT().Begin(ctx).Return(tx, nil).Once()
-
-		tx.EXPECT().Exec(ctx, platformdb.SetTenantSQL, []any{"garage-1"}).Return(pgconn.CommandTag{}, nil).Once()
-		tx.EXPECT().Commit(ctx).Return(nil).Once()
-
-		tx.EXPECT().Rollback(ctx).Return(pgx.ErrTxClosed).Once()
-
-		handlerCtx := make(chan context.Context, 1)
-		got, err := interceptor(ctx, garageScopedReq{garageID: "garage-1"}, &grpc.UnaryServerInfo{FullMethod: testRoute}, func(ctx context.Context, req any) (any, error) {
-			handlerCtx <- ctx
-
-			return "handled", nil
-		})
-
-		require.NoError(t, err)
-		assert.Equal(t, "handled", got)
-
-		txCtx := <-handlerCtx
-		assert.Equal(t, tx, platformdb.QuerierFromContext(txCtx, pool))
-	})
-
-	t.Run("rolls back and surfaces the handler error", func(t *testing.T) {
-		ctx := garageAuthedCtx(t, "garage-1")
-		connPool := mocks.NewMockConnPool(t)
-		tx := mocks.NewMockTx(t)
-		txManager := platformdb.NewTxManager(platformdb.NewPool(t.Context(), connPool))
-		interceptor := middleware.TransactionInterceptor(txManager)
-		handlerErr := errors.New("handler failed")
-
-		connPool.EXPECT().Begin(ctx).Return(tx, nil).Once()
-
-		tx.EXPECT().Exec(ctx, platformdb.SetTenantSQL, []any{"garage-1"}).Return(pgconn.CommandTag{}, nil).Once()
-		tx.EXPECT().Rollback(ctx).Return(nil).Once()
-
-		got, err := interceptor(ctx, garageScopedReq{garageID: "garage-1"}, &grpc.UnaryServerInfo{FullMethod: testRoute}, func(ctx context.Context, req any) (any, error) {
-			return nil, handlerErr
-		})
-
-		require.ErrorIs(t, err, handlerErr)
-		assert.Nil(t, got)
-		tx.AssertNotCalled(t, "Commit", ctx)
-	})
-
-	t.Run("surfaces transaction begin failures", func(t *testing.T) {
-		ctx := garageAuthedCtx(t, "garage-1")
-		connPool := mocks.NewMockConnPool(t)
-		txManager := platformdb.NewTxManager(platformdb.NewPool(t.Context(), connPool))
-		interceptor := middleware.TransactionInterceptor(txManager)
-		handlerCalled := false
-
-		connPool.EXPECT().Begin(ctx).Return(nil, errors.New("connection lost")).Once()
-
-		got, err := interceptor(ctx, garageScopedReq{garageID: "garage-1"}, &grpc.UnaryServerInfo{FullMethod: testRoute}, func(ctx context.Context, req any) (any, error) {
-			handlerCalled = true
-
-			return nil, nil
-		})
-
-		require.Error(t, err)
-		assert.Nil(t, got)
-		assert.False(t, handlerCalled)
-	})
-}
+//go:fix inline

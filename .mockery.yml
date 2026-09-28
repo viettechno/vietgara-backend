@@ -28,39 +28,165 @@ packages:
       all: true
       dir: "./internal/mocks"
       filename: "platform_db.go"
-  github.com/viettechno/vietgara-backend/internal/tenant/usecase:
+  github.com/viettechno/vietgara-backend/internal/platform/access:
     interfaces:
-      GarageRepository:
+      Reader:
         config:
-          filename: "tenant_usecase_garage_repository.go"
+          filename: "access_reader.go"
           dir: "./internal/mocks"
-      GarageStaffRepository:
+          structname: "MockAccessReader"
+  github.com/viettechno/vietgara-backend/internal/middleware:
+    interfaces:
+      LicenseChecker:
         config:
-          filename: "tenant_usecase_garage_staff_repository.go"
+          filename: "middleware_license_checker.go"
           dir: "./internal/mocks"
-      EventPublisher:
+      Transactor:
         config:
-          filename: "tenant_usecase_event_publisher.go"
+          filename: "middleware_transactor.go"
           dir: "./internal/mocks"
-      AccountDirectory:
+          structname: "MockMiddlewareTransactor"
+  github.com/viettechno/vietgara-backend/internal/platform/outbox:
+    interfaces:
+      Publisher:
         config:
-          filename: "tenant_usecase_account_directory.go"
+          filename: "outbox_publisher.go"
           dir: "./internal/mocks"
+          structname: "MockOutboxPublisher"
+      Transactor:
+        config:
+          filename: "outbox_transactor.go"
+          dir: "./internal/mocks"
+          structname: "MockOutboxTransactor"
   github.com/viettechno/vietgara-backend/internal/identity/usecase:
     interfaces:
       AccountRepository:
         config:
           filename: "identity_usecase_account.go"
           dir: "./internal/mocks"
-      GarageMembershipReader:
+      SessionStore:
         config:
-          filename: "identity_usecase_garage_membership_reader.go"
+          filename: "identity_usecase_session_store.go"
           dir: "./internal/mocks"
-      RefreshTokenStore:
+      OTPStore:
         config:
-          filename: "identity_usecase_refresh_token_store.go"
+          filename: "identity_usecase_otp_store.go"
           dir: "./internal/mocks"
-      OTPVerifier:
+      Mailer:
         config:
-          filename: "identity_usecase_otp_verifier.go"
+          filename: "identity_usecase_mailer.go"
           dir: "./internal/mocks"
+          structname: "MockMailer"
+      EventPublisher:
+        config:
+          filename: "identity_usecase_event_publisher.go"
+          dir: "./internal/mocks"
+          structname: "MockIdentityEventPublisher"
+      Transactor:
+        config:
+          filename: "identity_usecase_transactor.go"
+          dir: "./internal/mocks"
+          structname: "MockIdentityTransactor"
+  github.com/viettechno/vietgara-backend/internal/tenant/usecase:
+    interfaces:
+      GarageRepository:
+        config:
+          filename: "tenant_usecase_garage_repository.go"
+          dir: "./internal/mocks"
+      StaffRepository:
+        config:
+          filename: "tenant_usecase_staff_repository.go"
+          dir: "./internal/mocks"
+      RoleRepository:
+        config:
+          filename: "tenant_usecase_role_repository.go"
+          dir: "./internal/mocks"
+      GroupRepository:
+        config:
+          filename: "tenant_usecase_group_repository.go"
+          dir: "./internal/mocks"
+      InvitationRepository:
+        config:
+          filename: "tenant_usecase_invitation_repository.go"
+          dir: "./internal/mocks"
+      UsageReader:
+        config:
+          filename: "tenant_usecase_usage_reader.go"
+          dir: "./internal/mocks"
+      LimitChecker:
+        config:
+          filename: "tenant_usecase_limit_checker.go"
+          dir: "./internal/mocks"
+      AccountDirectory:
+        config:
+          filename: "tenant_usecase_account_directory.go"
+          dir: "./internal/mocks"
+      LogoStore:
+        config:
+          filename: "tenant_usecase_logo_store.go"
+          dir: "./internal/mocks"
+      AuditLogger:
+        config:
+          filename: "tenant_usecase_audit_logger.go"
+          dir: "./internal/mocks"
+          structname: "MockAuditLogger"
+      EventPublisher:
+        config:
+          filename: "tenant_usecase_event_publisher.go"
+          dir: "./internal/mocks"
+          structname: "MockTenantEventPublisher"
+  github.com/viettechno/vietgara-backend/internal/customer/usecase:
+    interfaces:
+      CustomerRepository:
+        config:
+          filename: "customer_usecase_customer_repository.go"
+          dir: "./internal/mocks"
+      VehicleRepository:
+        config:
+          filename: "customer_usecase_vehicle_repository.go"
+          dir: "./internal/mocks"
+      PartnerRepository:
+        config:
+          filename: "customer_usecase_partner_repository.go"
+          dir: "./internal/mocks"
+  github.com/viettechno/vietgara-backend/internal/license/usecase:
+    interfaces:
+      PlanRepository:
+        config:
+          filename: "license_usecase_plan_repository.go"
+          dir: "./internal/mocks"
+      SubscriptionRepository:
+        config:
+          filename: "license_usecase_subscription_repository.go"
+          dir: "./internal/mocks"
+      EntitlementRepository:
+        config:
+          filename: "license_usecase_entitlement_repository.go"
+          dir: "./internal/mocks"
+      EntitlementCache:
+        config:
+          filename: "license_usecase_entitlement_cache.go"
+          dir: "./internal/mocks"
+      TransactionCounter:
+        config:
+          filename: "license_usecase_transaction_counter.go"
+          dir: "./internal/mocks"
+      GarageOwnerReader:
+        config:
+          filename: "license_usecase_garage_owner_reader.go"
+          dir: "./internal/mocks"
+      UsageReader:
+        config:
+          filename: "license_usecase_usage_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockLicenseUsageReader"
+      EventPublisher:
+        config:
+          filename: "license_usecase_event_publisher.go"
+          dir: "./internal/mocks"
+          structname: "MockLicenseEventPublisher"
+      Transactor:
+        config:
+          filename: "license_usecase_transactor.go"
+          dir: "./internal/mocks"
+          structname: "MockLicenseTransactor"

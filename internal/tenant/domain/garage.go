@@ -3,7 +3,10 @@
 package domain
 
 import (
+	"regexp"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // GarageStatus is the lifecycle state of a garage.
@@ -11,36 +14,144 @@ type GarageStatus string
 
 // Valid GarageStatus values.
 const (
-	GarageStatusActive    GarageStatus = "active"
-	GarageStatusInactive  GarageStatus = "inactive"
-	GarageStatusSuspended GarageStatus = "suspended"
+	GarageStatusActive   GarageStatus = "active"
+	GarageStatusInactive GarageStatus = "inactive"
 )
 
 // IsValid reports whether s is one of the defined GarageStatus values.
 func (s GarageStatus) IsValid() bool {
-	switch s {
-	case GarageStatusActive, GarageStatusInactive, GarageStatusSuspended:
-		return true
+	return s == GarageStatusActive || s == GarageStatusInactive
+}
+
+// Defaults of a new garage (Database Design 2.2).
+const (
+	DefaultTimezone                  = "Asia/Ho_Chi_Minh"
+	DefaultCurrency                  = "VND"
+	DefaultQuoteNumberTemplate       = "BG-{YYYY}{MM}-{SEQ:4}"
+	DefaultRepairOrderNumberTemplate = "LSC-{YYYY}{MM}-{SEQ:4}"
+	MaxGarageNameLength              = 255
+	MaxTaxCodeLength                 = 20
+	MaxTemplateLength                = 50
+)
+
+// DailyHours is the opening time of one weekday (1 = Monday ... 7 =
+// Sunday), "HH:MM" in the garage's timezone (FR-TEN-05).
+type DailyHours struct {
+	Day    int    `json:"day"`
+	Closed bool   `json:"closed"`
+	Open   string `json:"open"`
+	Close  string `json:"close"`
+}
+
+// DefaultOperatingHours returns Monday-Friday 08:00-17:30, Saturday 08:00-12:00,
+// closed on Sunday.
+func DefaultOperatingHours() []DailyHours {
+	hours := make([]DailyHours, 0, 7)
+	for day := 1; day <= 5; day++ {
+		hours = append(hours, DailyHours{Day: day, Open: "08:00", Close: "17:30"})
 	}
 
-	return false
+	return append(hours, DailyHours{Day: 6, Open: "08:00", Close: "12:00"}, DailyHours{Day: 7, Closed: true})
 }
 
 // Garage is one tenant: an independent operating/data-isolation unit.
-// Per Decision Log DEC-003, an Account may own many Garages (1 account --
-// many garages); "branch" is used synonymously with "garage" throughout
-// VietGara -- a garage is NOT a sub-unit of another garage.
+// An account may own many garages (one account -- many garages); "branch"
+// is used synonymously with "garage" throughout VietGara.
 // See: Database Design Section 2.2, ADR-005.
 type Garage struct {
-	ID        string
-	AccountID string
-	Name      string
-	TaxCode   *string
-	Address   *string
-	LogoURL   *string
-	Timezone  string
-	Currency  string
-	Status    GarageStatus
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID                        string
+	OwnerAccountID            string
+	Name                      string
+	TaxCode                   *string
+	Address                   *string
+	Phone                     *string
+	Email                     *string
+	LogoURL                   *string
+	Timezone                  string
+	Currency                  string
+	Status                    GarageStatus
+	OperatingHours            []DailyHours
+	QuoteNumberTemplate       string
+	RepairOrderNumberTemplate string
+	CreatedBy                 *string
+	UpdatedBy                 *string
+	CreatedAt                 time.Time
+	UpdatedAt                 time.Time
+}
+
+// ValidName reports whether name is a usable garage name.
+func ValidName(name string) bool {
+	return name != "" && utf8.RuneCountInString(name) <= MaxGarageNameLength
+}
+
+// ValidTimezone reports whether tz is a known IANA timezone.
+func ValidTimezone(tz string) bool {
+	if tz == "" || len(tz) > 64 {
+		return false
+	}
+
+	_, err := time.LoadLocation(tz)
+
+	return err == nil && tz != "Local"
+}
+
+var currencyPattern = regexp.MustCompile(`^[A-Z]{3}$`)
+
+// ValidCurrency reports whether c is an ISO 4217 code shape.
+func ValidCurrency(c string) bool {
+	return currencyPattern.MatchString(c)
+}
+
+var (
+	hhmm             = regexp.MustCompile(`^([01][0-9]|2[0-3]):[0-5][0-9]$`)
+	templateToken    = regexp.MustCompile(`\{[^}]*\}`)
+	allowedTemplates = map[string]bool{"{YYYY}": true, "{YY}": true, "{MM}": true, "{DD}": true}
+	seqToken         = regexp.MustCompile(`^\{SEQ:[1-9]\}$`)
+)
+
+// ValidOperatingHours reports whether hours lists each weekday at most once
+// with valid, ordered times.
+func ValidOperatingHours(hours []DailyHours) bool {
+	seen := map[int]bool{}
+
+	for _, h := range hours {
+		if h.Day < 1 || h.Day > 7 || seen[h.Day] {
+			return false
+		}
+
+		seen[h.Day] = true
+
+		if h.Closed {
+			continue
+		}
+
+		if !hhmm.MatchString(h.Open) || !hhmm.MatchString(h.Close) || h.Open >= h.Close {
+			return false
+		}
+	}
+
+	return true
+}
+
+// ValidNumberingTemplate reports whether t uses only the known
+// placeholders and exactly one {SEQ:n}.
+func ValidNumberingTemplate(t string) bool {
+	if t == "" || utf8.RuneCountInString(t) > MaxTemplateLength {
+		return false
+	}
+
+	seq := 0
+
+	for _, token := range templateToken.FindAllString(t, -1) {
+		switch {
+		case seqToken.MatchString(token):
+			seq++
+		case !allowedTemplates[token]:
+			return false
+		}
+	}
+
+	rest := templateToken.ReplaceAllString(t, "")
+
+	return seq == 1 && !strings.ContainsAny(rest, "{}")
 }

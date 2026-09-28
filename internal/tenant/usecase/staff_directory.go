@@ -3,147 +3,105 @@ package usecase
 import (
 	"context"
 	"errors"
-	"strings"
 
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
-	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-const minPhoneDigits = 8
-
-// StaffOption configures a StaffUseCase.
-type StaffOption func(*StaffUseCase)
-
-// WithAccountDirectory lets the use case resolve accounts by email or phone,
-// show account details on staff lists, and verify accounts before inviting.
-func WithAccountDirectory(directory AccountDirectory) StaffOption {
-	return func(uc *StaffUseCase) {
-		uc.account = directory
-	}
+// Candidate is an existing account found to be invited.
+type Candidate struct {
+	Account    *AccountSummary
+	Membership string // none, member, invited
 }
 
-// StaffMember is a staff membership together with the account behind it.
-// Account is nil when no AccountDirectory is configured or the account is gone.
-type StaffMember struct {
-	Staff   *domain.GarageStaff
-	Account *AccountSummary
-}
+// Candidate memberships.
+const (
+	CandidateNone    = "none"
+	CandidateMember  = "member"
+	CandidateInvited = "invited"
+)
 
-// StaffCandidate is the result of looking up an account to invite.
-type StaffCandidate struct {
-	Account *AccountSummary
-	// AlreadyStaff is true when the account already has a membership in the garage.
-	AlreadyStaff bool
-}
-
-// ListMembers returns the active staff of garageID with their account details.
-func (uc *StaffUseCase) ListMembers(ctx context.Context, garageID string) ([]StaffMember, error) {
-	garaStaffs, err := uc.List(ctx, garageID)
+// LookupCandidate finds an existing account by exact e-mail or phone
+// (FR-TEN-04: only existing accounts can be added).
+func (uc *TenantUseCase) LookupCandidate(ctx context.Context, garageID, query string) (*Candidate, error) {
+	account, err := uc.findAccountByContact(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	members := make([]StaffMember, 0, len(garaStaffs))
-	for _, s := range garaStaffs {
-		members = append(members, StaffMember{Staff: s})
-	}
+	candidate := &Candidate{Account: account, Membership: CandidateNone}
 
-	if uc.account == nil || len(garaStaffs) == 0 {
-		return members, nil
-	}
-
-	ids := make([]string, 0, len(garaStaffs))
-	for _, s := range garaStaffs {
-		ids = append(ids, s.AccountID)
-	}
-
-	accounts, err := uc.account.ListByIDs(ctx, ids)
-	if err != nil {
-		return nil, apperror.Wrap(apperror.CodeInternal, "load staff accounts", err)
-	}
-
-	for i := range members {
-		members[i].Account = accounts[members[i].Staff.AccountID]
-	}
-
-	return members, nil
-}
-
-// FindCandidate looks an account up by its unique email or phone number (an
-// identifier containing "@" is treated as an email) and reports whether it is
-// already staff at garageID. Only exact matches are returned, so the lookup
-// cannot be used to browse accounts.
-func (uc *StaffUseCase) FindCandidate(ctx context.Context, garageID, identifier string) (*StaffCandidate, error) {
-	if uc.account == nil {
-		return nil, apperror.New(apperror.CodeFailedPrecondition, "account lookup is not available")
-	}
-
-	identifier = strings.TrimSpace(identifier)
-
-	var (
-		account *AccountSummary
-		err     error
-	)
-
+	member, err := uc.Staff.FindByAccount(ctx, garageID, account.ID)
 	switch {
-	case strings.Contains(identifier, "@"):
-		account, err = uc.account.FindByEmail(ctx, identifier)
-	case countDigits(identifier) >= minPhoneDigits:
-		account, err = uc.account.FindByPhone(ctx, identifier)
-	default:
-		return nil, apperror.New(apperror.CodeInvalidArgument, "enter a full email address or phone number")
+	case err == nil && member.Status == domain.StaffStatusActive:
+		candidate.Membership = CandidateMember
+	case err != nil && !errors.Is(err, domain.ErrStaffNotFound):
+		return nil, toAppError("lookup staff", err)
 	}
 
-	if err != nil {
-		if errors.Is(err, domain.ErrAccountNotFound) {
-			return nil, apperror.Wrap(apperror.CodeNotFound, domain.ErrAccountNotFound.Error(), err)
+	if candidate.Membership == CandidateNone {
+		invited, err := uc.hasPendingInvitation(ctx, garageID, account.ID)
+		if err != nil {
+			return nil, err
 		}
 
-		return nil, apperror.Wrap(apperror.CodeInternal, "find account", err)
-	}
-
-	candidate := &StaffCandidate{Account: account}
-
-	existing, err := uc.staff.FindByGarageAndAccount(ctx, garageID, account.ID)
-	if err == nil && existing != nil {
-		candidate.AlreadyStaff = existing.Status == domain.StaffStatusActive
+		if invited {
+			candidate.Membership = CandidateInvited
+		}
 	}
 
 	return candidate, nil
 }
 
-// requireActiveAccount checks the account exists and is active. It is a no-op
-// without an AccountDirectory.
-func (uc *StaffUseCase) requireActiveAccount(ctx context.Context, accountID string) error {
-	if uc.account == nil {
-		return nil
+func (uc *TenantUseCase) findAccountByContact(ctx context.Context, query string) (*AccountSummary, error) {
+	var (
+		account *AccountSummary
+		err     error
+	)
+
+	if containsAt(query) {
+		account, err = uc.Accounts.FindByEmail(ctx, query)
+	} else {
+		account, err = uc.Accounts.FindByPhone(ctx, query)
 	}
 
-	accounts, err := uc.account.ListByIDs(ctx, []string{accountID})
 	if err != nil {
-		return apperror.Wrap(apperror.CodeInternal, "find account", err)
-	}
-
-	account, ok := accounts[accountID]
-	if !ok {
-		return apperror.Wrap(apperror.CodeNotFound, domain.ErrAccountNotFound.Error(), domain.ErrAccountNotFound)
+		return nil, toAppError("lookup account", err)
 	}
 
 	if !account.Active {
-		return apperror.Wrap(apperror.CodeFailedPrecondition, domain.ErrAccountInactive.Error(), domain.ErrAccountInactive)
+		return nil, toAppError("lookup account", domain.ErrAccountInactive)
+	}
+
+	return account, nil
+}
+
+// withAccounts loads the account details of members.
+func (uc *TenantUseCase) withAccounts(ctx context.Context, members ...*domain.Staff) error {
+	ids := make([]string, 0, len(members))
+	for _, m := range members {
+		ids = append(ids, m.AccountID)
+	}
+
+	accounts, err := uc.Accounts.ListByIDs(ctx, ids)
+	if err != nil {
+		return toAppError("load staff accounts", err)
+	}
+
+	for _, m := range members {
+		if acc, ok := accounts[m.AccountID]; ok {
+			m.FullName, m.Email, m.Phone = acc.FullName, acc.Email, acc.Phone
+		}
 	}
 
 	return nil
 }
 
-func countDigits(s string) int {
-	n := 0
-
+func containsAt(s string) bool {
 	for _, r := range s {
-		if r >= '0' && r <= '9' {
-			n++
+		if r == '@' {
+			return true
 		}
 	}
 
-	return n
+	return false
 }

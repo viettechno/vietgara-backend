@@ -1,0 +1,14 @@
+{{define "subject"}}{{.InviterName}} invited you to join {{.GarageName}} on VietGara{{end}}
+{{define "text"}}Hello {{.Name}},
+
+{{.InviterName}} invited you to join the garage {{.GarageName}} on VietGara.
+
+Open this link to accept or decline the invitation (valid until {{.ExpiresAt}}):
+{{.AcceptURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p><strong>{{.InviterName}}</strong> invited you to join the garage <strong>{{.GarageName}}</strong> on VietGara.</p>
+<p><a href="{{.AcceptURL}}" style="display:inline-block;padding:10px 18px;background:#2E74B5;color:#fff;border-radius:8px;text-decoration:none">View invitation</a></p>
+<p>The invitation is valid until {{.ExpiresAt}}.</p>
+<p>VietGara</p>{{end}}

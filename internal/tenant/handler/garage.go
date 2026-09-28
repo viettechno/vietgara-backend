@@ -3,110 +3,161 @@ package handler
 import (
 	"context"
 
-	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
+	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
+
+	"github.com/viettechno/vietgara-backend/internal/middleware"
+	"github.com/viettechno/vietgara-backend/internal/platform/httpapi"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
-	"github.com/viettechno/vietgara-backend/pkg/converter"
-	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 )
 
-// CreateGarage validates the request, creates the garage for the caller's
-// account, and returns its API representation.
-func (s *Server) CreateGarage(ctx context.Context, req *tenantv1.CreateGarageRequest) (*tenantv1.CreateGarageResponse, error) {
-	accountID, err := accountIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	g, err := s.garage.Create(ctx, usecase.CreateGarageRequest{
-		AccountID: accountID,
-		Name:      req.GetName(),
-		TaxCode:   req.TaxCode,
-		Address:   req.Address,
-		Timezone:  req.Timezone,
-		Currency:  req.Currency,
-	})
-	if err != nil {
-		return nil, apperror.ToGRPCError(err)
-	}
-
-	return &tenantv1.CreateGarageResponse{Garage: garageToProto(g)}, nil
-}
-
-// GetGarage returns the garage with the given id.
-func (s *Server) GetGarage(ctx context.Context, req *tenantv1.GetGarageRequest) (*tenantv1.GetGarageResponse, error) {
-	g, err := s.garage.Get(ctx, req.GetGarageId())
-	if err != nil {
-		return nil, apperror.ToGRPCError(err)
-	}
-
-	return &tenantv1.GetGarageResponse{Garage: garageToProto(g)}, nil
-}
-
-// UpdateGarage applies the partial updates in req to an existing garage
-// and returns its updated API representation.
-func (s *Server) UpdateGarage(ctx context.Context, req *tenantv1.UpdateGarageRequest) (*tenantv1.UpdateGarageResponse, error) {
-	g, err := s.garage.Update(ctx, usecase.UpdateGarageRequest{
-		GarageID: req.GetGarageId(),
-		Name:     req.Name,
-		TaxCode:  req.TaxCode,
-		Address:  req.Address,
-		LogoURL:  req.LogoUrl,
-		Timezone: req.Timezone,
-		Currency: req.Currency,
-	})
-	if err != nil {
-		return nil, apperror.ToGRPCError(err)
-	}
-
-	return &tenantv1.UpdateGarageResponse{Garage: garageToProto(g)}, nil
-}
-
-// ListGarages returns every garage owned by the caller's account.
+// ListGarages lists the garages the caller owns or works in.
 func (s *Server) ListGarages(ctx context.Context, _ *tenantv1.ListGaragesRequest) (*tenantv1.ListGaragesResponse, error) {
-	accountID, err := accountIDFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	garages, err := s.garage.List(ctx, accountID)
+	garages, err := s.uc.ListGarages(ctx, middleware.AccountID(ctx))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	resp := &tenantv1.ListGaragesResponse{}
-	for _, g := range garages {
-		resp.Garages = append(resp.Garages, garageToProto(g))
+	resp := &tenantv1.ListGaragesResponse{Data: make([]*tenantv1.Garage, 0, len(garages))}
+	for i := range garages {
+		resp.Data = append(resp.Data, garageToProto(&garages[i]))
 	}
 
 	return resp, nil
 }
 
-func garageToProto(g *domain.Garage) *tenantv1.Garage {
-	return &tenantv1.Garage{
-		Id:        g.ID,
-		AccountId: g.AccountID,
-		Name:      g.Name,
-		TaxCode:   g.TaxCode,
-		Address:   g.Address,
-		LogoUrl:   g.LogoURL,
-		Timezone:  g.Timezone,
-		Currency:  g.Currency,
-		Status:    garageStatusToProto(g.Status),
-		CreatedAt: converter.TimeToProto(g.CreatedAt),
-		UpdatedAt: converter.TimeToProto(g.UpdatedAt),
+// CreateGarage creates a garage owned by the caller; answers 201.
+func (s *Server) CreateGarage(ctx context.Context, req *tenantv1.CreateGarageRequest) (*tenantv1.CreateGarageResponse, error) {
+	fields, err := garageFields(req.GetGarage(), nil)
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
 	}
+
+	garage, err := s.uc.CreateGarage(ctx, middleware.AccountID(ctx), fields)
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	httpapi.Created(ctx)
+
+	return &tenantv1.CreateGarageResponse{Garage: garageToProto(garage)}, nil
 }
 
-func garageStatusToProto(s domain.GarageStatus) tenantv1.GarageStatus {
-	switch s {
-	case domain.GarageStatusActive:
-		return tenantv1.GarageStatus_GARAGE_STATUS_ACTIVE
-	case domain.GarageStatusInactive:
-		return tenantv1.GarageStatus_GARAGE_STATUS_INACTIVE
-	case domain.GarageStatusSuspended:
-		return tenantv1.GarageStatus_GARAGE_STATUS_SUSPENDED
-	default:
-		return tenantv1.GarageStatus_GARAGE_STATUS_UNSPECIFIED
+// GetGarage returns a garage.
+func (s *Server) GetGarage(ctx context.Context, req *tenantv1.GetGarageRequest) (*tenantv1.GetGarageResponse, error) {
+	garage, err := s.uc.GetGarage(ctx, req.GetGarageId())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
 	}
+
+	return &tenantv1.GetGarageResponse{Garage: garageToProto(garage)}, nil
 }
+
+// UpdateGarage changes the fields named by the update mask.
+func (s *Server) UpdateGarage(ctx context.Context, req *tenantv1.UpdateGarageRequest) (*tenantv1.UpdateGarageResponse, error) {
+	fields, err := garageFields(req.GetGarage(), req.GetUpdateMask().GetPaths())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	garage, err := s.uc.UpdateGarage(ctx, req.GetGarageId(), fields)
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return &tenantv1.UpdateGarageResponse{Garage: garageToProto(garage)}, nil
+}
+
+// UploadGarageLogo replaces the logo.
+func (s *Server) UploadGarageLogo(ctx context.Context, req *tenantv1.UploadGarageLogoRequest) (*tenantv1.UploadGarageLogoResponse, error) {
+	garage, err := s.uc.UploadGarageLogo(ctx, req.GetGarageId(), req.GetContent(), req.GetContentType())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return &tenantv1.UploadGarageLogoResponse{Garage: garageToProto(garage)}, nil
+}
+
+// DeleteGarageLogo removes the logo.
+func (s *Server) DeleteGarageLogo(ctx context.Context, req *tenantv1.DeleteGarageLogoRequest) (*tenantv1.DeleteGarageLogoResponse, error) {
+	garage, err := s.uc.DeleteGarageLogo(ctx, req.GetGarageId())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return &tenantv1.DeleteGarageLogoResponse{Garage: garageToProto(garage)}, nil
+}
+
+const pathName = "name"
+
+var garageSettable = []string{
+	pathName, "tax_code", "address", "phone", "email", "timezone", "currency", "status", "operating_hours", "numbering",
+}
+
+// garageSetters copy one masked field of the API garage into GarageFields.
+var garageSetters = map[string]func(f *usecase.GarageFields, in *tenantv1.Garage){
+	pathName:   func(f *usecase.GarageFields, in *tenantv1.Garage) { f.Name = new(in.GetName()) },
+	"tax_code": func(f *usecase.GarageFields, in *tenantv1.Garage) { f.TaxCode = new(in.GetTaxCode()) },
+	"address":  func(f *usecase.GarageFields, in *tenantv1.Garage) { f.Address = new(in.GetAddress()) },
+	"phone":    func(f *usecase.GarageFields, in *tenantv1.Garage) { f.Phone = new(in.GetPhone()) },
+	"email":    func(f *usecase.GarageFields, in *tenantv1.Garage) { f.Email = new(in.GetEmail()) },
+	"timezone": func(f *usecase.GarageFields, in *tenantv1.Garage) { f.Timezone = new(in.GetTimezone()) },
+	"currency": func(f *usecase.GarageFields, in *tenantv1.Garage) { f.Currency = new(in.GetCurrency()) },
+	"status": func(f *usecase.GarageFields, in *tenantv1.Garage) {
+		f.Status = new(garageStatusFromProto(in.GetStatus()))
+	},
+	"operating_hours": func(f *usecase.GarageFields, in *tenantv1.Garage) {
+		f.OperatingHours = new(hoursFromProto(in.GetOperatingHours()))
+	},
+	"numbering": func(f *usecase.GarageFields, in *tenantv1.Garage) {
+		f.QuoteNumberTemplate = new(in.GetNumbering().GetQuote())
+		f.RepairOrderNumberTemplate = new(in.GetNumbering().GetRepairOrder())
+	},
+	"numbering.quote": func(f *usecase.GarageFields, in *tenantv1.Garage) {
+		f.QuoteNumberTemplate = new(in.GetNumbering().GetQuote())
+	},
+	"numbering.repair_order": func(f *usecase.GarageFields, in *tenantv1.Garage) {
+		f.RepairOrderNumberTemplate = new(in.GetNumbering().GetRepairOrder())
+	},
+}
+
+// garageFields reads the masked fields of in (all settable fields that are
+// set when paths is nil, i.e. on create).
+func garageFields(in *tenantv1.Garage, paths []string) (usecase.GarageFields, error) {
+	var f usecase.GarageFields
+
+	if paths == nil {
+		paths = presentGarageFields(in)
+	}
+
+	for _, path := range maskPaths(paths, garageSettable...) {
+		set, ok := garageSetters[path]
+		if !ok {
+			return f, apperror.Validation("updateMask", apperror.IssueInvalid, "field "+path+" cannot be updated")
+		}
+
+		set(&f, in)
+	}
+
+	return f, nil
+}
+
+// presentGarageFields lists the fields set on a garage being created.
+func presentGarageFields(in *tenantv1.Garage) []string {
+	paths := []string{pathName}
+
+	for path, set := range map[string]bool{
+		"tax_code": in.TaxCode != nil, "address": in.Address != nil, "phone": in.Phone != nil, "email": in.Email != nil,
+		"timezone": in.GetTimezone() != "", "currency": in.GetCurrency() != "",
+		"operating_hours": len(in.GetOperatingHours()) > 0,
+		"numbering.quote": in.GetNumbering().GetQuote() != "", "numbering.repair_order": in.GetNumbering().GetRepairOrder() != "",
+	} {
+		if set {
+			paths = append(paths, path)
+		}
+	}
+
+	return paths
+}
+
+//go:fix inline

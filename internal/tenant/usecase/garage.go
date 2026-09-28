@@ -2,214 +2,384 @@ package usecase
 
 import (
 	"context"
+	"fmt"
+	"log/slog"
+	"net/http"
+	"strings"
 
 	"github.com/google/uuid"
 
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-// CreateGarageRequest is the input for GarageUseCase.Create.
-type CreateGarageRequest struct {
-	AccountID string
-	Name      string
-	TaxCode   *string
-	Address   *string
-	Timezone  *string
-	Currency  *string
+// MaxLogoBytes is the largest accepted logo.
+const MaxLogoBytes = 1 << 20
+
+var logoExtensions = map[string]string{"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
+
+// GarageFields are the settable garage fields; nil fields are left
+// unchanged (on create: defaulted). Empty optional strings clear them.
+type GarageFields struct {
+	Name                      *string
+	TaxCode                   *string
+	Address                   *string
+	Phone                     *string
+	Email                     *string
+	Timezone                  *string
+	Currency                  *string
+	Status                    *domain.GarageStatus
+	OperatingHours            *[]domain.DailyHours
+	QuoteNumberTemplate       *string
+	RepairOrderNumberTemplate *string
 }
 
-// UpdateGarageRequest is the input for GarageUseCase.Update; nil pointer
-// fields keep their current value.
-type UpdateGarageRequest struct {
-	GarageID string
-	Name     *string
-	TaxCode  *string
-	Address  *string
-	LogoURL  *string
-	Timezone *string
-	Currency *string
-	// Status transitions the garage lifecycle (e.g. deactivate/reactivate);
-	// nil keeps the current status.
-	Status *domain.GarageStatus
+// GarageWithAccess is a garage and what the caller may do in it.
+type GarageWithAccess struct {
+	Garage *domain.Garage
+	Access *access.Access
 }
 
-// Option configures a GarageUseCase.
-type Option func(*GarageUseCase)
-
-// WithTransactionManager makes Create persist the garage, its owner staff
-// record, and the garage.created outbox event inside a single Postgres
-// transaction whose tenant context is the newly generated garage id -- the
-// Row-Level Security policies require app.current_garage_id to be set to
-// that id before the inserts can succeed.
-func WithTransactionManager(txManager *platformdb.TxManager) Option {
-	return func(uc *GarageUseCase) {
-		uc.txManager = txManager
-	}
-}
-
-// GarageUseCase (FR-TEN-01/02/03/05) implements the garage lifecycle
-// actions that share the same repositories and can be injected as a single
-// dependency.
-type GarageUseCase struct {
-	garageRepo     GarageRepository
-	staffRepo      GarageStaffRepository
-	eventPublisher EventPublisher
-	txManager      *platformdb.TxManager
-}
-
-// NewGarageUseCase wires the garage use case to its repositories and the
-// event publisher.
-func NewGarageUseCase(garaRepo GarageRepository, staffRepo GarageStaffRepository, eventPublisher EventPublisher, opts ...Option) *GarageUseCase {
-	uc := &GarageUseCase{garageRepo: garaRepo, staffRepo: staffRepo, eventPublisher: eventPublisher}
-
-	for _, opt := range opts {
-		opt(uc)
+// ListGarages returns the garages the account owns or works in, each with
+// the caller's access.
+func (uc *TenantUseCase) ListGarages(ctx context.Context, accountID string) ([]GarageWithAccess, error) {
+	garages, err := uc.Garages.ListForAccount(ctx, accountID)
+	if err != nil {
+		return nil, toAppError("list garages", err)
 	}
 
-	return uc
-}
+	result := make([]GarageWithAccess, 0, len(garages))
 
-// Create validates the request, persists the garage together with an owner
-// staff record, and publishes a garage.created event.
-func (uc *GarageUseCase) Create(ctx context.Context, req CreateGarageRequest) (*domain.Garage, error) {
-	if req.Name == "" {
-		return nil, apperror.Wrap(apperror.CodeInvalidArgument, "garage name is required", domain.ErrGarageNameRequired)
-	}
-
-	gara := &domain.Garage{
-		ID:        uuid.NewString(),
-		AccountID: req.AccountID,
-		Name:      req.Name,
-		TaxCode:   req.TaxCode,
-		Address:   req.Address,
-		Timezone:  valueOrDefault(req.Timezone, "Asia/Ho_Chi_Minh"),
-		Currency:  valueOrDefault(req.Currency, "VND"),
-		Status:    domain.GarageStatusActive,
-	}
-
-	owner := &domain.GarageStaff{
-		ID:        uuid.NewString(),
-		GarageID:  gara.ID,
-		AccountID: req.AccountID,
-		Role:      domain.RoleOwner,
-		Status:    domain.StaffStatusActive,
-	}
-
-	if uc.txManager != nil {
-		// The garage id is only known after it is generated above, so the
-		// tenant-scoped transaction is opened here (the interceptor layer
-		// cannot know the id upfront) -- see middleware.TransactionInterceptor.
-		if err := uc.txManager.WithTransaction(ctx, &gara.ID, func(txCtx context.Context) error {
-			return uc.persist(txCtx, gara, owner)
-		}); err != nil {
-			return nil, apperror.Wrap(apperror.CodeInternal, "create garage", err)
+	for _, g := range garages {
+		acc, err := uc.Access.GarageAccess(ctx, g.ID, accountID)
+		if err != nil {
+			return nil, toAppError("load garage access", err)
 		}
 
-		return gara, nil
+		result = append(result, GarageWithAccess{Garage: g, Access: acc})
 	}
 
-	if err := uc.persist(ctx, gara, owner); err != nil {
-		return nil, apperror.Wrap(apperror.CodeInternal, "create garage", err)
-	}
-
-	return gara, nil
+	return result, nil
 }
 
-// persist writes the garage, the owner staff record, and the outbox event
-// using the querier carried in ctx (a transaction when one is active).
-func (uc *GarageUseCase) persist(ctx context.Context, g *domain.Garage, owner *domain.GarageStaff) error {
-	if err := uc.garageRepo.Create(ctx, g); err != nil {
-		return err
+// CreateGarage creates a garage owned by ownerID (FR-TEN-01/02) within the
+// plan's garage limit, with the owner's membership and one staff group per
+// default role, and publishes garage.created.
+func (uc *TenantUseCase) CreateGarage(ctx context.Context, ownerID string, fields GarageFields) (*GarageWithAccess, error) {
+	g := &domain.Garage{
+		ID:                        uuid.NewString(),
+		OwnerAccountID:            ownerID,
+		Timezone:                  domain.DefaultTimezone,
+		Currency:                  domain.DefaultCurrency,
+		Status:                    domain.GarageStatusActive,
+		OperatingHours:            domain.DefaultOperatingHours(),
+		QuoteNumberTemplate:       domain.DefaultQuoteNumberTemplate,
+		RepairOrderNumberTemplate: domain.DefaultRepairOrderNumberTemplate,
+		CreatedBy:                 &ownerID,
+		UpdatedBy:                 &ownerID,
 	}
 
-	if err := uc.staffRepo.Create(ctx, owner); err != nil {
-		return err
+	fields.Status = nil
+	if fields.Name == nil {
+		return nil, apperror.Validation("name", apperror.IssueRequired, "garage name is required")
 	}
 
-	if uc.eventPublisher != nil {
-		return uc.eventPublisher.Publish(ctx, "garage.created", g.ID, map[string]string{
-			"garage_id":  g.ID,
-			"account_id": g.AccountID,
+	if err := applyGarageFields(g, fields); err != nil {
+		return nil, err
+	}
+
+	if err := uc.checkUsage(ctx, ownerID, LimitGarages); err != nil {
+		return nil, err
+	}
+
+	err := uc.Tx.WithTransaction(ctx, platformdb.AccountScope(ownerID).Garage(g.ID), func(ctx context.Context) error {
+		if err := uc.EnsureDefaultRoles(ctx, ownerID, uc.accountLocale(ctx, ownerID)); err != nil {
+			return err
+		}
+
+		if err := uc.Garages.Create(ctx, g); err != nil {
+			return err
+		}
+
+		owner := &domain.Staff{GarageID: g.ID, AccountID: ownerID, Status: domain.StaffStatusActive}
+		if err := uc.Staff.Create(ctx, owner); err != nil {
+			return err
+		}
+
+		if err := uc.ensureDefaultGroups(ctx, g.ID, ownerID); err != nil {
+			return err
+		}
+
+		if err := uc.audit(ctx, g.ID, "garage.created", "garage", g.ID, nil, g); err != nil {
+			return err
+		}
+
+		return uc.Events.Publish(ctx, EventGarageCreated, g.ID, ownerID, map[string]any{
+			keyGarageID: g.ID, "owner_account_id": ownerID, "name": g.Name,
 		})
+	})
+	if err != nil {
+		return nil, toAppError("create garage", err)
+	}
+
+	return &GarageWithAccess{Garage: g, Access: &access.Access{
+		GarageID: g.ID, AccountID: ownerID, OwnerAccountID: ownerID, Owner: true, Active: true,
+	}}, nil
+}
+
+// GetGarage returns a garage the caller was authorized for.
+func (uc *TenantUseCase) GetGarage(ctx context.Context, garageID string) (*GarageWithAccess, error) {
+	g, err := uc.Garages.FindByID(ctx, garageID)
+	if err != nil {
+		return nil, toAppError("get garage", err)
+	}
+
+	acc, _ := access.FromContext(ctx)
+
+	return &GarageWithAccess{Garage: g, Access: acc}, nil
+}
+
+// UpdateGarage changes a garage's profile and configuration (FR-TEN-01/05).
+// Only the owner may (de)activate it; reactivation counts against the plan.
+func (uc *TenantUseCase) UpdateGarage(ctx context.Context, garageID string, fields GarageFields) (*GarageWithAccess, error) {
+	caller, _ := access.FromContext(ctx)
+
+	g, err := uc.Garages.FindByID(ctx, garageID)
+	if err != nil {
+		return nil, toAppError("update garage", err)
+	}
+
+	before := *g
+
+	if fields.Status != nil && *fields.Status != g.Status {
+		if caller == nil || !caller.Owner {
+			return nil, apperror.New(apperror.CodePermissionDenied, access.ErrOwnerOnly.Error()).WithReason("OWNER_ONLY")
+		}
+
+		if *fields.Status == domain.GarageStatusActive {
+			if err := uc.checkUsage(ctx, g.OwnerAccountID, LimitGarages); err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if err := applyGarageFields(g, fields); err != nil {
+		return nil, err
+	}
+
+	actor := callerID(caller)
+	g.UpdatedBy = &actor
+
+	if err := uc.Garages.Update(ctx, g); err != nil {
+		return nil, toAppError("update garage", err)
+	}
+
+	if err := uc.audit(ctx, g.ID, "garage.updated", "garage", g.ID, before, g); err != nil {
+		return nil, toAppError("audit garage update", err)
+	}
+
+	return &GarageWithAccess{Garage: g, Access: caller}, nil
+}
+
+// UploadGarageLogo replaces the garage logo (PNG, JPEG or WebP, at most
+// 1 MB); the old file is removed once the change is committed.
+func (uc *TenantUseCase) UploadGarageLogo(ctx context.Context, garageID string, content []byte, contentType string) (*GarageWithAccess, error) {
+	contentType = strings.ToLower(strings.TrimSpace(contentType))
+
+	ext, ok := logoExtensions[contentType]
+	if !ok || len(content) == 0 || len(content) > MaxLogoBytes || http.DetectContentType(content) != contentType {
+		return nil, toAppError("upload logo", domain.ErrInvalidLogo)
+	}
+
+	key := fmt.Sprintf("garages/%s/logo-%s.%s", garageID, uuid.NewString(), ext)
+
+	url, err := uc.Logos.Put(ctx, key, contentType, content)
+	if err != nil {
+		return nil, toAppError("store logo", err)
+	}
+
+	result, err := uc.setLogo(ctx, garageID, &url)
+	if err != nil {
+		_ = uc.Logos.Delete(context.WithoutCancel(ctx), key)
+
+		return nil, err
+	}
+
+	return result, nil
+}
+
+// DeleteGarageLogo removes the garage logo.
+func (uc *TenantUseCase) DeleteGarageLogo(ctx context.Context, garageID string) (*GarageWithAccess, error) {
+	return uc.setLogo(ctx, garageID, nil)
+}
+
+func (uc *TenantUseCase) setLogo(ctx context.Context, garageID string, url *string) (*GarageWithAccess, error) {
+	caller, _ := access.FromContext(ctx)
+
+	g, err := uc.Garages.FindByID(ctx, garageID)
+	if err != nil {
+		return nil, toAppError("update logo", err)
+	}
+
+	old := g.LogoURL
+	g.LogoURL = url
+	actor := callerID(caller)
+	g.UpdatedBy = &actor
+
+	if err := uc.Garages.Update(ctx, g); err != nil {
+		return nil, toAppError("update logo", err)
+	}
+
+	if old != nil {
+		if key, ok := uc.Logos.KeyFromURL(*old); ok {
+			platformdb.AfterCommit(ctx, func() {
+				if err := uc.Logos.Delete(context.WithoutCancel(ctx), key); err != nil {
+					slog.Warn("tenant: removing the old logo failed", "key", key, "error", err)
+				}
+			})
+		}
+	}
+
+	return &GarageWithAccess{Garage: g, Access: caller}, nil
+}
+
+// checkUsage enforces limit for ownerID against the current usage.
+func (uc *TenantUseCase) checkUsage(ctx context.Context, ownerID string, limit Limit) error {
+	garages, staff, err := uc.Usage.OwnerUsage(ctx, ownerID)
+	if err != nil {
+		return toAppError("read plan usage", err)
+	}
+
+	current := garages
+	if limit == LimitStaff {
+		current = staff
+	}
+
+	return uc.Limits.CheckLimit(ctx, ownerID, limit, current)
+}
+
+func callerID(caller *access.Access) string {
+	if caller == nil {
+		return ""
+	}
+
+	return caller.AccountID
+}
+
+// applyGarageFields validates and applies fields to g.
+func applyGarageFields(g *domain.Garage, f GarageFields) error {
+	if f.Name != nil {
+		name := strings.TrimSpace(*f.Name)
+		if !domain.ValidName(name) {
+			return apperror.Validation("name", apperror.IssueRequired, "garage name is required (at most 255 characters)")
+		}
+
+		g.Name = name
+	}
+
+	if f.TaxCode != nil {
+		taxCode := optional(*f.TaxCode)
+		if taxCode != nil && len(*taxCode) > domain.MaxTaxCodeLength {
+			return apperror.Validation("taxCode", apperror.IssueTooLong, "tax code is at most 20 characters")
+		}
+
+		g.TaxCode = taxCode
+	}
+
+	if f.Address != nil {
+		g.Address = optional(*f.Address)
+	}
+
+	if err := applyContact(g, f); err != nil {
+		return err
+	}
+
+	return applyConfiguration(g, f)
+}
+
+func applyContact(g *domain.Garage, f GarageFields) error {
+	if f.Phone != nil {
+		phone := optional(*f.Phone)
+		if phone != nil && len(*phone) > 20 {
+			return apperror.Validation("phone", apperror.IssueInvalid, "phone number is invalid")
+		}
+
+		g.Phone = phone
+	}
+
+	if f.Email != nil {
+		email := optional(strings.ToLower(*f.Email))
+		if email != nil && (len(*email) > 255 || !strings.Contains(*email, "@")) {
+			return apperror.Validation("email", apperror.IssueInvalid, "email is invalid")
+		}
+
+		g.Email = email
 	}
 
 	return nil
 }
 
-// List returns every garage owned by accountID.
-func (uc *GarageUseCase) List(ctx context.Context, accountID string) ([]*domain.Garage, error) {
-	garages, err := uc.garageRepo.ListByAccountID(ctx, accountID)
-	if err != nil {
-		return nil, apperror.Wrap(apperror.CodeInternal, "list garages", err)
-	}
-
-	return garages, nil
-}
-
-// Get returns the garage with the given id.
-func (uc *GarageUseCase) Get(ctx context.Context, garageID string) (*domain.Garage, error) {
-	g, err := uc.garageRepo.FindByID(ctx, garageID)
-	if err != nil {
-		return nil, apperror.Wrap(apperror.CodeNotFound, "garage not found", err)
-	}
-
-	return g, nil
-}
-
-// Update applies the partial updates in req to the matching garage and
-// persists it.
-func (uc *GarageUseCase) Update(ctx context.Context, req UpdateGarageRequest) (*domain.Garage, error) {
-	g, err := uc.garageRepo.FindByID(ctx, req.GarageID)
-	if err != nil {
-		return nil, apperror.Wrap(apperror.CodeNotFound, "garage not found", err)
-	}
-
-	if req.Name != nil {
-		g.Name = *req.Name
-	}
-
-	if req.TaxCode != nil {
-		g.TaxCode = req.TaxCode
-	}
-
-	if req.Address != nil {
-		g.Address = req.Address
-	}
-
-	if req.LogoURL != nil {
-		g.LogoURL = req.LogoURL
-	}
-
-	if req.Timezone != nil {
-		g.Timezone = *req.Timezone
-	}
-
-	if req.Currency != nil {
-		g.Currency = *req.Currency
-	}
-
-	if req.Status != nil {
-		if !req.Status.IsValid() {
-			return nil, apperror.Wrap(apperror.CodeInvalidArgument, "invalid garage status", domain.ErrInvalidGarageStatus)
+func applyConfiguration(g *domain.Garage, f GarageFields) error {
+	if f.Timezone != nil {
+		if !domain.ValidTimezone(*f.Timezone) {
+			return apperror.Validation("timezone", apperror.IssueInvalid, "timezone is not a known IANA timezone")
 		}
 
-		g.Status = *req.Status
+		g.Timezone = *f.Timezone
 	}
 
-	if err := uc.garageRepo.Update(ctx, g); err != nil {
-		return nil, apperror.Wrap(apperror.CodeInternal, "update garage", err)
+	if f.Currency != nil {
+		currency := strings.ToUpper(strings.TrimSpace(*f.Currency))
+		if !domain.ValidCurrency(currency) {
+			return apperror.Validation("currency", apperror.IssueInvalid, "currency must be an ISO 4217 code")
+		}
+
+		g.Currency = currency
 	}
 
-	return g, nil
+	if f.Status != nil {
+		if !f.Status.IsValid() {
+			return apperror.Validation("status", apperror.IssueInvalid, "status is invalid")
+		}
+
+		g.Status = *f.Status
+	}
+
+	if f.OperatingHours != nil {
+		if !domain.ValidOperatingHours(*f.OperatingHours) {
+			return apperror.Validation("operatingHours", apperror.IssueInvalid, "operating hours are invalid")
+		}
+
+		g.OperatingHours = *f.OperatingHours
+	}
+
+	if f.QuoteNumberTemplate != nil {
+		if !domain.ValidNumberingTemplate(*f.QuoteNumberTemplate) {
+			return apperror.Validation("numbering.quote", apperror.IssueInvalid, "numbering template is invalid")
+		}
+
+		g.QuoteNumberTemplate = *f.QuoteNumberTemplate
+	}
+
+	if f.RepairOrderNumberTemplate != nil {
+		if !domain.ValidNumberingTemplate(*f.RepairOrderNumberTemplate) {
+			return apperror.Validation("numbering.repairOrder", apperror.IssueInvalid, "numbering template is invalid")
+		}
+
+		g.RepairOrderNumberTemplate = *f.RepairOrderNumberTemplate
+	}
+
+	return nil
 }
 
-// valueOrDefault returns def when v is nil, otherwise *v.
-func valueOrDefault(v *string, def string) string {
-	if v != nil {
-		return *v
+// optional trims s and returns nil for "".
+func optional(s string) *string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
 	}
 
-	return def
+	return &s
 }

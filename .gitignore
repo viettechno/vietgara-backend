@@ -8,3 +8,4 @@ out/*
 # Ignore copilot skills
 .codex/*
 .opencode/*
+.data/

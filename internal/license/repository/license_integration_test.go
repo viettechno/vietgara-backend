@@ -98,9 +98,11 @@ func TestLicenseRepositoriesOnPostgres(t *testing.T) {
 	require.Len(t, public, 3, "seeded starter, professional and chain")
 	assert.Equal(t, 2, public[1].MaxGarages)
 
-	plan := &domain.Plan{Code: "garage-plus", Name: "Garage+", Currency: "VND", BillingCycle: domain.BillingCycleYearly,
+	plan := &domain.Plan{
+		Code: "garage-plus", Name: "Garage+", Currency: "VND", BillingCycle: domain.BillingCycleYearly,
 		MaxGarages: 3, MaxStaff: 10, MaxTransactionsPerDay: 200, Features: []domain.Feature{domain.FeatureQuotes, domain.FeatureReports},
-		Public: true, Active: true}
+		Public: true, Active: true,
+	}
 	require.NoError(t, plans.Create(ctx, plan))
 	require.ErrorIs(t, plans.Create(ctx, plan), domain.ErrPlanCodeTaken)
 

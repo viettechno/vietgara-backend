@@ -24,7 +24,11 @@ CREATE TABLE vehicles (
     deleted_at TIMESTAMP WITH TIME ZONE,
     -- A vehicle's owner must belong to the same garage as the vehicle.
     CONSTRAINT vehicles_garage_customer_fkey FOREIGN KEY (garage_id, customer_id)
-        REFERENCES customers (garage_id, id) ON DELETE CASCADE
+        REFERENCES customers (garage_id, id) ON DELETE CASCADE,
+    -- Target of the quotes/repair_orders (garage_id, vehicle_id) foreign
+    -- keys (Release 1.2), which guarantee a quote and its vehicle always
+    -- belong to the same garage.
+    CONSTRAINT vehicles_garage_id_id_key UNIQUE (garage_id, id)
 );
 
 -- Indexes (Database Design Section 8: (garage_id, license_plate))

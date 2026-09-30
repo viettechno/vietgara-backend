@@ -31,6 +31,7 @@ import (
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
+	quotev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/quote/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	appdb "github.com/viettechno/vietgara-backend/db"
@@ -51,6 +52,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
 	"github.com/viettechno/vietgara-backend/internal/platform/storage"
+	quoteHandler "github.com/viettechno/vietgara-backend/internal/quote/handler"
 	tenantHandler "github.com/viettechno/vietgara-backend/internal/tenant/handler"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 	tenantUsecase "github.com/viettechno/vietgara-backend/internal/tenant/usecase"
@@ -230,9 +232,14 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// Customer & Vehicle
 	customerRepo := customerRepository.NewPostgresCustomerRepository(pool)
 	vehicleRepo := customerRepository.NewPostgresVehicleRepository(pool)
+
+	// Quote & Pricing (Release 1.2), plus the minimal Repair Order module
+	// its ConvertQuote depends on (FR-QUO-04).
+	quote := buildQuote(pool, tx, events, mailer, garages, license.entitlements, customerRepo, vehicleRepo)
+
 	customerSrv := customerHandler.NewServer(
 		customerUsecase.NewCustomerUseCase(customerRepo, vehicleRepo),
-		customerUsecase.NewVehicleUseCase(vehicleRepo, customerRepo),
+		customerUsecase.NewVehicleUseCase(vehicleRepo, customerRepo, vehicleHistory{quotes: quote.quotes, repairOrders: quote.repairOrders}),
 		customerUsecase.NewPartnerUseCase(customerRepository.NewPostgresPartnerRepository(pool)),
 	)
 
@@ -246,7 +253,10 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	})
 
 	// gRPC server with the request pipeline of internal/middleware.
-	policies := middleware.Merge(identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies())
+	policies := middleware.Merge(
+		identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
+		quoteHandler.Policies(),
+	)
 	app.grpcServer = grpc.NewServer(grpc.ChainUnaryInterceptor(
 		middleware.Auth(issuer, policies),
 		middleware.EmailVerified(),
@@ -266,6 +276,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	customerv1.RegisterCustomerServiceServer(app.grpcServer, customerSrv)
 	customerv1.RegisterVehicleServiceServer(app.grpcServer, customerSrv)
 	customerv1.RegisterPartnerServiceServer(app.grpcServer, customerSrv)
+	quotev1.RegisterQuoteServiceServer(app.grpcServer, quote.server)
+	quotev1.RegisterPublicQuoteServiceServer(app.grpcServer, quote.server)
 	reflection.Register(app.grpcServer)
 
 	mux, err := buildGateway(ctx, app, identitySrv, files)
@@ -352,6 +364,7 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 		licensev1.RegisterLicenseServiceHandler, licensev1.RegisterLicenseAdminServiceHandler,
 		customerv1.RegisterCustomerServiceHandler, customerv1.RegisterVehicleServiceHandler,
 		customerv1.RegisterPartnerServiceHandler,
+		quotev1.RegisterQuoteServiceHandler, quotev1.RegisterPublicQuoteServiceHandler,
 	} {
 		if err := register(ctx, mux, conn); err != nil {
 			return nil, err

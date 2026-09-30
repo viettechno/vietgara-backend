@@ -24,6 +24,10 @@ func TestStatuses(t *testing.T) {
 	}
 
 	assert.False(t, domain.InvitationStatus("x").IsValid())
+
+	assert.True(t, domain.QuoteApprovalModeLink.IsValid())
+	assert.True(t, domain.QuoteApprovalModeManual.IsValid())
+	assert.False(t, domain.QuoteApprovalMode("email").IsValid())
 }
 
 func TestGarageValidation(t *testing.T) {

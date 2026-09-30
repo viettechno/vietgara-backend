@@ -26,6 +26,9 @@ exists, schema changes must become new, forward-only migrations.)
 | 000011 | Tenant | `staff_invitations` (`invitation_status`, one pending invitation per garage and account) |
 | 000012 | Platform | `processed_events` (idempotent consumers), `audit_log` (append-only) |
 | 000013 | Platform | RLS policies of the tenant/access tables, `owner_usage()`, the `vietgara_app` role and its grants |
+| 000014 | Platform | `document_sequences`: the per-garage, per-document-type, per-period counter behind numbering templates (FR-TEN-05) |
+| 000015 | Quote & Pricing | `quotes` (`quote_status`, `quote_approval_mode` from 000002, the public approval token hash), `quote_lines` (`quote_item_type`, `quote_line_decision`), `find_quote_by_public_token()` |
+| 000016 | Repair Order | `repair_orders` (`repair_order_status`), `repair_order_lines` -- the minimal shape `ConvertQuote` needs; Release 1.3 extends both for technician assignment and per-line progress |
 
 Tables from 000002, 000003, 000010 and 000011 enable `FORCE ROW LEVEL
 SECURITY` when created; their policies are created together in 000013,
@@ -78,6 +81,7 @@ garages, invitations, roles) runs with only the account set.
 | `roles`, `role_permissions` | The caller's roles, the current garage owner's roles, roles used by visible groups | The caller's own roles |
 | `staff_invitations` | Current garage, or invitations to the caller | Insert/delete: current garage; update: garage side (revoke) or invitee (accept/decline) |
 | `customers`, `vehicles`, `partners` | Current garage | Current garage |
+| `document_sequences`, `quotes`, `quote_lines`, `repair_orders`, `repair_order_lines` | Current garage | Current garage |
 
 Platform tables (`accounts`, `plans`, `subscriptions`, `entitlements`,
 `outbox_events`, `processed_events`, `audit_log`, `platform_admins`) have no

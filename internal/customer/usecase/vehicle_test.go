@@ -33,7 +33,7 @@ func newVehicleUseCase(t *testing.T) (*usecase.VehicleUseCase, *mocks.MockVehicl
 	vehicles := mocks.NewMockVehicleRepository(t)
 	customers := mocks.NewMockCustomerRepository(t)
 
-	return usecase.NewVehicleUseCase(vehicles, customers, clock()), vehicles, customers
+	return usecase.NewVehicleUseCase(vehicles, customers, nil, clock()), vehicles, customers
 }
 
 func TestVehicleUseCase_Create(t *testing.T) {
@@ -212,4 +212,53 @@ func TestVehicleUseCase_GetListDelete(t *testing.T) {
 
 	require.NoError(t, uc.Delete(t.Context(), garageID, vehicleID, actorID))
 	assertAppError(t, uc.Delete(t.Context(), garageID, "missing", actorID), apperror.CodeNotFound)
+}
+
+func TestVehicleUseCase_GetHistory(t *testing.T) {
+	t.Parallel()
+
+	t.Run("no history reader configured", func(t *testing.T) {
+		t.Parallel()
+
+		uc, vehicles, _ := newVehicleUseCase(t)
+		vehicles.EXPECT().FindByID(mock.Anything, garageID, vehicleID).Return(existingVehicle(), nil).Once()
+
+		entries, err := uc.GetHistory(t.Context(), garageID, vehicleID)
+		require.NoError(t, err)
+		assert.Empty(t, entries)
+	})
+
+	t.Run("unknown vehicle", func(t *testing.T) {
+		t.Parallel()
+
+		uc, vehicles, _ := newVehicleUseCase(t)
+		vehicles.EXPECT().FindByID(mock.Anything, garageID, "missing").Return(nil, domain.ErrVehicleNotFound).Once()
+
+		_, err := uc.GetHistory(t.Context(), garageID, "missing")
+		assertAppError(t, err, apperror.CodeNotFound)
+	})
+
+	t.Run("reads history when configured", func(t *testing.T) {
+		t.Parallel()
+
+		vehicles := mocks.NewMockVehicleRepository(t)
+		customers := mocks.NewMockCustomerRepository(t)
+		history := mocks.NewMockHistoryReader(t)
+		uc := usecase.NewVehicleUseCase(vehicles, customers, history)
+
+		vehicles.EXPECT().FindByID(mock.Anything, garageID, vehicleID).Return(existingVehicle(), nil).Once()
+
+		want := []usecase.HistoryEntry{{Type: usecase.HistoryEntryQuote, EntityID: "q-1", Number: "BG-1"}}
+		history.EXPECT().History(mock.Anything, garageID, vehicleID).Return(want, nil).Once()
+
+		entries, err := uc.GetHistory(t.Context(), garageID, vehicleID)
+		require.NoError(t, err)
+		assert.Equal(t, want, entries)
+
+		vehicles.EXPECT().FindByID(mock.Anything, garageID, vehicleID).Return(existingVehicle(), nil).Once()
+		history.EXPECT().History(mock.Anything, garageID, vehicleID).Return(nil, errBoom).Once()
+
+		_, err = uc.GetHistory(t.Context(), garageID, vehicleID)
+		assertAppError(t, err, apperror.CodeInternal)
+	})
 }

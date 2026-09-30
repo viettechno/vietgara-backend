@@ -114,6 +114,26 @@ func partnerTypeFromProto(t customerv1.PartnerType) domain.PartnerType {
 	}
 }
 
+func historyEntryToProto(e usecase.HistoryEntry) *customerv1.VehicleHistoryEntry {
+	return &customerv1.VehicleHistoryEntry{
+		Type: historyEntryTypeToProto(e.Type), EntityId: e.EntityID, Number: e.Number, Status: e.Status,
+		TotalAmount: e.TotalAmount, OccurredAt: converter.TimeToProto(e.OccurredAt),
+	}
+}
+
+func historyEntryTypeToProto(t usecase.HistoryEntryType) customerv1.VehicleHistoryEntryType {
+	switch t {
+	case usecase.HistoryEntryQuote:
+		return customerv1.VehicleHistoryEntryType_VEHICLE_HISTORY_ENTRY_TYPE_QUOTE
+	case usecase.HistoryEntryRepairOrder:
+		return customerv1.VehicleHistoryEntryType_VEHICLE_HISTORY_ENTRY_TYPE_REPAIR_ORDER
+	case usecase.HistoryEntrySettlement:
+		return customerv1.VehicleHistoryEntryType_VEHICLE_HISTORY_ENTRY_TYPE_SETTLEMENT
+	default:
+		return customerv1.VehicleHistoryEntryType_VEHICLE_HISTORY_ENTRY_TYPE_UNSPECIFIED
+	}
+}
+
 func paginationToProto[T any](p *usecase.Page[T]) *commonv1.Pagination {
 	return &commonv1.Pagination{Total: toInt32(p.Total), Page: toInt32(p.Page), PageSize: toInt32(p.PageSize)}
 }

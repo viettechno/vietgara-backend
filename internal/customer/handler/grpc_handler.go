@@ -44,11 +44,12 @@ func Policies() middleware.Policies {
 		customerv1.CustomerService_UpdateCustomer_FullMethodName: middleware.GarageMethod(write),
 		customerv1.CustomerService_DeleteCustomer_FullMethodName: middleware.GarageMethod(write),
 
-		customerv1.VehicleService_ListVehicles_FullMethodName:  middleware.GarageMethod(read),
-		customerv1.VehicleService_GetVehicle_FullMethodName:    middleware.GarageMethod(read),
-		customerv1.VehicleService_CreateVehicle_FullMethodName: middleware.GarageMethod(write),
-		customerv1.VehicleService_UpdateVehicle_FullMethodName: middleware.GarageMethod(write),
-		customerv1.VehicleService_DeleteVehicle_FullMethodName: middleware.GarageMethod(write),
+		customerv1.VehicleService_ListVehicles_FullMethodName:      middleware.GarageMethod(read),
+		customerv1.VehicleService_GetVehicle_FullMethodName:        middleware.GarageMethod(read),
+		customerv1.VehicleService_CreateVehicle_FullMethodName:     middleware.GarageMethod(write),
+		customerv1.VehicleService_UpdateVehicle_FullMethodName:     middleware.GarageMethod(write),
+		customerv1.VehicleService_DeleteVehicle_FullMethodName:     middleware.GarageMethod(write),
+		customerv1.VehicleService_GetVehicleHistory_FullMethodName: middleware.GarageMethod(read),
 
 		customerv1.PartnerService_ListPartners_FullMethodName:  middleware.GarageMethod(partnerRead),
 		customerv1.PartnerService_GetPartner_FullMethodName:    middleware.GarageMethod(partnerRead),

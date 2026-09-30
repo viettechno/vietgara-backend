@@ -1,0 +1,13 @@
+{{define "subject"}}Báo giá {{.Number}} cho xe {{.VehiclePlate}} cần bạn duyệt{{end}}
+{{define "text"}}Xin chào {{.CustomerName}},
+
+Gara vừa lập báo giá {{.Number}} cho xe {{.VehiclePlate}} của bạn, tổng cộng {{.TotalAmount}} đ.
+
+Xem chi tiết và duyệt (hoặc từ chối) từng hạng mục tại:
+{{.ApproveURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.CustomerName}},</p>
+<p>Gara vừa lập báo giá <strong>{{.Number}}</strong> cho xe <strong>{{.VehiclePlate}}</strong> của bạn, tổng cộng <strong>{{.TotalAmount}} đ</strong>.</p>
+<p><a href="{{.ApproveURL}}" style="display:inline-block;padding:10px 18px;background:#2E74B5;color:#fff;border-radius:8px;text-decoration:none">Xem báo giá</a></p>
+<p>VietGara</p>{{end}}

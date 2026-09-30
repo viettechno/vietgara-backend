@@ -205,8 +205,8 @@ github.com/twmb/franz-go/pkg/kfake v0.0.0-20260925040417-67711bad7b74 h1:P6V+qoR
 github.com/twmb/franz-go/pkg/kfake v0.0.0-20260925040417-67711bad7b74/go.mod h1:TG+7GhIS2HEiBNWJUb+2m0F+rB87IbU7WtWSWBDnOL4=
 github.com/twmb/franz-go/pkg/kmsg v1.14.0 h1:gSxrBEKWl3qnsx3QKWol5OEVujuPmIoDkhMt3didFKM=
 github.com/twmb/franz-go/pkg/kmsg v1.14.0/go.mod h1:+DPt4NC8RmI6hqb8G09+3giKObE6uD2Eya6CfqBpeJY=
-github.com/viettechno/vietgara-proto v1.1.0 h1:HOEVGT4bhXK9A6sUB9+XUer1i8+EPkLf/oxWJp3gNLk=
-github.com/viettechno/vietgara-proto v1.1.0/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
+github.com/viettechno/vietgara-proto v1.1.1-0.20260930025648-cca0937f355f h1:GjNB4Pl7DGn+BUdb8089bvFu3HMHC56PXW9XRFxQvPk=
+github.com/viettechno/vietgara-proto v1.1.1-0.20260930025648-cca0937f355f/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
 github.com/yuin/gopher-lua v1.1.1 h1:kYKnWBjvbNP4XLT3+bPEwAXJx262OhaHDWDVOPjL46M=
 github.com/yuin/gopher-lua v1.1.1/go.mod h1:GBR0iDaNXjAgGg9zfCvksxSRnQx76gclCIb7kdAd1Pw=
 github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo0=

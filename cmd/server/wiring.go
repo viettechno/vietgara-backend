@@ -186,24 +186,67 @@ type quoteRepairOrders struct {
 }
 
 func (r quoteRepairOrders) Create(
-	ctx context.Context, garageID, quoteID, vehicleID, number, actorID string, lines []quoteDomain.Line,
+	ctx context.Context, garageID, quoteID, vehicleID, customerName, vehiclePlate, number, actorID string,
+	lines []quoteDomain.Line,
 ) (string, error) {
 	roLines := make([]repairorderDomain.Line, 0, len(lines))
 	for _, l := range lines {
 		roLines = append(roLines, repairorderDomain.Line{
 			Position: l.Position, ItemType: repairorderDomain.ItemType(l.ItemType), ItemRefID: l.ItemRefID,
 			Description: l.Description, Quantity: l.Quantity, UnitPrice: l.UnitPrice, LineTotal: l.LineTotal,
+			Status: repairorderDomain.LineNotStarted,
 		})
 	}
 
 	ro, err := r.uc.CreateFromQuote(ctx, repairorderUsecase.CreateFromQuoteRequest{
-		GarageID: garageID, QuoteID: quoteID, ActorID: actorID, VehicleID: vehicleID, Number: number, Lines: roLines,
+		GarageID: garageID, QuoteID: quoteID, ActorID: actorID, VehicleID: vehicleID, CustomerName: customerName,
+		VehiclePlate: vehiclePlate, Number: number, Lines: roLines,
 	})
 	if err != nil {
 		return "", err
 	}
 
 	return ro.ID, nil
+}
+
+// repairOrderVehicles gives the Repair Order module a read-only view of a
+// vehicle's customer name and license plate for ad-hoc creation
+// (FR-REP-01), without the customer-id cross-check Quote's own adapter
+// does (an ad-hoc repair order is created from a vehicle alone) -- kept as
+// its own type so the two modules stay decoupled from each other.
+type repairOrderVehicles struct {
+	vehicles *customerRepository.PostgresVehicleRepository
+}
+
+func (v repairOrderVehicles) Find(ctx context.Context, garageID, vehicleID string) (string, string, error) {
+	vehicle, err := v.vehicles.FindByID(ctx, garageID, vehicleID)
+	if err != nil {
+		if errors.Is(err, customerDomain.ErrVehicleNotFound) {
+			return "", "", repairorderDomain.ErrVehicleRequired
+		}
+
+		return "", "", err
+	}
+
+	return vehicle.CustomerName, vehicle.LicensePlate, nil
+}
+
+// repairOrderGarages lets the Repair Order module read a garage's
+// numbering configuration (FR-TEN-05) without importing Tenant.
+type repairOrderGarages struct {
+	garages *tenantRepo.PostgresGarageRepository
+}
+
+func (g repairOrderGarages) Get(ctx context.Context, garageID string) (repairorderUsecase.GarageInfo, error) {
+	garage, err := g.garages.FindByID(ctx, garageID)
+	if err != nil {
+		return repairorderUsecase.GarageInfo{}, err
+	}
+
+	return repairorderUsecase.GarageInfo{
+		OwnerAccountID: garage.OwnerAccountID, Timezone: garage.Timezone,
+		RepairOrderNumberTemplate: garage.RepairOrderNumberTemplate,
+	}, nil
 }
 
 // vehicleHistory gives the Customer module a read-only view of a

@@ -264,9 +264,9 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// repair order, the customer/insurer allocation, recorded payments.
 	billing := buildBilling(pool, events, garages, license.entitlements, partnerRepo, repairOrder.uc)
 
-	// Document/Print (Release 1.4): quote and settlement receipt PDFs,
-	// the stock movement report as Excel.
-	document := buildDocument(quote.quotes, billing.uc, inventory.uc, garages)
+	// Document/Print (Release 1.4): quote, repair order and settlement
+	// receipt PDFs, the stock movement report as Excel.
+	document := buildDocument(quote.quotes, repairOrder.uc, billing.uc, inventory.uc, garages)
 
 	// Events: Kafka when brokers are configured, otherwise in-process.
 	if err := wireEvents(app, pool, tx, tenantUC, license, inventory); err != nil {

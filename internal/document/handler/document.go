@@ -19,6 +19,18 @@ func (s *Server) ExportQuotePdf(ctx context.Context, req *documentv1.ExportQuote
 	return pdfBody(data), nil
 }
 
+// ExportRepairOrderPdf renders the repair order as a PDF (FR-DOC-01).
+func (s *Server) ExportRepairOrderPdf(
+	ctx context.Context, req *documentv1.ExportRepairOrderPdfRequest,
+) (*httpbody.HttpBody, error) {
+	data, err := s.uc.RepairOrderPDF(ctx, req.GetGarageId(), req.GetRepairOrderId())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return pdfBody(data), nil
+}
+
 // ExportSettlementReceiptPdf renders the settlement as a receipt PDF
 // (FR-DOC-01).
 func (s *Server) ExportSettlementReceiptPdf(

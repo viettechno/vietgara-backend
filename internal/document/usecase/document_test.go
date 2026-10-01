@@ -14,10 +14,11 @@ import (
 )
 
 const (
-	garageID     = "11111111-1111-1111-1111-111111111111"
-	quoteID      = "22222222-2222-2222-2222-222222222222"
-	settlementID = "33333333-3333-3333-3333-333333333333"
-	itemID       = "44444444-4444-4444-4444-444444444444"
+	garageID      = "11111111-1111-1111-1111-111111111111"
+	quoteID       = "22222222-2222-2222-2222-222222222222"
+	settlementID  = "33333333-3333-3333-3333-333333333333"
+	itemID        = "44444444-4444-4444-4444-444444444444"
+	repairOrderID = "55555555-5555-5555-5555-555555555555"
 )
 
 var errBoom = errors.New("boom")
@@ -25,6 +26,7 @@ var errBoom = errors.New("boom")
 // deps are the mocked dependencies of one DocumentUseCase under test.
 type deps struct {
 	Quotes         *mocks.MockDocumentQuoteReader
+	RepairOrders   *mocks.MockDocumentRepairOrderReader
 	Settlements    *mocks.MockDocumentSettlementReader
 	StockMovements *mocks.MockDocumentStockMovementReader
 	Garages        *mocks.MockDocumentGarageReader
@@ -34,11 +36,12 @@ func newUseCase(t *testing.T) (*usecase.DocumentUseCase, *deps) {
 	t.Helper()
 
 	d := &deps{
-		Quotes: mocks.NewMockDocumentQuoteReader(t), Settlements: mocks.NewMockDocumentSettlementReader(t),
-		StockMovements: mocks.NewMockDocumentStockMovementReader(t), Garages: mocks.NewMockDocumentGarageReader(t),
+		Quotes: mocks.NewMockDocumentQuoteReader(t), RepairOrders: mocks.NewMockDocumentRepairOrderReader(t),
+		Settlements: mocks.NewMockDocumentSettlementReader(t), StockMovements: mocks.NewMockDocumentStockMovementReader(t),
+		Garages: mocks.NewMockDocumentGarageReader(t),
 	}
 
-	uc := usecase.NewDocumentUseCase(d.Quotes, d.Settlements, d.StockMovements, d.Garages)
+	uc := usecase.NewDocumentUseCase(d.Quotes, d.RepairOrders, d.Settlements, d.StockMovements, d.Garages)
 
 	return uc, d
 }
@@ -97,6 +100,40 @@ func TestDocumentUseCase_QuotePDF(t *testing.T) {
 		d.Quotes.EXPECT().Get(mock.Anything, garageID, quoteID).Return(usecase.QuoteInfo{}, notFound).Once()
 
 		_, err := uc.QuotePDF(t.Context(), garageID, quoteID)
+		assertAppError(t, err, apperror.CodeNotFound)
+	})
+}
+
+func TestDocumentUseCase_RepairOrderPDF(t *testing.T) {
+	t.Parallel()
+
+	t.Run("renders a non-empty PDF", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+		d.RepairOrders.EXPECT().Get(mock.Anything, garageID, repairOrderID).Return(usecase.RepairOrderInfo{
+			Number: "LSC-202609-0001", Status: "open", CustomerName: "An Nguyen", VehiclePlate: "51F-123.45",
+			Lines:       []render.DocumentLine{{Description: "Oil change", Quantity: "1", UnitPrice: 250_000, LineTotal: 250_000}},
+			TotalAmount: 250_000,
+		}, nil).Once()
+
+		pdf, err := uc.RepairOrderPDF(t.Context(), garageID, repairOrderID)
+		require.NoError(t, err)
+		require.NotEmpty(t, pdf)
+		require.Equal(t, "%PDF", string(pdf[:4]))
+	})
+
+	t.Run("repair order not found", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+
+		notFound := apperror.Wrap(apperror.CodeNotFound, "repair order not found", errBoom)
+		d.RepairOrders.EXPECT().Get(mock.Anything, garageID, repairOrderID).Return(usecase.RepairOrderInfo{}, notFound).Once()
+
+		_, err := uc.RepairOrderPDF(t.Context(), garageID, repairOrderID)
 		assertAppError(t, err, apperror.CodeNotFound)
 	})
 }

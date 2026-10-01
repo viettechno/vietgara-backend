@@ -395,6 +395,35 @@ func (q documentQuotes) Get(ctx context.Context, garageID, quoteID string) (docu
 	}, nil
 }
 
+// documentRepairOrders lets the Document/Print module render a repair
+// order PDF (FR-DOC-01) without importing the Repair Order module's use
+// case directly. Repair Order's own Get already returns a classified
+// *apperror.AppError, which this module's toAppError passes through
+// unchanged, so no error translation is needed here (the same choice
+// documentSettlements below makes).
+type documentRepairOrders struct {
+	uc *repairorderUsecase.RepairOrderUseCase
+}
+
+func (r documentRepairOrders) Get(ctx context.Context, garageID, repairOrderID string) (documentUsecase.RepairOrderInfo, error) {
+	ro, err := r.uc.Get(ctx, garageID, repairOrderID)
+	if err != nil {
+		return documentUsecase.RepairOrderInfo{}, err
+	}
+
+	lines := make([]render.DocumentLine, 0, len(ro.Lines))
+	for _, line := range ro.Lines {
+		lines = append(lines, render.DocumentLine{
+			Description: line.Description, Quantity: line.Quantity, UnitPrice: line.UnitPrice, LineTotal: line.LineTotal,
+		})
+	}
+
+	return documentUsecase.RepairOrderInfo{
+		Number: ro.Number, Status: string(ro.Status), CustomerName: ro.CustomerName, VehiclePlate: ro.VehicleLicensePlate,
+		Lines: lines, TotalAmount: ro.TotalAmount,
+	}, nil
+}
+
 // documentSettlements lets the Document/Print module render a settlement
 // receipt PDF (FR-DOC-01) without importing the Billing & Settlement
 // module's use case directly.

@@ -329,6 +329,11 @@ packages:
           filename: "document_usecase_quote_reader.go"
           dir: "./internal/mocks"
           structname: "MockDocumentQuoteReader"
+      RepairOrderReader:
+        config:
+          filename: "document_usecase_repair_order_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockDocumentRepairOrderReader"
       SettlementReader:
         config:
           filename: "document_usecase_settlement_reader.go"

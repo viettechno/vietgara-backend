@@ -35,11 +35,13 @@ func NewServer(uc *usecase.DocumentUseCase) *Server {
 // matching the module whose data it renders.
 func Policies() middleware.Policies {
 	quoteRead := access.Requires(access.QuoteRead)
+	repairOrderRead := access.Requires(access.RepairOrderRead)
 	billingRead := access.Requires(access.BillingRead)
 	inventoryRead := access.Requires(access.InventoryRead)
 
 	return middleware.Policies{
 		documentv1.DocumentService_ExportQuotePdf_FullMethodName:             middleware.GarageMethod(quoteRead),
+		documentv1.DocumentService_ExportRepairOrderPdf_FullMethodName:       middleware.GarageMethod(repairOrderRead),
 		documentv1.DocumentService_ExportSettlementReceiptPdf_FullMethodName: middleware.GarageMethod(billingRead),
 		documentv1.DocumentService_ExportStockMovementsExcel_FullMethodName:  middleware.GarageMethod(inventoryRead),
 	}

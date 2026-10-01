@@ -31,6 +31,20 @@ type QuoteReader interface {
 	Get(ctx context.Context, garageID, quoteID string) (QuoteInfo, error)
 }
 
+// RepairOrderInfo is the Repair Order module's view of a repair order
+// that Document/Print needs to render its PDF.
+type RepairOrderInfo struct {
+	Number, Status, CustomerName, VehiclePlate string
+	Lines                                      []render.DocumentLine
+	TotalAmount                                int64
+}
+
+// RepairOrderReader reads a repair order for PDF export; implemented by
+// an adapter over the Repair Order module in cmd/server.
+type RepairOrderReader interface {
+	Get(ctx context.Context, garageID, repairOrderID string) (RepairOrderInfo, error)
+}
+
 // SettlementInfo is the Billing & Settlement module's view of a
 // settlement that Document/Print needs to render its receipt PDF.
 type SettlementInfo struct {
@@ -66,14 +80,20 @@ type GarageReader interface {
 // DocumentUseCase implements every export of the Document/Print module.
 type DocumentUseCase struct {
 	Quotes         QuoteReader
+	RepairOrders   RepairOrderReader
 	Settlements    SettlementReader
 	StockMovements StockMovementReader
 	Garages        GarageReader
 }
 
 // NewDocumentUseCase wires the use case to its dependencies.
-func NewDocumentUseCase(quotes QuoteReader, settlements SettlementReader, stockMovements StockMovementReader, garages GarageReader) *DocumentUseCase {
-	return &DocumentUseCase{Quotes: quotes, Settlements: settlements, StockMovements: stockMovements, Garages: garages}
+func NewDocumentUseCase(
+	quotes QuoteReader, repairOrders RepairOrderReader, settlements SettlementReader, stockMovements StockMovementReader,
+	garages GarageReader,
+) *DocumentUseCase {
+	return &DocumentUseCase{
+		Quotes: quotes, RepairOrders: repairOrders, Settlements: settlements, StockMovements: stockMovements, Garages: garages,
+	}
 }
 
 // QuotePDF renders a quote as a PDF (FR-DOC-01).
@@ -94,6 +114,29 @@ func (uc *DocumentUseCase) QuotePDF(ctx context.Context, garageID, quoteID strin
 	})
 	if err != nil {
 		return nil, apperror.Internal("export quote pdf", err)
+	}
+
+	return pdf, nil
+}
+
+// RepairOrderPDF renders a repair order as a PDF (FR-DOC-01).
+func (uc *DocumentUseCase) RepairOrderPDF(ctx context.Context, garageID, repairOrderID string) ([]byte, error) {
+	garage, err := uc.garageHeader(ctx, garageID)
+	if err != nil {
+		return nil, err
+	}
+
+	ro, err := uc.RepairOrders.Get(ctx, garageID, repairOrderID)
+	if err != nil {
+		return nil, toAppError("export repair order pdf", err)
+	}
+
+	pdf, err := render.RepairOrderPDF(render.RepairOrderPDFData{
+		Garage: garage, Number: ro.Number, Status: ro.Status, CustomerName: ro.CustomerName,
+		VehiclePlate: ro.VehiclePlate, Lines: ro.Lines, TotalAmount: ro.TotalAmount,
+	})
+	if err != nil {
+		return nil, apperror.Internal("export repair order pdf", err)
 	}
 
 	return pdf, nil

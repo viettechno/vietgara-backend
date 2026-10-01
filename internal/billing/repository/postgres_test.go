@@ -44,6 +44,18 @@ func paymentRow() []any {
 	return []any{"p-1", "customer", int64(300_000), "cash", nil, nil, now}
 }
 
+// settlementRowNoInsurer is a settlement with no insurer allocated yet --
+// both insurer_partner_id and insurer_partner_name are NULL, the actual
+// shape of every settlement from creation until its first allocation with
+// an insurer amount (regression test for scanning a NULL
+// insurer_partner_name into domain.Settlement's plain string field).
+func settlementRowNoInsurer() []any {
+	return []any{
+		settlementID, garageID, repairOrderID, "51F-123.45", "An Nguyen", "QT-202609-0001", int64(1_000_000),
+		int64(1_000_000), int64(0), nil, nil, int64(0), int64(0), "pending", nil, nil, now, now,
+	}
+}
+
 func TestPostgresRepository_Create(t *testing.T) {
 	t.Parallel()
 
@@ -103,6 +115,21 @@ func TestPostgresRepository_FindByID(t *testing.T) {
 		require.Equal(t, "ABC Insurance", s.InsurerPartnerName)
 		require.Len(t, s.Payments, 1)
 		require.Equal(t, domain.PayerCustomer, s.Payments[0].PayerType)
+	})
+
+	t.Run("success, no insurer allocated yet", func(t *testing.T) {
+		t.Parallel()
+
+		repo := repository.NewPostgresRepository(nil)
+		tx := dbtest.New(t).
+			ExpectQueryRow("FROM settlements WHERE garage_id", dbtest.Row(settlementRowNoInsurer()...)).
+			ExpectQuery("FROM settlement_payments", dbtest.NewRows(), nil)
+		ctx := tx.Context(t.Context())
+
+		s, err := repo.FindByID(ctx, garageID, settlementID)
+		require.NoError(t, err)
+		require.Nil(t, s.InsurerPartnerID)
+		require.Empty(t, s.InsurerPartnerName)
 	})
 
 	t.Run("not found", func(t *testing.T) {

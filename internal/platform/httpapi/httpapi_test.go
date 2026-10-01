@@ -12,6 +12,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/genproto/googleapis/api/httpbody"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -19,12 +20,26 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/test/bufconn"
 
+	documentv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/document/v1"
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/platform/httpapi"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
+
+// documentServer stubs just enough of DocumentService to prove the gateway
+// forwards a google.api.HttpBody response as its raw bytes with its own
+// Content-Type, not JSON-encoded like every other response (NewMux's
+// HTTPBodyMarshaler wrapper, without which this silently regresses to
+// {"contentType":"...","data":"<base64>"}).
+type documentServer struct {
+	documentv1.UnimplementedDocumentServiceServer
+}
+
+func (documentServer) ExportQuotePdf(context.Context, *documentv1.ExportQuotePdfRequest) (*httpbody.HttpBody, error) {
+	return &httpbody.HttpBody{ContentType: "application/pdf", Data: []byte("%PDF-fake")}, nil
+}
 
 type accountServer struct {
 	identityv1.UnimplementedAccountServiceServer
@@ -86,6 +101,7 @@ func newGateway(t *testing.T) (http.Handler, *accountServer) {
 	accounts := &accountServer{}
 	identityv1.RegisterAccountServiceServer(srv, accounts)
 	tenantv1.RegisterRoleServiceServer(srv, roleServer{})
+	documentv1.RegisterDocumentServiceServer(srv, documentServer{})
 
 	go func() { _ = srv.Serve(lis) }()
 
@@ -100,6 +116,7 @@ func newGateway(t *testing.T) (http.Handler, *accountServer) {
 	mux := httpapi.NewMux()
 	require.NoError(t, identityv1.RegisterAccountServiceHandler(t.Context(), mux, conn))
 	require.NoError(t, tenantv1.RegisterRoleServiceHandler(t.Context(), mux, conn))
+	require.NoError(t, documentv1.RegisterDocumentServiceHandler(t.Context(), mux, conn))
 
 	return httpapi.NoContentForDelete(mux), accounts
 }
@@ -190,6 +207,26 @@ func TestGateway(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, rec.Code)
 	assert.Empty(t, rec.Body.String())
 	assert.Empty(t, rec.Header().Get("Content-Type"))
+}
+
+// TestGateway_HttpBody guards against NewMux's marshaler losing its
+// HTTPBodyMarshaler wrapper: without it, a google.api.HttpBody response
+// (Document/Print's PDF/Excel exports) silently regresses to a JSON
+// envelope around a base64 "data" field instead of the raw file.
+func TestGateway_HttpBody(t *testing.T) {
+	t.Parallel()
+
+	h, _ := newGateway(t)
+
+	req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/v1/garages/g1/quotes/q1/pdf", nil)
+	req.Header.Set("Authorization", "Bearer tok")
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "application/pdf", rec.Header().Get("Content-Type"))
+	assert.Equal(t, "%PDF-fake", rec.Body.String())
 }
 
 func TestWriteHelpers(t *testing.T) {

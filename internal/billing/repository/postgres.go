@@ -37,12 +37,13 @@ const settlementColumns = `id, garage_id, repair_order_id, vehicle_license_plate
 
 func scanSettlement(row pgx.Row) (*domain.Settlement, error) {
 	var (
-		s      domain.Settlement
-		status string
+		s                  domain.Settlement
+		status             string
+		insurerPartnerName *string
 	)
 
 	err := row.Scan(&s.ID, &s.GarageID, &s.RepairOrderID, &s.VehicleLicensePlate, &s.CustomerName, &s.Number,
-		&s.TotalAmount, &s.CustomerAmount, &s.InsurerAmount, &s.InsurerPartnerID, &s.InsurerPartnerName,
+		&s.TotalAmount, &s.CustomerAmount, &s.InsurerAmount, &s.InsurerPartnerID, &insurerPartnerName,
 		&s.CustomerPaidAmount, &s.InsurerPaidAmount, &status, &s.CreatedBy, &s.UpdatedBy, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -53,6 +54,9 @@ func scanSettlement(row pgx.Row) (*domain.Settlement, error) {
 	}
 
 	s.Status = domain.SettlementStatus(status)
+	if insurerPartnerName != nil {
+		s.InsurerPartnerName = *insurerPartnerName
+	}
 
 	return &s, nil
 }

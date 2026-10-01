@@ -15,6 +15,13 @@ LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting('app.current_account_id'
 
 CREATE TYPE garage_status AS ENUM ('active', 'inactive');
 
+-- How a garage's quotes are approved by the customer by default
+-- (FR-TEN-05, FR-QUO-02): a public link (e-mailed automatically when the
+-- customer has an e-mail on file) or a manual decision recorded by staff
+-- (e.g. approved face to face). Also used by quotes.approval_mode
+-- (000015), which a service advisor may set per quote.
+CREATE TYPE quote_approval_mode AS ENUM ('link', 'manual');
+
 -- operating_hours: [{"day": 1..7 (Monday..Sunday), "closed", "open", "close"}].
 -- The numbering templates use {YYYY}, {YY}, {MM}, {DD} and one {SEQ:n}.
 CREATE TABLE garages (
@@ -40,6 +47,7 @@ CREATE TABLE garages (
     ]'::jsonb,
     quote_number_template VARCHAR(50) NOT NULL DEFAULT 'BG-{YYYY}{MM}-{SEQ:4}',
     repair_order_number_template VARCHAR(50) NOT NULL DEFAULT 'LSC-{YYYY}{MM}-{SEQ:4}',
+    default_quote_approval_mode quote_approval_mode NOT NULL DEFAULT 'link',
     created_by UUID,
     updated_by UUID,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),

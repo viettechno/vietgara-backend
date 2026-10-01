@@ -17,6 +17,7 @@
 DOCKER_COMPOSE := docker compose
 POSTGRES_SERVICE := vietgara-pgsql
 BACKEND_SERVICE := vietgara-backend
+WEB_ADMIN_SERVICE := vietgara-web-admin
 
 docker-up: ## Start PostgreSQL and backend services
 	@printf "$(CYAN)▶ Starting VietGara services...$(RESET)\n"
@@ -59,6 +60,21 @@ docker-restart-backend: ## Restart the backend service
 
 docker-logs-backend: ## Follow backend logs
 	@$(DOCKER_COMPOSE) logs -f $(BACKEND_SERVICE)
+
+docker-up-web-admin: ## Start the backend service and its dependencies
+	@printf "$(CYAN)▶ Starting backend...$(RESET)\n"
+	@$(DOCKER_COMPOSE) up -d $(WEB_ADMIN_SERVICE)
+
+docker-down-web-admin: ## Stop the backend service
+	@printf "\033[33m▶ Stopping backend...$(RESET)\n"
+	@$(DOCKER_COMPOSE) stop $(WEB_ADMIN_SERVICE)
+
+docker-restart-web-admin: ## Restart the backend service
+	@printf "$(CYAN)▶ Restarting backend...$(RESET)\n"
+	@$(DOCKER_COMPOSE) restart $(WEB_ADMIN_SERVICE)
+
+docker-logs-web-admin: ## Follow web admin logs
+	@$(DOCKER_COMPOSE) logs -f $(WEB_ADMIN_SERVICE)
 
 docker-build-backend: ## Build the backend image
 	@printf "$(CYAN)▶ Building backend image...$(RESET)\n"

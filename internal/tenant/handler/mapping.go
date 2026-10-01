@@ -3,6 +3,7 @@ package handler
 import (
 	"google.golang.org/genproto/googleapis/type/dayofweek"
 
+	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/platform/access"
@@ -10,6 +11,26 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/converter"
 )
+
+// quoteApprovalModeToProto maps a garage's default approval mode; unknown
+// or empty values map to LINK, the column's default.
+func quoteApprovalModeToProto(m domain.QuoteApprovalMode) commonv1.QuoteApprovalMode {
+	if m == domain.QuoteApprovalModeManual {
+		return commonv1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_MANUAL
+	}
+
+	return commonv1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_LINK
+}
+
+// quoteApprovalModeFromProto maps an API enum value back to the domain
+// type; UNSPECIFIED (and unknown values) map to LINK.
+func quoteApprovalModeFromProto(m commonv1.QuoteApprovalMode) domain.QuoteApprovalMode {
+	if m == commonv1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_MANUAL {
+		return domain.QuoteApprovalModeManual
+	}
+
+	return domain.QuoteApprovalModeLink
+}
 
 func garageToProto(g *usecase.GarageWithAccess) *tenantv1.Garage {
 	hours := make([]*tenantv1.DailyHours, 0, len(g.Garage.OperatingHours))
@@ -33,8 +54,9 @@ func garageToProto(g *usecase.GarageWithAccess) *tenantv1.Garage {
 		Numbering: &tenantv1.NumberingTemplates{
 			Quote: g.Garage.QuoteNumberTemplate, RepairOrder: g.Garage.RepairOrderNumberTemplate,
 		},
-		CreatedAt: converter.TimeToProto(g.Garage.CreatedAt),
-		UpdatedAt: converter.TimeToProto(g.Garage.UpdatedAt),
+		DefaultQuoteApprovalMode: quoteApprovalModeToProto(g.Garage.DefaultQuoteApprovalMode),
+		CreatedAt:                converter.TimeToProto(g.Garage.CreatedAt),
+		UpdatedAt:                converter.TimeToProto(g.Garage.UpdatedAt),
 	}
 
 	if g.Access != nil {

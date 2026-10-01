@@ -119,3 +119,21 @@ func (s *Server) DeleteVehicle(ctx context.Context, req *customerv1.DeleteVehicl
 		return &customerv1.DeleteVehicleResponse{}, nil
 	})
 }
+
+// GetVehicleHistory returns a vehicle's quotes, repair orders and
+// settlements, newest first (FR-CUS-03).
+func (s *Server) GetVehicleHistory(ctx context.Context, req *customerv1.GetVehicleHistoryRequest) (*customerv1.GetVehicleHistoryResponse, error) {
+	return run(ctx, func(string) (*customerv1.GetVehicleHistoryResponse, error) {
+		entries, err := s.vehicles.GetHistory(ctx, req.GetGarageId(), req.GetVehicleId())
+		if err != nil {
+			return nil, err
+		}
+
+		resp := &customerv1.GetVehicleHistoryResponse{Data: make([]*customerv1.VehicleHistoryEntry, 0, len(entries))}
+		for _, e := range entries {
+			resp.Data = append(resp.Data, historyEntryToProto(e))
+		}
+
+		return resp, nil
+	})
+}

@@ -206,8 +206,10 @@ func TestRLS_TenantModel(t *testing.T) {
 			assert.Len(t, list, 2)
 
 			key := domain.DefaultServiceAdvisor
-			role = &domain.Role{OwnerAccountID: env.accountID, Name: "Advisor", DefaultKey: &key,
-				Permissions: []access.Permission{access.CustomerRead, access.CustomerWrite}}
+			role = &domain.Role{
+				OwnerAccountID: env.accountID, Name: "Advisor", DefaultKey: &key,
+				Permissions: []access.Permission{access.CustomerRead, access.CustomerWrite},
+			}
 			inserted, err := roles.CreateDefault(ctx, role)
 			require.NoError(t, err)
 			assert.True(t, inserted)
@@ -224,9 +226,12 @@ func TestRLS_TenantModel(t *testing.T) {
 	var group *domain.StaffGroup
 
 	t.Run("a new garage gets its owner membership and groups", func(t *testing.T) {
-		garage := &domain.Garage{ID: uuid.NewString(), OwnerAccountID: env.accountID, Name: "New", Timezone: domain.DefaultTimezone,
+		garage := &domain.Garage{
+			ID: uuid.NewString(), OwnerAccountID: env.accountID, Name: "New", Timezone: domain.DefaultTimezone,
 			Currency: domain.DefaultCurrency, Status: domain.GarageStatusActive, OperatingHours: domain.DefaultOperatingHours(),
-			QuoteNumberTemplate: domain.DefaultQuoteNumberTemplate, RepairOrderNumberTemplate: domain.DefaultRepairOrderNumberTemplate}
+			QuoteNumberTemplate: domain.DefaultQuoteNumberTemplate, RepairOrderNumberTemplate: domain.DefaultRepairOrderNumberTemplate,
+			DefaultQuoteApprovalMode: domain.QuoteApprovalModeLink,
+		}
 
 		err := tx.WithTransaction(ctx, owner.Garage(garage.ID), func(ctx context.Context) error {
 			require.NoError(t, garages.Create(ctx, garage))
@@ -250,8 +255,10 @@ func TestRLS_TenantModel(t *testing.T) {
 		require.NoError(t, err)
 
 		err = tx.WithTransaction(ctx, owner.Garage(env.garageA), func(ctx context.Context) error {
-			foreign := &domain.Garage{ID: uuid.NewString(), OwnerAccountID: env.accountID, Name: "Sneaky", Timezone: "UTC",
-				Currency: "VND", Status: domain.GarageStatusActive}
+			foreign := &domain.Garage{
+				ID: uuid.NewString(), OwnerAccountID: env.accountID, Name: "Sneaky", Timezone: "UTC",
+				Currency: "VND", Status: domain.GarageStatusActive, DefaultQuoteApprovalMode: domain.QuoteApprovalModeLink,
+			}
 
 			return garages.Create(ctx, foreign)
 		})
@@ -262,8 +269,10 @@ func TestRLS_TenantModel(t *testing.T) {
 
 	t.Run("the invitee sees the invitation and its garage", func(t *testing.T) {
 		err := tx.WithTransaction(ctx, owner.Garage(env.garageA), func(ctx context.Context) error {
-			invitation = &domain.Invitation{GarageID: env.garageA, AccountID: env.staffID, GroupIDs: []string{group.ID},
-				Status: domain.InvitationPending, InvitedBy: env.accountID, ExpiresAt: time.Now().Add(domain.InvitationTTL)}
+			invitation = &domain.Invitation{
+				GarageID: env.garageA, AccountID: env.staffID, GroupIDs: []string{group.ID},
+				Status: domain.InvitationPending, InvitedBy: env.accountID, ExpiresAt: time.Now().Add(domain.InvitationTTL),
+			}
 
 			return invitations.Create(ctx, invitation)
 		})

@@ -149,6 +149,10 @@ packages:
         config:
           filename: "customer_usecase_partner_repository.go"
           dir: "./internal/mocks"
+      HistoryReader:
+        config:
+          filename: "customer_usecase_history_reader.go"
+          dir: "./internal/mocks"
   github.com/viettechno/vietgara-backend/internal/license/usecase:
     interfaces:
       PlanRepository:
@@ -190,3 +194,57 @@ packages:
           filename: "license_usecase_transactor.go"
           dir: "./internal/mocks"
           structname: "MockLicenseTransactor"
+  github.com/viettechno/vietgara-backend/internal/quote/usecase:
+    interfaces:
+      Repository:
+        config:
+          filename: "quote_usecase_repository.go"
+          dir: "./internal/mocks"
+          structname: "MockQuoteRepository"
+      VehicleReader:
+        config:
+          filename: "quote_usecase_vehicle_reader.go"
+          dir: "./internal/mocks"
+      CustomerReader:
+        config:
+          filename: "quote_usecase_customer_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockQuoteCustomerReader"
+      GarageReader:
+        config:
+          filename: "quote_usecase_garage_reader.go"
+          dir: "./internal/mocks"
+      TransactionLimiter:
+        config:
+          filename: "quote_usecase_transaction_limiter.go"
+          dir: "./internal/mocks"
+      Sequencer:
+        config:
+          filename: "quote_usecase_sequencer.go"
+          dir: "./internal/mocks"
+      RepairOrderCreator:
+        config:
+          filename: "quote_usecase_repair_order_creator.go"
+          dir: "./internal/mocks"
+      Mailer:
+        config:
+          filename: "quote_usecase_mailer.go"
+          dir: "./internal/mocks"
+          structname: "MockQuoteMailer"
+      EventPublisher:
+        config:
+          filename: "quote_usecase_event_publisher.go"
+          dir: "./internal/mocks"
+          structname: "MockQuoteEventPublisher"
+      Transactor:
+        config:
+          filename: "quote_usecase_transactor.go"
+          dir: "./internal/mocks"
+          structname: "MockQuoteTransactor"
+  github.com/viettechno/vietgara-backend/internal/repairorder/usecase:
+    interfaces:
+      Repository:
+        config:
+          filename: "repairorder_usecase_repository.go"
+          dir: "./internal/mocks"
+          structname: "MockRepairOrderRepository"

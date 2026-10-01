@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 
+	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/middleware"
@@ -92,6 +93,7 @@ const pathName = "name"
 
 var garageSettable = []string{
 	pathName, "tax_code", "address", "phone", "email", "timezone", "currency", "status", "operating_hours", "numbering",
+	"default_quote_approval_mode",
 }
 
 // garageSetters copy one masked field of the API garage into GarageFields.
@@ -118,6 +120,9 @@ var garageSetters = map[string]func(f *usecase.GarageFields, in *tenantv1.Garage
 	},
 	"numbering.repair_order": func(f *usecase.GarageFields, in *tenantv1.Garage) {
 		f.RepairOrderNumberTemplate = new(in.GetNumbering().GetRepairOrder())
+	},
+	"default_quote_approval_mode": func(f *usecase.GarageFields, in *tenantv1.Garage) {
+		f.DefaultQuoteApprovalMode = new(quoteApprovalModeFromProto(in.GetDefaultQuoteApprovalMode()))
 	},
 }
 
@@ -151,6 +156,7 @@ func presentGarageFields(in *tenantv1.Garage) []string {
 		"timezone": in.GetTimezone() != "", "currency": in.GetCurrency() != "",
 		"operating_hours": len(in.GetOperatingHours()) > 0,
 		"numbering.quote": in.GetNumbering().GetQuote() != "", "numbering.repair_order": in.GetNumbering().GetRepairOrder() != "",
+		"default_quote_approval_mode": in.GetDefaultQuoteApprovalMode() != commonv1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_UNSPECIFIED,
 	} {
 		if set {
 			paths = append(paths, path)

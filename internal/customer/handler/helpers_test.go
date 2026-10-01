@@ -34,7 +34,7 @@ func newEnv(t *testing.T) *env {
 	}
 	e.srv = handler.NewServer(
 		usecase.NewCustomerUseCase(e.customers, e.vehicles),
-		usecase.NewVehicleUseCase(e.vehicles, e.customers),
+		usecase.NewVehicleUseCase(e.vehicles, e.customers, nil),
 		usecase.NewPartnerUseCase(e.partners),
 	)
 

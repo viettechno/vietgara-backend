@@ -23,6 +23,26 @@ func (s GarageStatus) IsValid() bool {
 	return s == GarageStatusActive || s == GarageStatusInactive
 }
 
+// QuoteApprovalMode selects how a garage's quotes are approved by the
+// customer by default (FR-TEN-05, FR-QUO-02); a service advisor may still
+// change it per quote (Quote & Pricing module).
+type QuoteApprovalMode string
+
+// Valid QuoteApprovalMode values.
+const (
+	// QuoteApprovalModeLink sends a public approval link, e-mailed to the
+	// customer automatically when they have an e-mail on file.
+	QuoteApprovalModeLink QuoteApprovalMode = "link"
+	// QuoteApprovalModeManual sends no link: a staff member records the
+	// customer's decision directly (e.g. approved face to face).
+	QuoteApprovalModeManual QuoteApprovalMode = "manual"
+)
+
+// IsValid reports whether m is one of the defined QuoteApprovalMode values.
+func (m QuoteApprovalMode) IsValid() bool {
+	return m == QuoteApprovalModeLink || m == QuoteApprovalModeManual
+}
+
 // Defaults of a new garage (Database Design 2.2).
 const (
 	DefaultTimezone                  = "Asia/Ho_Chi_Minh"
@@ -73,6 +93,7 @@ type Garage struct {
 	OperatingHours            []DailyHours
 	QuoteNumberTemplate       string
 	RepairOrderNumberTemplate string
+	DefaultQuoteApprovalMode  QuoteApprovalMode
 	CreatedBy                 *string
 	UpdatedBy                 *string
 	CreatedAt                 time.Time

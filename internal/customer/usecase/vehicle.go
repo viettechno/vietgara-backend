@@ -3,11 +3,42 @@ package usecase
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/viettechno/vietgara-backend/internal/customer/domain"
 )
+
+// HistoryEntryType names which module produced a vehicle history entry
+// (FR-CUS-03).
+type HistoryEntryType string
+
+// Valid HistoryEntryType values.
+const (
+	HistoryEntryQuote       HistoryEntryType = "quote"
+	HistoryEntryRepairOrder HistoryEntryType = "repair_order"
+	HistoryEntrySettlement  HistoryEntryType = "settlement"
+)
+
+// HistoryEntry is one quote, repair order or settlement of a vehicle
+// (FR-CUS-03).
+type HistoryEntry struct {
+	Type        HistoryEntryType
+	EntityID    string
+	Number      string
+	Status      string
+	TotalAmount int64
+	OccurredAt  time.Time
+}
+
+// HistoryReader collects a vehicle's repair history from the modules that
+// own it (Quote & Pricing today; Repair Order and Billing & Settlement in
+// Releases 1.3-1.4); implemented by an adapter in cmd/server so Customer
+// never imports those modules directly.
+type HistoryReader interface {
+	History(ctx context.Context, garageID, vehicleID string) ([]HistoryEntry, error)
+}
 
 // CreateVehicleRequest is the input for VehicleUseCase.Create.
 type CreateVehicleRequest struct {
@@ -54,12 +85,15 @@ type ListVehiclesRequest struct {
 type VehicleUseCase struct {
 	vehicles  VehicleRepository
 	customers CustomerRepository
+	history   HistoryReader
 	opts      options
 }
 
-// NewVehicleUseCase wires the vehicle use case to its repositories.
-func NewVehicleUseCase(vehicles VehicleRepository, customers CustomerRepository, opts ...Option) *VehicleUseCase {
-	return &VehicleUseCase{vehicles: vehicles, customers: customers, opts: newOptions(opts)}
+// NewVehicleUseCase wires the vehicle use case to its repositories. history
+// may be nil, in which case GetHistory always returns an empty list (unit
+// tests that do not exercise FR-CUS-03 need not provide one).
+func NewVehicleUseCase(vehicles VehicleRepository, customers CustomerRepository, history HistoryReader, opts ...Option) *VehicleUseCase {
+	return &VehicleUseCase{vehicles: vehicles, customers: customers, history: history, opts: newOptions(opts)}
 }
 
 // vehicleFields is the editable part of a vehicle shared by create and
@@ -235,4 +269,24 @@ func (uc *VehicleUseCase) Delete(ctx context.Context, garageID, vehicleID, actor
 	}
 
 	return nil
+}
+
+// GetHistory returns a vehicle's quotes, repair orders and settlements,
+// newest first (FR-CUS-03). The vehicle must exist in the garage; an empty
+// slice (not an error) means it simply has no history yet.
+func (uc *VehicleUseCase) GetHistory(ctx context.Context, garageID, vehicleID string) ([]HistoryEntry, error) {
+	if _, err := uc.vehicles.FindByID(ctx, garageID, vehicleID); err != nil {
+		return nil, toAppError("get vehicle history", err)
+	}
+
+	if uc.history == nil {
+		return nil, nil
+	}
+
+	entries, err := uc.history.History(ctx, garageID, vehicleID)
+	if err != nil {
+		return nil, toAppError("get vehicle history", err)
+	}
+
+	return entries, nil
 }

@@ -19,9 +19,10 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 15)
+	assert.Len(t, p, 16)
 	assert.Equal(t, access.CustomerWrite, p[customerv1.CustomerService_CreateCustomer_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.PartnerRead, p[customerv1.PartnerService_ListPartners_FullMethodName].Garage.Permission)
+	assert.Equal(t, access.CustomerRead, p[customerv1.VehicleService_GetVehicleHistory_FullMethodName].Garage.Permission)
 }
 
 func existingCustomer() *domain.Customer {

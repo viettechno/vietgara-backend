@@ -49,6 +49,7 @@ const (
 	DefaultCurrency                  = "VND"
 	DefaultQuoteNumberTemplate       = "BG-{YYYY}{MM}-{SEQ:4}"
 	DefaultRepairOrderNumberTemplate = "LSC-{YYYY}{MM}-{SEQ:4}"
+	DefaultSettlementNumberTemplate  = "QT-{YYYY}{MM}-{SEQ:4}"
 	MaxGarageNameLength              = 255
 	MaxTaxCodeLength                 = 20
 	MaxTemplateLength                = 50
@@ -93,6 +94,7 @@ type Garage struct {
 	OperatingHours            []DailyHours
 	QuoteNumberTemplate       string
 	RepairOrderNumberTemplate string
+	SettlementNumberTemplate  string
 	DefaultQuoteApprovalMode  QuoteApprovalMode
 	CreatedBy                 *string
 	UpdatedBy                 *string

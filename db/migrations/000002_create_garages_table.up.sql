@@ -47,6 +47,7 @@ CREATE TABLE garages (
     ]'::jsonb,
     quote_number_template VARCHAR(50) NOT NULL DEFAULT 'BG-{YYYY}{MM}-{SEQ:4}',
     repair_order_number_template VARCHAR(50) NOT NULL DEFAULT 'LSC-{YYYY}{MM}-{SEQ:4}',
+    settlement_number_template VARCHAR(50) NOT NULL DEFAULT 'QT-{YYYY}{MM}-{SEQ:4}',
     default_quote_approval_mode quote_approval_mode NOT NULL DEFAULT 'link',
     created_by UUID,
     updated_by UUID,

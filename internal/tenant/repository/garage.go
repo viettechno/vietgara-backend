@@ -30,8 +30,8 @@ func NewPostgresGarageRepository(pool *platformdb.Pool) *PostgresGarageRepositor
 }
 
 const garageColumns = `g.id, g.account_id, g.name, g.tax_code, g.address, g.phone, g.email, g.logo_url, g.timezone, g.currency,
-	g.status, g.operating_hours, g.quote_number_template, g.repair_order_number_template, g.default_quote_approval_mode,
-	g.created_by, g.updated_by, g.created_at, g.updated_at`
+	g.status, g.operating_hours, g.quote_number_template, g.repair_order_number_template, g.settlement_number_template,
+	g.default_quote_approval_mode, g.created_by, g.updated_by, g.created_at, g.updated_at`
 
 func scanGarage(row pgx.Row) (*domain.Garage, error) {
 	var (
@@ -42,8 +42,8 @@ func scanGarage(row pgx.Row) (*domain.Garage, error) {
 	)
 
 	err := row.Scan(&g.ID, &g.OwnerAccountID, &g.Name, &g.TaxCode, &g.Address, &g.Phone, &g.Email, &g.LogoURL,
-		&g.Timezone, &g.Currency, &status, &hours, &g.QuoteNumberTemplate, &g.RepairOrderNumberTemplate, &approvalMode,
-		&g.CreatedBy, &g.UpdatedBy, &g.CreatedAt, &g.UpdatedAt)
+		&g.Timezone, &g.Currency, &status, &hours, &g.QuoteNumberTemplate, &g.RepairOrderNumberTemplate,
+		&g.SettlementNumberTemplate, &approvalMode, &g.CreatedBy, &g.UpdatedBy, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrGarageNotFound
@@ -98,13 +98,13 @@ func (r *PostgresGarageRepository) Create(ctx context.Context, g *domain.Garage)
 
 	return q.QueryRow(ctx, `
 		INSERT INTO garages (id, account_id, name, tax_code, address, phone, email, logo_url, timezone, currency, status,
-			operating_hours, quote_number_template, repair_order_number_template, default_quote_approval_mode,
-			created_by, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+			operating_hours, quote_number_template, repair_order_number_template, settlement_number_template,
+			default_quote_approval_mode, created_by, updated_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 		RETURNING created_at, updated_at`,
 		g.ID, g.OwnerAccountID, g.Name, g.TaxCode, g.Address, g.Phone, g.Email, g.LogoURL, g.Timezone, g.Currency,
-		string(g.Status), hours, g.QuoteNumberTemplate, g.RepairOrderNumberTemplate, string(g.DefaultQuoteApprovalMode),
-		g.CreatedBy, g.UpdatedBy,
+		string(g.Status), hours, g.QuoteNumberTemplate, g.RepairOrderNumberTemplate, g.SettlementNumberTemplate,
+		string(g.DefaultQuoteApprovalMode), g.CreatedBy, g.UpdatedBy,
 	).Scan(&g.CreatedAt, &g.UpdatedAt)
 }
 
@@ -120,11 +120,13 @@ func (r *PostgresGarageRepository) Update(ctx context.Context, g *domain.Garage)
 	err = q.QueryRow(ctx, `
 		UPDATE garages SET name = $2, tax_code = $3, address = $4, phone = $5, email = $6, logo_url = $7,
 			timezone = $8, currency = $9, status = $10, operating_hours = $11, quote_number_template = $12,
-			repair_order_number_template = $13, default_quote_approval_mode = $14, updated_by = $15
+			repair_order_number_template = $13, settlement_number_template = $14, default_quote_approval_mode = $15,
+			updated_by = $16
 		WHERE id = $1
 		RETURNING updated_at`,
 		g.ID, g.Name, g.TaxCode, g.Address, g.Phone, g.Email, g.LogoURL, g.Timezone, g.Currency, string(g.Status),
-		hours, g.QuoteNumberTemplate, g.RepairOrderNumberTemplate, string(g.DefaultQuoteApprovalMode), g.UpdatedBy,
+		hours, g.QuoteNumberTemplate, g.RepairOrderNumberTemplate, g.SettlementNumberTemplate,
+		string(g.DefaultQuoteApprovalMode), g.UpdatedBy,
 	).Scan(&g.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.ErrGarageNotFound

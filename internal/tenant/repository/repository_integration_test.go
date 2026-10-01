@@ -230,7 +230,7 @@ func TestRLS_TenantModel(t *testing.T) {
 			ID: uuid.NewString(), OwnerAccountID: env.accountID, Name: "New", Timezone: domain.DefaultTimezone,
 			Currency: domain.DefaultCurrency, Status: domain.GarageStatusActive, OperatingHours: domain.DefaultOperatingHours(),
 			QuoteNumberTemplate: domain.DefaultQuoteNumberTemplate, RepairOrderNumberTemplate: domain.DefaultRepairOrderNumberTemplate,
-			DefaultQuoteApprovalMode: domain.QuoteApprovalModeLink,
+			SettlementNumberTemplate: domain.DefaultSettlementNumberTemplate, DefaultQuoteApprovalMode: domain.QuoteApprovalModeLink,
 		}
 
 		err := tx.WithTransaction(ctx, owner.Garage(garage.ID), func(ctx context.Context) error {

@@ -285,3 +285,62 @@ packages:
           filename: "inventory_usecase_event_publisher.go"
           dir: "./internal/mocks"
           structname: "MockInventoryEventPublisher"
+  github.com/viettechno/vietgara-backend/internal/billing/usecase:
+    interfaces:
+      Repository:
+        config:
+          filename: "billing_usecase_repository.go"
+          dir: "./internal/mocks"
+          structname: "MockBillingRepository"
+      RepairOrderReader:
+        config:
+          filename: "billing_usecase_repair_order_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockBillingRepairOrderReader"
+      PartnerReader:
+        config:
+          filename: "billing_usecase_partner_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockBillingPartnerReader"
+      GarageReader:
+        config:
+          filename: "billing_usecase_garage_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockBillingGarageReader"
+      TransactionLimiter:
+        config:
+          filename: "billing_usecase_transaction_limiter.go"
+          dir: "./internal/mocks"
+          structname: "MockBillingTransactionLimiter"
+      Sequencer:
+        config:
+          filename: "billing_usecase_sequencer.go"
+          dir: "./internal/mocks"
+          structname: "MockBillingSequencer"
+      EventPublisher:
+        config:
+          filename: "billing_usecase_event_publisher.go"
+          dir: "./internal/mocks"
+          structname: "MockBillingEventPublisher"
+  github.com/viettechno/vietgara-backend/internal/document/usecase:
+    interfaces:
+      QuoteReader:
+        config:
+          filename: "document_usecase_quote_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockDocumentQuoteReader"
+      SettlementReader:
+        config:
+          filename: "document_usecase_settlement_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockDocumentSettlementReader"
+      StockMovementReader:
+        config:
+          filename: "document_usecase_stock_movement_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockDocumentStockMovementReader"
+      GarageReader:
+        config:
+          filename: "document_usecase_garage_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockDocumentGarageReader"

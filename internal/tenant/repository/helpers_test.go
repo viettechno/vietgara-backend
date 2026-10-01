@@ -13,7 +13,8 @@ var (
 func garageRow() []any {
 	return []any{
 		"g-1", "owner", "Gara", "0101", nil, nil, "a@b.vn", nil, "Asia/Ho_Chi_Minh", "VND", "active",
-		[]byte(`[{"day":1,"closed":false,"open":"08:00","close":"17:00"}]`), "BG-{SEQ:4}", "LSC-{SEQ:4}", "link", "owner", nil, now, now,
+		[]byte(`[{"day":1,"closed":false,"open":"08:00","close":"17:00"}]`), "BG-{SEQ:4}", "LSC-{SEQ:4}", "QT-{SEQ:4}",
+		"link", "owner", nil, now, now,
 	}
 }
 

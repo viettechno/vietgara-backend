@@ -32,7 +32,7 @@ func TestQuoteUseCase_Convert(t *testing.T) {
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
-		d.RepairOrders.EXPECT().Create(mock.Anything, garageID, quoteID, vehicleID, "LSC-202609-0001", actorID,
+		d.RepairOrders.EXPECT().Create(mock.Anything, garageID, quoteID, vehicleID, "An Nguyen", "51F-123.45", "LSC-202609-0001", actorID,
 			mock.MatchedBy(func(lines []domain.Line) bool { return len(lines) == 1 && lines[0].ID == "line-1" }),
 		).Return("ro-1", nil).Once()
 		d.Quotes.EXPECT().Save(mock.Anything, mock.Anything).Return(nil).Once()
@@ -110,7 +110,8 @@ func TestQuoteUseCase_Convert(t *testing.T) {
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
-		d.RepairOrders.EXPECT().Create(mock.Anything, garageID, quoteID, vehicleID, "LSC-202609-0001", actorID, mock.Anything).
+		d.RepairOrders.EXPECT().
+			Create(mock.Anything, garageID, quoteID, vehicleID, "An Nguyen", "51F-123.45", "LSC-202609-0001", actorID, mock.Anything).
 			Return("", errBoom).Once()
 
 		_, err := uc.Convert(t.Context(), garageID, quoteID, actorID)
@@ -125,7 +126,8 @@ func TestQuoteUseCase_Convert(t *testing.T) {
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
-		d.RepairOrders.EXPECT().Create(mock.Anything, garageID, quoteID, vehicleID, "LSC-202609-0001", actorID, mock.Anything).
+		d.RepairOrders.EXPECT().
+			Create(mock.Anything, garageID, quoteID, vehicleID, "An Nguyen", "51F-123.45", "LSC-202609-0001", actorID, mock.Anything).
 			Return("ro-1", nil).Once()
 		d.Quotes.EXPECT().Save(mock.Anything, mock.Anything).Return(errBoom).Once()
 

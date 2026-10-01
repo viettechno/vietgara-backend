@@ -9,6 +9,7 @@ import (
 
 	mock "github.com/stretchr/testify/mock"
 	"github.com/viettechno/vietgara-backend/internal/repairorder/domain"
+	"github.com/viettechno/vietgara-backend/internal/repairorder/usecase"
 )
 
 // NewMockRepairOrderRepository creates a new instance of MockRepairOrderRepository. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -95,6 +96,160 @@ func (_c *MockRepairOrderRepository_Create_Call) RunAndReturn(run func(ctx conte
 	return _c
 }
 
+// FindByID provides a mock function for the type MockRepairOrderRepository
+func (_mock *MockRepairOrderRepository) FindByID(ctx context.Context, garageID string, repairOrderID string) (*domain.RepairOrder, error) {
+	ret := _mock.Called(ctx, garageID, repairOrderID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindByID")
+	}
+
+	var r0 *domain.RepairOrder
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (*domain.RepairOrder, error)); ok {
+		return returnFunc(ctx, garageID, repairOrderID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) *domain.RepairOrder); ok {
+		r0 = returnFunc(ctx, garageID, repairOrderID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*domain.RepairOrder)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, garageID, repairOrderID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockRepairOrderRepository_FindByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindByID'
+type MockRepairOrderRepository_FindByID_Call struct {
+	*mock.Call
+}
+
+// FindByID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - repairOrderID string
+func (_e *MockRepairOrderRepository_Expecter) FindByID(ctx any, garageID any, repairOrderID any) *MockRepairOrderRepository_FindByID_Call {
+	return &MockRepairOrderRepository_FindByID_Call{Call: _e.mock.On("FindByID", ctx, garageID, repairOrderID)}
+}
+
+func (_c *MockRepairOrderRepository_FindByID_Call) Run(run func(ctx context.Context, garageID string, repairOrderID string)) *MockRepairOrderRepository_FindByID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepairOrderRepository_FindByID_Call) Return(repairOrder *domain.RepairOrder, err error) *MockRepairOrderRepository_FindByID_Call {
+	_c.Call.Return(repairOrder, err)
+	return _c
+}
+
+func (_c *MockRepairOrderRepository_FindByID_Call) RunAndReturn(run func(ctx context.Context, garageID string, repairOrderID string) (*domain.RepairOrder, error)) *MockRepairOrderRepository_FindByID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// List provides a mock function for the type MockRepairOrderRepository
+func (_mock *MockRepairOrderRepository) List(ctx context.Context, garageID string, filter usecase.ListFilter) ([]*domain.RepairOrder, int, error) {
+	ret := _mock.Called(ctx, garageID, filter)
+
+	if len(ret) == 0 {
+		panic("no return value specified for List")
+	}
+
+	var r0 []*domain.RepairOrder
+	var r1 int
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.ListFilter) ([]*domain.RepairOrder, int, error)); ok {
+		return returnFunc(ctx, garageID, filter)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.ListFilter) []*domain.RepairOrder); ok {
+		r0 = returnFunc(ctx, garageID, filter)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*domain.RepairOrder)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, usecase.ListFilter) int); ok {
+		r1 = returnFunc(ctx, garageID, filter)
+	} else {
+		r1 = ret.Get(1).(int)
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string, usecase.ListFilter) error); ok {
+		r2 = returnFunc(ctx, garageID, filter)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockRepairOrderRepository_List_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'List'
+type MockRepairOrderRepository_List_Call struct {
+	*mock.Call
+}
+
+// List is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - filter usecase.ListFilter
+func (_e *MockRepairOrderRepository_Expecter) List(ctx any, garageID any, filter any) *MockRepairOrderRepository_List_Call {
+	return &MockRepairOrderRepository_List_Call{Call: _e.mock.On("List", ctx, garageID, filter)}
+}
+
+func (_c *MockRepairOrderRepository_List_Call) Run(run func(ctx context.Context, garageID string, filter usecase.ListFilter)) *MockRepairOrderRepository_List_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 usecase.ListFilter
+		if args[2] != nil {
+			arg2 = args[2].(usecase.ListFilter)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepairOrderRepository_List_Call) Return(repairOrders []*domain.RepairOrder, n int, err error) *MockRepairOrderRepository_List_Call {
+	_c.Call.Return(repairOrders, n, err)
+	return _c
+}
+
+func (_c *MockRepairOrderRepository_List_Call) RunAndReturn(run func(ctx context.Context, garageID string, filter usecase.ListFilter) ([]*domain.RepairOrder, int, error)) *MockRepairOrderRepository_List_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListForVehicle provides a mock function for the type MockRepairOrderRepository
 func (_mock *MockRepairOrderRepository) ListForVehicle(ctx context.Context, garageID string, vehicleID string) ([]*domain.RepairOrder, error) {
 	ret := _mock.Called(ctx, garageID, vehicleID)
@@ -165,6 +320,63 @@ func (_c *MockRepairOrderRepository_ListForVehicle_Call) Return(repairOrders []*
 }
 
 func (_c *MockRepairOrderRepository_ListForVehicle_Call) RunAndReturn(run func(ctx context.Context, garageID string, vehicleID string) ([]*domain.RepairOrder, error)) *MockRepairOrderRepository_ListForVehicle_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Save provides a mock function for the type MockRepairOrderRepository
+func (_mock *MockRepairOrderRepository) Save(ctx context.Context, ro *domain.RepairOrder) error {
+	ret := _mock.Called(ctx, ro)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Save")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.RepairOrder) error); ok {
+		r0 = returnFunc(ctx, ro)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockRepairOrderRepository_Save_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Save'
+type MockRepairOrderRepository_Save_Call struct {
+	*mock.Call
+}
+
+// Save is a helper method to define mock.On call
+//   - ctx context.Context
+//   - ro *domain.RepairOrder
+func (_e *MockRepairOrderRepository_Expecter) Save(ctx any, ro any) *MockRepairOrderRepository_Save_Call {
+	return &MockRepairOrderRepository_Save_Call{Call: _e.mock.On("Save", ctx, ro)}
+}
+
+func (_c *MockRepairOrderRepository_Save_Call) Run(run func(ctx context.Context, ro *domain.RepairOrder)) *MockRepairOrderRepository_Save_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.RepairOrder
+		if args[1] != nil {
+			arg1 = args[1].(*domain.RepairOrder)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepairOrderRepository_Save_Call) Return(err error) *MockRepairOrderRepository_Save_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockRepairOrderRepository_Save_Call) RunAndReturn(run func(ctx context.Context, ro *domain.RepairOrder) error) *MockRepairOrderRepository_Save_Call {
 	_c.Call.Return(run)
 	return _c
 }

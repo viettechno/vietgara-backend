@@ -28,7 +28,8 @@ exists, schema changes must become new, forward-only migrations.)
 | 000013 | Platform | RLS policies of the tenant/access tables, `owner_usage()`, the `vietgara_app` role and its grants |
 | 000014 | Platform | `document_sequences`: the per-garage, per-document-type, per-period counter behind numbering templates (FR-TEN-05) |
 | 000015 | Quote & Pricing | `quotes` (`quote_status`, `quote_approval_mode` from 000002, the public approval token hash), `quote_lines` (`quote_item_type`, `quote_line_decision`), `find_quote_by_public_token()` |
-| 000016 | Repair Order | `repair_orders` (`repair_order_status`), `repair_order_lines` -- the minimal shape `ConvertQuote` needs; Release 1.3 extends both for technician assignment and per-line progress |
+| 000016 | Repair Order | `repair_orders` (`repair_order_status`, incl. `waiting_on_parts`), `repair_order_lines` (`repair_order_line_status`, `assigned_technicians`) -- FR-REP-01..03/06 |
+| 000017 | Inventory | `items` (trigram search), `stock_balance` (per-item running total), `stock_transactions` (append-only, `stock_transaction_type`, `stock_transaction_ref_type`) -- FR-INV-01..03/05 |
 
 Tables from 000002, 000003, 000010 and 000011 enable `FORCE ROW LEVEL
 SECURITY` when created; their policies are created together in 000013,

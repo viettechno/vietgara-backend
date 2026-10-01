@@ -248,3 +248,40 @@ packages:
           filename: "repairorder_usecase_repository.go"
           dir: "./internal/mocks"
           structname: "MockRepairOrderRepository"
+      VehicleReader:
+        config:
+          filename: "repairorder_usecase_vehicle_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockRepairOrderVehicleReader"
+      GarageReader:
+        config:
+          filename: "repairorder_usecase_garage_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockRepairOrderGarageReader"
+      TransactionLimiter:
+        config:
+          filename: "repairorder_usecase_transaction_limiter.go"
+          dir: "./internal/mocks"
+          structname: "MockRepairOrderTransactionLimiter"
+      Sequencer:
+        config:
+          filename: "repairorder_usecase_sequencer.go"
+          dir: "./internal/mocks"
+          structname: "MockRepairOrderSequencer"
+      EventPublisher:
+        config:
+          filename: "repairorder_usecase_event_publisher.go"
+          dir: "./internal/mocks"
+          structname: "MockRepairOrderEventPublisher"
+  github.com/viettechno/vietgara-backend/internal/inventory/usecase:
+    interfaces:
+      Repository:
+        config:
+          filename: "inventory_usecase_repository.go"
+          dir: "./internal/mocks"
+          structname: "MockInventoryRepository"
+      EventPublisher:
+        config:
+          filename: "inventory_usecase_event_publisher.go"
+          dir: "./internal/mocks"
+          structname: "MockInventoryEventPublisher"

@@ -30,8 +30,10 @@ import (
 
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
+	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
 	quotev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/quote/v1"
+	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	appdb "github.com/viettechno/vietgara-backend/db"
@@ -41,6 +43,7 @@ import (
 	identityHandler "github.com/viettechno/vietgara-backend/internal/identity/handler"
 	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
 	identityUsecase "github.com/viettechno/vietgara-backend/internal/identity/usecase"
+	inventoryHandler "github.com/viettechno/vietgara-backend/internal/inventory/handler"
 	licenseHandler "github.com/viettechno/vietgara-backend/internal/license/handler"
 	licenseUsecase "github.com/viettechno/vietgara-backend/internal/license/usecase"
 	"github.com/viettechno/vietgara-backend/internal/middleware"
@@ -53,6 +56,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
 	"github.com/viettechno/vietgara-backend/internal/platform/storage"
 	quoteHandler "github.com/viettechno/vietgara-backend/internal/quote/handler"
+	repairorderHandler "github.com/viettechno/vietgara-backend/internal/repairorder/handler"
 	tenantHandler "github.com/viettechno/vietgara-backend/internal/tenant/handler"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 	tenantUsecase "github.com/viettechno/vietgara-backend/internal/tenant/usecase"
@@ -233,18 +237,25 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	customerRepo := customerRepository.NewPostgresCustomerRepository(pool)
 	vehicleRepo := customerRepository.NewPostgresVehicleRepository(pool)
 
-	// Quote & Pricing (Release 1.2), plus the minimal Repair Order module
-	// its ConvertQuote depends on (FR-QUO-04).
-	quote := buildQuote(pool, tx, events, mailer, garages, license.entitlements, customerRepo, vehicleRepo)
+	// Repair Order (Release 1.3): the Kanban board, plus the
+	// draft-creation-from-quote use case Quote depends on (FR-QUO-04).
+	repairOrder := buildRepairOrder(pool, events, garages, license.entitlements, repairOrderVehicles{vehicles: vehicleRepo})
+
+	// Quote & Pricing (Release 1.2)
+	quote := buildQuote(pool, tx, events, mailer, garages, license.entitlements, customerRepo, vehicleRepo, repairOrder.uc)
+
+	// Inventory (Release 1.3): items, stock receipts and the
+	// repair_order.closed consumer that deducts stock (FR-INV-02).
+	inventory := buildInventory(pool, events)
 
 	customerSrv := customerHandler.NewServer(
 		customerUsecase.NewCustomerUseCase(customerRepo, vehicleRepo),
-		customerUsecase.NewVehicleUseCase(vehicleRepo, customerRepo, vehicleHistory{quotes: quote.quotes, repairOrders: quote.repairOrders}),
+		customerUsecase.NewVehicleUseCase(vehicleRepo, customerRepo, vehicleHistory{quotes: quote.quotes, repairOrders: repairOrder.uc}),
 		customerUsecase.NewPartnerUseCase(customerRepository.NewPostgresPartnerRepository(pool)),
 	)
 
 	// Events: Kafka when brokers are configured, otherwise in-process.
-	if err := wireEvents(app, pool, tx, tenantUC, license); err != nil {
+	if err := wireEvents(app, pool, tx, tenantUC, license, inventory); err != nil {
 		return nil, err
 	}
 
@@ -255,7 +266,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// gRPC server with the request pipeline of internal/middleware.
 	policies := middleware.Merge(
 		identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
-		quoteHandler.Policies(),
+		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(),
 	)
 	app.grpcServer = grpc.NewServer(grpc.ChainUnaryInterceptor(
 		middleware.Auth(issuer, policies),
@@ -278,6 +289,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	customerv1.RegisterPartnerServiceServer(app.grpcServer, customerSrv)
 	quotev1.RegisterQuoteServiceServer(app.grpcServer, quote.server)
 	quotev1.RegisterPublicQuoteServiceServer(app.grpcServer, quote.server)
+	repairorderv1.RegisterRepairOrderServiceServer(app.grpcServer, repairOrder.server)
+	inventoryv1.RegisterInventoryServiceServer(app.grpcServer, inventory.server)
 	reflection.Register(app.grpcServer)
 
 	mux, err := buildGateway(ctx, app, identitySrv, files)
@@ -292,7 +305,10 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 
 // wireEvents connects the outbox relay to Kafka (or the in-process
 // dispatcher) and subscribes the module consumers.
-func wireEvents(app *application, pool *platformdb.Pool, tx *platformdb.TxManager, tenantUC *tenantUsecase.TenantUseCase, license *licenseModule) error {
+func wireEvents(
+	app *application, pool *platformdb.Pool, tx *platformdb.TxManager, tenantUC *tenantUsecase.TenantUseCase,
+	license *licenseModule, inventory *inventoryModule,
+) error {
 	processor := outbox.NewProcessor(pool, tx)
 	relayOpts := []outbox.RelayOption{outbox.WithInterval(envDuration("OUTBOX_RELAY_INTERVAL", outbox.DefaultRelayInterval))}
 
@@ -303,6 +319,7 @@ func wireEvents(app *application, pool *platformdb.Pool, tx *platformdb.TxManage
 		dispatcher := outbox.NewDispatcher()
 		tenantHandler.Subscribe(dispatcher, processor, tenantUC)
 		licenseHandler.Subscribe(dispatcher, processor, license.subscriptions)
+		inventoryHandler.Subscribe(dispatcher, processor, inventory.uc)
 		app.workers = append(app.workers, outbox.NewRelay(pool, tx, dispatcher, relayOpts...).Run)
 
 		return nil
@@ -320,6 +337,7 @@ func wireEvents(app *application, pool *platformdb.Pool, tx *platformdb.TxManage
 	consumer := kafka.NewConsumer(brokers, envOr("KAFKA_CONSUMER_GROUP", "vietgara-backend"), prefix)
 	tenantHandler.Subscribe(consumer, processor, tenantUC)
 	licenseHandler.Subscribe(consumer, processor, license.subscriptions)
+	inventoryHandler.Subscribe(consumer, processor, inventory.uc)
 
 	app.workers = append(app.workers,
 		outbox.NewRelay(pool, tx, producer, relayOpts...).Run,
@@ -365,6 +383,7 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 		customerv1.RegisterCustomerServiceHandler, customerv1.RegisterVehicleServiceHandler,
 		customerv1.RegisterPartnerServiceHandler,
 		quotev1.RegisterQuoteServiceHandler, quotev1.RegisterPublicQuoteServiceHandler,
+		repairorderv1.RegisterRepairOrderServiceHandler, inventoryv1.RegisterInventoryServiceHandler,
 	} {
 		if err := register(ctx, mux, conn); err != nil {
 			return nil, err

@@ -107,7 +107,9 @@ type Sequencer interface {
 type RepairOrderCreator interface {
 	// Create returns the new repair order's id, or
 	// repairorder domain.ErrAlreadyConverted (the caller maps it).
-	Create(ctx context.Context, garageID, quoteID, vehicleID, number, actorID string, lines []domain.Line) (repairOrderID string, err error)
+	Create(
+		ctx context.Context, garageID, quoteID, vehicleID, customerName, vehiclePlate, number, actorID string, lines []domain.Line,
+	) (repairOrderID string, err error)
 }
 
 // Mailer delivers e-mails (internal/platform/mail).

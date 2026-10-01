@@ -5,7 +5,6 @@ import (
 	quoteHandler "github.com/viettechno/vietgara-backend/internal/quote/handler"
 	quoteRepository "github.com/viettechno/vietgara-backend/internal/quote/repository"
 	quoteUsecase "github.com/viettechno/vietgara-backend/internal/quote/usecase"
-	repairorderRepository "github.com/viettechno/vietgara-backend/internal/repairorder/repository"
 	repairorderUsecase "github.com/viettechno/vietgara-backend/internal/repairorder/usecase"
 
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
@@ -16,14 +15,10 @@ import (
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 )
 
-// quoteModule is the wired Quote & Pricing module (Release 1.2) plus the
-// minimal Repair Order module (draft creation only, FR-QUO-04) it depends
-// on; the Repair Order Service proper is built in Release 1.3 on the same
-// tables and domain types.
+// quoteModule is the wired Quote & Pricing module (Release 1.2).
 type quoteModule struct {
-	server       *quoteHandler.Server
-	quotes       *quoteRepository.PostgresRepository
-	repairOrders *repairorderUsecase.RepairOrderUseCase
+	server *quoteHandler.Server
+	quotes *quoteRepository.PostgresRepository
 }
 
 func buildQuote(
@@ -35,9 +30,9 @@ func buildQuote(
 	entitlements *licenseUsecase.EntitlementUseCase,
 	customers *customerRepository.PostgresCustomerRepository,
 	vehicles *customerRepository.PostgresVehicleRepository,
+	repairOrders *repairorderUsecase.RepairOrderUseCase,
 ) *quoteModule {
 	quotesRepo := quoteRepository.NewPostgresRepository(pool)
-	repairOrders := repairorderUsecase.NewRepairOrderUseCase(repairorderRepository.NewPostgresRepository(pool))
 	customerAdapter := quoteCustomers{customers: customers, vehicles: vehicles}
 
 	quotes := quoteUsecase.NewQuoteUseCase(quoteUsecase.Deps{
@@ -47,5 +42,5 @@ func buildQuote(
 		AppBaseURL: envOr("APP_BASE_URL", envOr("FRONTEND_ORIGIN", "http://localhost:8000")),
 	})
 
-	return &quoteModule{server: quoteHandler.NewServer(quotes), quotes: quotesRepo, repairOrders: repairOrders}
+	return &quoteModule{server: quoteHandler.NewServer(quotes), quotes: quotesRepo}
 }

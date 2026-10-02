@@ -17,8 +17,9 @@ import (
 // Release 1.4): settlements from a closed repair order, the
 // customer/insurer allocation, and recorded payments.
 type billingModule struct {
-	server *billingHandler.Server
-	uc     *billingUsecase.SettlementUseCase
+	server      *billingHandler.Server
+	uc          *billingUsecase.SettlementUseCase
+	settlements *billingRepository.PostgresRepository
 }
 
 func buildBilling(
@@ -29,11 +30,13 @@ func buildBilling(
 	partners *customerRepository.PostgresPartnerRepository,
 	repairOrders *repairorderUsecase.RepairOrderUseCase,
 ) *billingModule {
+	settlementsRepo := billingRepository.NewPostgresRepository(pool)
+
 	uc := billingUsecase.NewSettlementUseCase(billingUsecase.Deps{
-		Settlements: billingRepository.NewPostgresRepository(pool), RepairOrders: billingRepairOrders{uc: repairOrders},
+		Settlements: settlementsRepo, RepairOrders: billingRepairOrders{uc: repairOrders},
 		Partners: billingPartners{partners: partners}, Garages: billingGarages{garages: garages}, Limits: entitlements,
 		Sequences: numbering.NewSequencer(pool), Events: events,
 	})
 
-	return &billingModule{server: billingHandler.NewServer(uc), uc: uc}
+	return &billingModule{server: billingHandler.NewServer(uc), uc: uc, settlements: settlementsRepo}
 }

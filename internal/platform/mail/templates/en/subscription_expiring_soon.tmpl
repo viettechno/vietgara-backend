@@ -1,0 +1,9 @@
+{{define "subject"}}Your VietGara plan renews on {{.CurrentPeriodEnd}}{{end}}
+{{define "text"}}Hello {{.Name}},
+
+Your {{.PlanCode}} plan is due to renew on {{.CurrentPeriodEnd}}. No action is needed if auto-renewal is on; otherwise, please renew before that date to avoid any interruption.
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p>Your <strong>{{.PlanCode}}</strong> plan is due to renew on <strong>{{.CurrentPeriodEnd}}</strong>. No action is needed if auto-renewal is on; otherwise, please renew before that date to avoid any interruption.</p>
+<p>VietGara</p>{{end}}

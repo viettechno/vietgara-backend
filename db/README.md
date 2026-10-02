@@ -31,6 +31,7 @@ exists, schema changes must become new, forward-only migrations.)
 | 000016 | Repair Order | `repair_orders` (`repair_order_status`, incl. `waiting_on_parts`), `repair_order_lines` (`repair_order_line_status`, `assigned_technicians`) -- FR-REP-01..03/06 |
 | 000017 | Inventory | `items` (trigram search), `stock_balance` (per-item running total), `stock_transactions` (append-only, `stock_transaction_type`, `stock_transaction_ref_type`) -- FR-INV-01..03/05 |
 | 000018 | Billing & Settlement | `settlements` (`settlement_status`, customer/insurer allocation and paid totals), `settlement_payments` (append-only, `payer_type`, `payment_method`) -- FR-BIL-01..03, FR-REC-01 |
+| 000019 | Notification | `notification_log` (append-only, `notification_channel`, `notification_status`): what was sent, for visibility -- not a dedup mechanism, the Outbox Pattern's `processed_events` already gives exactly-once delivery -- FR-NOT-04 |
 
 Tables from 000002, 000003, 000010 and 000011 enable `FORCE ROW LEVEL
 SECURITY` when created; their policies are created together in 000013,

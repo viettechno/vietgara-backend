@@ -8,6 +8,9 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+
+	"github.com/viettechno/vietgara-backend/internal/platform/tracing"
 )
 
 // Errors returned by NewPgxPool; the underlying cause is wrapped via %w.
@@ -37,6 +40,10 @@ func NewPgxPool(ctx context.Context, dsn string) (ConnPool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrParsePgxConfig, err)
 	}
+
+	// One span per query (NFR-OB-01), so a slow or failing query is
+	// traceable within the request that caused it.
+	cfg.ConnConfig.Tracer = tracing.NewQueryTracer(otel.GetTracerProvider())
 
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {

@@ -3,9 +3,12 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sort"
+	"time"
 
 	billingDomain "github.com/viettechno/vietgara-backend/internal/billing/domain"
+	billingRepository "github.com/viettechno/vietgara-backend/internal/billing/repository"
 	billingUsecase "github.com/viettechno/vietgara-backend/internal/billing/usecase"
 	customerDomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
@@ -18,11 +21,13 @@ import (
 	inventoryUsecase "github.com/viettechno/vietgara-backend/internal/inventory/usecase"
 	licenseDomain "github.com/viettechno/vietgara-backend/internal/license/domain"
 	licenseUsecase "github.com/viettechno/vietgara-backend/internal/license/usecase"
+	notificationUsecase "github.com/viettechno/vietgara-backend/internal/notification/usecase"
 	quoteDomain "github.com/viettechno/vietgara-backend/internal/quote/domain"
 	quoteRepository "github.com/viettechno/vietgara-backend/internal/quote/repository"
 	quoteUsecase "github.com/viettechno/vietgara-backend/internal/quote/usecase"
 	repairorderDomain "github.com/viettechno/vietgara-backend/internal/repairorder/domain"
 	repairorderUsecase "github.com/viettechno/vietgara-backend/internal/repairorder/usecase"
+	reportingUsecase "github.com/viettechno/vietgara-backend/internal/reporting/usecase"
 	tenantDomain "github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 	tenantUsecase "github.com/viettechno/vietgara-backend/internal/tenant/usecase"
@@ -521,4 +526,75 @@ func (g documentGarages) Get(ctx context.Context, garageID string) (documentUsec
 	}
 
 	return info, nil
+}
+
+// reportingSettlements lets the Reporting module read a garage's revenue
+// (FR-RPT-01) without importing Billing & Settlement's use case; it wraps
+// the repository directly (the same choice documentQuotes above already
+// makes) since it only needs one read with no business rule attached.
+type reportingSettlements struct {
+	settlements *billingRepository.PostgresRepository
+}
+
+var reportingTruncUnits = map[reportingUsecase.Period]string{
+	reportingUsecase.PeriodDay: "day", reportingUsecase.PeriodMonth: "month",
+	reportingUsecase.PeriodQuarter: "quarter", reportingUsecase.PeriodYear: "year",
+}
+
+func (s reportingSettlements) RevenueByPeriod(
+	ctx context.Context, garageID string, period reportingUsecase.Period, from, to time.Time,
+) ([]reportingUsecase.RevenuePoint, error) {
+	buckets, err := s.settlements.RevenueByPeriod(ctx, garageID, reportingTruncUnits[period], from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	points := make([]reportingUsecase.RevenuePoint, 0, len(buckets))
+	for _, b := range buckets {
+		points = append(points, reportingUsecase.RevenuePoint{PeriodLabel: revenuePeriodLabel(period, b.PeriodStart), Amount: b.Amount})
+	}
+
+	return points, nil
+}
+
+// notificationAccounts lets the Notification module address a reminder
+// e-mail by account id (FR-NOT-04) without importing Identity's use case;
+// it wraps the repository directly (the same choice accountDirectory
+// above already makes), translating the raw repository's not-found
+// sentinel into this module's own.
+type notificationAccounts struct {
+	accounts *identityRepo.PostgresAccountRepository
+}
+
+func (a notificationAccounts) Get(ctx context.Context, accountID string) (notificationUsecase.AccountInfo, error) {
+	acc, err := a.accounts.FindByID(ctx, accountID)
+	if err != nil {
+		if errors.Is(err, identityDomain.ErrAccountNotFound) {
+			return notificationUsecase.AccountInfo{}, notificationUsecase.ErrAccountNotFound
+		}
+
+		return notificationUsecase.AccountInfo{}, err
+	}
+
+	return notificationUsecase.AccountInfo{
+		Email: acc.Email, FullName: acc.FullName, Locale: string(acc.Locale.OrDefault()),
+	}, nil
+}
+
+// revenuePeriodLabel formats a bucket's start for its requested
+// granularity: "2026-09-30" (day), "2026-09" (month), "2026-Q3" (quarter),
+// "2026" (year).
+func revenuePeriodLabel(period reportingUsecase.Period, start time.Time) string {
+	switch period {
+	case reportingUsecase.PeriodDay:
+		return start.Format("2006-01-02")
+	case reportingUsecase.PeriodMonth:
+		return start.Format("2006-01")
+	case reportingUsecase.PeriodQuarter:
+		return fmt.Sprintf("%d-Q%d", start.Year(), (int(start.Month())-1)/3+1)
+	case reportingUsecase.PeriodYear:
+		return start.Format("2006")
+	default:
+		return start.Format("2006-01-02")
+	}
 }

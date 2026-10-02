@@ -1,0 +1,9 @@
+{{define "subject"}}Gói dịch vụ VietGara của bạn gia hạn vào {{.CurrentPeriodEnd}}{{end}}
+{{define "text"}}Xin chào {{.Name}},
+
+Gói {{.PlanCode}} của bạn sẽ gia hạn vào {{.CurrentPeriodEnd}}. Bạn không cần làm gì nếu đã bật tự động gia hạn; nếu chưa, vui lòng gia hạn trước ngày này để không bị gián đoạn dịch vụ.
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.Name}},</p>
+<p>Gói <strong>{{.PlanCode}}</strong> của bạn sẽ gia hạn vào <strong>{{.CurrentPeriodEnd}}</strong>. Bạn không cần làm gì nếu đã bật tự động gia hạn; nếu chưa, vui lòng gia hạn trước ngày này để không bị gián đoạn dịch vụ.</p>
+<p>VietGara</p>{{end}}

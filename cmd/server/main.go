@@ -23,6 +23,7 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
@@ -36,6 +37,7 @@ import (
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
 	quotev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/quote/v1"
 	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
+	reportingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/reporting/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	appdb "github.com/viettechno/vietgara-backend/db"
@@ -51,6 +53,7 @@ import (
 	licenseHandler "github.com/viettechno/vietgara-backend/internal/license/handler"
 	licenseUsecase "github.com/viettechno/vietgara-backend/internal/license/usecase"
 	"github.com/viettechno/vietgara-backend/internal/middleware"
+	notificationHandler "github.com/viettechno/vietgara-backend/internal/notification/handler"
 	"github.com/viettechno/vietgara-backend/internal/platform/audit"
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
@@ -59,8 +62,10 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
 	"github.com/viettechno/vietgara-backend/internal/platform/storage"
+	"github.com/viettechno/vietgara-backend/internal/platform/tracing"
 	quoteHandler "github.com/viettechno/vietgara-backend/internal/quote/handler"
 	repairorderHandler "github.com/viettechno/vietgara-backend/internal/repairorder/handler"
+	reportingHandler "github.com/viettechno/vietgara-backend/internal/reporting/handler"
 	tenantHandler "github.com/viettechno/vietgara-backend/internal/tenant/handler"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 	tenantUsecase "github.com/viettechno/vietgara-backend/internal/tenant/usecase"
@@ -145,6 +150,17 @@ func (a *application) close() {
 //nolint:funlen // the composition root wires every module in one place
 func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	app := &application{}
+
+	// Distributed tracing (NFR-OB-01): without OTEL_EXPORTER_OTLP_ENDPOINT,
+	// spans are still created (every request still carries a trace id to
+	// log) but are not exported anywhere.
+	shutdownTracing, err := tracing.Init(ctx, "vietgara-backend", envOr("OTEL_EXPORTER_OTLP_ENDPOINT", ""))
+	if err != nil {
+		return nil, err
+	}
+
+	app.closers = append(app.closers, func() { _ = shutdownTracing(context.Background()) })
+
 	tx := platformdb.NewTxManager(pool)
 	issuer := auth.NewTokenIssuer([]byte(mustEnv("JWT_SIGNING_KEY")),
 		envDuration("JWT_ACCESS_TTL", 20*time.Minute), envDuration("JWT_REFRESH_TTL", 30*24*time.Hour))
@@ -268,8 +284,17 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// receipt PDFs, the stock movement report as Excel.
 	document := buildDocument(quote.quotes, repairOrder.uc, billing.uc, inventory.uc, garages)
 
+	// Reporting (Release 1.5): revenue by period (FR-RPT-01), reusing
+	// Billing & Settlement's own repository -- no tables of its own.
+	reporting := buildReporting(billing.settlements)
+
+	// Notification (Release 1.5): the e-mail channel only (FR-NOT-04) --
+	// registration confirmation and license renewal reminders. No RPCs of
+	// its own; every e-mail is triggered by an event consumer (wireEvents).
+	notification := buildNotification(pool, mailer, accounts)
+
 	// Events: Kafka when brokers are configured, otherwise in-process.
-	if err := wireEvents(app, pool, tx, tenantUC, license, inventory); err != nil {
+	if err := wireEvents(app, pool, tx, tenantUC, license, inventory, notification); err != nil {
 		return nil, err
 	}
 
@@ -281,14 +306,17 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	policies := middleware.Merge(
 		identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
 		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
-		documentHandler.Policies(),
+		documentHandler.Policies(), reportingHandler.Policies(),
 	)
-	app.grpcServer = grpc.NewServer(grpc.ChainUnaryInterceptor(
-		middleware.Auth(issuer, policies),
-		middleware.EmailVerified(),
-		middleware.PlatformAdmin(),
-		middleware.Garage(tx, accessReader, license.enforcement),
-	))
+	app.grpcServer = grpc.NewServer(
+		grpc.StatsHandler(otelgrpc.NewServerHandler()), // one span per request (NFR-OB-01)
+		grpc.ChainUnaryInterceptor(
+			middleware.Auth(issuer, policies),
+			middleware.EmailVerified(),
+			middleware.PlatformAdmin(),
+			middleware.Garage(tx, accessReader, license.enforcement),
+		),
+	)
 
 	identityv1.RegisterAuthServiceServer(app.grpcServer, identitySrv)
 	identityv1.RegisterAccountServiceServer(app.grpcServer, identitySrv)
@@ -308,6 +336,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	inventoryv1.RegisterInventoryServiceServer(app.grpcServer, inventory.server)
 	billingv1.RegisterSettlementServiceServer(app.grpcServer, billing.server)
 	documentv1.RegisterDocumentServiceServer(app.grpcServer, document.server)
+	reportingv1.RegisterReportingServiceServer(app.grpcServer, reporting.server)
 	reflection.Register(app.grpcServer)
 
 	mux, err := buildGateway(ctx, app, identitySrv, files)
@@ -324,7 +353,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 // dispatcher) and subscribes the module consumers.
 func wireEvents(
 	app *application, pool *platformdb.Pool, tx *platformdb.TxManager, tenantUC *tenantUsecase.TenantUseCase,
-	license *licenseModule, inventory *inventoryModule,
+	license *licenseModule, inventory *inventoryModule, notification *notificationModule,
 ) error {
 	processor := outbox.NewProcessor(pool, tx)
 	relayOpts := []outbox.RelayOption{outbox.WithInterval(envDuration("OUTBOX_RELAY_INTERVAL", outbox.DefaultRelayInterval))}
@@ -337,6 +366,7 @@ func wireEvents(
 		tenantHandler.Subscribe(dispatcher, processor, tenantUC)
 		licenseHandler.Subscribe(dispatcher, processor, license.subscriptions)
 		inventoryHandler.Subscribe(dispatcher, processor, inventory.uc)
+		notificationHandler.Subscribe(dispatcher, processor, notification.uc)
 		app.workers = append(app.workers, outbox.NewRelay(pool, tx, dispatcher, relayOpts...).Run)
 
 		return nil
@@ -355,6 +385,7 @@ func wireEvents(
 	tenantHandler.Subscribe(consumer, processor, tenantUC)
 	licenseHandler.Subscribe(consumer, processor, license.subscriptions)
 	inventoryHandler.Subscribe(consumer, processor, inventory.uc)
+	notificationHandler.Subscribe(consumer, processor, notification.uc)
 
 	app.workers = append(app.workers,
 		outbox.NewRelay(pool, tx, producer, relayOpts...).Run,
@@ -402,6 +433,7 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 		quotev1.RegisterQuoteServiceHandler, quotev1.RegisterPublicQuoteServiceHandler,
 		repairorderv1.RegisterRepairOrderServiceHandler, inventoryv1.RegisterInventoryServiceHandler,
 		billingv1.RegisterSettlementServiceHandler, documentv1.RegisterDocumentServiceHandler,
+		reportingv1.RegisterReportingServiceHandler,
 	} {
 		if err := register(ctx, mux, conn); err != nil {
 			return nil, err

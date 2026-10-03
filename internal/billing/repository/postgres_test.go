@@ -385,3 +385,64 @@ func TestPostgresRepository_RecordPayment(t *testing.T) {
 		require.ErrorIs(t, err, errBoom)
 	})
 }
+
+func TestPostgresRepository_RevenueByPeriod(t *testing.T) {
+	t.Parallel()
+
+	from, to := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+
+	t.Run("success", func(t *testing.T) {
+		t.Parallel()
+
+		repo := repository.NewPostgresRepository(nil)
+		tx := dbtest.New(t).ExpectQuery("date_trunc", dbtest.NewRows([]any{now, int64(1_000_000)}), nil)
+		ctx := tx.Context(t.Context())
+
+		buckets, err := repo.RevenueByPeriod(ctx, garageID, "day", from, to)
+		require.NoError(t, err)
+		require.Equal(t, []repository.RevenueBucket{{PeriodStart: now, Amount: 1_000_000}}, buckets)
+	})
+
+	t.Run("no settlements in range", func(t *testing.T) {
+		t.Parallel()
+
+		repo := repository.NewPostgresRepository(nil)
+		tx := dbtest.New(t).ExpectQuery("date_trunc", dbtest.NewRows(), nil)
+		ctx := tx.Context(t.Context())
+
+		buckets, err := repo.RevenueByPeriod(ctx, garageID, "month", from, to)
+		require.NoError(t, err)
+		require.Empty(t, buckets)
+	})
+
+	t.Run("rejects an invalid period unit before it reaches SQL", func(t *testing.T) {
+		t.Parallel()
+
+		repo := repository.NewPostgresRepository(nil)
+
+		_, err := repo.RevenueByPeriod(t.Context(), garageID, "week", from, to)
+		require.Error(t, err)
+	})
+
+	t.Run("query failure", func(t *testing.T) {
+		t.Parallel()
+
+		repo := repository.NewPostgresRepository(nil)
+		tx := dbtest.New(t).ExpectQuery("date_trunc", nil, errBoom)
+		ctx := tx.Context(t.Context())
+
+		_, err := repo.RevenueByPeriod(ctx, garageID, "day", from, to)
+		require.ErrorIs(t, err, errBoom)
+	})
+
+	t.Run("scan failure", func(t *testing.T) {
+		t.Parallel()
+
+		repo := repository.NewPostgresRepository(nil)
+		tx := dbtest.New(t).ExpectQuery("date_trunc", dbtest.NewRows([]any{now, int64(1_000_000)}).WithScanError(errBoom), nil)
+		ctx := tx.Context(t.Context())
+
+		_, err := repo.RevenueByPeriod(ctx, garageID, "day", from, to)
+		require.ErrorIs(t, err, errBoom)
+	})
+}

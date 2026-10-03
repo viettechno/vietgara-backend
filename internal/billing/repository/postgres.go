@@ -9,6 +9,8 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -283,6 +285,57 @@ func (r *PostgresRepository) RecordPayment(
 	}
 
 	return s, nil
+}
+
+// RevenueBucket is one period's total settlement value.
+type RevenueBucket struct {
+	PeriodStart time.Time
+	Amount      int64
+}
+
+// truncUnits are the only values ever interpolated into date_trunc below;
+// RevenueByPeriod rejects anything else before it reaches SQL.
+var truncUnits = map[string]bool{"day": true, "month": true, "quarter": true, "year": true}
+
+// RevenueByPeriod sums settlements.total_amount per period, bucketed by
+// the settlement's created_at truncated to unit ("day", "month",
+// "quarter" or "year") -- FR-RPT-01. Called directly by an adapter in
+// cmd/server for the Reporting module (HLD module #15), the same choice
+// documentQuotes already makes for a single cross-module read with no
+// business rule attached, rather than going through this module's own
+// use case. from is inclusive, to is exclusive.
+func (r *PostgresRepository) RevenueByPeriod(ctx context.Context, garageID, unit string, from, to time.Time) ([]RevenueBucket, error) {
+	if !truncUnits[unit] {
+		return nil, fmt.Errorf("billing: invalid period unit %q", unit)
+	}
+
+	q := platformdb.QuerierFromContext(ctx, r.pool)
+
+	rows, err := q.Query(ctx, `
+		SELECT date_trunc($2, created_at) AS period, COALESCE(SUM(total_amount), 0)
+		FROM settlements
+		WHERE garage_id = $1 AND created_at >= $3 AND created_at < $4
+		GROUP BY period
+		ORDER BY period`,
+		garageID, unit, from, to,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var buckets []RevenueBucket
+
+	for rows.Next() {
+		var b RevenueBucket
+		if err := rows.Scan(&b.PeriodStart, &b.Amount); err != nil {
+			return nil, err
+		}
+
+		buckets = append(buckets, b)
+	}
+
+	return buckets, rows.Err()
 }
 
 func nullableString(s string) *string {

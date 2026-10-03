@@ -11,10 +11,12 @@ import (
 
 // Template names.
 const (
-	TemplateEmailVerification     = "email_verification"
-	TemplatePasswordReset         = "password_reset"
-	TemplateStaffInvitation       = "staff_invitation"
-	TemplateQuoteReadyForApproval = "quote_ready_for_approval"
+	TemplateEmailVerification        = "email_verification"
+	TemplatePasswordReset            = "password_reset"
+	TemplateStaffInvitation          = "staff_invitation"
+	TemplateQuoteReadyForApproval    = "quote_ready_for_approval"
+	TemplateRegistrationConfirmation = "registration_confirmation"
+	TemplateSubscriptionExpiringSoon = "subscription_expiring_soon"
 )
 
 // Supported locales; Vietnamese is the default.

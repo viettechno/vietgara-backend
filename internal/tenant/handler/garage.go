@@ -114,12 +114,16 @@ var garageSetters = map[string]func(f *usecase.GarageFields, in *tenantv1.Garage
 	"numbering": func(f *usecase.GarageFields, in *tenantv1.Garage) {
 		f.QuoteNumberTemplate = new(in.GetNumbering().GetQuote())
 		f.RepairOrderNumberTemplate = new(in.GetNumbering().GetRepairOrder())
+		f.SettlementNumberTemplate = new(in.GetNumbering().GetSettlement())
 	},
 	"numbering.quote": func(f *usecase.GarageFields, in *tenantv1.Garage) {
 		f.QuoteNumberTemplate = new(in.GetNumbering().GetQuote())
 	},
 	"numbering.repair_order": func(f *usecase.GarageFields, in *tenantv1.Garage) {
 		f.RepairOrderNumberTemplate = new(in.GetNumbering().GetRepairOrder())
+	},
+	"numbering.settlement": func(f *usecase.GarageFields, in *tenantv1.Garage) {
+		f.SettlementNumberTemplate = new(in.GetNumbering().GetSettlement())
 	},
 	"default_quote_approval_mode": func(f *usecase.GarageFields, in *tenantv1.Garage) {
 		f.DefaultQuoteApprovalMode = new(quoteApprovalModeFromProto(in.GetDefaultQuoteApprovalMode()))

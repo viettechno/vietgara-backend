@@ -122,7 +122,7 @@ func TestGarageRPCs(t *testing.T) {
 		GarageId: g.GetId(),
 		Garage: &tenantv1.Garage{
 			Name: "Renamed", Status: tenantv1.GarageStatus_GARAGE_STATUS_INACTIVE,
-			Numbering: &tenantv1.NumberingTemplates{Quote: "A-{SEQ:2}", RepairOrder: "B-{SEQ:2}"},
+			Numbering: &tenantv1.NumberingTemplates{Quote: "A-{SEQ:2}", RepairOrder: "B-{SEQ:2}", Settlement: "C-{SEQ:2}"},
 		},
 		UpdateMask: mask("name", "status", "numbering"),
 	})

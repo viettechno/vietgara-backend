@@ -5,11 +5,17 @@ import (
 	"errors"
 	"sort"
 
+	billingDomain "github.com/viettechno/vietgara-backend/internal/billing/domain"
+	billingUsecase "github.com/viettechno/vietgara-backend/internal/billing/usecase"
 	customerDomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
 	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
+	"github.com/viettechno/vietgara-backend/internal/document/render"
+	documentUsecase "github.com/viettechno/vietgara-backend/internal/document/usecase"
 	identityDomain "github.com/viettechno/vietgara-backend/internal/identity/domain"
 	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
+	inventoryDomain "github.com/viettechno/vietgara-backend/internal/inventory/domain"
+	inventoryUsecase "github.com/viettechno/vietgara-backend/internal/inventory/usecase"
 	licenseDomain "github.com/viettechno/vietgara-backend/internal/license/domain"
 	licenseUsecase "github.com/viettechno/vietgara-backend/internal/license/usecase"
 	quoteDomain "github.com/viettechno/vietgara-backend/internal/quote/domain"
@@ -20,6 +26,7 @@ import (
 	tenantDomain "github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 	tenantUsecase "github.com/viettechno/vietgara-backend/internal/tenant/usecase"
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
 // The adapters below connect modules through narrow interfaces owned by the
@@ -292,3 +299,226 @@ func (h vehicleHistory) History(ctx context.Context, garageID, vehicleID string)
 // "complete" history, but a single vehicle realistically never approaches
 // this many quotes).
 const maxHistoryEntries = 1000
+
+// billingRepairOrders lets the Billing & Settlement module read a closed
+// repair order's settlement-relevant data (FR-BIL-01) without importing
+// the Repair Order module's use case directly. Repair Order's own Get
+// already returns a classified *apperror.AppError, which Billing's
+// toAppError passes through unchanged, so no error translation is needed
+// here.
+type billingRepairOrders struct {
+	uc *repairorderUsecase.RepairOrderUseCase
+}
+
+func (r billingRepairOrders) Get(ctx context.Context, garageID, repairOrderID string) (billingUsecase.RepairOrderInfo, error) {
+	ro, err := r.uc.Get(ctx, garageID, repairOrderID)
+	if err != nil {
+		return billingUsecase.RepairOrderInfo{}, err
+	}
+
+	return billingUsecase.RepairOrderInfo{
+		CustomerName: ro.CustomerName, VehicleLicensePlate: ro.VehicleLicensePlate, TotalAmount: ro.TotalAmount,
+		Closed: ro.Status == repairorderDomain.StatusClosed,
+	}, nil
+}
+
+// billingPartners lets the Billing & Settlement module validate and name
+// an insurer allocated to a settlement (FR-BIL-02) without importing the
+// Customer module directly.
+type billingPartners struct {
+	partners *customerRepository.PostgresPartnerRepository
+}
+
+func (p billingPartners) FindInsurer(ctx context.Context, garageID, partnerID string) (string, error) {
+	partner, err := p.partners.FindByID(ctx, garageID, partnerID)
+	if err != nil {
+		if errors.Is(err, customerDomain.ErrPartnerNotFound) {
+			return "", billingDomain.ErrInsurerNotFound
+		}
+
+		return "", err
+	}
+
+	if partner.Type != customerDomain.PartnerTypeInsurer {
+		return "", billingDomain.ErrInsurerNotFound
+	}
+
+	return partner.Name, nil
+}
+
+// billingGarages lets the Billing & Settlement module read a garage's
+// numbering configuration (FR-TEN-05) without importing Tenant.
+type billingGarages struct {
+	garages *tenantRepo.PostgresGarageRepository
+}
+
+func (g billingGarages) Get(ctx context.Context, garageID string) (billingUsecase.GarageInfo, error) {
+	garage, err := g.garages.FindByID(ctx, garageID)
+	if err != nil {
+		return billingUsecase.GarageInfo{}, err
+	}
+
+	return billingUsecase.GarageInfo{
+		OwnerAccountID: garage.OwnerAccountID, Timezone: garage.Timezone,
+		SettlementNumberTemplate: garage.SettlementNumberTemplate,
+	}, nil
+}
+
+// documentQuotes lets the Document/Print module render a quote PDF
+// (FR-DOC-01) without importing the Quote & Pricing module's use case
+// directly; it wraps the repository directly (the same choice
+// vehicleHistory above already makes) since it only needs one read.
+type documentQuotes struct {
+	quotes *quoteRepository.PostgresRepository
+}
+
+func (q documentQuotes) Get(ctx context.Context, garageID, quoteID string) (documentUsecase.QuoteInfo, error) {
+	quote, err := q.quotes.FindByID(ctx, garageID, quoteID)
+	if err != nil {
+		if errors.Is(err, quoteDomain.ErrQuoteNotFound) {
+			return documentUsecase.QuoteInfo{}, apperror.Wrap(apperror.CodeNotFound, err.Error(), err)
+		}
+
+		return documentUsecase.QuoteInfo{}, err
+	}
+
+	lines := make([]render.DocumentLine, 0, len(quote.Lines))
+	for _, line := range quote.Lines {
+		lines = append(lines, render.DocumentLine{
+			Description: line.Description, Quantity: line.Quantity, UnitPrice: line.UnitPrice, LineTotal: line.LineTotal,
+		})
+	}
+
+	return documentUsecase.QuoteInfo{
+		Number: quote.Number, Status: string(quote.Status), CustomerName: quote.CustomerName,
+		VehiclePlate: quote.VehicleLicensePlate, Notes: quote.Notes, Lines: lines, TotalAmount: quote.TotalAmount,
+	}, nil
+}
+
+// documentRepairOrders lets the Document/Print module render a repair
+// order PDF (FR-DOC-01) without importing the Repair Order module's use
+// case directly. Repair Order's own Get already returns a classified
+// *apperror.AppError, which this module's toAppError passes through
+// unchanged, so no error translation is needed here (the same choice
+// documentSettlements below makes).
+type documentRepairOrders struct {
+	uc *repairorderUsecase.RepairOrderUseCase
+}
+
+func (r documentRepairOrders) Get(ctx context.Context, garageID, repairOrderID string) (documentUsecase.RepairOrderInfo, error) {
+	ro, err := r.uc.Get(ctx, garageID, repairOrderID)
+	if err != nil {
+		return documentUsecase.RepairOrderInfo{}, err
+	}
+
+	lines := make([]render.DocumentLine, 0, len(ro.Lines))
+	for _, line := range ro.Lines {
+		lines = append(lines, render.DocumentLine{
+			Description: line.Description, Quantity: line.Quantity, UnitPrice: line.UnitPrice, LineTotal: line.LineTotal,
+		})
+	}
+
+	return documentUsecase.RepairOrderInfo{
+		Number: ro.Number, Status: string(ro.Status), CustomerName: ro.CustomerName, VehiclePlate: ro.VehicleLicensePlate,
+		Lines: lines, TotalAmount: ro.TotalAmount,
+	}, nil
+}
+
+// documentSettlements lets the Document/Print module render a settlement
+// receipt PDF (FR-DOC-01) without importing the Billing & Settlement
+// module's use case directly.
+type documentSettlements struct {
+	uc *billingUsecase.SettlementUseCase
+}
+
+func (s documentSettlements) Get(ctx context.Context, garageID, settlementID string) (documentUsecase.SettlementInfo, error) {
+	settlement, err := s.uc.Get(ctx, garageID, settlementID)
+	if err != nil {
+		return documentUsecase.SettlementInfo{}, err
+	}
+
+	payments := make([]render.PaymentRow, 0, len(settlement.Payments))
+	for _, p := range settlement.Payments {
+		payments = append(payments, render.PaymentRow{
+			Date: p.CreatedAt.Format("2006-01-02"), PayerType: string(p.PayerType), Method: string(p.Method), Amount: p.Amount,
+		})
+	}
+
+	return documentUsecase.SettlementInfo{
+		Number: settlement.Number, Status: string(settlement.Status), CustomerName: settlement.CustomerName,
+		VehiclePlate: settlement.VehicleLicensePlate, InsurerName: settlement.InsurerPartnerName,
+		TotalAmount: settlement.TotalAmount, CustomerAmount: settlement.CustomerAmount,
+		InsurerAmount: settlement.InsurerAmount, Payments: payments,
+	}, nil
+}
+
+// documentStockMovements lets the Document/Print module render the stock
+// movement report as Excel (FR-DOC-02) without importing the Inventory
+// module's use case directly. Pages through every matching transaction --
+// the report is meant to be complete, unlike the JSON report's own
+// paginated screen.
+type documentStockMovements struct {
+	uc *inventoryUsecase.InventoryUseCase
+}
+
+func (s documentStockMovements) List(ctx context.Context, garageID, itemID string) ([]render.StockMovementRow, error) {
+	var rows []render.StockMovementRow
+
+	for page := 1; ; page++ {
+		result, err := s.uc.ListTransactions(ctx, inventoryUsecase.ListTransactionsRequest{
+			PageRequest: inventoryUsecase.PageRequest{Page: page, PageSize: inventoryUsecase.MaxPageSize},
+			GarageID:    garageID, ItemID: itemID,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		for _, tx := range result.Items {
+			direction := "In"
+			reference := "Purchase"
+
+			if tx.Type == inventoryDomain.TransactionOut {
+				direction = "Out"
+			}
+
+			if tx.RefType == inventoryDomain.RefRepairOrder && tx.RefID != nil {
+				reference = "Repair order " + *tx.RefID
+			}
+
+			rows = append(rows, render.StockMovementRow{
+				Date: tx.CreatedAt.Format("2006-01-02"), SKU: tx.ItemSKU, ItemName: tx.ItemName, Direction: direction,
+				Quantity: tx.Quantity, Reference: reference,
+			})
+		}
+
+		if page*inventoryUsecase.MaxPageSize >= result.Total {
+			break
+		}
+	}
+
+	return rows, nil
+}
+
+// documentGarages lets the Document/Print module read a garage's
+// letterhead (name, address, phone) without importing Tenant.
+type documentGarages struct {
+	garages *tenantRepo.PostgresGarageRepository
+}
+
+func (g documentGarages) Get(ctx context.Context, garageID string) (documentUsecase.GarageHeaderInfo, error) {
+	garage, err := g.garages.FindByID(ctx, garageID)
+	if err != nil {
+		return documentUsecase.GarageHeaderInfo{}, err
+	}
+
+	info := documentUsecase.GarageHeaderInfo{Name: garage.Name}
+	if garage.Address != nil {
+		info.Address = *garage.Address
+	}
+
+	if garage.Phone != nil {
+		info.Phone = *garage.Phone
+	}
+
+	return info, nil
+}

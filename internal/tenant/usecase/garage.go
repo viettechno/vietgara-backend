@@ -34,6 +34,7 @@ type GarageFields struct {
 	OperatingHours            *[]domain.DailyHours
 	QuoteNumberTemplate       *string
 	RepairOrderNumberTemplate *string
+	SettlementNumberTemplate  *string
 	DefaultQuoteApprovalMode  *domain.QuoteApprovalMode
 }
 
@@ -78,6 +79,7 @@ func (uc *TenantUseCase) CreateGarage(ctx context.Context, ownerID string, field
 		OperatingHours:            domain.DefaultOperatingHours(),
 		QuoteNumberTemplate:       domain.DefaultQuoteNumberTemplate,
 		RepairOrderNumberTemplate: domain.DefaultRepairOrderNumberTemplate,
+		SettlementNumberTemplate:  domain.DefaultSettlementNumberTemplate,
 		DefaultQuoteApprovalMode:  domain.QuoteApprovalModeLink,
 		CreatedBy:                 &ownerID,
 		UpdatedBy:                 &ownerID,
@@ -357,14 +359,14 @@ func applyConfiguration(g *domain.Garage, f GarageFields) error {
 		g.OperatingHours = *f.OperatingHours
 	}
 
-	return applyQuoteConfiguration(g, f)
+	return applyDocumentConfiguration(g, f)
 }
 
-// applyQuoteConfiguration sets the fields FR-TEN-05 adds for Quote &
-// Pricing (Release 1.2): document numbering templates and the default
-// approval mode. Split out of applyConfiguration to keep its cyclomatic
-// complexity down.
-func applyQuoteConfiguration(g *domain.Garage, f GarageFields) error {
+// applyDocumentConfiguration sets the fields FR-TEN-05 adds for each
+// document-numbered module (Quote, Repair Order, Settlement) and the
+// quote default approval mode. Split out of applyConfiguration to keep
+// its cyclomatic complexity down.
+func applyDocumentConfiguration(g *domain.Garage, f GarageFields) error {
 	if f.QuoteNumberTemplate != nil {
 		if !domain.ValidNumberingTemplate(*f.QuoteNumberTemplate) {
 			return apperror.Validation("numbering.quote", apperror.IssueInvalid, "numbering template is invalid")
@@ -379,6 +381,14 @@ func applyQuoteConfiguration(g *domain.Garage, f GarageFields) error {
 		}
 
 		g.RepairOrderNumberTemplate = *f.RepairOrderNumberTemplate
+	}
+
+	if f.SettlementNumberTemplate != nil {
+		if !domain.ValidNumberingTemplate(*f.SettlementNumberTemplate) {
+			return apperror.Validation("numbering.settlement", apperror.IssueInvalid, "numbering template is invalid")
+		}
+
+		g.SettlementNumberTemplate = *f.SettlementNumberTemplate
 	}
 
 	if f.DefaultQuoteApprovalMode != nil {

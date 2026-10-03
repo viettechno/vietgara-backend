@@ -53,6 +53,7 @@ func garageToProto(g *usecase.GarageWithAccess) *tenantv1.Garage {
 		OperatingHours: hours,
 		Numbering: &tenantv1.NumberingTemplates{
 			Quote: g.Garage.QuoteNumberTemplate, RepairOrder: g.Garage.RepairOrderNumberTemplate,
+			Settlement: g.Garage.SettlementNumberTemplate,
 		},
 		DefaultQuoteApprovalMode: quoteApprovalModeToProto(g.Garage.DefaultQuoteApprovalMode),
 		CreatedAt:                converter.TimeToProto(g.Garage.CreatedAt),

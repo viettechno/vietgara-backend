@@ -28,7 +28,9 @@ import (
 	"google.golang.org/grpc/reflection"
 	"google.golang.org/grpc/test/bufconn"
 
+	billingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/billing/v1"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
+	documentv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/document/v1"
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
@@ -37,9 +39,11 @@ import (
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	appdb "github.com/viettechno/vietgara-backend/db"
+	billingHandler "github.com/viettechno/vietgara-backend/internal/billing/handler"
 	customerHandler "github.com/viettechno/vietgara-backend/internal/customer/handler"
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
 	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
+	documentHandler "github.com/viettechno/vietgara-backend/internal/document/handler"
 	identityHandler "github.com/viettechno/vietgara-backend/internal/identity/handler"
 	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
 	identityUsecase "github.com/viettechno/vietgara-backend/internal/identity/usecase"
@@ -248,11 +252,21 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// repair_order.closed consumer that deducts stock (FR-INV-02).
 	inventory := buildInventory(pool, events)
 
+	partnerRepo := customerRepository.NewPostgresPartnerRepository(pool)
+
 	customerSrv := customerHandler.NewServer(
 		customerUsecase.NewCustomerUseCase(customerRepo, vehicleRepo),
 		customerUsecase.NewVehicleUseCase(vehicleRepo, customerRepo, vehicleHistory{quotes: quote.quotes, repairOrders: repairOrder.uc}),
-		customerUsecase.NewPartnerUseCase(customerRepository.NewPostgresPartnerRepository(pool)),
+		customerUsecase.NewPartnerUseCase(partnerRepo),
 	)
+
+	// Billing & Settlement (Release 1.4): settlements from a closed
+	// repair order, the customer/insurer allocation, recorded payments.
+	billing := buildBilling(pool, events, garages, license.entitlements, partnerRepo, repairOrder.uc)
+
+	// Document/Print (Release 1.4): quote, repair order and settlement
+	// receipt PDFs, the stock movement report as Excel.
+	document := buildDocument(quote.quotes, repairOrder.uc, billing.uc, inventory.uc, garages)
 
 	// Events: Kafka when brokers are configured, otherwise in-process.
 	if err := wireEvents(app, pool, tx, tenantUC, license, inventory); err != nil {
@@ -266,7 +280,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// gRPC server with the request pipeline of internal/middleware.
 	policies := middleware.Merge(
 		identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
-		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(),
+		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
+		documentHandler.Policies(),
 	)
 	app.grpcServer = grpc.NewServer(grpc.ChainUnaryInterceptor(
 		middleware.Auth(issuer, policies),
@@ -291,6 +306,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	quotev1.RegisterPublicQuoteServiceServer(app.grpcServer, quote.server)
 	repairorderv1.RegisterRepairOrderServiceServer(app.grpcServer, repairOrder.server)
 	inventoryv1.RegisterInventoryServiceServer(app.grpcServer, inventory.server)
+	billingv1.RegisterSettlementServiceServer(app.grpcServer, billing.server)
+	documentv1.RegisterDocumentServiceServer(app.grpcServer, document.server)
 	reflection.Register(app.grpcServer)
 
 	mux, err := buildGateway(ctx, app, identitySrv, files)
@@ -384,6 +401,7 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 		customerv1.RegisterPartnerServiceHandler,
 		quotev1.RegisterQuoteServiceHandler, quotev1.RegisterPublicQuoteServiceHandler,
 		repairorderv1.RegisterRepairOrderServiceHandler, inventoryv1.RegisterInventoryServiceHandler,
+		billingv1.RegisterSettlementServiceHandler, documentv1.RegisterDocumentServiceHandler,
 	} {
 		if err := register(ctx, mux, conn); err != nil {
 			return nil, err

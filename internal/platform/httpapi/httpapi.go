@@ -64,11 +64,19 @@ var reasonStatus = map[string]int{
 
 // NewMux returns the gateway mux with VietGara's conventions. Handlers are
 // registered on it by the caller (Register*HandlerClient / HandlePath).
+//
+// The marshaler is wrapped in HTTPBodyMarshaler so a google.api.HttpBody
+// response (Document/Print's PDF/Excel exports) is written as its raw
+// bytes with its own Content-Type, not JSON-encoded like every other
+// response -- without this wrapper, ForwardResponseMessage has no special
+// case for HttpBody and silently falls back to the plain JSONPb marshaler.
 func NewMux() *runtime.ServeMux {
 	return runtime.NewServeMux(
-		runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.JSONPb{
-			MarshalOptions:   protojson.MarshalOptions{EmitDefaultValues: true},
-			UnmarshalOptions: protojson.UnmarshalOptions{DiscardUnknown: true},
+		runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.HTTPBodyMarshaler{
+			Marshaler: &runtime.JSONPb{
+				MarshalOptions:   protojson.MarshalOptions{EmitDefaultValues: true},
+				UnmarshalOptions: protojson.UnmarshalOptions{DiscardUnknown: true},
+			},
 		}),
 		runtime.WithErrorHandler(errorHandler),
 		runtime.WithRoutingErrorHandler(routingErrorHandler),

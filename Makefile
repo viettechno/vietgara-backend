@@ -33,7 +33,7 @@ help: ## Show all available commands
 
 	@awk 'BEGIN {FS = ":.*##"} \
 	/^[a-zA-Z0-9_.-]+:.*##/ { \
-		printf "  $(CYAN)%-25s$(RESET) %s\n", $$1, $$2 \
+		printf "  $(CYAN)%-32s$(RESET) %s\n", $$1, $$2 \
 	}' $(MAKEFILE_LIST)
 
 	@echo ""

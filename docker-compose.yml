@@ -1,9 +1,11 @@
 version: "3.9"
 
 # Local environment: Postgres, Redis, Kafka (KRaft, single node), Mailpit,
-# the backend, the web admin and Kong. Open http://localhost:8000 (web
-# admin + /api) and http://localhost:8025 (Mailpit: every e-mail the backend
-# sends, e.g. verification OTPs).
+# the backend, the web admin, the platform admin and Kong. Open
+# http://localhost:8000 (garage web admin + /api), http://admin.localhost:8000
+# (platform admin + /api; *.localhost resolves to loopback in browsers) and
+# http://localhost:8025 (Mailpit: every e-mail the backend sends, e.g.
+# verification OTPs).
 
 services:
   vietgara-pgsql:
@@ -152,6 +154,15 @@ services:
     networks:
       - vietgara-network
 
+  vietgara-platform-admin:
+    build:
+      context: ../vietgara-platform-admin
+      dockerfile: Dockerfile
+    container_name: vietgara-platform-admin
+    restart: unless-stopped
+    networks:
+      - vietgara-network
+
   vietgara-api-gateway:
     image: kong:3.9
     container_name: vietgara-api-gateway
@@ -159,6 +170,7 @@ services:
     depends_on:
       - vietgara-backend
       - vietgara-web-admin
+      - vietgara-platform-admin
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
@@ -168,7 +180,8 @@ services:
       # Logo uploads are base64 JSON (max 1 MB of image).
       KONG_NGINX_HTTP_CLIENT_MAX_BODY_SIZE: 4m
     ports:
-      # Single local entry point: the admin SPA is served at http://localhost:8000.
+      # Single local entry point: the garage web admin is served at http://localhost:8000 and the
+      # platform admin at http://admin.localhost:8000.
       - "${KONG_PROXY_PORT:-8000}:8000"
       # Bind the Admin API to loopback only; it is not an application-facing API.
       - "127.0.0.1:${KONG_ADMIN_PORT:-8001}:8001"

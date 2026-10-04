@@ -72,6 +72,10 @@ docker-restart-backend: ## Restart the backend service
 docker-logs-backend: ## Follow backend logs
 	@$(DOCKER_COMPOSE) logs -f $(BACKEND_SERVICE)
 
+docker-build-backend: ## Build the backend image
+	@printf "$(CYAN)▶ Building backend image...$(RESET)\n"
+	@$(DOCKER_COMPOSE) build $(BACKEND_SERVICE)
+
 docker-up-owner-web: ## Start the garage web admin
 	@printf "$(CYAN)▶ Starting garage web admin...$(RESET)\n"
 	@$(DOCKER_COMPOSE) up -d $(WEB_OWNER_SERVICE)
@@ -109,10 +113,6 @@ docker-logs-admin-web: ## Follow platform admin logs
 docker-build-admin-web: ## Build the platform admin image
 	@printf "$(CYAN)▶ Building platform admin image...$(RESET)\n"
 	@$(DOCKER_COMPOSE) build $(WEB_ADMIN_SERVICE)
-
-docker-build-backend: ## Build the backend image
-	@printf "$(CYAN)▶ Building backend image...$(RESET)\n"
-	@$(DOCKER_COMPOSE) build $(BACKEND_SERVICE)
 
 docker-ps: ## Show running containers
 	@$(DOCKER_COMPOSE) ps

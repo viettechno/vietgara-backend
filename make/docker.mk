@@ -27,8 +27,8 @@
 DOCKER_COMPOSE := docker compose
 POSTGRES_SERVICE := vietgara-pgsql
 BACKEND_SERVICE := vietgara-backend
-WEB_ADMIN_SERVICE := vietgara-owner-web
-PLATFORM_ADMIN_SERVICE := vietgara-admin-web
+WEB_OWNER_SERVICE := vietgara-owner-web
+WEB_ADMIN_SERVICE := vietgara-admin-web
 
 docker-up: ## Start PostgreSQL and backend services
 	@printf "$(CYAN)▶ Starting VietGara services...$(RESET)\n"
@@ -74,41 +74,41 @@ docker-logs-backend: ## Follow backend logs
 
 docker-up-web-admin: ## Start the garage web admin
 	@printf "$(CYAN)▶ Starting garage web admin...$(RESET)\n"
-	@$(DOCKER_COMPOSE) up -d $(WEB_ADMIN_SERVICE)
+	@$(DOCKER_COMPOSE) up -d $(WEB_OWNER_SERVICE)
 
 docker-down-web-admin: ## Stop the garage web admin
 	@printf "\033[33m▶ Stopping garage web admin...$(RESET)\n"
-	@$(DOCKER_COMPOSE) stop $(WEB_ADMIN_SERVICE)
+	@$(DOCKER_COMPOSE) stop $(WEB_OWNER_SERVICE)
 
 docker-restart-web-admin: ## Restart the garage web admin
 	@printf "$(CYAN)▶ Restarting garage web admin...$(RESET)\n"
-	@$(DOCKER_COMPOSE) restart $(WEB_ADMIN_SERVICE)
+	@$(DOCKER_COMPOSE) restart $(WEB_OWNER_SERVICE)
 
 docker-logs-web-admin: ## Follow garage web admin logs
-	@$(DOCKER_COMPOSE) logs -f $(WEB_ADMIN_SERVICE)
+	@$(DOCKER_COMPOSE) logs -f $(WEB_OWNER_SERVICE)
 
 docker-build-web-admin: ## Build the garage web admin image
 	@printf "$(CYAN)▶ Building garage web admin image...$(RESET)\n"
-	@$(DOCKER_COMPOSE) build $(WEB_ADMIN_SERVICE)
+	@$(DOCKER_COMPOSE) build $(WEB_OWNER_SERVICE)
 
 docker-up-platform-admin: ## Start the platform admin
 	@printf "$(CYAN)▶ Starting platform admin...$(RESET)\n"
-	@$(DOCKER_COMPOSE) up -d $(PLATFORM_ADMIN_SERVICE)
+	@$(DOCKER_COMPOSE) up -d $(WEB_ADMIN_SERVICE)
 
 docker-down-platform-admin: ## Stop the platform admin
 	@printf "\033[33m▶ Stopping platform admin...$(RESET)\n"
-	@$(DOCKER_COMPOSE) stop $(PLATFORM_ADMIN_SERVICE)
+	@$(DOCKER_COMPOSE) stop $(WEB_ADMIN_SERVICE)
 
 docker-restart-platform-admin: ## Restart the platform admin
 	@printf "$(CYAN)▶ Restarting platform admin...$(RESET)\n"
-	@$(DOCKER_COMPOSE) restart $(PLATFORM_ADMIN_SERVICE)
+	@$(DOCKER_COMPOSE) restart $(WEB_ADMIN_SERVICE)
 
 docker-logs-platform-admin: ## Follow platform admin logs
-	@$(DOCKER_COMPOSE) logs -f $(PLATFORM_ADMIN_SERVICE)
+	@$(DOCKER_COMPOSE) logs -f $(WEB_ADMIN_SERVICE)
 
 docker-build-platform-admin: ## Build the platform admin image
 	@printf "$(CYAN)▶ Building platform admin image...$(RESET)\n"
-	@$(DOCKER_COMPOSE) build $(PLATFORM_ADMIN_SERVICE)
+	@$(DOCKER_COMPOSE) build $(WEB_ADMIN_SERVICE)
 
 docker-build-backend: ## Build the backend image
 	@printf "$(CYAN)▶ Building backend image...$(RESET)\n"

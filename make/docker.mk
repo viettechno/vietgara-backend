@@ -11,16 +11,16 @@
 	docker-restart-backend \
 	docker-logs-backend \
 	docker-build-backend \
-	docker-up-web-admin \
-	docker-down-web-admin \
-	docker-restart-web-admin \
-	docker-logs-web-admin \
-	docker-build-web-admin \
-	docker-up-platform-admin \
-	docker-down-platform-admin \
-	docker-restart-platform-admin \
-	docker-logs-platform-admin \
-	docker-build-platform-admin \
+	docker-up-owner-web \
+	docker-down-owner-web \
+	docker-restart-owner-web \
+	docker-logs-owner-web \
+	docker-build-owner-web \
+	docker-up-admin-web \
+	docker-down-admin-web \
+	docker-restart-admin-web \
+	docker-logs-admin-web \
+	docker-build-admin-web \
 	docker-ps \
 	docker-clean
 
@@ -72,41 +72,41 @@ docker-restart-backend: ## Restart the backend service
 docker-logs-backend: ## Follow backend logs
 	@$(DOCKER_COMPOSE) logs -f $(BACKEND_SERVICE)
 
-docker-up-web-admin: ## Start the garage web admin
+docker-up-owner-web: ## Start the garage web admin
 	@printf "$(CYAN)▶ Starting garage web admin...$(RESET)\n"
 	@$(DOCKER_COMPOSE) up -d $(WEB_OWNER_SERVICE)
 
-docker-down-web-admin: ## Stop the garage web admin
+docker-down-owner-web: ## Stop the garage web admin
 	@printf "\033[33m▶ Stopping garage web admin...$(RESET)\n"
 	@$(DOCKER_COMPOSE) stop $(WEB_OWNER_SERVICE)
 
-docker-restart-web-admin: ## Restart the garage web admin
+docker-restart-owner-web: ## Restart the garage web admin
 	@printf "$(CYAN)▶ Restarting garage web admin...$(RESET)\n"
 	@$(DOCKER_COMPOSE) restart $(WEB_OWNER_SERVICE)
 
-docker-logs-web-admin: ## Follow garage web admin logs
+docker-logs-owner-web: ## Follow garage web admin logs
 	@$(DOCKER_COMPOSE) logs -f $(WEB_OWNER_SERVICE)
 
-docker-build-web-admin: ## Build the garage web admin image
+docker-build-owner-web: ## Build the garage web admin image
 	@printf "$(CYAN)▶ Building garage web admin image...$(RESET)\n"
 	@$(DOCKER_COMPOSE) build $(WEB_OWNER_SERVICE)
 
-docker-up-platform-admin: ## Start the platform admin
+docker-up-admin-web: ## Start the platform admin
 	@printf "$(CYAN)▶ Starting platform admin...$(RESET)\n"
 	@$(DOCKER_COMPOSE) up -d $(WEB_ADMIN_SERVICE)
 
-docker-down-platform-admin: ## Stop the platform admin
+docker-down-admin-web: ## Stop the platform admin
 	@printf "\033[33m▶ Stopping platform admin...$(RESET)\n"
 	@$(DOCKER_COMPOSE) stop $(WEB_ADMIN_SERVICE)
 
-docker-restart-platform-admin: ## Restart the platform admin
+docker-restart-admin-web: ## Restart the platform admin
 	@printf "$(CYAN)▶ Restarting platform admin...$(RESET)\n"
 	@$(DOCKER_COMPOSE) restart $(WEB_ADMIN_SERVICE)
 
-docker-logs-platform-admin: ## Follow platform admin logs
+docker-logs-admin-web: ## Follow platform admin logs
 	@$(DOCKER_COMPOSE) logs -f $(WEB_ADMIN_SERVICE)
 
-docker-build-platform-admin: ## Build the platform admin image
+docker-build-admin-web: ## Build the platform admin image
 	@printf "$(CYAN)▶ Building platform admin image...$(RESET)\n"
 	@$(DOCKER_COMPOSE) build $(WEB_ADMIN_SERVICE)
 

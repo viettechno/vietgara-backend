@@ -4,10 +4,10 @@ _transform: true
 services:
   # The platform admin SPA, on its own host. Kong picks a route with a host
   # over the catch-all "/" route below, so only admin.localhost reaches it.
-  - name: platform-admin
+  - name: admin-web
     url: http://vietgara-admin-web:80
     routes:
-      - name: platform-admin-route
+      - name: admin-web-route
         hosts:
           - admin.localhost
         paths:
@@ -19,10 +19,10 @@ services:
 
   # The browser-facing SPA is the default route. Nginx handles client-side
   # routes so direct navigation to /staff or /login still loads the app.
-  - name: web-admin
+  - name: owner-web
     url: http://vietgara-owner-web:80
     routes:
-      - name: web-admin-route
+      - name: owner-web-route
         paths:
           - /
         strip_path: false
@@ -43,7 +43,7 @@ services:
           - http
           - https
       # The platform admin calls the API on its own host (same origin).
-      - name: platform-admin-api-route
+      - name: admin-web-api-route
         hosts:
           - admin.localhost
         paths:

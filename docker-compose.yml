@@ -145,20 +145,20 @@ services:
     networks:
       - vietgara-network
 
-  vietgara-web-admin:
+  vietgara-owner-web:
     build:
-      context: ../vietgara-web-admin
+      context: ../vietgara-owner-web
       dockerfile: Dockerfile
-    container_name: vietgara-web-admin
+    container_name: vietgara-owner-web
     restart: unless-stopped
     networks:
       - vietgara-network
 
-  vietgara-platform-admin:
+  vietgara-admin-web:
     build:
-      context: ../vietgara-platform-admin
+      context: ../vietgara-admin-web
       dockerfile: Dockerfile
-    container_name: vietgara-platform-admin
+    container_name: vietgara-admin-web
     restart: unless-stopped
     networks:
       - vietgara-network
@@ -169,8 +169,8 @@ services:
     restart: unless-stopped
     depends_on:
       - vietgara-backend
-      - vietgara-web-admin
-      - vietgara-platform-admin
+      - vietgara-owner-web
+      - vietgara-admin-web
     environment:
       KONG_DATABASE: "off"
       KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml

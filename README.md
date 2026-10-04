@@ -1,7 +1,7 @@
 # VietGara Backend
 
 The Go modular monolith behind the VietGara front ends: the garage web admin
-(`vietgara-web-admin`), the platform admin (`vietgara-platform-admin`) and the
+(`vietgara-owner-web`), the platform admin (`vietgara-admin-web`) and the
 mobile apps (Release 1.0–1.5). One
 process serves:
 
@@ -143,7 +143,7 @@ screen or API grants them.
 The `platform_admin` flag in the access token is read from the database each
 time a session is issued or refreshed. It therefore takes effect within
 `JWT_ACCESS_TTL` (20 minutes by default), or at once if the person signs out
-and back in. The platform admin app (`vietgara-platform-admin`) accepts only accounts that
+and back in. The platform admin app (`vietgara-admin-web`) accepts only accounts that
 have the flag; others see an access-denied page. The garage web admin has no
 platform-admin pages.
 

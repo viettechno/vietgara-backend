@@ -27,8 +27,8 @@
 DOCKER_COMPOSE := docker compose
 POSTGRES_SERVICE := vietgara-pgsql
 BACKEND_SERVICE := vietgara-backend
-WEB_ADMIN_SERVICE := vietgara-web-admin
-PLATFORM_ADMIN_SERVICE := vietgara-platform-admin
+WEB_ADMIN_SERVICE := vietgara-owner-web
+PLATFORM_ADMIN_SERVICE := vietgara-admin-web
 
 docker-up: ## Start PostgreSQL and backend services
 	@printf "$(CYAN)▶ Starting VietGara services...$(RESET)\n"

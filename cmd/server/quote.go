@@ -39,7 +39,7 @@ func buildQuote(
 		Quotes: quotesRepo, Vehicles: customerAdapter, Customers: customerAdapter,
 		Garages: quoteGarages{garages: garages}, Limits: entitlements, Sequences: numbering.NewSequencer(pool),
 		RepairOrders: quoteRepairOrders{uc: repairOrders}, Mailer: mailer, Events: events, Tx: tx,
-		AppBaseURL: envOr("APP_BASE_URL", envOr("FRONTEND_ORIGIN", "http://localhost:8000")),
+		AppBaseURL: appBaseURL(),
 	})
 
 	return &quoteModule{server: quoteHandler.NewServer(quotes), quotes: quotesRepo}

@@ -220,13 +220,12 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	}
 
 	identitySrv := identityHandler.NewServer(identityUC, int64(issuer.AccessTTL().Seconds()), identityHandler.GoogleOAuthConfig{
-		ClientID:       envOr("GOOGLE_CLIENT_ID", ""),
-		ClientSecret:   envOr("GOOGLE_CLIENT_SECRET", ""),
-		AuthEndpoint:   envOr("GOOGLE_AUTH_ENDPOINT", "https://accounts.google.com/o/oauth2/v2/auth"),
-		TokenEndpoint:  envOr("GOOGLE_TOKEN_ENDPOINT", "https://oauth2.googleapis.com/token"),
-		UserInfoURL:    envOr("GOOGLE_USERINFO_URL", "https://openidconnect.googleapis.com/v1/userinfo"),
-		RedirectURI:    envOr("GOOGLE_REDIRECT_URI", "http://localhost:8000"+identityHandler.GoogleCallbackPath),
-		FrontendOrigin: envOr("FRONTEND_ORIGIN", "http://localhost:8000"),
+		ClientID:      envOr("GOOGLE_CLIENT_ID", ""),
+		ClientSecret:  envOr("GOOGLE_CLIENT_SECRET", ""),
+		AuthEndpoint:  envOr("GOOGLE_AUTH_ENDPOINT", "https://accounts.google.com/o/oauth2/v2/auth"),
+		TokenEndpoint: envOr("GOOGLE_TOKEN_ENDPOINT", "https://oauth2.googleapis.com/token"),
+		UserInfoURL:   envOr("GOOGLE_USERINFO_URL", "https://openidconnect.googleapis.com/v1/userinfo"),
+		AppBaseURL:    appBaseURL(),
 	})
 
 	// Tenant/Garage Management
@@ -249,7 +248,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		Events:      events,
 		Audit:       auditLog,
 		Tx:          tx,
-		AppBaseURL:  envOr("APP_BASE_URL", envOr("FRONTEND_ORIGIN", "http://localhost:8000")),
+		AppBaseURL:  appBaseURL(),
 	})
 	tenantSrv := tenantHandler.NewServer(tenantUC)
 

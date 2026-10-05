@@ -40,7 +40,7 @@ func config(google *httptest.Server) handler.GoogleOAuthConfig {
 	return handler.GoogleOAuthConfig{
 		ClientID: "cid", ClientSecret: "secret", AuthEndpoint: "https://accounts.example/auth",
 		TokenEndpoint: google.URL + "/token", UserInfoURL: google.URL + "/userinfo",
-		RedirectURI: "http://localhost:8000/api/v1/auth/google/callback", FrontendOrigin: "http://localhost:8000",
+		AppBaseURL: "http://localhost:8000",
 	}
 }
 
@@ -91,6 +91,7 @@ func TestGoogleLoginFlow(t *testing.T) {
 
 	state := location.Query().Get("state")
 	assert.Equal(t, "cid", location.Query().Get("client_id"))
+	assert.Equal(t, "http://localhost:8000"+handler.GoogleCallbackPath, location.Query().Get("redirect_uri"))
 	require.NotEmpty(t, state)
 
 	cookie := rec.Result().Cookies()[0]
@@ -146,9 +147,15 @@ func TestGoogleCallbackErrors(t *testing.T) {
 
 	rec := serve(t, newEnv(t, handler.GoogleOAuthConfig{}), handler.GoogleLoginPath, nil)
 	assert.Equal(t, "GOOGLE_NOT_CONFIGURED", popupMessage(t, rec)["error"])
+	assert.Contains(t, rec.Body.String(), `,"/")`, "same-origin target without a base URL")
 
 	cfg := handler.GoogleOAuthConfig{ClientID: "c", ClientSecret: "s", //nolint:gosec // test fixture, not a credential
-		RedirectURI: "r", UserInfoURL: "http://127.0.0.1:1/u", TokenEndpoint: "http://127.0.0.1:1/t"}
+		AppBaseURL: "https://staging.vietgara.vn/app/", UserInfoURL: "http://127.0.0.1:1/u", TokenEndpoint: "http://127.0.0.1:1/t"}
 	rec = serve(t, newEnv(t, cfg), handler.GoogleCallbackPath+"?state=s&code=x", cookie)
-	assert.Contains(t, rec.Body.String(), `"http://localhost:8000"`, "default origin")
+	assert.Contains(t, rec.Body.String(), `,"https://staging.vietgara.vn")`, "origin of the base URL")
+
+	rec = serve(t, newEnv(t, cfg), handler.GoogleLoginPath, nil)
+	location, err := url.Parse(rec.Header().Get("Location"))
+	require.NoError(t, err)
+	assert.Equal(t, "https://staging.vietgara.vn"+handler.GoogleCallbackPath, location.Query().Get("redirect_uri"))
 }

@@ -126,7 +126,7 @@ services:
       OUTBOX_RELAY_INTERVAL: ${OUTBOX_RELAY_INTERVAL:-1s}
       LICENSE_EXPIRY_JOB_INTERVAL: ${LICENSE_EXPIRY_JOB_INTERVAL:-1h}
       MAIL_PROVIDER: ${MAIL_PROVIDER:-smtp}
-      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-no-reply@vietgara.vn}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-support@viettechno.com}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-VietGara}
       SMTP_HOST: vietgara-mailpit
       SMTP_PORT: 1025

@@ -63,7 +63,7 @@ make run                         # loads .env when present
 ```
 
 To get into the admin pages, sign up with the e-mail set in
-`PLATFORM_ADMIN_EMAILS` (`admin@vietgara.vn` in `.env_example`) and then
+`PLATFORM_ADMIN_EMAILS` (`admin@viettechno.com` in `.env_example`) and then
 restart the backend. See [Platform admins](#platform-admins).
 
 ### Database roles
@@ -101,7 +101,7 @@ local defaults.
 | `JWT_SIGNING_KEY`, `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL` | Token signing and lifetimes. Generate the key with `openssl rand -hex 32` |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google sign-in popup. Register `APP_BASE_URL` + `/api/v1/auth/google/callback` as the redirect URI |
 | `PLATFORM_ADMIN_EMAILS` | Comma-separated e-mails granted platform admin. See [Platform admins](#platform-admins) |
-| `APP_BASE_URL` | Public URL of the deployment, such as `https://app.vietgara.vn`. The web admin origin for the Google popup, the Google callback host, and the base of e-mailed links. Defaults to `http://localhost:8000` |
+| `APP_BASE_URL` | Public URL of the deployment, such as `https://gara.viettechno.com`. The web admin origin for the Google popup, the Google callback host, and the base of e-mailed links. Defaults to `http://localhost:8000` |
 
 **Cache, licensing and events**
 
@@ -133,7 +133,7 @@ screen or API grants them.
 2. Add their e-mail to `PLATFORM_ADMIN_EMAILS` for that environment:
 
    ```bash
-   PLATFORM_ADMIN_EMAILS=admin@vietgara.vn,ops@vietgara.vn
+   PLATFORM_ADMIN_EMAILS=admin@viettechno.com,ops@viettechno.com
    ```
 
 3. Restart the backend. On startup it adds every account whose e-mail is in
@@ -159,7 +159,7 @@ Things to know:
 
   ```sql
   DELETE FROM platform_admins
-  WHERE account_id = (SELECT id FROM accounts WHERE lower(email) = 'ops@vietgara.vn');
+  WHERE account_id = (SELECT id FROM accounts WHERE lower(email) = 'ops@viettechno.com');
   ```
 
   The change takes effect when that person's current access token expires.
@@ -191,7 +191,7 @@ How failures are handled:
 ### Setting up Mailjet
 
 1. Create a Mailjet account. Under **Account settings → Senders & domains**,
-   add the sending domain (for example `vietgara.vn`).
+   add the sending domain (for example `viettechno.com`).
 2. Publish the SPF and DKIM DNS records that Mailjet shows for the domain.
    Wait until both are validated: mail from an unvalidated sender is rejected
    or lands in spam.
@@ -202,7 +202,7 @@ How failures are handled:
 
    ```bash
    MAIL_PROVIDER=mailjet
-   MAIL_FROM_ADDRESS=no-reply@vietgara.vn   # must be a validated sender
+   MAIL_FROM_ADDRESS=support@viettechno.com   # must be a validated sender
    MAIL_FROM_NAME=VietGara
    MAILJET_API_KEY=<api key>
    MAILJET_SECRET_KEY=<secret key>
@@ -210,7 +210,7 @@ How failures are handled:
 
 5. Trigger a verification e-mail, then check delivery under **Statistics →
    Messages** in Mailjet. In staging, use a sender such as
-   `no-reply@staging.vietgara.vn` so test mail is easy to tell apart.
+   `no-reply@stagging.gara.viettechno.com` so test mail is easy to tell apart.
 
 ## File storage
 

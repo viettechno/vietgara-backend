@@ -178,7 +178,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 
 	mailer, err := mail.New(mail.Config{
 		Provider:         envOr("MAIL_PROVIDER", "smtp"),
-		From:             mail.From{Email: envOr("MAIL_FROM_ADDRESS", "no-reply@vietgara.vn"), Name: envOr("MAIL_FROM_NAME", "VietGara")},
+		From:             mail.From{Email: envOr("MAIL_FROM_ADDRESS", "support@viettechno.com"), Name: envOr("MAIL_FROM_NAME", "VietGara")},
 		SMTPHost:         envOr("SMTP_HOST", "localhost"),
 		SMTPPort:         envInt("SMTP_PORT", 1025),
 		SMTPUsername:     envOr("SMTP_USERNAME", ""),

@@ -36,7 +36,7 @@ func TestInvitationFlow(t *testing.T) {
 	assert.Equal(t, e.Now.Add(domain.InvitationTTL), inv.ExpiresAt)
 
 	require.Len(t, e.Mail.Sent, 1)
-	assert.Contains(t, e.Mail.Sent[0].Text, "https://app.vietgara.vn/invitations/"+inv.ID)
+	assert.Contains(t, e.Mail.Sent[0].Text, "https://gara.viettechno.com/invitations/"+inv.ID)
 	assert.Contains(t, e.Mail.Sent[0].Subject, "Gara Minh", "invitee's language (vi)")
 
 	candidate, err = e.UC.LookupCandidate(ctx, id, "lan@example.com")

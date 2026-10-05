@@ -106,8 +106,8 @@ func TestGrantPlatformAdmins(t *testing.T) {
 
 	e := newEnv(t)
 	require.NoError(t, e.uc.GrantPlatformAdmins(t.Context(), nil))
-	require.NoError(t, e.uc.GrantPlatformAdmins(t.Context(), []string{" Admin@VietGara.vn ", "bad"}))
-	assert.Equal(t, []string{"admin@vietgara.vn"}, e.accounts.granted)
+	require.NoError(t, e.uc.GrantPlatformAdmins(t.Context(), []string{" Admin@viettechno.com ", "bad"}))
+	assert.Equal(t, []string{"admin@viettechno.com"}, e.accounts.granted)
 
 	e.accounts.findErr = errBoom
 	require.Error(t, e.uc.GrantPlatformAdmins(t.Context(), []string{"a@b.vn"}))

@@ -14,6 +14,7 @@ import (
 	customerdomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
 	customerusecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
+	quotedomain "github.com/viettechno/vietgara-backend/internal/quote/domain"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
@@ -145,7 +146,8 @@ func (uc *PortalUseCase) ListMyVehicles(ctx context.Context, accountID string) (
 
 // GetMyVehicleHistory returns a vehicle's quotes, repair orders and
 // settlements, newest first (FR-CAPP-02, FR-CUS-03) -- only for a vehicle
-// on one of the person's customer records in that garage.
+// on one of the person's customer records in that garage. Draft quotes are
+// the garage's work in progress and are left out.
 func (uc *PortalUseCase) GetMyVehicleHistory(
 	ctx context.Context, accountID, garageID, vehicleID string,
 ) ([]customerusecase.HistoryEntry, error) {
@@ -190,7 +192,11 @@ func (uc *PortalUseCase) GetMyVehicleHistory(
 		return nil, apperror.Internal("read the vehicle's history", err)
 	}
 
-	return history, nil
+	return slices.DeleteFunc(history, isDraftQuote), nil
+}
+
+func isDraftQuote(e customerusecase.HistoryEntry) bool {
+	return e.Type == customerusecase.HistoryEntryQuote && e.Status == string(quotedomain.StatusDraft)
 }
 
 // myRecords returns the customer records carrying the account's e-mail.

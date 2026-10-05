@@ -102,7 +102,11 @@ func (v vehicles) History(_ context.Context, garageID, vehicleID string) ([]cust
 		return nil, err
 	}
 
-	return []customerusecase.HistoryEntry{{Type: customerusecase.HistoryEntryQuote, EntityID: "q-" + vehicleID}}, nil
+	return []customerusecase.HistoryEntry{
+		{Type: customerusecase.HistoryEntryQuote, EntityID: "q-" + vehicleID, Status: "sent"},
+		{Type: customerusecase.HistoryEntryQuote, EntityID: "draft-" + vehicleID, Status: "draft"},
+		{Type: customerusecase.HistoryEntryRepairOrder, EntityID: "ro-" + vehicleID, Status: "draft"},
+	}, nil
 }
 
 type garages struct{ *world }
@@ -201,7 +205,13 @@ func TestGetMyVehicleHistory(t *testing.T) {
 	history, err := portal(w, accounts{}).GetMyVehicleHistory(context.Background(), me, "g-1", "v-1")
 
 	require.NoError(t, err)
-	assert.Equal(t, "q-v-1", history[0].EntityID)
+	// The draft quote is left out; only quotes have drafts.
+	ids := make([]string, 0, len(history))
+	for _, e := range history {
+		ids = append(ids, e.EntityID)
+	}
+
+	assert.Equal(t, []string{"q-v-1", "ro-v-1"}, ids)
 	assert.Equal(t, []platformdb.Scope{{GarageID: "g-1", AccountID: me}}, w.scopes)
 }
 

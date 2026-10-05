@@ -58,7 +58,7 @@ func exchangeGoogleCode(ctx context.Context, config GoogleOAuthConfig, code stri
 func fetchGoogleToken(ctx context.Context, config GoogleOAuthConfig, code string) (googleTokenResponse, error) {
 	form := url.Values{
 		"code": {code}, "client_id": {config.ClientID}, "client_secret": {config.ClientSecret},
-		"redirect_uri": {config.RedirectURI}, "grant_type": {"authorization_code"},
+		"redirect_uri": {config.redirectURI()}, "grant_type": {"authorization_code"},
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, config.TokenEndpoint, strings.NewReader(form.Encode()))

@@ -26,20 +26,37 @@ const (
 	googleErrorExchange      = "GOOGLE_EXCHANGE_FAILED"
 )
 
-// GoogleOAuthConfig contains the provider endpoints and the public callback.
+// GoogleOAuthConfig contains the provider endpoints and the public base URL.
 // Client credentials must come from environment or secret management.
 type GoogleOAuthConfig struct {
-	ClientID       string
-	ClientSecret   string
-	AuthEndpoint   string
-	TokenEndpoint  string
-	UserInfoURL    string
-	RedirectURI    string
-	FrontendOrigin string
+	ClientID      string
+	ClientSecret  string
+	AuthEndpoint  string
+	TokenEndpoint string
+	UserInfoURL   string
+	// AppBaseURL is the public URL of the deployment (local, staging or
+	// production). The web admin and the API share its origin behind Kong.
+	AppBaseURL string
 }
 
 func (c GoogleOAuthConfig) configured() bool {
-	return c.ClientID != "" && c.ClientSecret != "" && c.RedirectURI != ""
+	return c.ClientID != "" && c.ClientSecret != "" && c.origin() != ""
+}
+
+// origin is the scheme and host of AppBaseURL, or "" when it is not an
+// absolute URL.
+func (c GoogleOAuthConfig) origin() string {
+	u, err := url.Parse(c.AppBaseURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+
+	return u.Scheme + "://" + u.Host
+}
+
+// redirectURI is the callback registered with Google, on the public origin.
+func (c GoogleOAuthConfig) redirectURI() string {
+	return c.origin() + GoogleCallbackPath
 }
 
 // googleLogin starts the authorization-code flow in the sign-in popup.
@@ -57,7 +74,7 @@ func (s *Server) googleLogin(w http.ResponseWriter, r *http.Request) {
 	})
 
 	query := url.Values{
-		"client_id": {s.googleOAuth.ClientID}, "redirect_uri": {s.googleOAuth.RedirectURI},
+		"client_id": {s.googleOAuth.ClientID}, "redirect_uri": {s.googleOAuth.redirectURI()},
 		"response_type": {"code"}, "scope": {"openid email profile"},
 		"state": {state}, "prompt": {"select_account"},
 	}
@@ -119,9 +136,11 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 // writeGooglePopup posts {type: "vietgara-google-auth", ...payload} to the
 // opener (restricted to the web admin origin) and closes the popup.
 func (s *Server) writeGooglePopup(w http.ResponseWriter, payload map[string]any) {
-	origin := s.googleOAuth.FrontendOrigin
+	// Without a configured origin, "/" restricts the message to the popup's
+	// own origin, which is the web admin's behind Kong.
+	origin := s.googleOAuth.origin()
 	if origin == "" {
-		origin = "http://localhost:8000"
+		origin = "/"
 	}
 
 	payload["type"] = "vietgara-google-auth"

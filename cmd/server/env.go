@@ -2,11 +2,22 @@ package main
 
 import (
 	"log/slog"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// defaultAppBaseURL is the local Kong entry point (KONG_PROXY_PORT).
+const defaultAppBaseURL = "http://localhost:8000"
+
+// appBaseURL is the public URL of this deployment (local, staging or
+// production). The web admin and the API share its origin behind Kong, so it
+// is also the Google OAuth origin and the base of e-mailed links.
+func appBaseURL() string {
+	return envURL("APP_BASE_URL", defaultAppBaseURL)
+}
 
 func mustEnv(key string) string {
 	v := os.Getenv(key)
@@ -72,4 +83,17 @@ func envDuration(key string, fallback time.Duration) time.Duration {
 	}
 
 	return d
+}
+
+// envURL reads an absolute http(s) URL and drops any trailing slash.
+func envURL(key, fallback string) string {
+	v := envOr(key, fallback)
+
+	u, err := url.Parse(v)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		slog.Error("invalid URL environment variable", "key", key, "value", v)
+		os.Exit(1)
+	}
+
+	return strings.TrimSuffix(v, "/")
 }

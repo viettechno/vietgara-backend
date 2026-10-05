@@ -186,11 +186,11 @@ func TestGCSStore(t *testing.T) {
 	require.ErrorContains(t, err, "upload")
 	require.ErrorContains(t, store.Delete(t.Context(), "garages/g1/other.png"), "delete")
 
-	cdn, err := storage.NewGCS(t.Context(), "logos", "https://cdn.vietgara.vn/")
+	cdn, err := storage.NewGCS(t.Context(), "logos", "https://cdn.gara.viettechno.com/")
 	require.NoError(t, err)
 
 	fake.fail = false
 	url, err = cdn.Put(t.Context(), "garages/g1/logo.png", "image/png", png)
 	require.NoError(t, err)
-	assert.Equal(t, "https://cdn.vietgara.vn/garages/g1/logo.png", url)
+	assert.Equal(t, "https://cdn.gara.viettechno.com/garages/g1/logo.png", url)
 }

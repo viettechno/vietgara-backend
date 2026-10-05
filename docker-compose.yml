@@ -116,9 +116,7 @@ services:
       HTTP_PORT: 8080
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8000/api/v1/auth/google/callback}
-      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:8000}
-      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8000}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:${KONG_PROXY_PORT:-8000}}
       PLATFORM_ADMIN_EMAILS: ${PLATFORM_ADMIN_EMAILS:-}
       REDIS_ADDR: vietgara-redis:6379
       ENTITLEMENT_CACHE_TTL: ${ENTITLEMENT_CACHE_TTL:-5m}
@@ -128,7 +126,7 @@ services:
       OUTBOX_RELAY_INTERVAL: ${OUTBOX_RELAY_INTERVAL:-1s}
       LICENSE_EXPIRY_JOB_INTERVAL: ${LICENSE_EXPIRY_JOB_INTERVAL:-1h}
       MAIL_PROVIDER: ${MAIL_PROVIDER:-smtp}
-      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-no-reply@vietgara.vn}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-support@viettechno.com}
       MAIL_FROM_NAME: ${MAIL_FROM_NAME:-VietGara}
       SMTP_HOST: vietgara-mailpit
       SMTP_PORT: 1025

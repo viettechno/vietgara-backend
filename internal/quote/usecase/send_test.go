@@ -69,7 +69,7 @@ func TestQuoteUseCase_Send(t *testing.T) {
 		result, err := uc.Send(t.Context(), garageID, quoteID, actorID)
 		require.NoError(t, err)
 		assert.Equal(t, domain.StatusSent, result.Quote.Status)
-		assert.Contains(t, result.PublicURL, "https://app.vietgara.vn/public/quotes/")
+		assert.Contains(t, result.PublicURL, "https://gara.viettechno.com/public/quotes/")
 		assert.True(t, result.Emailed)
 	})
 

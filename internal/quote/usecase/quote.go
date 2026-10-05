@@ -25,7 +25,7 @@ type Deps struct {
 	Events       EventPublisher
 	Tx           Transactor
 	// AppBaseURL is the web admin origin the public approval link is
-	// built on, e.g. "https://app.vietgara.vn".
+	// built on, e.g. "https://gara.viettechno.com".
 	AppBaseURL string
 	// Now defaults to time.Now.
 	Now clock

@@ -31,6 +31,7 @@ import (
 
 	billingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/billing/v1"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
+	customerportalv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customerportal/v1"
 	documentv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/document/v1"
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
@@ -38,6 +39,7 @@ import (
 	quotev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/quote/v1"
 	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
 	reportingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/reporting/v1"
+	technicianv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/technician/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 	"github.com/viettechno/vietgara-proto/openapi"
 
@@ -46,6 +48,7 @@ import (
 	customerHandler "github.com/viettechno/vietgara-backend/internal/customer/handler"
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
 	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
+	customerportalHandler "github.com/viettechno/vietgara-backend/internal/customerportal/handler"
 	documentHandler "github.com/viettechno/vietgara-backend/internal/document/handler"
 	identityHandler "github.com/viettechno/vietgara-backend/internal/identity/handler"
 	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
@@ -59,6 +62,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/audit"
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
+	"github.com/viettechno/vietgara-backend/internal/platform/googleid"
 	"github.com/viettechno/vietgara-backend/internal/platform/httpapi"
 	"github.com/viettechno/vietgara-backend/internal/platform/kafka"
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
@@ -68,6 +72,7 @@ import (
 	quoteHandler "github.com/viettechno/vietgara-backend/internal/quote/handler"
 	repairorderHandler "github.com/viettechno/vietgara-backend/internal/repairorder/handler"
 	reportingHandler "github.com/viettechno/vietgara-backend/internal/reporting/handler"
+	technicianHandler "github.com/viettechno/vietgara-backend/internal/technician/handler"
 	tenantHandler "github.com/viettechno/vietgara-backend/internal/tenant/handler"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 	tenantUsecase "github.com/viettechno/vietgara-backend/internal/tenant/usecase"
@@ -228,7 +233,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		TokenEndpoint: envOr("GOOGLE_TOKEN_ENDPOINT", "https://oauth2.googleapis.com/token"),
 		UserInfoURL:   envOr("GOOGLE_USERINFO_URL", "https://openidconnect.googleapis.com/v1/userinfo"),
 		AppBaseURL:    appBaseURL(),
-	})
+	}).WithGoogleIDTokenVerifier(googleid.NewVerifier(envList("GOOGLE_MOBILE_CLIENT_IDS")))
 
 	// Tenant/Garage Management
 	garages := tenantRepo.NewPostgresGarageRepository(pool)
@@ -271,9 +276,10 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 
 	partnerRepo := customerRepository.NewPostgresPartnerRepository(pool)
 
+	vehicleUC := customerUsecase.NewVehicleUseCase(vehicleRepo, customerRepo, vehicleHistory{quotes: quote.quotes, repairOrders: repairOrder.uc})
 	customerSrv := customerHandler.NewServer(
 		customerUsecase.NewCustomerUseCase(customerRepo, vehicleRepo),
-		customerUsecase.NewVehicleUseCase(vehicleRepo, customerRepo, vehicleHistory{quotes: quote.quotes, repairOrders: repairOrder.uc}),
+		vehicleUC,
 		customerUsecase.NewPartnerUseCase(partnerRepo),
 	)
 
@@ -294,6 +300,11 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// its own; every e-mail is triggered by an event consumer (wireEvents).
 	notification := buildNotification(pool, mailer, accounts)
 
+	// Mobile BFFs (Phase 2): the Technician App's work list (Release 2.2)
+	// and the Customer App's vehicles and history (Release 2.4).
+	technicianSrv := buildTechnician(tx, tenantUC, repairOrder.uc)
+	customerPortalSrv := buildCustomerPortal(tx, identityUC, customerRepo, vehicleUC, garages)
+
 	// Events: Kafka when brokers are configured, otherwise in-process.
 	if err := wireEvents(app, pool, tx, tenantUC, license, inventory, notification); err != nil {
 		return nil, err
@@ -308,6 +319,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
 		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
 		documentHandler.Policies(), reportingHandler.Policies(),
+		technicianHandler.Policies(), customerportalHandler.Policies(),
 	)
 	app.grpcServer = grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()), // one span per request (NFR-OB-01)
@@ -338,6 +350,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	billingv1.RegisterSettlementServiceServer(app.grpcServer, billing.server)
 	documentv1.RegisterDocumentServiceServer(app.grpcServer, document.server)
 	reportingv1.RegisterReportingServiceServer(app.grpcServer, reporting.server)
+	technicianv1.RegisterTechnicianServiceServer(app.grpcServer, technicianSrv)
+	customerportalv1.RegisterCustomerPortalServiceServer(app.grpcServer, customerPortalSrv)
 	reflection.Register(app.grpcServer)
 
 	mux, err := buildGateway(ctx, app, identitySrv, files)
@@ -436,6 +450,7 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 		repairorderv1.RegisterRepairOrderServiceHandler, inventoryv1.RegisterInventoryServiceHandler,
 		billingv1.RegisterSettlementServiceHandler, documentv1.RegisterDocumentServiceHandler,
 		reportingv1.RegisterReportingServiceHandler,
+		technicianv1.RegisterTechnicianServiceHandler, customerportalv1.RegisterCustomerPortalServiceHandler,
 	} {
 		if err := register(ctx, mux, conn); err != nil {
 			return nil, err

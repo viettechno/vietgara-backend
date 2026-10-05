@@ -20,7 +20,8 @@ func TestPolicies(t *testing.T) {
 	assert.True(t, p[identityv1.AuthService_Login_FullMethodName].Public)
 	assert.True(t, p[identityv1.AuthService_VerifyEmail_FullMethodName].AllowUnverified)
 	assert.Equal(t, middleware.UnverifiedMethod(), p[identityv1.AccountService_GetMe_FullMethodName])
-	assert.Len(t, p, 11)
+	assert.True(t, p[identityv1.AuthService_SignInWithGoogleIdToken_FullMethodName].Public)
+	assert.Len(t, p, 12)
 }
 
 func TestAuthFlow(t *testing.T) {

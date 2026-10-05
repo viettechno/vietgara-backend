@@ -39,6 +39,7 @@ import (
 	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
 	reportingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/reporting/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
+	"github.com/viettechno/vietgara-proto/openapi"
 
 	appdb "github.com/viettechno/vietgara-backend/db"
 	billingHandler "github.com/viettechno/vietgara-backend/internal/billing/handler"
@@ -54,6 +55,7 @@ import (
 	licenseUsecase "github.com/viettechno/vietgara-backend/internal/license/usecase"
 	"github.com/viettechno/vietgara-backend/internal/middleware"
 	notificationHandler "github.com/viettechno/vietgara-backend/internal/notification/handler"
+	"github.com/viettechno/vietgara-backend/internal/platform/apidocs"
 	"github.com/viettechno/vietgara-backend/internal/platform/audit"
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
@@ -399,7 +401,8 @@ func wireEvents(
 }
 
 // buildGateway serves the REST API from the gRPC server over an in-memory
-// connection, plus the plain HTTP routes (Google OAuth, local files).
+// connection, plus the plain HTTP routes (Google OAuth, local files, API
+// docs).
 func buildGateway(ctx context.Context, app *application, identitySrv *identityHandler.Server, files storage.Store) (*runtime.ServeMux, error) {
 	listener := bufconn.Listen(1 << 20)
 
@@ -441,6 +444,12 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 
 	if err := identitySrv.RegisterHTTPRoutes(mux); err != nil {
 		return nil, err
+	}
+
+	if envBool("API_DOCS_ENABLED", false) {
+		if err := apidocs.Register(mux, openapi.Spec); err != nil {
+			return nil, err
+		}
 	}
 
 	if local, ok := files.(*storage.LocalStore); ok {

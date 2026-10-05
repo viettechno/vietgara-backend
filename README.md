@@ -8,7 +8,9 @@ process serves:
 - **gRPC** on `GRPC_PORT`, using the contracts in `vietgara-proto`.
 - The **REST/JSON API** on `HTTP_PORT` under `/api/v1`. grpc-gateway builds
   it from the same contracts and serves it in-process, so every REST call
-  passes through the same interceptors as a gRPC call.
+  passes through the same interceptors as a gRPC call. With
+  `API_DOCS_ENABLED`, a [Scalar](https://scalar.com) API reference to read and
+  try it is served at `/api/docs` (`http://localhost:8000/api/docs` in Compose).
 
 ```mermaid
 flowchart LR
@@ -93,6 +95,7 @@ local defaults.
 | `APP_DB_USER`, `APP_DB_PASSWORD` | Login created in `vietgara_app` on startup, if set |
 | `RUN_MIGRATIONS`, `MIGRATIONS_PATH` | Apply `db/migrations` on startup |
 | `GRPC_PORT`, `HTTP_PORT` | Listener ports |
+| `API_DOCS_ENABLED` | Serve the API reference at `/api/docs` and the OpenAPI document at `/api/openapi.json`. Defaults to `false`; Compose turns it on |
 
 **Identity and access**
 

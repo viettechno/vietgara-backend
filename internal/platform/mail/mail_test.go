@@ -15,7 +15,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 )
 
-var from = mail.From{Email: "support@viettechno.com", Name: "VietGara"}
+var from = mail.From{Email: "no-reply@vietgara.viettechno.com", Name: "VietGara"}
 
 func validMessage() mail.Message {
 	return mail.Message{ToEmail: "owner@example.com", ToName: "Nguyễn Minh", Subject: "Mã xác minh", Text: "Mã: 123456", HTML: "<p>Mã: 123456</p>", Tag: "email_verification"}

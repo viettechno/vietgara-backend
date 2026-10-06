@@ -184,7 +184,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		app.closers = append(app.closers, func() { _ = redisClient.Close() })
 	}
 
-	mailFrom := mail.From{Email: envOr("MAIL_FROM_ADDRESS", "support@viettechno.com"), Name: envOr("MAIL_FROM_NAME", "VietGara")}
+	mailFrom := mail.From{Email: envOr("MAIL_FROM_ADDRESS", "no-reply@vietgara.viettechno.com"), Name: envOr("MAIL_FROM_NAME", "VietGara")}
 
 	mailer, err := mail.New(mail.Config{
 		Provider:         envOr("MAIL_PROVIDER", "smtp"),

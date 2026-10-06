@@ -3,7 +3,7 @@ name: Blackbox tests (staging)
 # Runs testing/blackbox against the staging deployment, on demand (after a
 # staging deploy). The values come from repository secrets; on the staging
 # VM, `make blackbox-env` (vietgara-infra) prints them:
-#   BLACKBOX_STAGING_API_URL       e.g. https://staging.vietgara.vn
+#   BLACKBOX_STAGING_API_URL       e.g. https://vietgara-api-staging.viettechno.com
 #   BLACKBOX_STAGING_EMAIL_DOMAIN  the deployment's TEST_ACCOUNTS_EMAIL_DOMAIN
 #   BLACKBOX_STAGING_MAILPIT_URL   https://blackbox:<password>@<MAILPIT_ADDRESS>
 on:

@@ -150,12 +150,12 @@ func TestGoogleCallbackErrors(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), `,"/")`, "same-origin target without a base URL")
 
 	cfg := handler.GoogleOAuthConfig{ClientID: "c", ClientSecret: "s", //nolint:gosec // test fixture, not a credential
-		AppBaseURL: "https://stagging.gara.viettechno.com/app/", UserInfoURL: "http://127.0.0.1:1/u", TokenEndpoint: "http://127.0.0.1:1/t"}
+		AppBaseURL: "https://vietgara-staging.viettechno.com/app/", UserInfoURL: "http://127.0.0.1:1/u", TokenEndpoint: "http://127.0.0.1:1/t"}
 	rec = serve(t, newEnv(t, cfg), handler.GoogleCallbackPath+"?state=s&code=x", cookie)
-	assert.Contains(t, rec.Body.String(), `,"https://stagging.gara.viettechno.com")`, "origin of the base URL")
+	assert.Contains(t, rec.Body.String(), `,"https://vietgara-staging.viettechno.com")`, "origin of the base URL")
 
 	rec = serve(t, newEnv(t, cfg), handler.GoogleLoginPath, nil)
 	location, err := url.Parse(rec.Header().Get("Location"))
 	require.NoError(t, err)
-	assert.Equal(t, "https://stagging.gara.viettechno.com"+handler.GoogleCallbackPath, location.Query().Get("redirect_uri"))
+	assert.Equal(t, "https://vietgara-staging.viettechno.com"+handler.GoogleCallbackPath, location.Query().Get("redirect_uri"))
 }

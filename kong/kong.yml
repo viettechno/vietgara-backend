@@ -54,11 +54,16 @@ services:
           - https
 
   # Native gRPC for service-to-service and tooling clients on the network.
+  # gRPC paths are /<package>.<Service>/<Method>: only our services and
+  # reflection/health match, so "/" stays with the owner web SPA above (a
+  # catch-all here makes Kong answer browsers "Non-gRPC request matched gRPC
+  # route").
   - name: backend-grpc
     url: grpc://vietgara-backend:50051
     routes:
       - name: backend-grpc-route
         paths:
-          - /
+          - /vietgara.
+          - /grpc.
         protocols:
           - grpc

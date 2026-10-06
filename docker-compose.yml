@@ -104,8 +104,8 @@ services:
     environment:
       RUN_MIGRATIONS: ${RUN_MIGRATIONS:-true}
       # Migrations run as the database owner; the backend itself connects as
-      # APP_DB_USER, a member of vietgara_app that is subject to RLS.
       MIGRATION_DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD_URLENCODED}@vietgara-pgsql:5432/${POSTGRES_DB}?sslmode=disable
+      # APP_DB_USER, a member of vietgara_app that is subject to RLS.
       APP_DB_USER: ${APP_DB_USER:-vietgara_local}
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:-vietgara_local}
       DATABASE_URL: postgres://${APP_DB_USER:-vietgara_local}:${APP_DB_PASSWORD:-vietgara_local}@vietgara-pgsql:5432/${POSTGRES_DB}?sslmode=disable

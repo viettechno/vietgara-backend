@@ -66,9 +66,9 @@ to the development `docker-compose.yml`:
 ```bash
 # On the staging VM, `make blackbox-env` (vietgara-infra) prints these:
 export BLACKBOX_TARGET=staging
-export BLACKBOX_API_URL=https://staging.vietgara.vn
+export BLACKBOX_API_URL=https://vietgara-api-staging.viettechno.com
 export BLACKBOX_EMAIL_DOMAIN=blackbox.vietgara.test
-export BLACKBOX_MAILPIT_URL=https://blackbox:<password>@mailpit.staging.vietgara.vn
+export BLACKBOX_MAILPIT_URL=https://blackbox:<password>@vietgara-mailpit-staging.viettechno.com
 make blackbox-staging
 ```
 

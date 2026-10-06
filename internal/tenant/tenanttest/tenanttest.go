@@ -735,7 +735,7 @@ func NewEnv(lim Limits) *Env {
 		Garages: e.Store, Staff: StaffRepo{e.Store}, Roles: RoleRepo{e.Store}, Groups: GroupRepo{e.Store},
 		Invitations: InvitationRepo{e.Store}, Access: e.Store, Usage: e.Store, Limits: lim, Accounts: e.Dir,
 		Logos: e.Logos, Mailer: e.Mail, Events: e.Events, Audit: e.Audit, Tx: PassTx{},
-		AppBaseURL: "https://gara.viettechno.com/", Now: func() time.Time { return e.Now },
+		AppBaseURL: "https://vietgara.viettechno.com/", Now: func() time.Time { return e.Now },
 	})
 
 	return e

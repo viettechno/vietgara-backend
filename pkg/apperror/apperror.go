@@ -38,8 +38,9 @@ const (
 	CodeInternal           Code = "INTERNAL"
 )
 
-// ErrorDomain is the google.rpc.ErrorInfo domain of VietGara errors.
-const ErrorDomain = "gara.viettechno.com"
+// ErrorDomain is the google.rpc.ErrorInfo domain of VietGara errors: the
+// production API host.
+const ErrorDomain = "vietgara-api.viettechno.com"
 
 // Reasons shared across modules. Module-specific reasons (OTP_EXPIRED,
 // ROLE_IN_USE, ...) are declared next to the module's errors.

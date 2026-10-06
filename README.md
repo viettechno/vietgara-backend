@@ -106,7 +106,7 @@ local defaults.
 | `GOOGLE_MOBILE_CLIENT_IDS` | Google sign-in from the mobile apps (`POST /api/v1/auth/google/id-token`): comma-separated OAuth client IDs the apps' ID tokens are issued to (the Android "web/server" client and the iOS client). Empty disables it |
 | `GOOGLE_AUTH_ENDPOINT`, `GOOGLE_TOKEN_ENDPOINT`, `GOOGLE_USERINFO_URL`, `GOOGLE_CERTS_URL` | Google's OAuth endpoints and the JWKS that mobile ID tokens are verified against. Default to Google's own; override them only to point the backend at a Google stub (the blackbox tests) |
 | `PLATFORM_ADMIN_EMAILS` | Comma-separated e-mails granted platform admin. See [Platform admins](#platform-admins) |
-| `APP_BASE_URL` | Public URL of the deployment, such as `https://gara.viettechno.com`. The web admin origin for the Google popup, the Google callback host, and the base of e-mailed links. Defaults to `http://localhost:8000` |
+| `APP_BASE_URL` | Public URL of the deployment, such as `https://vietgara.viettechno.com`. The web admin origin for the Google popup, the Google callback host, and the base of e-mailed links. Defaults to `http://localhost:8000` |
 
 **Cache, licensing and events**
 
@@ -222,7 +222,10 @@ Never set it in production.
 ### Setting up Mailjet
 
 1. Create a Mailjet account. Under **Account settings → Senders & domains**,
-   add the sending domain (for example `viettechno.com`).
+   add the product's sending domain: `vietgara.viettechno.com` in production,
+   `vietgara-staging.viettechno.com` in staging. A subdomain of its own keeps
+   the product's sending reputation and bounces apart from the company's
+   mailboxes on `viettechno.com`.
 2. Publish the SPF and DKIM DNS records that Mailjet shows for the domain.
    Wait until both are validated: mail from an unvalidated sender is rejected
    or lands in spam.
@@ -233,15 +236,16 @@ Never set it in production.
 
    ```bash
    MAIL_PROVIDER=mailjet
-   MAIL_FROM_ADDRESS=support@viettechno.com   # must be a validated sender
+   MAIL_FROM_ADDRESS=no-reply@vietgara.viettechno.com   # a validated sender
    MAIL_FROM_NAME=VietGara
    MAILJET_API_KEY=<api key>
    MAILJET_SECRET_KEY=<secret key>
    ```
 
 5. Trigger a verification e-mail, then check delivery under **Statistics →
-   Messages** in Mailjet. In staging, use a sender such as
-   `no-reply@stagging.gara.viettechno.com` so test mail is easy to tell apart.
+   Messages** in Mailjet. Staging sends as
+   `no-reply@vietgara-staging.viettechno.com`, so test mail is easy to tell
+   apart.
 
 ## File storage
 

@@ -19,7 +19,7 @@ func TestParse(t *testing.T) {
 	}
 
 	for _, raw := range []string{
-		"", "test", ".test", "gmail.com", "vietgara.vn", "evil.test.com", "a..test", "a_b.test", "a@b.test", "x.testing",
+		"", "test", ".test", "gmail.com", "viettechno.com", "evil.test.com", "a..test", "a_b.test", "a@b.test", "x.testing",
 	} {
 		_, err := testaccounts.Parse(raw)
 		require.ErrorIs(t, err, testaccounts.ErrDomain, raw)

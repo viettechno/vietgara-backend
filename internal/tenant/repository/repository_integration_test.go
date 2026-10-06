@@ -5,36 +5,21 @@ package repository_test
 import (
 	"context"
 	"database/sql"
-	"fmt"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
-	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
-
 	"github.com/stretchr/testify/assert"
-	dbpkg "github.com/viettechno/vietgara-backend/internal/platform/db"
-	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
-	"github.com/viettechno/vietgara-backend/internal/tenant/repository"
+	"github.com/stretchr/testify/require"
 
 	"github.com/viettechno/vietgara-backend/internal/platform/access"
-)
-
-const (
-	appRoleName = "app_rls"
-	appRolePass = "appsecret"
+	dbpkg "github.com/viettechno/vietgara-backend/internal/platform/db"
+	"github.com/viettechno/vietgara-backend/internal/platform/db/pgtest"
+	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
+	"github.com/viettechno/vietgara-backend/internal/tenant/repository"
 )
 
 type testEnv struct {
-	admin     *sql.DB
-	superPool *dbpkg.Pool
 	appPool   *dbpkg.Pool
 	accountID string
 	staffID   string
@@ -42,106 +27,21 @@ type testEnv struct {
 	garageB   string
 }
 
-// startPostgres boots a disposable Postgres, applies the real migrations
-// from db/migrations, seeds an owner with two garages and a second
-// account, and returns two pools: one bound to the superuser (which
-// bypasses RLS) and one bound to a LOGIN member of vietgara_app -- the role
-// the backend runs as, subject to every FORCE ROW LEVEL SECURITY policy.
+// startPostgres boots a migrated Postgres, seeds an owner with two garages
+// and a second account, and returns a pool bound to a LOGIN member of
+// vietgara_app -- the role the backend runs as, subject to every FORCE ROW
+// LEVEL SECURITY policy.
 func startPostgres(t *testing.T) *testEnv {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	t.Cleanup(cancel)
+	pg := pgtest.StartMigrated(t)
+	ctx := t.Context()
 
-	req := testcontainers.ContainerRequest{
-		Image:        "postgres:15-alpine",
-		ExposedPorts: []string{"5432/tcp"},
-		Env: map[string]string{
-			"POSTGRES_DB":       "vietgara_tenant_test",
-			"POSTGRES_USER":     "postgres",
-			"POSTGRES_PASSWORD": "postgres",
-		},
-		WaitingFor: wait.ForLog("database system is ready to accept connections").
-			WithOccurrence(2).
-			WithStartupTimeout(30 * time.Second),
-	}
-
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = container.Terminate(ctx) })
-
-	host, err := container.Host(ctx)
-	require.NoError(t, err)
-
-	port, err := container.MappedPort(ctx, "5432")
-	require.NoError(t, err)
-
-	dsn := fmt.Sprintf("postgres://postgres:postgres@%s:%s/vietgara_tenant_test?sslmode=disable", host, port.Port())
-
-	admin, err := sql.Open("postgres", dsn)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = admin.Close() })
-	require.NoError(t, admin.PingContext(ctx))
-
-	applyMigrations(t, ctx, admin)
-	createAppRole(t, ctx, admin)
-
-	env := &testEnv{admin: admin}
-	env.accountID, env.garageA, env.garageB = seedGarages(t, ctx, admin)
-	env.staffID = seedAccount(t, ctx, admin, "staff@example.com")
-
-	superConn, err := dbpkg.NewPgxPool(ctx, dsn)
-	require.NoError(t, err)
-	t.Cleanup(superConn.Close)
-
-	appDSN := fmt.Sprintf("postgres://%s:%s@%s:%s/vietgara_tenant_test?sslmode=disable",
-		appRoleName, appRolePass, host, port.Port())
-	appConn, err := dbpkg.NewPgxPool(ctx, appDSN)
-	require.NoError(t, err)
-	t.Cleanup(appConn.Close)
-
-	env.superPool = dbpkg.NewPool(ctx, superConn)
-	env.appPool = dbpkg.NewPool(ctx, appConn)
+	env := &testEnv{appPool: pg.AppPool(t)}
+	env.accountID, env.garageA, env.garageB = seedGarages(t, ctx, pg.Admin)
+	env.staffID = seedAccount(t, ctx, pg.Admin, "staff@example.com")
 
 	return env
-}
-
-func applyMigrations(t *testing.T, ctx context.Context, admin *sql.DB) {
-	t.Helper()
-
-	dir := filepath.Join("..", "..", "..", "db", "migrations")
-	entries, err := os.ReadDir(dir)
-	require.NoError(t, err)
-
-	var up []string
-
-	for _, entry := range entries {
-		if strings.HasSuffix(entry.Name(), ".up.sql") {
-			up = append(up, entry.Name())
-		}
-	}
-
-	sort.Strings(up)
-
-	for _, name := range up {
-		content, err := os.ReadFile(filepath.Join(dir, name))
-		require.NoError(t, err)
-
-		_, err = admin.ExecContext(ctx, string(content))
-		require.NoError(t, err, "applying migration %s", name)
-	}
-}
-
-// createAppRole creates a login in vietgara_app, whose grants come from the
-// migrations themselves.
-func createAppRole(t *testing.T, ctx context.Context, admin *sql.DB) {
-	t.Helper()
-
-	_, err := admin.ExecContext(ctx, `CREATE ROLE `+appRoleName+` LOGIN PASSWORD '`+appRolePass+`' IN ROLE vietgara_app`)
-	require.NoError(t, err)
 }
 
 func seedAccount(t *testing.T, ctx context.Context, admin *sql.DB, email string) string {
@@ -172,6 +72,8 @@ func seedGarages(t *testing.T, ctx context.Context, admin *sql.DB) (accountID, g
 
 // TestRLS_TenantModel walks the owner/staff lifecycle through the
 // repositories as the application role and checks every RLS boundary.
+//
+//nolint:funlen // the subtests are ordered steps of one lifecycle on shared state
 func TestRLS_TenantModel(t *testing.T) {
 	env := startPostgres(t)
 	ctx := t.Context()
@@ -317,7 +219,7 @@ func TestRLS_TenantModel(t *testing.T) {
 			assert.Equal(t, []access.Permission{access.CustomerRead, access.CustomerWrite}, acc.Permissions)
 
 			_, err = reader.GarageAccess(ctx, env.garageB, env.staffID)
-			assert.ErrorIs(t, err, access.ErrNoMembership)
+			require.ErrorIs(t, err, access.ErrNoMembership)
 
 			garageCount, staffCount, err := reader.OwnerUsage(ctx, env.accountID)
 			require.NoError(t, err)

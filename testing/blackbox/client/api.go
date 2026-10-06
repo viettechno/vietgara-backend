@@ -1,0 +1,117 @@
+package client
+
+import (
+	"context"
+	"net/http"
+	"net/url"
+
+	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
+	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
+	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
+	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
+	"google.golang.org/protobuf/proto"
+)
+
+// The typed calls below follow the google.api.http mapping of each RPC in
+// vietgara-proto: the request body is the RPC's `body` field and the
+// response is its `response_body` field when one is set.
+
+// ---- Identity ------------------------------------------------------------
+
+// Register creates an e-mail/password account and e-mails the first
+// verification OTP.
+func (c *Client) Register(ctx context.Context, req *identityv1.RegisterRequest) (*identityv1.Session, error) {
+	return call[identityv1.Session](ctx, c, http.MethodPost, "/api/v1/auth/register", req)
+}
+
+// Login signs in with e-mail and password.
+func (c *Client) Login(ctx context.Context, email, password string) (*identityv1.Session, error) {
+	return call[identityv1.Session](ctx, c, http.MethodPost, "/api/v1/auth/login",
+		&identityv1.LoginRequest{Email: email, Password: password})
+}
+
+// VerifyEmail confirms the e-mail OTP and rotates refreshToken into a
+// session that carries the verified claim.
+func (c *Client) VerifyEmail(ctx context.Context, otp, refreshToken string) (*identityv1.Session, error) {
+	return call[identityv1.Session](ctx, c, http.MethodPost, "/api/v1/auth/email-verification",
+		&identityv1.VerifyEmailRequest{OtpCode: otp, RefreshToken: refreshToken})
+}
+
+// Refresh rotates refreshToken.
+func (c *Client) Refresh(ctx context.Context, refreshToken string) (*identityv1.Session, error) {
+	return call[identityv1.Session](ctx, c, http.MethodPost, "/api/v1/auth/refresh",
+		&identityv1.RefreshTokenRequest{RefreshToken: refreshToken})
+}
+
+// SignInWithGoogleIDToken signs in (or up) with an ID token from native
+// Google Sign-In, as the mobile apps do.
+func (c *Client) SignInWithGoogleIDToken(ctx context.Context, idToken string) (*identityv1.Session, error) {
+	return call[identityv1.Session](ctx, c, http.MethodPost, "/api/v1/auth/google/id-token",
+		&identityv1.SignInWithGoogleIdTokenRequest{IdToken: idToken})
+}
+
+// Me returns the signed-in account.
+func (c *Client) Me(ctx context.Context) (*identityv1.Account, error) {
+	return call[identityv1.Account](ctx, c, http.MethodGet, "/api/v1/me", nil)
+}
+
+// ---- Tenant ----------------------------------------------------------------
+
+// CreateGarage creates a garage owned by the signed-in account.
+func (c *Client) CreateGarage(ctx context.Context, garage *tenantv1.Garage) (*tenantv1.Garage, error) {
+	return call[tenantv1.Garage](ctx, c, http.MethodPost, "/api/v1/garages", garage)
+}
+
+// GetGarage returns one garage.
+func (c *Client) GetGarage(ctx context.Context, garageID string) (*tenantv1.Garage, error) {
+	return call[tenantv1.Garage](ctx, c, http.MethodGet, "/api/v1/garages/"+url.PathEscape(garageID), nil)
+}
+
+// ListGarages returns the garages the account owns or works at.
+func (c *Client) ListGarages(ctx context.Context) ([]*tenantv1.Garage, error) {
+	resp, err := call[tenantv1.ListGaragesResponse](ctx, c, http.MethodGet, "/api/v1/garages", nil)
+
+	return resp.GetData(), err
+}
+
+// ---- License ---------------------------------------------------------------
+
+// MySubscription returns the signed-in owner's subscription and usage.
+func (c *Client) MySubscription(ctx context.Context) (*licensev1.Subscription, error) {
+	return call[licensev1.Subscription](ctx, c, http.MethodGet, "/api/v1/me/subscription", nil)
+}
+
+// ---- Customer --------------------------------------------------------------
+
+// CreateCustomer adds a customer to garageID.
+func (c *Client) CreateCustomer(ctx context.Context, garageID string, customer *customerv1.Customer) (*customerv1.Customer, error) {
+	return call[customerv1.Customer](ctx, c, http.MethodPost, garagePath(garageID)+"/customers", customer)
+}
+
+// GetCustomer returns one customer of garageID.
+func (c *Client) GetCustomer(ctx context.Context, garageID, customerID string) (*customerv1.Customer, error) {
+	return call[customerv1.Customer](ctx, c, http.MethodGet, garagePath(garageID)+"/customers/"+url.PathEscape(customerID), nil)
+}
+
+// ListCustomers returns the first page of garageID's customers.
+func (c *Client) ListCustomers(ctx context.Context, garageID string) ([]*customerv1.Customer, error) {
+	resp, err := call[customerv1.ListCustomersResponse](ctx, c, http.MethodGet, garagePath(garageID)+"/customers", nil)
+
+	return resp.GetData(), err
+}
+
+func garagePath(garageID string) string { return "/api/v1/garages/" + url.PathEscape(garageID) }
+
+// call decodes the response into a new T.
+func call[T any, PT interface {
+	*T
+	proto.Message
+}](ctx context.Context, c *Client, method, path string, in proto.Message,
+) (PT, error) {
+	out := PT(new(T))
+	if err := c.Do(ctx, method, path, in, out); err != nil {
+		return nil, err
+	}
+
+	return out, nil
+}

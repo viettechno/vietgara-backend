@@ -1,0 +1,140 @@
+# The blackbox suite's stubbed target: the backend image built from this
+# repository, behind Kong with the real kong/kong.yml, on real Postgres,
+# Redis and Kafka -- the infrastructure we run ourselves -- with every
+# third-party service replaced by a stub:
+#
+#   e-mail (Mailjet in staging)  -> Mailpit, read by the suite for OTPs
+#   Google sign-in               -> google-stub (stubs/google)
+#   file storage (GCS)           -> local disk
+#
+# Everything is disposable (no volumes) and uses its own project name and
+# host ports, so it runs next to the docker-compose.yml development stack.
+# Use `make blackbox-stubbed` from the repository root, or see README.md.
+name: vietgara-blackbox
+
+x-db: &db
+  POSTGRES_USER: vietgara
+  POSTGRES_PASSWORD: vietgara
+  POSTGRES_DB: vietgara
+
+services:
+  vietgara-pgsql:
+    image: postgres:18.4
+    environment: *db
+    tmpfs:
+      - /var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vietgara -d vietgara"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  vietgara-redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  vietgara-kafka:
+    image: apache/kafka:3.9.1
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://vietgara-kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@vietgara-kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_NUM_PARTITIONS: 3
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
+      interval: 3s
+      timeout: 10s
+      retries: 40
+
+  vietgara-mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "127.0.0.1:${BLACKBOX_MAILPIT_PORT:-18025}:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  google-stub:
+    build:
+      context: .
+      dockerfile: stubs/google/Dockerfile
+    ports:
+      - "127.0.0.1:${BLACKBOX_GOOGLE_STUB_PORT:-18090}:8080"
+
+  # Kong's kong.yml routes /api to vietgara-backend:8080, hence the name.
+  vietgara-backend:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    depends_on:
+      vietgara-pgsql: {condition: service_healthy}
+      vietgara-redis: {condition: service_healthy}
+      vietgara-kafka: {condition: service_healthy}
+      vietgara-mailpit: {condition: service_healthy}
+      google-stub: {condition: service_healthy}
+    environment:
+      RUN_MIGRATIONS: "true"
+      MIGRATION_DATABASE_URL: postgres://vietgara:vietgara@vietgara-pgsql:5432/vietgara?sslmode=disable
+      APP_DB_USER: vietgara_blackbox
+      APP_DB_PASSWORD: vietgara_blackbox
+      DATABASE_URL: postgres://vietgara_blackbox:vietgara_blackbox@vietgara-pgsql:5432/vietgara?sslmode=disable
+      # Test-only key; never used outside this stack.
+      JWT_SIGNING_KEY: 0000000000000000000000000000000000000000000000000000000000b1acb0
+      JWT_ACCESS_TTL: 20m
+      JWT_REFRESH_TTL: 720h
+      GRPC_PORT: 50051
+      HTTP_PORT: 8080
+      APP_BASE_URL: http://localhost:${BLACKBOX_KONG_PORT:-18000}
+      # Google: mobile ID tokens are verified against the stub's JWKS; the
+      # web OAuth endpoints point at the stub too, so nothing reaches Google.
+      GOOGLE_MOBILE_CLIENT_IDS: blackbox-mobile.apps.googleusercontent.com
+      GOOGLE_CERTS_URL: http://google-stub:8080/oauth2/v3/certs
+      GOOGLE_AUTH_ENDPOINT: http://google-stub:8080/o/oauth2/v2/auth
+      GOOGLE_TOKEN_ENDPOINT: http://google-stub:8080/token
+      GOOGLE_USERINFO_URL: http://google-stub:8080/v1/userinfo
+      REDIS_ADDR: vietgara-redis:6379
+      KAFKA_BROKERS: vietgara-kafka:9092
+      KAFKA_TOPIC_PREFIX: vietgara
+      KAFKA_CONSUMER_GROUP: vietgara-backend
+      OUTBOX_RELAY_INTERVAL: 500ms
+      MAIL_PROVIDER: smtp
+      MAIL_FROM_ADDRESS: blackbox@vietgara.test
+      MAIL_FROM_NAME: VietGara
+      SMTP_HOST: vietgara-mailpit
+      SMTP_PORT: 1025
+      STORAGE_BACKEND: local
+      STORAGE_LOCAL_DIR: /app/data/uploads
+
+  vietgara-api-gateway:
+    image: kong:3.9
+    depends_on:
+      vietgara-backend: {condition: service_healthy}
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
+      KONG_PROXY_LISTEN: 0.0.0.0:8000
+      KONG_LOG_LEVEL: warn
+      KONG_NGINX_HTTP_CLIENT_MAX_BODY_SIZE: 4m
+    ports:
+      - "127.0.0.1:${BLACKBOX_KONG_PORT:-18000}:8000"
+    volumes:
+      - ../../kong/kong.yml:/etc/kong/kong.yml:ro
+    healthcheck:
+      test: ["CMD", "kong", "health"]
+      interval: 2s
+      timeout: 5s
+      retries: 30

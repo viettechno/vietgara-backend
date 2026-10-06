@@ -8,6 +8,7 @@ include make/image.mk
 include make/build.mk
 include make/mock.mk
 include make/migrate.mk
+include make/blackbox.mk
 
 # Styles
 BOLD 	:= \033[1m

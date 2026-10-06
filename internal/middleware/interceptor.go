@@ -37,6 +37,9 @@ type Policy struct {
 	// SkipLicense exempts a garage-scoped RPC from subscription
 	// enforcement (it must stay reachable to renew).
 	SkipLicense bool
+	// Idempotent RPCs require an Idempotency-Key and replay the first
+	// response for a repeated key (see Idempotency). Garage-scoped only.
+	Idempotent bool
 }
 
 // Policies maps full gRPC method names to their Policy.
@@ -67,6 +70,12 @@ func AdminMethod() Policy { return Policy{PlatformAdmin: true} }
 
 // GarageMethod needs rule in the request's garage.
 func GarageMethod(rule access.Rule) Policy { return Policy{Garage: &rule} }
+
+// IdempotentGarageMethod is GarageMethod for a creation with financial
+// impact, which must be sent with an Idempotency-Key.
+func IdempotentGarageMethod(rule access.Rule) Policy {
+	return Policy{Garage: &rule, Idempotent: true}
+}
 
 // ChainUnaryInterceptors composes multiple interceptors into one, applied
 // in the given order (first argument runs outermost).

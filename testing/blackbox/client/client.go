@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ type Client struct {
 	baseURL string
 	http    *http.Client
 	token   string
+	headers map[string]string
 }
 
 // New returns an anonymous client for the API at baseURL (the gateway, without
@@ -41,6 +43,25 @@ func (c *Client) WithToken(token string) *Client {
 
 	return &clone
 }
+
+// WithHeader returns a client that also sends the header name: value, e.g.
+// an Idempotency-Key.
+func (c *Client) WithHeader(name, value string) *Client {
+	clone := *c
+
+	clone.headers = maps.Clone(c.headers)
+	if clone.headers == nil {
+		clone.headers = map[string]string{}
+	}
+
+	clone.headers[name] = value
+
+	return &clone
+}
+
+// WithIdempotencyKey returns a client that sends key as its
+// Idempotency-Key (API Specification Section 1.1).
+func (c *Client) WithIdempotencyKey(key string) *Client { return c.WithHeader("Idempotency-Key", key) }
 
 // APIError is a non-2xx response: the HTTP status plus the body's
 // {"error": {"code", "message", "details"}}.
@@ -69,30 +90,9 @@ var (
 // Do sends in (nil for no body) to method path and decodes the response
 // into out (nil to ignore it).
 func (c *Client) Do(ctx context.Context, method, path string, in, out proto.Message) error {
-	var body io.Reader = http.NoBody
-
-	if in != nil {
-		raw, err := marshal.Marshal(in)
-		if err != nil {
-			return fmt.Errorf("encode %s %s: %w", method, path, err)
-		}
-
-		body = bytes.NewReader(raw)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
+	req, err := c.newRequest(ctx, method, path, in)
 	if err != nil {
 		return err
-	}
-
-	req.Header.Set("Accept", "application/json")
-
-	if in != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 
 	resp, err := c.http.Do(req)
@@ -119,6 +119,41 @@ func (c *Client) Do(ctx context.Context, method, path string, in, out proto.Mess
 	}
 
 	return nil
+}
+
+// newRequest encodes in (nil for no body) and sets the client's headers.
+func (c *Client) newRequest(ctx context.Context, method, path string, in proto.Message) (*http.Request, error) {
+	var body io.Reader = http.NoBody
+
+	if in != nil {
+		raw, err := marshal.Marshal(in)
+		if err != nil {
+			return nil, fmt.Errorf("encode %s %s: %w", method, path, err)
+		}
+
+		body = bytes.NewReader(raw)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+
+	if in != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+
+	for name, value := range c.headers {
+		req.Header.Set(name, value)
+	}
+
+	return req, nil
 }
 
 func decodeError(status int, raw []byte) error {

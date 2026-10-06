@@ -368,3 +368,51 @@ func TestPartnerRepository(t *testing.T) {
 		assert.Zero(t, total)
 	})
 }
+
+// The Customer Portal's lookup (Release 2.4, migration 000020) finds a
+// person's customer records in every garage by e-mail, case-insensitively,
+// although the caller belongs to none of those garages and RLS still hides
+// the rows themselves.
+func TestFindByEmailAcrossGarages(t *testing.T) {
+	env := startIntegrationEnv(t)
+
+	email := func(c *domain.Customer, address string) *domain.Customer {
+		c.Email = &address
+
+		return c
+	}
+
+	inA := email(newCustomer(env.garageA, "Binh in A", "0911111111"), "Binh@Example.com")
+	inB := email(newCustomer(env.garageB, "Binh in B", "0922222222"), "binh@example.com")
+	removed := email(newCustomer(env.garageB, "Old Binh", "0933333333"), "binh@example.com")
+	other := email(newCustomer(env.garageA, "Someone else", "0944444444"), "other@example.com")
+
+	env.inGarage(t, env.garageA, func(ctx context.Context) {
+		require.NoError(t, env.customers.Create(ctx, inA))
+		require.NoError(t, env.customers.Create(ctx, other))
+	})
+	env.inGarage(t, env.garageB, func(ctx context.Context) {
+		require.NoError(t, env.customers.Create(ctx, inB))
+		require.NoError(t, env.customers.Create(ctx, removed))
+		require.NoError(t, env.customers.SoftDelete(ctx, env.garageB, removed.ID, env.accountID))
+	})
+
+	// No garage scope at all: only the SECURITY DEFINER function sees rows.
+	err := env.txm.WithTransaction(t.Context(), dbpkg.AccountScope(uuid.NewString()), func(ctx context.Context) error {
+		refs, err := env.customers.FindByEmailAcrossGarages(ctx, "BINH@example.com")
+		require.NoError(t, err)
+		assert.ElementsMatch(t, []repository.CustomerRef{
+			{ID: inA.ID, GarageID: env.garageA}, {ID: inB.ID, GarageID: env.garageB},
+		}, refs)
+
+		_, err = env.customers.FindByID(ctx, env.garageA, inA.ID)
+		assert.ErrorIs(t, err, domain.ErrCustomerNotFound, "RLS still hides the record itself")
+
+		none, err := env.customers.FindByEmailAcrossGarages(ctx, "nobody@example.com")
+		require.NoError(t, err)
+		assert.Empty(t, none)
+
+		return nil
+	})
+	require.NoError(t, err)
+}

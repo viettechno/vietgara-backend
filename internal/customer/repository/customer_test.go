@@ -209,3 +209,35 @@ func TestPostgresCustomerRepository_SoftDelete(t *testing.T) {
 	require.ErrorIs(t, repo.SoftDelete(t.Context(), garageID, customerID, actorID), errBoom)
 	require.ErrorIs(t, repo.SoftDelete(t.Context(), garageID, "bad", actorID), domain.ErrCustomerNotFound)
 }
+
+func TestPostgresCustomerRepository_FindByEmailAcrossGarages(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns the matching ids", func(t *testing.T) {
+		t.Parallel()
+
+		conn, pool := newPool(t)
+		conn.EXPECT().Query(mock.Anything, sqlContaining("FROM find_customers_by_email($1)"), []any{"binh@example.com"}).
+			Return(resultRows(t, []any{"c-1", "g-1"}, []any{"c-2", "g-2"}), nil).Once()
+
+		refs, err := repository.NewPostgresCustomerRepository(pool).FindByEmailAcrossGarages(t.Context(), "binh@example.com")
+
+		require.NoError(t, err)
+		assert.Equal(t, []repository.CustomerRef{{ID: "c-1", GarageID: "g-1"}, {ID: "c-2", GarageID: "g-2"}}, refs)
+	})
+
+	t.Run("query and scan errors", func(t *testing.T) {
+		t.Parallel()
+
+		conn, pool := newPool(t)
+		conn.EXPECT().Query(mock.Anything, mock.Anything, mock.Anything).Return(nil, errBoom).Once()
+
+		_, err := repository.NewPostgresCustomerRepository(pool).FindByEmailAcrossGarages(t.Context(), "x@y.z")
+		require.ErrorIs(t, err, errBoom)
+
+		conn, pool = newPool(t)
+		conn.EXPECT().Query(mock.Anything, mock.Anything, mock.Anything).Return(resultRows(t, []any{errBoom}), nil).Once()
+		_, err = repository.NewPostgresCustomerRepository(pool).FindByEmailAcrossGarages(t.Context(), "x@y.z")
+		require.ErrorIs(t, err, errBoom)
+	})
+}

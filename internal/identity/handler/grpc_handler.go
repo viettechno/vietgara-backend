@@ -4,7 +4,11 @@
 package handler
 
 import (
+	"context"
+
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
+
+	"github.com/viettechno/vietgara-backend/internal/platform/googleid"
 
 	"github.com/viettechno/vietgara-backend/internal/identity/usecase"
 	"github.com/viettechno/vietgara-backend/internal/middleware"
@@ -20,11 +24,26 @@ type Server struct {
 	uc          *usecase.IdentityUseCase
 	accessTTL   int64
 	googleOAuth GoogleOAuthConfig
+	googleID    GoogleIDTokenVerifier
+}
+
+// GoogleIDTokenVerifier checks a Google ID token obtained natively by a
+// mobile app (implemented by googleid.Verifier).
+type GoogleIDTokenVerifier interface {
+	Configured() bool
+	Verify(ctx context.Context, idToken string) (googleid.Claims, error)
 }
 
 // NewServer returns a Server; accessTTLSeconds is echoed as expires_in.
 func NewServer(uc *usecase.IdentityUseCase, accessTTLSeconds int64, google GoogleOAuthConfig) *Server {
 	return &Server{uc: uc, accessTTL: accessTTLSeconds, googleOAuth: google}
+}
+
+// WithGoogleIDTokenVerifier enables SignInWithGoogleIdToken (mobile apps).
+func (s *Server) WithGoogleIDTokenVerifier(v GoogleIDTokenVerifier) *Server {
+	s.googleID = v
+
+	return s
 }
 
 // Policies declares what every Identity RPC requires (see
@@ -34,6 +53,7 @@ func Policies() middleware.Policies {
 	return middleware.Policies{
 		identityv1.AuthService_Register_FullMethodName:                 middleware.PublicMethod(),
 		identityv1.AuthService_Login_FullMethodName:                    middleware.PublicMethod(),
+		identityv1.AuthService_SignInWithGoogleIdToken_FullMethodName:  middleware.PublicMethod(),
 		identityv1.AuthService_RefreshToken_FullMethodName:             middleware.PublicMethod(),
 		identityv1.AuthService_Logout_FullMethodName:                   middleware.PublicMethod(),
 		identityv1.AuthService_RequestPasswordReset_FullMethodName:     middleware.PublicMethod(),

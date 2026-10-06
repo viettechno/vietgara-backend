@@ -11,6 +11,12 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/converter"
 )
 
+// RepairOrderToProto maps a repair order for other modules' handlers (the
+// Technician BFF), so the wire format stays defined in one place.
+func RepairOrderToProto(ro *domain.RepairOrder) *repairorderv1.RepairOrder {
+	return repairOrderToProto(ro)
+}
+
 func repairOrderToProto(ro *domain.RepairOrder) *repairorderv1.RepairOrder {
 	out := &repairorderv1.RepairOrder{
 		Id: ro.ID, GarageId: ro.GarageID, VehicleId: ro.VehicleID, VehicleLicensePlate: ro.VehicleLicensePlate,

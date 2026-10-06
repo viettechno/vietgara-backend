@@ -101,6 +101,39 @@ func (r *PostgresCustomerRepository) FindByID(ctx context.Context, garageID, cus
 		garageID, customerID)
 }
 
+// CustomerRef identifies one garage's customer record.
+type CustomerRef struct {
+	ID       string
+	GarageID string
+}
+
+// FindByEmailAcrossGarages returns every live customer record, in any
+// garage, whose e-mail is email (case-insensitive) -- through the
+// SECURITY DEFINER find_customers_by_email() (000020), since the caller
+// (the Customer App's signed-in person) belongs to none of those garages.
+// It returns ids only: the records are then read in each garage's scope.
+func (r *PostgresCustomerRepository) FindByEmailAcrossGarages(ctx context.Context, email string) ([]CustomerRef, error) {
+	rows, err := platformdb.QuerierFromContext(ctx, r.pool).Query(ctx,
+		`SELECT id, garage_id FROM find_customers_by_email($1) ORDER BY garage_id, id`, email)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var refs []CustomerRef
+
+	for rows.Next() {
+		var ref CustomerRef
+		if err := rows.Scan(&ref.ID, &ref.GarageID); err != nil {
+			return nil, err
+		}
+
+		refs = append(refs, ref)
+	}
+
+	return refs, rows.Err()
+}
+
 // Update persists the editable fields of c and scans back updated_at.
 func (r *PostgresCustomerRepository) Update(ctx context.Context, c *domain.Customer) error {
 	consent, err := consentJSON(c)

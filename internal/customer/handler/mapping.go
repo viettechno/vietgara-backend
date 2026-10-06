@@ -32,6 +32,15 @@ func customerToProto(c *domain.Customer) *customerv1.Customer {
 	return out
 }
 
+// VehicleToProto and HistoryEntryToProto map for other modules' handlers
+// (the Customer BFF), so the wire format stays defined in one place.
+func VehicleToProto(v *domain.Vehicle) *customerv1.Vehicle { return vehicleToProto(v) }
+
+// HistoryEntryToProto maps a history entry for other modules' handlers.
+func HistoryEntryToProto(e usecase.HistoryEntry) *customerv1.VehicleHistoryEntry {
+	return historyEntryToProto(e)
+}
+
 func vehicleToProto(v *domain.Vehicle) *customerv1.Vehicle {
 	out := &customerv1.Vehicle{
 		Id:           v.ID,

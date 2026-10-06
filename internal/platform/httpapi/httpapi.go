@@ -30,12 +30,12 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/converter"
 )
 
-// httpCodeHeader carries the HTTP status an RPC asks for (see Created).
-const httpCodeHeader = "x-http-code"
+// HTTPCodeHeader carries the HTTP status an RPC asks for (see Created).
+const HTTPCodeHeader = "x-http-code"
 
 // Created marks a successful RPC response as 201 Created.
 func Created(ctx context.Context) {
-	_ = grpc.SetHeader(ctx, metadata.Pairs(httpCodeHeader, strconv.Itoa(http.StatusCreated)))
+	_ = grpc.SetHeader(ctx, metadata.Pairs(HTTPCodeHeader, strconv.Itoa(http.StatusCreated)))
 }
 
 // ErrorBody is the JSON error envelope.
@@ -89,7 +89,7 @@ func NewMux() *runtime.ServeMux {
 // incomingHeaders forwards the headers handlers need as gRPC metadata.
 func incomingHeaders(key string) (string, bool) {
 	switch strings.ToLower(key) {
-	case "authorization", "accept-language", "x-request-id":
+	case "authorization", "accept-language", "x-request-id", "idempotency-key":
 		return strings.ToLower(key), true
 	default:
 		return "", false
@@ -103,7 +103,7 @@ func forwardStatus(ctx context.Context, w http.ResponseWriter, _ proto.Message) 
 		return nil
 	}
 
-	if values := md.HeaderMD.Get(httpCodeHeader); len(values) > 0 {
+	if values := md.HeaderMD.Get(HTTPCodeHeader); len(values) > 0 {
 		if code, err := strconv.Atoi(values[0]); err == nil {
 			w.WriteHeader(code)
 		}

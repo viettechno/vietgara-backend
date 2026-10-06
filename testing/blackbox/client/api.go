@@ -5,9 +5,11 @@ import (
 	"net/http"
 	"net/url"
 
+	billingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/billing/v1"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
+	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 	"google.golang.org/protobuf/proto"
 )
@@ -98,6 +100,54 @@ func (c *Client) ListCustomers(ctx context.Context, garageID string) ([]*custome
 	resp, err := call[customerv1.ListCustomersResponse](ctx, c, http.MethodGet, garagePath(garageID)+"/customers", nil)
 
 	return resp.GetData(), err
+}
+
+// CreateVehicle registers a vehicle in garageID.
+func (c *Client) CreateVehicle(ctx context.Context, garageID string, vehicle *customerv1.Vehicle) (*customerv1.Vehicle, error) {
+	return call[customerv1.Vehicle](ctx, c, http.MethodPost, garagePath(garageID)+"/vehicles", vehicle)
+}
+
+// ---- Repair Order ----------------------------------------------------------
+
+// CreateRepairOrder creates an ad-hoc repair order in garageID.
+func (c *Client) CreateRepairOrder(ctx context.Context, garageID string, order *repairorderv1.RepairOrder) (*repairorderv1.RepairOrder, error) {
+	return call[repairorderv1.RepairOrder](ctx, c, http.MethodPost, garagePath(garageID)+"/repair-orders", order)
+}
+
+// UpdateRepairOrderLine changes the fields set on line; returns the order.
+func (c *Client) UpdateRepairOrderLine(
+	ctx context.Context, garageID, orderID, lineID string, line *repairorderv1.RepairOrderLine,
+) (*repairorderv1.RepairOrder, error) {
+	return call[repairorderv1.RepairOrder](ctx, c, http.MethodPatch,
+		repairOrderPath(garageID, orderID)+"/lines/"+url.PathEscape(lineID), line)
+}
+
+// CloseRepairOrder closes a repair order whose lines are all completed.
+func (c *Client) CloseRepairOrder(ctx context.Context, garageID, orderID string) (*repairorderv1.RepairOrder, error) {
+	return call[repairorderv1.RepairOrder](ctx, c, http.MethodPost, repairOrderPath(garageID, orderID)+"/closing",
+		&repairorderv1.CloseRepairOrderRequest{})
+}
+
+func repairOrderPath(garageID, orderID string) string {
+	return garagePath(garageID) + "/repair-orders/" + url.PathEscape(orderID)
+}
+
+// ---- Billing & Settlement --------------------------------------------------
+
+// CreateSettlement settles a closed repair order. The API requires an
+// Idempotency-Key (WithIdempotencyKey).
+func (c *Client) CreateSettlement(ctx context.Context, garageID, repairOrderID string) (*billingv1.Settlement, error) {
+	return call[billingv1.Settlement](ctx, c, http.MethodPost, garagePath(garageID)+"/settlements",
+		&billingv1.CreateSettlementRequest{RepairOrderId: repairOrderID})
+}
+
+// RecordPayment records a payment against a settlement. The API requires
+// an Idempotency-Key (WithIdempotencyKey).
+func (c *Client) RecordPayment(
+	ctx context.Context, garageID, settlementID string, payment *billingv1.RecordSettlementPaymentRequest,
+) (*billingv1.Settlement, error) {
+	return call[billingv1.Settlement](ctx, c, http.MethodPost,
+		garagePath(garageID)+"/settlements/"+url.PathEscape(settlementID)+"/payments", payment)
 }
 
 func garagePath(garageID string) string { return "/api/v1/garages/" + url.PathEscape(garageID) }

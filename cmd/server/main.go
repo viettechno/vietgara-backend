@@ -64,6 +64,7 @@ import (
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/platform/googleid"
 	"github.com/viettechno/vietgara-backend/internal/platform/httpapi"
+	"github.com/viettechno/vietgara-backend/internal/platform/idempotency"
 	"github.com/viettechno/vietgara-backend/internal/platform/kafka"
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
@@ -331,6 +332,14 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		})
 	}
 
+	// Idempotency-Key replay for creations with financial impact (API
+	// Specification Section 1.1); expired keys are purged hourly.
+	idempotencyKeys := idempotency.NewStore(pool)
+
+	app.workers = append(app.workers, func(ctx context.Context) {
+		scheduleIdempotencyPurge(ctx, idempotencyKeys)
+	})
+
 	// gRPC server with the request pipeline of internal/middleware.
 	policies := middleware.Merge(
 		identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
@@ -345,6 +354,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 			middleware.EmailVerified(),
 			middleware.PlatformAdmin(),
 			middleware.Garage(tx, accessReader, license.enforcement),
+			middleware.Idempotency(idempotencyKeys),
 		),
 	)
 

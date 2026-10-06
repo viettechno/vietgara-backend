@@ -6,6 +6,7 @@ import (
 	billingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/billing/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/billing/usecase"
+	"github.com/viettechno/vietgara-backend/internal/platform/httpapi"
 )
 
 // ListSettlements lists a garage's settlements, optionally filtered by
@@ -45,6 +46,8 @@ func (s *Server) CreateSettlement(
 		if err != nil {
 			return nil, err
 		}
+
+		httpapi.Created(ctx)
 
 		return &billingv1.CreateSettlementResponse{Settlement: settlementToProto(settlement)}, nil
 	})

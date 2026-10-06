@@ -1,0 +1,2 @@
+DROP FUNCTION IF EXISTS purge_idempotency_keys(TIMESTAMP WITH TIME ZONE);
+DROP TABLE IF EXISTS idempotency_keys;

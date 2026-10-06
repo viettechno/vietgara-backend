@@ -294,7 +294,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 
 	// Billing & Settlement (Release 1.4): settlements from a closed
 	// repair order, the customer/insurer allocation, recorded payments.
-	billing := buildBilling(pool, events, garages, license.entitlements, partnerRepo, repairOrder.uc)
+	billing := buildBilling(pool, events, garages, license.entitlements, partnerRepo, repairOrder.uc, auditLog)
 
 	// Document/Print (Release 1.4): quote, repair order and settlement
 	// receipt PDFs, the stock movement report as Excel.

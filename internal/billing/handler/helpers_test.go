@@ -45,9 +45,13 @@ func newEnv(t *testing.T) *env {
 		events: mocks.NewMockBillingEventPublisher(t),
 	}
 
+	// Auditing is the use case's concern (its own tests check the entries).
+	auditLog := mocks.NewMockBillingAuditLogger(t)
+	auditLog.EXPECT().Record(mock.Anything, mock.Anything).Return(nil).Maybe()
+
 	uc := usecase.NewSettlementUseCase(usecase.Deps{
 		Settlements: e.settlements, RepairOrders: e.repairOrders, Partners: e.partners, Garages: e.garages,
-		Limits: e.limits, Sequences: e.sequences, Events: e.events,
+		Limits: e.limits, Sequences: e.sequences, Events: e.events, Audit: auditLog,
 	})
 	e.srv = handler.NewServer(uc)
 

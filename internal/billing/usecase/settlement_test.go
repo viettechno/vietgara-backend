@@ -26,11 +26,22 @@ func TestSettlementUseCase_Create(t *testing.T) {
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "settlement", "QT-202609-{SEQ:4}").Return(1, nil).Once()
 		d.Settlements.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
 		d.Events.EXPECT().Publish(mock.Anything, usecase.EventSettlementCreated, garageID, "", mock.Anything).Return(nil).Once()
+		entry := expectAudit(d)
 
 		s, err := uc.Create(t.Context(), usecase.CreateSettlementRequest{
 			GarageID: garageID, ActorID: actorID, RepairOrderID: repairOrderID,
 		})
 		require.NoError(t, err)
+		require.Equal(t, usecase.ActionSettlementCreated, entry.Action)
+		require.Equal(t, actorID, entry.Actor)
+		require.Equal(t, garageID, entry.GarageID)
+		require.Equal(t, "settlement", entry.EntityType)
+		require.Equal(t, s.ID, entry.EntityID)
+		require.Nil(t, entry.Before)
+		after, ok := entry.After.(map[string]any)
+		require.True(t, ok)
+		require.Equal(t, "QT-202609-0001", after["number"])
+		require.Equal(t, int64(1_000_000), after["total_amount"])
 		require.Equal(t, "An Nguyen", s.CustomerName)
 		require.Equal(t, "51F-123.45", s.VehicleLicensePlate)
 		require.Equal(t, "QT-202609-0001", s.Number)

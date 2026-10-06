@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"github.com/viettechno/vietgara-backend/internal/billing/domain"
+
+	"github.com/viettechno/vietgara-backend/internal/platform/audit"
 )
 
 // ListFilter selects one page of a garage's settlements.
@@ -110,6 +112,12 @@ type Sequencer interface {
 // transaction.
 type EventPublisher interface {
 	Publish(ctx context.Context, eventType, garageID, accountID string, payload any) error
+}
+
+// AuditLogger records audited changes in the caller's transaction
+// (Security Architecture Section 7, NFR-SE-07).
+type AuditLogger interface {
+	Record(ctx context.Context, e audit.Entry) error
 }
 
 // clock is a source of the current time, replaced in tests.

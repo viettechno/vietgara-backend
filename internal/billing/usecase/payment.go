@@ -40,6 +40,8 @@ func (uc *SettlementUseCase) RecordPayment(ctx context.Context, req RecordPaymen
 		return nil, toAppError("record payment", domain.ErrInvalidPaymentAmount)
 	}
 
+	before := settlementAudit(s)
+
 	payment := &domain.Payment{
 		ID: uuid.NewString(), PayerType: req.PayerType, Amount: req.Amount, Method: req.Method, Note: req.Note,
 		CreatedBy: actorRef(req.ActorID),
@@ -54,6 +56,15 @@ func (uc *SettlementUseCase) RecordPayment(ctx context.Context, req RecordPaymen
 
 	if err := uc.Settlements.SaveStatus(ctx, req.GarageID, req.SettlementID, updated.Status); err != nil {
 		return nil, toAppError("record payment", err)
+	}
+
+	// The payment is the entity; the settlement's totals and status before
+	// and after it are what an auditor reconciles.
+	after := settlementAudit(updated)
+	after["payment"] = paymentAudit(payment)
+
+	if err := uc.audit(ctx, req.ActorID, req.GarageID, ActionPaymentRecorded, entityPayment, payment.ID, before, after); err != nil {
+		return nil, err
 	}
 
 	return uc.Get(ctx, req.GarageID, req.SettlementID)

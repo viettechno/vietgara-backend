@@ -46,6 +46,8 @@ func (uc *SettlementUseCase) Allocate(ctx context.Context, req AllocateSettlemen
 		return nil, toAppError("allocate settlement", domain.ErrInvalidAllocation)
 	}
 
+	before := settlementAudit(s)
+
 	s.CustomerAmount, s.InsurerAmount = req.CustomerAmount, req.InsurerAmount
 	s.InsurerPartnerID, s.InsurerPartnerName = req.InsurerPartnerID, insurerName
 	s.UpdatedBy = actorRef(req.ActorID)
@@ -53,6 +55,10 @@ func (uc *SettlementUseCase) Allocate(ctx context.Context, req AllocateSettlemen
 
 	if err := uc.Settlements.SaveAllocation(ctx, s); err != nil {
 		return nil, toAppError("allocate settlement", err)
+	}
+
+	if err := uc.audit(ctx, req.ActorID, req.GarageID, ActionSettlementAllocated, entitySettlement, s.ID, before, settlementAudit(s)); err != nil {
+		return nil, err
 	}
 
 	return s, nil

@@ -104,6 +104,7 @@ local defaults.
 | `JWT_SIGNING_KEY`, `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL` | Token signing and lifetimes. Generate the key with `openssl rand -hex 32` |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google sign-in popup. Register `APP_BASE_URL` + `/api/v1/auth/google/callback` as the redirect URI |
 | `GOOGLE_MOBILE_CLIENT_IDS` | Google sign-in from the mobile apps (`POST /api/v1/auth/google/id-token`): comma-separated OAuth client IDs the apps' ID tokens are issued to (the Android "web/server" client and the iOS client). Empty disables it |
+| `GOOGLE_AUTH_ENDPOINT`, `GOOGLE_TOKEN_ENDPOINT`, `GOOGLE_USERINFO_URL`, `GOOGLE_CERTS_URL` | Google's OAuth endpoints and the JWKS that mobile ID tokens are verified against. Default to Google's own; override them only to point the backend at a Google stub (the blackbox tests) |
 | `PLATFORM_ADMIN_EMAILS` | Comma-separated e-mails granted platform admin. See [Platform admins](#platform-admins) |
 | `APP_BASE_URL` | Public URL of the deployment, such as `https://gara.viettechno.com`. The web admin origin for the Google popup, the Google callback host, and the base of e-mailed links. Defaults to `http://localhost:8000` |
 

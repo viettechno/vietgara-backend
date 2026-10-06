@@ -215,10 +215,8 @@ github.com/twmb/franz-go/pkg/kfake v0.0.0-20260925040417-67711bad7b74 h1:P6V+qoR
 github.com/twmb/franz-go/pkg/kfake v0.0.0-20260925040417-67711bad7b74/go.mod h1:TG+7GhIS2HEiBNWJUb+2m0F+rB87IbU7WtWSWBDnOL4=
 github.com/twmb/franz-go/pkg/kmsg v1.14.0 h1:gSxrBEKWl3qnsx3QKWol5OEVujuPmIoDkhMt3didFKM=
 github.com/twmb/franz-go/pkg/kmsg v1.14.0/go.mod h1:+DPt4NC8RmI6hqb8G09+3giKObE6uD2Eya6CfqBpeJY=
-github.com/viettechno/vietgara-proto v1.5.1 h1:XLY4/n2ret3X+SoSuI8of0K0xPLITP5r2NMimsQK/yo=
-github.com/viettechno/vietgara-proto v1.5.1/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
-github.com/viettechno/vietgara-proto v1.5.2-0.20261005164820-1e3bc1bbc93f h1:PCW/n7IWQdrE71TOMzVHtcb7XcvyZSulbI6I2t/0qrg=
-github.com/viettechno/vietgara-proto v1.5.2-0.20261005164820-1e3bc1bbc93f/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
+github.com/viettechno/vietgara-proto v1.5.2 h1:DEZO4YVIsLii5iDdaJuDNjyUza1CjcGRrNy9fjs95Co=
+github.com/viettechno/vietgara-proto v1.5.2/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
 github.com/xuri/efp v0.0.1 h1:fws5Rv3myXyYni8uwj2qKjVaRP30PdjeYe2Y6FDsCL8=
 github.com/xuri/efp v0.0.1/go.mod h1:ybY/Jr0T0GTCnYjKqmdwxyxn2BQf2RcQIIvex5QldPI=
 github.com/xuri/excelize/v2 v2.11.0 h1:HxaEFl6sRN2+8J5a8HaKq+0M4FsjBGMnWWtjOCPSG88=

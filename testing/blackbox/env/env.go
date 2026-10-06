@@ -1,8 +1,9 @@
 // Package env selects the deployment the blackbox suite runs against and
 // reads its endpoints from the environment. The scenarios are the same on
-// every target; only the ones that need a stub (reading OTP e-mails,
-// minting Google ID tokens, creating throwaway accounts) are limited to
-// the stubbed target with RequireStubbed.
+// every target. Scenarios that sign up accounts need the target's test
+// inbox (a Mailpit receiving the e-mail of EmailDomain, see the backend's
+// TEST_ACCOUNTS_*) and skip without one; the ones that need a stub only
+// the stubbed stack has (Google) use RequireStubbed.
 package env
 
 import (
@@ -22,7 +23,8 @@ const (
 	// for every third-party service (Mailpit for e-mail, google-stub for
 	// Google sign-in).
 	Stubbed Target = "stubbed"
-	// Staging is the shared staging deployment, with real third parties.
+	// Staging is the shared staging deployment, with real third parties;
+	// only its test accounts' e-mail goes to a Mailpit.
 	Staging Target = "staging"
 )
 
@@ -32,15 +34,21 @@ type Config struct {
 	// APIURL is the public entry point (Kong); the API is under /api/v1.
 	APIURL string
 
-	// MailpitURL and GoogleStubURL are set on the stubbed target only.
-	MailpitURL    string
+	// EmailDomain is the domain of every account the suite signs up: the
+	// target's TEST_ACCOUNTS_EMAIL_DOMAIN, whose e-mail lands in MailpitURL
+	// and whose accounts are purged after a day.
+	EmailDomain string
+	// MailpitURL is the test inbox's API; credentials, if any, go in the
+	// URL (https://user:pass@host). Empty: scenarios that sign up skip.
+	MailpitURL string
+	// GoogleStubURL is set on the stubbed target only.
 	GoogleStubURL string
 	// GoogleClientID is the audience the stubbed backend accepts mobile
 	// Google ID tokens for (GOOGLE_MOBILE_CLIENT_IDS).
 	GoogleClientID string
 
 	// OwnerEmail and OwnerPassword sign in a pre-provisioned, verified
-	// account on targets where the suite cannot create one (staging).
+	// account for the read-only checks when there is no test inbox.
 	OwnerEmail    string
 	OwnerPassword string
 }
@@ -68,6 +76,7 @@ func load() (Config, error) {
 	cfg := Config{
 		Target:         Target(getenv("BLACKBOX_TARGET", string(Stubbed))),
 		APIURL:         getenv("BLACKBOX_API_URL", "http://localhost:18000"),
+		EmailDomain:    getenv("BLACKBOX_EMAIL_DOMAIN", "blackbox.vietgara.test"),
 		MailpitURL:     getenv("BLACKBOX_MAILPIT_URL", "http://localhost:18025"),
 		GoogleStubURL:  getenv("BLACKBOX_GOOGLE_STUB_URL", "http://localhost:18090"),
 		GoogleClientID: getenv("BLACKBOX_GOOGLE_CLIENT_ID", "blackbox-mobile.apps.googleusercontent.com"),
@@ -82,7 +91,8 @@ func load() (Config, error) {
 			return Config{}, fmt.Errorf("BLACKBOX_API_URL is required for target %q", cfg.Target)
 		}
 
-		cfg.MailpitURL, cfg.GoogleStubURL = "", ""
+		// No local defaults on staging: its inbox is configured or absent.
+		cfg.MailpitURL, cfg.GoogleStubURL = os.Getenv("BLACKBOX_MAILPIT_URL"), ""
 	default:
 		return Config{}, fmt.Errorf("unknown BLACKBOX_TARGET %q (want %q or %q)", cfg.Target, Stubbed, Staging)
 	}
@@ -91,8 +101,7 @@ func load() (Config, error) {
 }
 
 // RequireStubbed skips t unless the suite runs against the stubbed stack.
-// Use it for scenarios that read stubbed side channels or create accounts
-// that cannot be cleaned up.
+// Use it for scenarios that need a stub staging does not have.
 func RequireStubbed(tb testing.TB, why string) {
 	tb.Helper()
 

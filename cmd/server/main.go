@@ -183,9 +183,11 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		app.closers = append(app.closers, func() { _ = redisClient.Close() })
 	}
 
+	mailFrom := mail.From{Email: envOr("MAIL_FROM_ADDRESS", "support@viettechno.com"), Name: envOr("MAIL_FROM_NAME", "VietGara")}
+
 	mailer, err := mail.New(mail.Config{
 		Provider:         envOr("MAIL_PROVIDER", "smtp"),
-		From:             mail.From{Email: envOr("MAIL_FROM_ADDRESS", "support@viettechno.com"), Name: envOr("MAIL_FROM_NAME", "VietGara")},
+		From:             mailFrom,
 		SMTPHost:         envOr("SMTP_HOST", "localhost"),
 		SMTPPort:         envInt("SMTP_PORT", 1025),
 		SMTPUsername:     envOr("SMTP_USERNAME", ""),
@@ -193,6 +195,11 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		MailjetAPIKey:    envOr("MAILJET_API_KEY", ""),
 		MailjetSecretKey: envOr("MAILJET_SECRET_KEY", ""),
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	testAccountDomain, mailer, err := testAccountsFromEnv(mailer, mailFrom)
 	if err != nil {
 		return nil, err
 	}
@@ -314,6 +321,15 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	app.workers = append(app.workers, func(ctx context.Context) {
 		license.expiryJob.Schedule(ctx, envDuration("LICENSE_EXPIRY_JOB_INTERVAL", licenseUsecase.DefaultExpiryJobInterval))
 	})
+
+	if !testAccountDomain.IsZero() {
+		purge := identityUsecase.NewTestAccountPurgeJob(accounts, testAccountDomain,
+			envDuration("TEST_ACCOUNTS_RETENTION", identityUsecase.DefaultTestAccountRetention))
+
+		app.workers = append(app.workers, func(ctx context.Context) {
+			purge.Schedule(ctx, identityUsecase.DefaultTestAccountPurgeInterval)
+		})
+	}
 
 	// gRPC server with the request pipeline of internal/middleware.
 	policies := middleware.Merge(

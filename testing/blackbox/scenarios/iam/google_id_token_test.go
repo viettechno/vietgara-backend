@@ -35,7 +35,7 @@ func TestGoogleIDTokenSignIn(t *testing.T) {
 	}
 
 	t.Run("a new Google user gets a verified account", func(t *testing.T) {
-		email := fixture.UniqueEmail("google")
+		email := fixture.UniqueEmail(t, "google")
 		claims := idtoken.Claims{Subject: "google-" + email, Email: email, EmailVerified: true, Name: "Blackbox Google", Audience: audience}
 
 		first, err := api.SignInWithGoogleIDToken(ctx, mint(t, claims))
@@ -62,7 +62,7 @@ func TestGoogleIDTokenSignIn(t *testing.T) {
 	})
 
 	t.Run("rejects tokens the backend must not trust", func(t *testing.T) {
-		email := fixture.UniqueEmail("google-bad")
+		email := fixture.UniqueEmail(t, "google-bad")
 		valid := idtoken.Claims{Subject: "google-" + email, Email: email, EmailVerified: true, Audience: audience}
 
 		for name, tc := range map[string]struct {

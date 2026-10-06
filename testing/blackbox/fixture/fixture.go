@@ -1,6 +1,7 @@
 // Package fixture creates the actors a scenario needs, over the public API
-// only. Each actor gets a unique e-mail, so scenarios never collide with
-// each other or with an earlier run against the same database.
+// only. Each actor gets a unique e-mail on the target's test domain, so
+// scenarios never collide with each other or with an earlier run against
+// the same database, and the target purges them after a day.
 package fixture
 
 import (
@@ -35,12 +36,16 @@ func Anonymous(tb testing.TB) *client.Client {
 	return client.New(env.Get(tb).APIURL)
 }
 
-// Mailpit returns the stubbed mailbox. Stubbed target only.
+// Mailpit returns the target's test inbox, skipping tb when it has none.
 func Mailpit(tb testing.TB) *client.Mailpit {
 	tb.Helper()
-	env.RequireStubbed(tb, "reads e-mails from Mailpit")
 
-	return client.NewMailpit(env.Get(tb).MailpitURL)
+	cfg := env.Get(tb)
+	if cfg.MailpitURL == "" {
+		tb.Skipf("needs the test inbox: BLACKBOX_MAILPIT_URL is not set for target %s", cfg.Target)
+	}
+
+	return client.NewMailpit(cfg.MailpitURL)
 }
 
 // GoogleStub returns the stubbed Google. Stubbed target only.
@@ -53,20 +58,21 @@ func GoogleStub(tb testing.TB) *client.GoogleStub {
 
 var seq atomic.Int64
 
-// UniqueEmail returns an address no earlier run has used, labelled for
-// whoever reads the database or Mailpit afterwards.
-func UniqueEmail(label string) string {
-	return fmt.Sprintf("bb.%s.%d.%d@vietgara.test", strings.ToLower(label), time.Now().UnixNano(), seq.Add(1))
+// UniqueEmail returns an address on the test domain that no earlier run
+// has used, labelled for whoever reads the database or Mailpit afterwards.
+func UniqueEmail(tb testing.TB, label string) string {
+	tb.Helper()
+
+	return fmt.Sprintf("bb.%s.%d.%d@%s", strings.ToLower(label), time.Now().UnixNano(), seq.Add(1), env.Get(tb).EmailDomain)
 }
 
-// NewVerifiedOwner registers a fresh account, reads its OTP from Mailpit
-// and verifies it: the state every garage scenario starts from. Stubbed
-// target only.
+// NewVerifiedOwner registers a fresh account, reads its OTP from the test
+// inbox and verifies it: the state every garage scenario starts from.
 func NewVerifiedOwner(tb testing.TB, label string) *Actor {
 	tb.Helper()
 
 	mail := Mailpit(tb)
-	email := UniqueEmail(label)
+	email := UniqueEmail(tb, label)
 	api := Anonymous(tb)
 
 	registered, err := api.Register(tb.Context(), &identityv1.RegisterRequest{
@@ -94,15 +100,16 @@ func NewVerifiedOwner(tb testing.TB, label string) *Actor {
 	return &Actor{Email: email, Password: Password, Session: verified, API: api.WithToken(verified.GetAccessToken())}
 }
 
-// Owner returns a verified owner on any target: a fresh one on the stubbed
-// stack, or the pre-provisioned BLACKBOX_OWNER_EMAIL account elsewhere
-// (skipping t when it is not configured). Scenarios that use it must not
-// change shared state they cannot undo.
+// Owner returns a verified owner on any target: a fresh one when the
+// target has a test inbox, otherwise the pre-provisioned
+// BLACKBOX_OWNER_EMAIL account (skipping tb when that is not configured
+// either). Scenarios that use it must not change shared state they cannot
+// undo, since the account may be shared.
 func Owner(tb testing.TB) *Actor {
 	tb.Helper()
 
 	cfg := env.Get(tb)
-	if cfg.Target == env.Stubbed {
+	if cfg.MailpitURL != "" {
 		return NewVerifiedOwner(tb, "owner")
 	}
 

@@ -125,6 +125,14 @@ local defaults.
 | `MAILJET_API_KEY`, `MAILJET_SECRET_KEY` | Mailjet provider |
 | `STORAGE_BACKEND`, `STORAGE_LOCAL_DIR`, `STORAGE_PUBLIC_BASE_URL`, `STORAGE_GCS_BUCKET` | Uploaded files. See [File storage](#file-storage) |
 
+**Test accounts (staging only)**
+
+| Variable | Purpose |
+| --- | --- |
+| `TEST_ACCOUNTS_EMAIL_DOMAIN` | E-mail domain of the blackbox suite's accounts, under `.test`, `.example`, `.invalid` or `.localhost`. Unset (the default, and always in production) disables everything below. See [Test accounts](#test-accounts) |
+| `TEST_ACCOUNTS_SMTP_HOST`, `TEST_ACCOUNTS_SMTP_PORT` | SMTP server (Mailpit) that receives the test accounts' e-mail. Required with the domain; port defaults to `1025` |
+| `TEST_ACCOUNTS_RETENTION` | How long a test account lives before it is purged with everything it owns. Defaults to `24h` |
+
 ## Platform admins
 
 Platform admins manage plans and subscriptions (FR-IAM-08, FR-LIC-05). They
@@ -192,6 +200,24 @@ How failures are handled:
 - Invitation e-mails are sent after the invitation is committed. If sending
   fails, the error is logged and the invitation still appears on the
   invitee's Invitations page.
+
+### Test accounts
+
+The blackbox suite (`testing/blackbox`) signs up its own accounts, including
+on staging, where real e-mail goes through Mailjet and the suite cannot read
+it. With `TEST_ACCOUNTS_EMAIL_DOMAIN` set:
+
+- Every e-mail to an address on that domain goes to `TEST_ACCOUNTS_SMTP_HOST`
+  (a Mailpit the suite reads OTPs from) instead of the configured provider.
+  All other e-mail is unchanged. Authentication itself is not changed:
+  these accounts get random OTPs, with the usual expiry and attempt limits.
+- The domain must be under a TLD reserved for testing, so no real person
+  can own an address on it. The server refuses to start otherwise.
+- Every hour, accounts on the domain older than `TEST_ACCOUNTS_RETENTION`
+  are deleted with everything they own. Garages and their data, staff
+  memberships and subscriptions all go by foreign-key cascade.
+
+Never set it in production.
 
 ### Setting up Mailjet
 

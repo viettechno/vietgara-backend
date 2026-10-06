@@ -1,5 +1,6 @@
 // Package iam_test covers sign-up and sign-in (FR-IAM-01..03) end to end:
-// e-mail OTPs read from Mailpit and Google ID tokens minted by the stub.
+// e-mail OTPs read from the test inbox and, on the stubbed stack, Google ID
+// tokens minted by the stub.
 package iam_test
 
 import (
@@ -23,7 +24,7 @@ func TestEmailSignUp(t *testing.T) {
 	ctx := t.Context()
 	mail := fixture.Mailpit(t)
 	api := fixture.Anonymous(t)
-	email := fixture.UniqueEmail("signup")
+	email := fixture.UniqueEmail(t, "signup")
 
 	registered, err := api.Register(ctx, &identityv1.RegisterRequest{Email: email, Password: fixture.Password, FullName: "Blackbox Signup"})
 	require.NoError(t, err)

@@ -57,37 +57,46 @@ to the development `docker-compose.yml`:
 | --- | --- |
 | `BLACKBOX_API_URL` | `http://localhost:18000` (Kong; `BLACKBOX_KONG_PORT` for Compose) |
 | `BLACKBOX_MAILPIT_URL` | `http://localhost:18025` (`BLACKBOX_MAILPIT_PORT`) |
+| `BLACKBOX_EMAIL_DOMAIN` | `blackbox.vietgara.test`, the `TEST_ACCOUNTS_EMAIL_DOMAIN` set in `compose.yml` |
 | `BLACKBOX_GOOGLE_STUB_URL` | `http://localhost:18090` (`BLACKBOX_GOOGLE_STUB_PORT`) |
 | `BLACKBOX_GOOGLE_CLIENT_ID` | the `GOOGLE_MOBILE_CLIENT_IDS` set in `compose.yml` |
 
 ### `staging`
 
 ```bash
-BLACKBOX_API_URL=https://<staging host> \
-BLACKBOX_OWNER_EMAIL=... BLACKBOX_OWNER_PASSWORD=... \
+# On the staging VM, `make blackbox-env` (vietgara-infra) prints these:
+export BLACKBOX_TARGET=staging
+export BLACKBOX_API_URL=https://staging.vietgara.vn
+export BLACKBOX_EMAIL_DOMAIN=blackbox.vietgara.test
+export BLACKBOX_MAILPIT_URL=https://blackbox:<password>@mailpit.staging.vietgara.vn
 make blackbox-staging
 ```
 
-Staging uses the real Mailjet and Google, so the suite cannot read OTPs or
-mint ID tokens there. It also must not leave throwaway accounts behind.
-Scenarios that need any of these call `env.RequireStubbed` and are
-**skipped** on staging. What runs there now:
+Or run the **Blackbox tests (staging)** workflow in GitHub Actions, which
+reads the same values from repository secrets (see
+`.github/workflows/blackbox-staging.yml`).
 
-- checks that need no account (anonymous calls are rejected);
-- read-only checks as a pre-provisioned, verified owner
-  (`BLACKBOX_OWNER_EMAIL`/`PASSWORD`), skipped if those are not set.
+Staging uses the real Mailjet and Google, except for **test accounts**.
+Every account the suite signs up is on `BLACKBOX_EMAIL_DOMAIN`, which must
+equal the deployment's `TEST_ACCOUNTS_EMAIL_DOMAIN`. For that domain only,
+the backend sends e-mail to a Mailpit that the suite reads (the "test
+inbox"), and it deletes the accounts and everything they own after 24 h.
+The domain is under a reserved TLD (`.test` and similar), so no real
+person's mail is ever routed there. Authentication itself is unchanged:
+the OTPs are random, and the suite reads them like a user would.
 
-Running workflows on staging needs decisions that have not been made yet:
-how a test signs up (a test OTP inbox or a staging-only bypass), and how
-test data is tagged and cleaned up. Until then, the staging target is a
-smoke test.
+So every scenario runs on staging except Google sign-in, which needs the
+Google stub (`env.RequireStubbed`). Without `BLACKBOX_MAILPIT_URL`, the
+scenarios that sign up are skipped, and the read-only checks use a
+pre-provisioned owner (`BLACKBOX_OWNER_EMAIL`/`BLACKBOX_OWNER_PASSWORD`)
+if one is set.
 
 ## Layout
 
 ```
 env/        target selection and endpoints (BLACKBOX_*)
 client/     REST client (protojson over the proto messages), Mailpit and google-stub clients
-fixture/    actors: Anonymous, Owner (any target), NewVerifiedOwner (stubbed), RequireAPIError
+fixture/    actors: Anonymous, Owner (any target), NewVerifiedOwner (needs the test inbox), RequireAPIError
 stubs/      third-party stubs, one directory each, with their Dockerfile
 scenarios/  one package per area: smoke, iam, tenant, ...
 compose.yml the stubbed stack
@@ -102,9 +111,11 @@ compose.yml the stubbed stack
   account with a unique e-mail, so tests can run in parallel
   (`t.Parallel()`) and can be re-run against the same stack without
   resetting it.
-- **Say which targets it runs on.** If it creates data, reads e-mail or
-  uses a stub, call `env.RequireStubbed(t, "<why>")` first. If it is
-  read-only, use `fixture.Owner(t)` so it also runs on staging.
+- **Make it run on staging too.** Create accounts with the `fixture`
+  helpers: they sign up on the test domain, which staging purges. Read
+  e-mail with `fixture.Mailpit`, which skips the test when the target has
+  no test inbox. Call `env.RequireStubbed(t, "<why>")` only when the
+  scenario needs a stub that staging lacks (Google).
 - **Add endpoints to the typed client** in `client/api.go` when you need
   them. Use the RPC's HTTP mapping from `vietgara-proto`: its `body` and
   `response_body` decide what is sent and decoded.

@@ -1,0 +1,35 @@
+name: Blackbox tests (staging)
+
+# Runs testing/blackbox against the staging deployment, on demand (after a
+# staging deploy). The values come from repository secrets; on the staging
+# VM, `make blackbox-env` (vietgara-infra) prints them:
+#   BLACKBOX_STAGING_API_URL       e.g. https://staging.vietgara.vn
+#   BLACKBOX_STAGING_EMAIL_DOMAIN  the deployment's TEST_ACCOUNTS_EMAIL_DOMAIN
+#   BLACKBOX_STAGING_MAILPIT_URL   https://blackbox:<password>@<MAILPIT_ADDRESS>
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: blackbox-staging
+  cancel-in-progress: false
+
+jobs:
+  blackbox-staging:
+    name: Blackbox tests (staging)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: testing/blackbox/go.mod
+          cache-dependency-path: testing/blackbox/go.sum
+
+      - name: Blackbox tests
+        env:
+          BLACKBOX_API_URL: ${{ secrets.BLACKBOX_STAGING_API_URL }}
+          BLACKBOX_EMAIL_DOMAIN: ${{ secrets.BLACKBOX_STAGING_EMAIL_DOMAIN }}
+          BLACKBOX_MAILPIT_URL: ${{ secrets.BLACKBOX_STAGING_MAILPIT_URL }}
+        run: make blackbox-staging

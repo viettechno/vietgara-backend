@@ -12,13 +12,11 @@ import (
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
-	"github.com/viettechno/vietgara-backend/testing/blackbox/env"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
 func TestOwnersCannotReachEachOthersGarages(t *testing.T) {
 	t.Parallel()
-	env.RequireStubbed(t, "creates owners and garages")
 
 	ctx := t.Context()
 	alice := fixture.NewVerifiedOwner(t, "alice")

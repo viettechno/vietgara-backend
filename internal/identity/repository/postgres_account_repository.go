@@ -7,7 +7,9 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -175,4 +177,47 @@ func mapUniqueViolation(err error) error {
 	default:
 		return err
 	}
+}
+
+// DeleteTestAccounts implements usecase.TestAccountDeleter. Each account
+// is deleted on its own, so one that cannot be removed (say, a test staff
+// member who invited a real account: staff_invitations.invited_by does not
+// cascade) does not keep the others; its error is returned with the rest.
+func (r *PostgresAccountRepository) DeleteTestAccounts(ctx context.Context, emailDomain string, createdBefore time.Time) (int64, error) {
+	if emailDomain == "" {
+		return 0, errors.New("delete test accounts: empty e-mail domain")
+	}
+
+	q := platformdb.QuerierFromContext(ctx, r.pool)
+
+	rows, err := q.Query(ctx, `
+		SELECT id FROM accounts
+		WHERE right(lower(email), length($1) + 1) = '@' || $1 AND created_at < $2`,
+		strings.ToLower(emailDomain), createdBefore)
+	if err != nil {
+		return 0, fmt.Errorf("list test accounts: %w", err)
+	}
+
+	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return 0, fmt.Errorf("list test accounts: %w", err)
+	}
+
+	var (
+		deleted int64
+		errs    []error
+	)
+
+	for _, id := range ids {
+		// Garages, memberships, subscriptions and the rest cascade.
+		if _, err := q.Exec(ctx, `DELETE FROM accounts WHERE id = $1`, id); err != nil {
+			errs = append(errs, fmt.Errorf("delete test account %s: %w", id, err))
+
+			continue
+		}
+
+		deleted++
+	}
+
+	return deleted, errors.Join(errs...)
 }

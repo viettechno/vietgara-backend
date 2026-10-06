@@ -233,7 +233,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		TokenEndpoint: envOr("GOOGLE_TOKEN_ENDPOINT", "https://oauth2.googleapis.com/token"),
 		UserInfoURL:   envOr("GOOGLE_USERINFO_URL", "https://openidconnect.googleapis.com/v1/userinfo"),
 		AppBaseURL:    appBaseURL(),
-	}).WithGoogleIDTokenVerifier(googleid.NewVerifier(envList("GOOGLE_MOBILE_CLIENT_IDS")))
+	}).WithGoogleIDTokenVerifier(googleid.NewVerifier(envList("GOOGLE_MOBILE_CLIENT_IDS"),
+		googleid.WithCertsURL(envOr("GOOGLE_CERTS_URL", googleid.DefaultCertsURL))))
 
 	// Tenant/Garage Management
 	garages := tenantRepo.NewPostgresGarageRepository(pool)

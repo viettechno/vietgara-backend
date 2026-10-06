@@ -1,0 +1,4 @@
+# Build context of the google-stub image (compose.yml).
+*.md
+compose.yml
+scenarios

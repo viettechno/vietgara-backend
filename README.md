@@ -244,6 +244,7 @@ make help               # list every target
 make test-unit          # unit tests with the 90% coverage gate
 make test-integration   # integration tests (testcontainers: Postgres, Kafka)
 make lint               # golangci-lint
+make blackbox-stubbed   # API-level tests of the built image with stubbed third parties (testing/blackbox)
 make generate-mocks     # mockery
 make migrate-up         # apply migrations; also migrate-down N=…, migrate-force VERSION=…, migrate-version
 ```
@@ -252,6 +253,10 @@ Locally, `go.work` in the parent directory builds against your
 `vietgara-proto` checkout. CI (`.github/workflows/ci.yml`) builds against the
 version pinned in `go.mod` instead. For every contract change, push and tag
 `vietgara-proto`, then bump the version here.
+
+The blackbox suite in [`testing/blackbox`](testing/blackbox/README.md) is a
+separate Go module that drives the built image over the public REST API,
+locally against stubbed third parties or against staging.
 
 ## Container image and staging
 

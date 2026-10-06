@@ -241,11 +241,18 @@ event catalogue is in the Event Design document.
 ```bash
 make help               # list every target
 make test-unit          # unit tests with the 90% coverage gate
-make test-integration   # integration tests (testcontainers: Postgres, Kafka)
+make test-integration   # repository and migration tests on a disposable Postgres (testcontainers)
 make lint               # golangci-lint
 make generate-mocks     # mockery
 make migrate-up         # apply migrations; also migrate-down N=…, migrate-force VERSION=…, migrate-version
 ```
+
+Integration tests carry `//go:build integration` and live next to the code
+they test. They get their database from `internal/platform/db/pgtest`, which
+starts the same Postgres version as `docker-compose.yml`, applies
+`db/migrations` the way the server does, and hands out a superuser
+connection (for seeding past RLS) and a `vietgara_app` pool (subject to RLS).
+`make lint` lints them too.
 
 Locally, `go.work` in the parent directory builds against your
 `vietgara-proto` checkout. CI (`.github/workflows/ci.yml`) builds against the

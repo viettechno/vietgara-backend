@@ -4,37 +4,23 @@ package repository_test
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/viettechno/vietgara-backend/internal/customer/domain"
 	"github.com/viettechno/vietgara-backend/internal/customer/repository"
 	"github.com/viettechno/vietgara-backend/internal/customer/usecase"
 	dbpkg "github.com/viettechno/vietgara-backend/internal/platform/db"
-)
-
-const (
-	appRoleName = "app_rls"
-	appRolePass = "appsecret"
+	"github.com/viettechno/vietgara-backend/internal/platform/db/pgtest"
 )
 
 // integrationEnv holds a migrated Postgres with two garages and pools bound
-// to a plain LOGIN role, so the FORCE ROW LEVEL SECURITY policies apply.
+// to a vietgara_app login, so the FORCE ROW LEVEL SECURITY policies apply.
 type integrationEnv struct {
-	admin     *sql.DB
 	txm       *dbpkg.TxManager
 	customers *repository.PostgresCustomerRepository
 	vehicles  *repository.PostgresVehicleRepository
@@ -47,93 +33,23 @@ type integrationEnv struct {
 func startIntegrationEnv(t *testing.T) *integrationEnv {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	t.Cleanup(cancel)
+	pg := pgtest.StartMigrated(t)
+	env := &integrationEnv{accountID: uuid.NewString(), garageA: uuid.NewString(), garageB: uuid.NewString()}
 
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "postgres:15-alpine",
-			ExposedPorts: []string{"5432/tcp"},
-			Env: map[string]string{
-				"POSTGRES_DB":       "vietgara_customer_test",
-				"POSTGRES_USER":     "postgres",
-				"POSTGRES_PASSWORD": "postgres",
-			},
-			WaitingFor: wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(30 * time.Second),
-		},
-		Started: true,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = container.Terminate(ctx) })
-
-	host, err := container.Host(ctx)
+	_, err := pg.Admin.ExecContext(t.Context(), `INSERT INTO accounts (id, email, full_name) VALUES ($1, 'owner@example.com', 'Owner')`, env.accountID)
 	require.NoError(t, err)
 
-	port, err := container.MappedPort(ctx, "5432")
-	require.NoError(t, err)
-
-	admin, err := sql.Open("postgres", fmt.Sprintf("postgres://postgres:postgres@%s:%s/vietgara_customer_test?sslmode=disable", host, port.Port()))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = admin.Close() })
-
-	applyMigrations(t, ctx, admin)
-
-	for _, stmt := range []string{
-		`CREATE ROLE ` + appRoleName + ` LOGIN PASSWORD '` + appRolePass + `'`,
-		"GRANT USAGE ON SCHEMA public TO " + appRoleName,
-		"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO " + appRoleName,
-	} {
-		_, err := admin.ExecContext(ctx, stmt)
-		require.NoError(t, err, stmt)
-	}
-
-	env := &integrationEnv{admin: admin, accountID: uuid.NewString(), garageA: uuid.NewString(), garageB: uuid.NewString()}
-
-	_, err = admin.ExecContext(ctx, `INSERT INTO accounts (id, email, full_name) VALUES ($1, 'owner@example.com', 'Owner')`, env.accountID)
-	require.NoError(t, err)
-
-	_, err = admin.ExecContext(ctx, `INSERT INTO garages (id, account_id, name) VALUES ($1, $3, 'A'), ($2, $3, 'B')`,
+	_, err = pg.Admin.ExecContext(t.Context(), `INSERT INTO garages (id, account_id, name) VALUES ($1, $3, 'A'), ($2, $3, 'B')`,
 		env.garageA, env.garageB, env.accountID)
 	require.NoError(t, err)
 
-	conn, err := dbpkg.NewPgxPool(ctx, fmt.Sprintf("postgres://%s:%s@%s:%s/vietgara_customer_test?sslmode=disable",
-		appRoleName, appRolePass, host, port.Port()))
-	require.NoError(t, err)
-	t.Cleanup(conn.Close)
-
-	pool := dbpkg.NewPool(ctx, conn)
+	pool := pg.AppPool(t)
 	env.txm = dbpkg.NewTxManager(pool)
 	env.customers = repository.NewPostgresCustomerRepository(pool)
 	env.vehicles = repository.NewPostgresVehicleRepository(pool)
 	env.partners = repository.NewPostgresPartnerRepository(pool)
 
 	return env
-}
-
-func applyMigrations(t *testing.T, ctx context.Context, admin *sql.DB) {
-	t.Helper()
-
-	dir := filepath.Join("..", "..", "..", "db", "migrations")
-	entries, err := os.ReadDir(dir)
-	require.NoError(t, err)
-
-	var up []string
-	for _, entry := range entries {
-		if strings.HasSuffix(entry.Name(), ".up.sql") {
-			up = append(up, entry.Name())
-		}
-	}
-	sort.Strings(up)
-
-	for _, name := range up {
-		content, err := os.ReadFile(filepath.Join(dir, name))
-		require.NoError(t, err)
-
-		_, err = admin.ExecContext(ctx, string(content))
-		require.NoError(t, err, "applying migration %s", name)
-	}
 }
 
 // inGarage runs fn in a transaction scoped to garageID, the way the
@@ -159,6 +75,7 @@ func newVehicle(c *domain.Customer, plate string) *domain.Vehicle {
 	return &domain.Vehicle{ID: uuid.NewString(), GarageID: c.GarageID, CustomerID: c.ID, LicensePlate: plate}
 }
 
+//nolint:funlen // one walk-through of the repositories against a shared, seeded database
 func TestCustomerAndVehicleRepositories(t *testing.T) {
 	env := startIntegrationEnv(t)
 	alice := newCustomer(env.garageA, "Nguyễn Thị Alice", "0912345678")
@@ -406,7 +323,7 @@ func TestFindByEmailAcrossGarages(t *testing.T) {
 		}, refs)
 
 		_, err = env.customers.FindByID(ctx, env.garageA, inA.ID)
-		assert.ErrorIs(t, err, domain.ErrCustomerNotFound, "RLS still hides the record itself")
+		require.ErrorIs(t, err, domain.ErrCustomerNotFound, "RLS still hides the record itself")
 
 		none, err := env.customers.FindByEmailAcrossGarages(ctx, "nobody@example.com")
 		require.NoError(t, err)

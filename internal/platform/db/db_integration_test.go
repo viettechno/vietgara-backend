@@ -6,15 +6,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"testing"
-	"time"
 
-	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
+
 	dbpkg "github.com/viettechno/vietgara-backend/internal/platform/db"
+	"github.com/viettechno/vietgara-backend/internal/platform/db/pgtest"
 )
 
 const txTestTable = "tx_manager_test"
@@ -22,57 +19,12 @@ const txTestTable = "tx_manager_test"
 func startPostgres(t *testing.T) (*sql.DB, *dbpkg.Pool) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	t.Cleanup(cancel)
+	pg := pgtest.Start(t)
 
-	req := testcontainers.ContainerRequest{
-		Image:        "postgres:15-alpine",
-		ExposedPorts: []string{"5432/tcp"},
-		Env: map[string]string{
-			"POSTGRES_DB":       "vietgara_test",
-			"POSTGRES_USER":     "postgres",
-			"POSTGRES_PASSWORD": "postgres",
-		},
-		WaitingFor: wait.ForLog("database system is ready to accept connections").
-			WithOccurrence(2).
-			WithStartupTimeout(30 * time.Second),
-	}
-
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = container.Terminate(ctx) })
-
-	host, err := container.Host(ctx)
+	_, err := pg.Admin.ExecContext(t.Context(), "CREATE TABLE IF NOT EXISTS "+txTestTable+" (id int PRIMARY KEY)")
 	require.NoError(t, err)
 
-	port, err := container.MappedPort(ctx, "5432")
-	require.NoError(t, err)
-
-	dsn := fmt.Sprintf("postgres://postgres:postgres@%s:%s/vietgara_test?sslmode=disable", host, port.Port())
-
-	admin, err := sql.Open("postgres", dsn)
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = admin.Close() })
-
-	require.NoError(t, admin.PingContext(ctx))
-
-	connPool, err := dbpkg.NewPgxPool(ctx, dsn)
-	require.NoError(t, err)
-	t.Cleanup(connPool.Close)
-
-	pool := dbpkg.NewPool(ctx, connPool)
-
-	_, err = admin.ExecContext(ctx, "CREATE TABLE IF NOT EXISTS "+txTestTable+" (id int PRIMARY KEY)")
-	require.NoError(t, err)
-
-	t.Cleanup(func() {
-		_, _ = admin.ExecContext(context.Background(), "DROP TABLE IF EXISTS "+txTestTable)
-	})
-
-	return admin, pool
+	return pg.Admin, pg.SuperPool(t)
 }
 
 func TestTxManager_WithTransactionReal(t *testing.T) {
@@ -96,6 +48,7 @@ func TestTxManager_WithTransactionReal(t *testing.T) {
 			}
 
 			_, err = querier.Exec(ctx, "INSERT INTO "+txTestTable+" (id) VALUES (1)")
+
 			return err
 		})
 		require.NoError(t, err)
@@ -122,6 +75,7 @@ func TestTxManager_WithTransactionReal(t *testing.T) {
 			if err != nil {
 				return err
 			}
+
 			return wantErr
 		})
 		require.ErrorIs(t, err, wantErr)

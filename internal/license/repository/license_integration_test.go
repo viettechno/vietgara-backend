@@ -3,27 +3,19 @@
 package repository_test
 
 import (
-	"context"
 	"database/sql"
-	"fmt"
-	"os"
-	"path/filepath"
-	"sort"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/viettechno/vietgara-backend/internal/license/domain"
 	"github.com/viettechno/vietgara-backend/internal/license/repository"
 	"github.com/viettechno/vietgara-backend/internal/license/usecase"
 	dbpkg "github.com/viettechno/vietgara-backend/internal/platform/db"
+	"github.com/viettechno/vietgara-backend/internal/platform/db/pgtest"
 )
 
 // startLicenseDB boots Postgres with every migration applied and returns a
@@ -31,59 +23,9 @@ import (
 func startLicenseDB(t *testing.T) (*dbpkg.Pool, *sql.DB) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
-	t.Cleanup(cancel)
+	pg := pgtest.StartMigrated(t)
 
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        "postgres:15-alpine",
-			ExposedPorts: []string{"5432/tcp"},
-			Env:          map[string]string{"POSTGRES_DB": "license_test", "POSTGRES_USER": "postgres", "POSTGRES_PASSWORD": "postgres"},
-			WaitingFor:   wait.ForLog("database system is ready to accept connections").WithOccurrence(2).WithStartupTimeout(30 * time.Second),
-		},
-		Started: true,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = container.Terminate(ctx) })
-
-	host, err := container.Host(ctx)
-	require.NoError(t, err)
-	port, err := container.MappedPort(ctx, "5432")
-	require.NoError(t, err)
-
-	admin, err := sql.Open("postgres", fmt.Sprintf("postgres://postgres:postgres@%s:%s/license_test?sslmode=disable", host, port.Port()))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = admin.Close() })
-
-	dir := filepath.Join("..", "..", "..", "db", "migrations")
-	entries, err := os.ReadDir(dir)
-	require.NoError(t, err)
-
-	var up []string
-
-	for _, e := range entries {
-		if strings.HasSuffix(e.Name(), ".up.sql") {
-			up = append(up, e.Name())
-		}
-	}
-
-	sort.Strings(up)
-
-	for _, name := range up {
-		content, err := os.ReadFile(filepath.Join(dir, name))
-		require.NoError(t, err)
-		_, err = admin.ExecContext(ctx, string(content))
-		require.NoError(t, err, name)
-	}
-
-	_, err = admin.ExecContext(ctx, `CREATE ROLE license_app LOGIN PASSWORD 'app' IN ROLE vietgara_app`)
-	require.NoError(t, err)
-
-	conn, err := dbpkg.NewPgxPool(ctx, fmt.Sprintf("postgres://license_app:app@%s:%s/license_test?sslmode=disable", host, port.Port()))
-	require.NoError(t, err)
-	t.Cleanup(conn.Close)
-
-	return dbpkg.NewPool(ctx, conn), admin
+	return pg.AppPool(t), pg.Admin
 }
 
 func TestLicenseRepositoriesOnPostgres(t *testing.T) {

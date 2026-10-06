@@ -5,6 +5,9 @@ run:
   timeout: 5m
   # Include test files
   tests: true
+  # Lint the testcontainers integration tests too (make test-integration).
+  build-tags:
+    - integration
 
 issues:
   max-issues-per-linter: 0 # 0 = unlimited (we want ALL issues)

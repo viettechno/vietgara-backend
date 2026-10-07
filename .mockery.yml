@@ -322,6 +322,11 @@ packages:
           filename: "billing_usecase_event_publisher.go"
           dir: "./internal/mocks"
           structname: "MockBillingEventPublisher"
+      AuditLogger:
+        config:
+          filename: "billing_usecase_audit_logger.go"
+          dir: "./internal/mocks"
+          structname: "MockBillingAuditLogger"
   github.com/viettechno/vietgara-backend/internal/document/usecase:
     interfaces:
       QuoteReader:

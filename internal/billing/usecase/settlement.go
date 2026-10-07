@@ -27,6 +27,7 @@ type Deps struct {
 	Limits       TransactionLimiter
 	Sequences    Sequencer
 	Events       EventPublisher
+	Audit        AuditLogger
 	// Now defaults to time.Now.
 	Now clock
 }
@@ -105,6 +106,10 @@ func (uc *SettlementUseCase) Create(ctx context.Context, req CreateSettlementReq
 		"settlement_id": s.ID, "garage_id": req.GarageID, "repair_order_id": req.RepairOrderID,
 	}); err != nil {
 		return nil, toAppError("create settlement", err)
+	}
+
+	if err := uc.audit(ctx, req.ActorID, req.GarageID, ActionSettlementCreated, entitySettlement, s.ID, nil, settlementAudit(s)); err != nil {
+		return nil, err
 	}
 
 	return s, nil

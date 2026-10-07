@@ -1,15 +1,18 @@
 package usecase_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/viettechno/vietgara-backend/internal/billing/domain"
 	"github.com/viettechno/vietgara-backend/internal/billing/usecase"
 	"github.com/viettechno/vietgara-backend/internal/mocks"
+	"github.com/viettechno/vietgara-backend/internal/platform/audit"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
@@ -36,6 +39,7 @@ type deps struct {
 	Limits       *mocks.MockBillingTransactionLimiter
 	Sequences    *mocks.MockBillingSequencer
 	Events       *mocks.MockBillingEventPublisher
+	Audit        *mocks.MockBillingAuditLogger
 }
 
 func newUseCase(t *testing.T) (*usecase.SettlementUseCase, *deps) {
@@ -45,15 +49,25 @@ func newUseCase(t *testing.T) (*usecase.SettlementUseCase, *deps) {
 		Settlements: mocks.NewMockBillingRepository(t), RepairOrders: mocks.NewMockBillingRepairOrderReader(t),
 		Partners: mocks.NewMockBillingPartnerReader(t), Garages: mocks.NewMockBillingGarageReader(t),
 		Limits: mocks.NewMockBillingTransactionLimiter(t), Sequences: mocks.NewMockBillingSequencer(t),
-		Events: mocks.NewMockBillingEventPublisher(t),
+		Events: mocks.NewMockBillingEventPublisher(t), Audit: mocks.NewMockBillingAuditLogger(t),
 	}
 
 	uc := usecase.NewSettlementUseCase(usecase.Deps{
 		Settlements: d.Settlements, RepairOrders: d.RepairOrders, Partners: d.Partners, Garages: d.Garages,
-		Limits: d.Limits, Sequences: d.Sequences, Events: d.Events, Now: func() time.Time { return now },
+		Limits: d.Limits, Sequences: d.Sequences, Events: d.Events, Audit: d.Audit, Now: func() time.Time { return now },
 	})
 
 	return uc, d
+}
+
+// expectAudit expects one audit entry and returns where it is captured.
+func expectAudit(d *deps) *audit.Entry {
+	var got audit.Entry
+
+	d.Audit.EXPECT().Record(mock.Anything, mock.Anything).
+		Run(func(_ context.Context, e audit.Entry) { got = e }).Return(nil).Once()
+
+	return &got
 }
 
 func insurerIDPtr() *string {

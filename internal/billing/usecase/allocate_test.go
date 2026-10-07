@@ -8,6 +8,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/billing/domain"
 	"github.com/viettechno/vietgara-backend/internal/billing/usecase"
+	"github.com/viettechno/vietgara-backend/internal/platform/audit"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
@@ -21,12 +22,14 @@ func TestSettlementUseCase_Allocate(t *testing.T) {
 		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
 		d.Partners.EXPECT().FindInsurer(mock.Anything, garageID, insurerID).Return("ABC Insurance", nil).Once()
 		d.Settlements.EXPECT().SaveAllocation(mock.Anything, mock.Anything).Return(nil).Once()
+		entry := expectAudit(d)
 
 		s, err := uc.Allocate(t.Context(), usecase.AllocateSettlementRequest{
 			GarageID: garageID, SettlementID: settlementID, ActorID: actorID,
 			CustomerAmount: 600_000, InsurerAmount: 400_000, InsurerPartnerID: insurerIDPtr(),
 		})
 		require.NoError(t, err)
+		assertAllocationAudit(t, entry)
 		require.Equal(t, int64(600_000), s.CustomerAmount)
 		require.Equal(t, int64(400_000), s.InsurerAmount)
 		require.Equal(t, "ABC Insurance", s.InsurerPartnerName)
@@ -39,6 +42,7 @@ func TestSettlementUseCase_Allocate(t *testing.T) {
 		uc, d := newUseCase(t)
 		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
 		d.Settlements.EXPECT().SaveAllocation(mock.Anything, mock.Anything).Return(nil).Once()
+		expectAudit(d)
 
 		s, err := uc.Allocate(t.Context(), usecase.AllocateSettlementRequest{
 			GarageID: garageID, SettlementID: settlementID, CustomerAmount: 1_000_000, InsurerAmount: 0,
@@ -123,4 +127,21 @@ func TestSettlementUseCase_Allocate(t *testing.T) {
 		})
 		assertAppError(t, err, apperror.CodeInternal)
 	})
+}
+
+// assertAllocationAudit checks the entry of a 600k/400k customer/insurer
+// split of an all-customer settlement.
+func assertAllocationAudit(t *testing.T, entry *audit.Entry) {
+	t.Helper()
+
+	require.Equal(t, usecase.ActionSettlementAllocated, entry.Action)
+	require.Equal(t, settlementID, entry.EntityID)
+
+	before, ok := entry.Before.(map[string]any)
+	require.True(t, ok)
+	after, ok := entry.After.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, int64(0), before["insurer_amount"], "the allocation before the change")
+	require.Equal(t, int64(400_000), after["insurer_amount"])
+	require.Equal(t, insurerIDPtr(), after["insurer_partner_id"])
 }

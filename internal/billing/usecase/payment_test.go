@@ -33,6 +33,7 @@ func TestSettlementUseCase_RecordPayment_Success(t *testing.T) {
 		updated.CustomerPaidAmount = 300_000
 		d.Settlements.EXPECT().RecordPayment(mock.Anything, garageID, settlementID, mock.Anything).Return(updated, nil).Once()
 		d.Settlements.EXPECT().SaveStatus(mock.Anything, garageID, settlementID, domain.StatusPartiallyPaid).Return(nil).Once()
+		entry := expectAudit(d)
 
 		final := allocatedSettlement()
 		final.CustomerPaidAmount, final.Status = 300_000, domain.StatusPartiallyPaid
@@ -43,6 +44,20 @@ func TestSettlementUseCase_RecordPayment_Success(t *testing.T) {
 			PayerType: domain.PayerCustomer, Amount: 300_000, Method: domain.MethodCash,
 		})
 		require.NoError(t, err)
+		require.Equal(t, usecase.ActionPaymentRecorded, entry.Action)
+		require.Equal(t, "settlement_payment", entry.EntityType)
+		require.NotEmpty(t, entry.EntityID, "the payment's id")
+		require.Equal(t, actorID, entry.Actor)
+		before, ok := entry.Before.(map[string]any)
+		require.True(t, ok)
+		after, ok := entry.After.(map[string]any)
+		require.True(t, ok)
+		require.Equal(t, int64(0), before["customer_paid_amount"])
+		require.Equal(t, int64(300_000), after["customer_paid_amount"])
+		require.Equal(t, domain.StatusPartiallyPaid, after["status"])
+		require.Equal(t, map[string]any{
+			"payer_type": domain.PayerCustomer, "amount": int64(300_000), "method": domain.MethodCash, "note": "",
+		}, after["payment"])
 		require.Equal(t, domain.StatusPartiallyPaid, s.Status)
 	})
 
@@ -56,6 +71,7 @@ func TestSettlementUseCase_RecordPayment_Success(t *testing.T) {
 		updated.CustomerPaidAmount, updated.InsurerPaidAmount = 600_000, 400_000
 		d.Settlements.EXPECT().RecordPayment(mock.Anything, garageID, settlementID, mock.Anything).Return(updated, nil).Once()
 		d.Settlements.EXPECT().SaveStatus(mock.Anything, garageID, settlementID, domain.StatusPaid).Return(nil).Once()
+		expectAudit(d)
 
 		final := allocatedSettlement()
 		final.CustomerPaidAmount, final.InsurerPaidAmount, final.Status = 600_000, 400_000, domain.StatusPaid
@@ -159,4 +175,26 @@ func TestSettlementUseCase_RecordPayment_Errors(t *testing.T) {
 		})
 		assertAppError(t, err, apperror.CodeInternal)
 	})
+}
+
+// TestSettlementUseCase_AuditFailure: a change whose audit entry cannot be
+// written fails, so its transaction rolls back and no unaudited change of
+// money is ever committed.
+func TestSettlementUseCase_AuditFailure(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+	d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(allocatedSettlement(), nil).Once()
+
+	updated := allocatedSettlement()
+	updated.CustomerPaidAmount = 300_000
+	d.Settlements.EXPECT().RecordPayment(mock.Anything, garageID, settlementID, mock.Anything).Return(updated, nil).Once()
+	d.Settlements.EXPECT().SaveStatus(mock.Anything, garageID, settlementID, domain.StatusPartiallyPaid).Return(nil).Once()
+	d.Audit.EXPECT().Record(mock.Anything, mock.Anything).Return(errBoom).Once()
+
+	_, err := uc.RecordPayment(t.Context(), usecase.RecordPaymentRequest{
+		GarageID: garageID, SettlementID: settlementID, ActorID: actorID,
+		PayerType: domain.PayerCustomer, Amount: 300_000, Method: domain.MethodCash,
+	})
+	assertAppError(t, err, apperror.CodeInternal)
 }

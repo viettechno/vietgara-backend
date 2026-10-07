@@ -1,5 +1,16 @@
 # VietGara Backend
 
+> **Purpose:** This repo is the **VietGara backend**: a Go modular monolith that serves the gRPC and REST/JSON API used by every VietGara web and mobile app.
+
+| | |
+| --- | --- |
+| **Type** | Backend service (Go), deployed as a container image |
+| **Used by** | `vietgara-owner-web`, `vietgara-admin-web`, and the four Flutter apps (through Kong) |
+| **Does** | Identity and access, tenants and licensing, customers, quotes, repair orders, inventory, billing and settlement, documents, reporting, notifications |
+| **Built with** | Go, gRPC + grpc-gateway, PostgreSQL (row-level security), Redis, Kafka, Mailjet |
+| **Depends on** | `vietgara-proto` (API contracts), Postgres, Redis, Kafka |
+| **Related** | `vietgara-infra` (how it is run), `vietgara-gitops-config` (target deployment), `vietgara-docs` (architecture) |
+
 The Go modular monolith behind the VietGara front ends: the garage web admin
 (`vietgara-owner-web`), the platform admin (`vietgara-admin-web`) and the
 mobile apps (Release 1.0–1.5). One

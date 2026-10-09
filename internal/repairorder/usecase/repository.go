@@ -63,7 +63,7 @@ type VehicleReader interface {
 // GarageInfo is the Tenant module's view of a garage that Repair Order
 // needs: its owner (for License checks) and numbering configuration.
 type GarageInfo struct {
-	OwnerAccountID            string
+	OwnerUserID               string
 	Timezone                  string
 	RepairOrderNumberTemplate string
 }
@@ -78,7 +78,7 @@ type GarageReader interface {
 // (FR-LIC-02); implemented directly by the License module's
 // EntitlementUseCase.
 type TransactionLimiter interface {
-	ConsumeTransaction(ctx context.Context, ownerAccountID string) error
+	ConsumeTransaction(ctx context.Context, ownerUserID string) error
 }
 
 // Sequencer hands out document sequence numbers (FR-TEN-05); implemented
@@ -94,7 +94,7 @@ type Sequencer interface {
 // module, so closing a repair order never fails because of an
 // inventory-side problem (Event Design).
 type EventPublisher interface {
-	Publish(ctx context.Context, eventType, garageID, accountID string, payload any) error
+	Publish(ctx context.Context, eventType, garageID, userID string, payload any) error
 }
 
 // clock is a source of the current time, replaced in tests.

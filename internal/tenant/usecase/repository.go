@@ -14,9 +14,9 @@ type GarageRepository interface {
 	// Create inserts g (its ID is set by the caller) and fills timestamps.
 	Create(ctx context.Context, g *domain.Garage) error
 	FindByID(ctx context.Context, id string) (*domain.Garage, error)
-	// ListForAccount returns the garages the account owns (any status) or
+	// ListForUser returns the garages the user owns (any status) or
 	// is an active member of (active garages only), oldest first.
-	ListForAccount(ctx context.Context, accountID string) ([]*domain.Garage, error)
+	ListForUser(ctx context.Context, userID string) ([]*domain.Garage, error)
 	// Update persists the mutable fields of g.
 	Update(ctx context.Context, g *domain.Garage) error
 }
@@ -26,9 +26,9 @@ type GarageRepository interface {
 type StaffRepository interface {
 	Create(ctx context.Context, s *domain.Staff) error
 	FindByID(ctx context.Context, garageID, staffID string) (*domain.Staff, error)
-	FindByAccount(ctx context.Context, garageID, accountID string) (*domain.Staff, error)
+	FindByUser(ctx context.Context, garageID, userID string) (*domain.Staff, error)
 	// List returns the garage's members with their groups and effective
-	// permissions (account details are not loaded).
+	// permissions (user details are not loaded).
 	List(ctx context.Context, garageID string) ([]*domain.Staff, error)
 	UpdateStatus(ctx context.Context, s *domain.Staff) error
 	// SetGroups replaces the member's groups.
@@ -39,7 +39,7 @@ type StaffRepository interface {
 // RoleRepository persists owner-defined roles. Finders return
 // domain.ErrRoleNotFound; a duplicate name yields domain.ErrRoleNameTaken.
 type RoleRepository interface {
-	ListByOwner(ctx context.Context, ownerAccountID string) ([]*domain.Role, error)
+	ListByOwner(ctx context.Context, ownerUserID string) ([]*domain.Role, error)
 	FindByID(ctx context.Context, roleID string) (*domain.Role, error)
 	Create(ctx context.Context, r *domain.Role) error
 	// CreateDefault inserts a default role unless the owner already has the
@@ -70,18 +70,18 @@ type InvitationRepository interface {
 	Create(ctx context.Context, inv *domain.Invitation) error
 	FindByID(ctx context.Context, id string) (*domain.Invitation, error)
 	ListByGarage(ctx context.Context, garageID string) ([]*domain.Invitation, error)
-	ListByAccount(ctx context.Context, accountID string) ([]*domain.Invitation, error)
+	ListByUser(ctx context.Context, userID string) ([]*domain.Invitation, error)
 	// Update persists status and responded_at.
 	Update(ctx context.Context, inv *domain.Invitation) error
-	// ExpireStale marks the account's pending invitations to the garage
+	// ExpireStale marks the user's pending invitations to the garage
 	// that are past their expiry as expired.
-	ExpireStale(ctx context.Context, garageID, accountID string) error
+	ExpireStale(ctx context.Context, garageID, userID string) error
 }
 
 // UsageReader counts what an owner uses of their plan limits across all
 // their garages.
 type UsageReader interface {
-	OwnerUsage(ctx context.Context, ownerAccountID string) (garages, staff int, err error)
+	OwnerUsage(ctx context.Context, ownerUserID string) (garages, staff int, err error)
 }
 
 // Limit names a plan limit (License Management).
@@ -97,11 +97,11 @@ const (
 // License module. It returns a PLAN_LIMIT_REACHED error when adding one more
 // unit to current would exceed the limit.
 type LimitChecker interface {
-	CheckLimit(ctx context.Context, ownerAccountID string, limit Limit, current int) error
+	CheckLimit(ctx context.Context, ownerUserID string, limit Limit, current int) error
 }
 
-// AccountSummary is the Identity module's view of an account.
-type AccountSummary struct {
+// UserSummary is the Identity module's view of a user.
+type UserSummary struct {
 	ID            string
 	FullName      string
 	Email         string
@@ -111,14 +111,14 @@ type AccountSummary struct {
 	EmailVerified bool
 }
 
-// AccountDirectory is a read-only view of Identity accounts, implemented by
+// UserDirectory is a read-only view of Identity users, implemented by
 // an adapter in cmd/server so the modules stay decoupled. Finders return
-// domain.ErrAccountNotFound.
-type AccountDirectory interface {
-	FindByEmail(ctx context.Context, email string) (*AccountSummary, error)
-	FindByPhone(ctx context.Context, phone string) (*AccountSummary, error)
-	FindByID(ctx context.Context, id string) (*AccountSummary, error)
-	ListByIDs(ctx context.Context, ids []string) (map[string]*AccountSummary, error)
+// domain.ErrUserNotFound.
+type UserDirectory interface {
+	FindByEmail(ctx context.Context, email string) (*UserSummary, error)
+	FindByPhone(ctx context.Context, phone string) (*UserSummary, error)
+	FindByID(ctx context.Context, id string) (*UserSummary, error)
+	ListByIDs(ctx context.Context, ids []string) (map[string]*UserSummary, error)
 }
 
 // LogoStore keeps garage logos (internal/platform/storage).
@@ -136,7 +136,7 @@ type Mailer interface {
 // EventPublisher writes domain events to the outbox in the caller's
 // transaction.
 type EventPublisher interface {
-	Publish(ctx context.Context, eventType, garageID, accountID string, payload any) error
+	Publish(ctx context.Context, eventType, garageID, userID string, payload any) error
 }
 
 // AuditLogger records audited changes in the caller's transaction.

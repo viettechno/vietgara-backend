@@ -58,5 +58,5 @@ type Repository interface {
 // EventPublisher writes domain events to the outbox in the caller's
 // transaction.
 type EventPublisher interface {
-	Publish(ctx context.Context, eventType, garageID, accountID string, payload any) error
+	Publish(ctx context.Context, eventType, garageID, userID string, payload any) error
 }

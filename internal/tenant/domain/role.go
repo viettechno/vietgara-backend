@@ -29,12 +29,12 @@ const (
 // Role is a named permission set defined by a garage owner and shared by
 // all the owner's garages.
 type Role struct {
-	ID             string
-	OwnerAccountID string
-	Name           string
-	Description    string
-	Permissions    []access.Permission
-	DefaultKey     *DefaultRole
+	ID          string
+	OwnerUserID string
+	Name        string
+	Description string
+	Permissions []access.Permission
+	DefaultKey  *DefaultRole
 	// GroupCount is the number of staff groups using the role (read only).
 	GroupCount int
 	CreatedAt  time.Time

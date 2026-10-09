@@ -35,24 +35,24 @@ func NewEntitlementUseCase(
 
 // Get returns the owner's entitlements. Cache failures are logged and
 // served from the database so licensing never takes the API down.
-func (uc *EntitlementUseCase) Get(ctx context.Context, accountID string) (*domain.Entitlements, error) {
-	cached, err := uc.cache.Get(ctx, accountID)
+func (uc *EntitlementUseCase) Get(ctx context.Context, userID string) (*domain.Entitlements, error) {
+	cached, err := uc.cache.Get(ctx, userID)
 	if err != nil {
-		slog.Warn("license: reading the entitlement cache failed", "account_id", accountID, "error", err)
+		slog.Warn("license: reading the entitlement cache failed", "user_id", userID, "error", err)
 	}
 
 	if cached != nil {
 		return cached, nil
 	}
 
-	sub, err := uc.subscriptions.FindByAccountID(ctx, accountID)
+	sub, err := uc.subscriptions.FindByUserID(ctx, userID)
 	if err != nil {
 		return nil, toAppError("load entitlements", err)
 	}
 
 	e := domain.NewEntitlements(sub)
 	if err := uc.cache.Set(ctx, e); err != nil {
-		slog.Warn("license: writing the entitlement cache failed", "account_id", accountID, "error", err)
+		slog.Warn("license: writing the entitlement cache failed", "user_id", userID, "error", err)
 	}
 
 	return e, nil
@@ -69,27 +69,27 @@ func (uc *EntitlementUseCase) ForGarage(ctx context.Context, garageID string) (*
 	return uc.getOrStartTrial(ctx, owner)
 }
 
-func (uc *EntitlementUseCase) getOrStartTrial(ctx context.Context, accountID string) (*domain.Entitlements, error) {
-	e, err := uc.Get(ctx, accountID)
+func (uc *EntitlementUseCase) getOrStartTrial(ctx context.Context, userID string) (*domain.Entitlements, error) {
+	e, err := uc.Get(ctx, userID)
 	if err == nil || !errors.Is(err, domain.ErrSubscriptionNotFound) {
 		return e, err
 	}
 
-	if err := uc.trials.EnsureTrial(ctx, accountID); err != nil {
+	if err := uc.trials.EnsureTrial(ctx, userID); err != nil {
 		return nil, err
 	}
 
-	return uc.Get(ctx, accountID)
+	return uc.Get(ctx, userID)
 }
 
 // Invalidate drops the owner's cache entry.
-func (uc *EntitlementUseCase) Invalidate(ctx context.Context, accountID string) error {
-	return uc.cache.Delete(ctx, accountID)
+func (uc *EntitlementUseCase) Invalidate(ctx context.Context, userID string) error {
+	return uc.cache.Delete(ctx, userID)
 }
 
 // IsFeatureEnabled reports whether the owner's garages may use feature.
-func (uc *EntitlementUseCase) IsFeatureEnabled(ctx context.Context, accountID string, feature domain.Feature) (bool, error) {
-	e, err := uc.Get(ctx, accountID)
+func (uc *EntitlementUseCase) IsFeatureEnabled(ctx context.Context, userID string, feature domain.Feature) (bool, error) {
+	e, err := uc.Get(ctx, userID)
 	if err != nil {
 		return false, err
 	}
@@ -172,8 +172,8 @@ func (uc *EntitlementUseCase) ConsumeTransaction(ctx context.Context, ownerID st
 // garageOwner reads the owner from the request's authorized access, or
 // asks the Tenant module.
 func (uc *EntitlementUseCase) garageOwner(ctx context.Context, garageID string) (string, error) {
-	if acc, ok := access.FromContext(ctx); ok && acc.GarageID == garageID && acc.OwnerAccountID != "" {
-		return acc.OwnerAccountID, nil
+	if user, ok := access.FromContext(ctx); ok && user.GarageID == garageID && user.OwnerUserID != "" {
+		return user.OwnerUserID, nil
 	}
 
 	owner, err := uc.owners.GarageOwner(ctx, garageID)

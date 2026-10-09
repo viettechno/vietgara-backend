@@ -12,11 +12,11 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 )
 
-// CreateInvitation invites an existing account to the garage with the
+// CreateInvitation invites an existing user to the garage with the
 // given groups (FR-TEN-04), within the plan's staff limit, and e-mails the
 // invitee once the invitation is stored.
-func (uc *TenantUseCase) CreateInvitation(ctx context.Context, garageID, accountID string, groupIDs []string) (*domain.Invitation, error) {
-	invitee, err := uc.checkInvitee(ctx, garageID, accountID)
+func (uc *TenantUseCase) CreateInvitation(ctx context.Context, garageID, userID string, groupIDs []string) (*domain.Invitation, error) {
+	invitee, err := uc.checkInvitee(ctx, garageID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -26,7 +26,7 @@ func (uc *TenantUseCase) CreateInvitation(ctx context.Context, garageID, account
 		return nil, err
 	}
 
-	if err := uc.Invitations.ExpireStale(ctx, garageID, accountID); err != nil {
+	if err := uc.Invitations.ExpireStale(ctx, garageID, userID); err != nil {
 		return nil, toAppError("expire invitations", err)
 	}
 
@@ -36,8 +36,8 @@ func (uc *TenantUseCase) CreateInvitation(ctx context.Context, garageID, account
 
 	now := uc.now()
 	inv := &domain.Invitation{
-		GarageID: garageID, AccountID: accountID, GroupIDs: groupIDs, Status: domain.InvitationPending,
-		InvitedBy: middleware.AccountID(ctx), ExpiresAt: now.Add(domain.InvitationTTL),
+		GarageID: garageID, UserID: userID, GroupIDs: groupIDs, Status: domain.InvitationPending,
+		InvitedBy: middleware.UserID(ctx), ExpiresAt: now.Add(domain.InvitationTTL),
 	}
 
 	if err := uc.Invitations.Create(ctx, inv); err != nil {
@@ -49,7 +49,7 @@ func (uc *TenantUseCase) CreateInvitation(ctx context.Context, garageID, account
 		return nil, toAppError("reload invitation", err)
 	}
 
-	if err := uc.withInvitationAccounts(ctx, created); err != nil {
+	if err := uc.withInvitationUsers(ctx, created); err != nil {
 		return nil, err
 	}
 
@@ -57,8 +57,8 @@ func (uc *TenantUseCase) CreateInvitation(ctx context.Context, garageID, account
 		return nil, toAppError("audit invitation", err)
 	}
 
-	if err := uc.Events.Publish(ctx, EventStaffInvited, garageID, accountID, map[string]any{
-		"invitation_id": inv.ID, keyGarageID: garageID, "account_id": accountID,
+	if err := uc.Events.Publish(ctx, EventStaffInvited, garageID, userID, map[string]any{
+		"invitation_id": inv.ID, keyGarageID: garageID, "user_id": userID,
 	}); err != nil {
 		return nil, toAppError("publish invitation", err)
 	}
@@ -68,19 +68,19 @@ func (uc *TenantUseCase) CreateInvitation(ctx context.Context, garageID, account
 	return created, nil
 }
 
-// checkInvitee returns the invited account: it must be active and not
+// checkInvitee returns the invited user: it must be active and not
 // already an active member of the garage.
-func (uc *TenantUseCase) checkInvitee(ctx context.Context, garageID, accountID string) (*AccountSummary, error) {
-	invitee, err := uc.Accounts.FindByID(ctx, accountID)
+func (uc *TenantUseCase) checkInvitee(ctx context.Context, garageID, userID string) (*UserSummary, error) {
+	invitee, err := uc.Users.FindByID(ctx, userID)
 	if err != nil {
 		return nil, toAppError("find invitee", err)
 	}
 
 	if !invitee.Active {
-		return nil, toAppError("invite", domain.ErrAccountInactive)
+		return nil, toAppError("invite", domain.ErrUserInactive)
 	}
 
-	member, err := uc.Staff.FindByAccount(ctx, garageID, accountID)
+	member, err := uc.Staff.FindByUser(ctx, garageID, userID)
 	if err == nil && member.Status == domain.StaffStatusActive {
 		return nil, toAppError("invite", domain.ErrAlreadyMember)
 	}
@@ -92,7 +92,7 @@ func (uc *TenantUseCase) checkInvitee(ctx context.Context, garageID, accountID s
 	return invitee, nil
 }
 
-func (uc *TenantUseCase) sendInvitation(ctx context.Context, inv *domain.Invitation, invitee *AccountSummary) {
+func (uc *TenantUseCase) sendInvitation(ctx context.Context, inv *domain.Invitation, invitee *UserSummary) {
 	locale := invitee.Locale
 	layout := "02/01/2006"
 
@@ -124,7 +124,7 @@ func (uc *TenantUseCase) ListInvitations(ctx context.Context, garageID string, s
 		return nil, toAppError("list invitations", err)
 	}
 
-	if err := uc.withInvitationAccounts(ctx, invitations...); err != nil {
+	if err := uc.withInvitationUsers(ctx, invitations...); err != nil {
 		return nil, err
 	}
 
@@ -153,30 +153,30 @@ func (uc *TenantUseCase) RevokeInvitation(ctx context.Context, garageID, invitat
 	return inv, nil
 }
 
-// ListMyInvitations returns the invitations sent to accountID.
-func (uc *TenantUseCase) ListMyInvitations(ctx context.Context, accountID string, status domain.InvitationStatus) ([]*domain.Invitation, error) {
-	invitations, err := uc.Invitations.ListByAccount(ctx, accountID)
+// ListMyInvitations returns the invitations sent to userID.
+func (uc *TenantUseCase) ListMyInvitations(ctx context.Context, userID string, status domain.InvitationStatus) ([]*domain.Invitation, error) {
+	invitations, err := uc.Invitations.ListByUser(ctx, userID)
 	if err != nil {
 		return nil, toAppError("list invitations", err)
 	}
 
-	if err := uc.withInvitationAccounts(ctx, invitations...); err != nil {
+	if err := uc.withInvitationUsers(ctx, invitations...); err != nil {
 		return nil, err
 	}
 
 	return uc.filterInvitations(invitations, status), nil
 }
 
-// GetMyInvitation returns one invitation sent to accountID.
-func (uc *TenantUseCase) GetMyInvitation(ctx context.Context, accountID, invitationID string) (*domain.Invitation, error) {
+// GetMyInvitation returns one invitation sent to userID.
+func (uc *TenantUseCase) GetMyInvitation(ctx context.Context, userID, invitationID string) (*domain.Invitation, error) {
 	inv, err := uc.Invitations.FindByID(ctx, invitationID)
-	if err != nil || inv.AccountID != accountID {
+	if err != nil || inv.UserID != userID {
 		return nil, toAppError("get invitation", domain.ErrInvitationNotFound)
 	}
 
 	inv.Status = inv.EffectiveStatus(uc.now())
 
-	if err := uc.withInvitationAccounts(ctx, inv); err != nil {
+	if err := uc.withInvitationUsers(ctx, inv); err != nil {
 		return nil, err
 	}
 
@@ -185,8 +185,8 @@ func (uc *TenantUseCase) GetMyInvitation(ctx context.Context, accountID, invitat
 
 // AcceptInvitation joins the garage with the invitation's groups (those
 // that still exist), reactivating a previous membership if there is one.
-func (uc *TenantUseCase) AcceptInvitation(ctx context.Context, accountID, invitationID string) (*domain.Invitation, error) {
-	inv, err := uc.GetMyInvitation(ctx, accountID, invitationID)
+func (uc *TenantUseCase) AcceptInvitation(ctx context.Context, userID, invitationID string) (*domain.Invitation, error) {
+	inv, err := uc.GetMyInvitation(ctx, userID, invitationID)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +195,7 @@ func (uc *TenantUseCase) AcceptInvitation(ctx context.Context, accountID, invita
 		return nil, toAppError("accept invitation", err)
 	}
 
-	err = uc.Tx.WithTransaction(ctx, platformdb.AccountScope(accountID).Garage(inv.GarageID), func(ctx context.Context) error {
+	err = uc.Tx.WithTransaction(ctx, platformdb.UserScope(userID).Garage(inv.GarageID), func(ctx context.Context) error {
 		if err := uc.Invitations.Update(ctx, inv); err != nil {
 			return err
 		}
@@ -209,8 +209,8 @@ func (uc *TenantUseCase) AcceptInvitation(ctx context.Context, accountID, invita
 			return err
 		}
 
-		return uc.Events.Publish(ctx, EventStaffJoined, inv.GarageID, accountID, map[string]any{
-			keyGarageID: inv.GarageID, "account_id": accountID, "staff_id": member.ID,
+		return uc.Events.Publish(ctx, EventStaffJoined, inv.GarageID, userID, map[string]any{
+			keyGarageID: inv.GarageID, "user_id": userID, "staff_id": member.ID,
 		})
 	})
 	if err != nil {
@@ -221,11 +221,11 @@ func (uc *TenantUseCase) AcceptInvitation(ctx context.Context, accountID, invita
 }
 
 func (uc *TenantUseCase) joinGarage(ctx context.Context, inv *domain.Invitation) (*domain.Staff, error) {
-	member, err := uc.Staff.FindByAccount(ctx, inv.GarageID, inv.AccountID)
+	member, err := uc.Staff.FindByUser(ctx, inv.GarageID, inv.UserID)
 
 	switch {
 	case errors.Is(err, domain.ErrStaffNotFound):
-		member = &domain.Staff{GarageID: inv.GarageID, AccountID: inv.AccountID, Status: domain.StaffStatusActive}
+		member = &domain.Staff{GarageID: inv.GarageID, UserID: inv.UserID, Status: domain.StaffStatusActive}
 		if err := uc.Staff.Create(ctx, member); err != nil {
 			return nil, err
 		}
@@ -257,8 +257,8 @@ func (uc *TenantUseCase) joinGarage(ctx context.Context, inv *domain.Invitation)
 }
 
 // DeclineInvitation turns an invitation down.
-func (uc *TenantUseCase) DeclineInvitation(ctx context.Context, accountID, invitationID string) (*domain.Invitation, error) {
-	inv, err := uc.GetMyInvitation(ctx, accountID, invitationID)
+func (uc *TenantUseCase) DeclineInvitation(ctx context.Context, userID, invitationID string) (*domain.Invitation, error) {
+	inv, err := uc.GetMyInvitation(ctx, userID, invitationID)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +274,7 @@ func (uc *TenantUseCase) DeclineInvitation(ctx context.Context, accountID, invit
 	return inv, nil
 }
 
-func (uc *TenantUseCase) hasPendingInvitation(ctx context.Context, garageID, accountID string) (bool, error) {
+func (uc *TenantUseCase) hasPendingInvitation(ctx context.Context, garageID, userID string) (bool, error) {
 	invitations, err := uc.Invitations.ListByGarage(ctx, garageID)
 	if err != nil {
 		return false, toAppError("list invitations", err)
@@ -283,7 +283,7 @@ func (uc *TenantUseCase) hasPendingInvitation(ctx context.Context, garageID, acc
 	now := uc.now()
 
 	for _, inv := range invitations {
-		if inv.AccountID == accountID && inv.EffectiveStatus(now) == domain.InvitationPending {
+		if inv.UserID == userID && inv.EffectiveStatus(now) == domain.InvitationPending {
 			return true, nil
 		}
 	}
@@ -307,26 +307,26 @@ func (uc *TenantUseCase) filterInvitations(invitations []*domain.Invitation, sta
 	return result
 }
 
-// withInvitationAccounts loads invitee and inviter names from the Identity
+// withInvitationUsers loads invitee and inviter names from the Identity
 // module.
-func (uc *TenantUseCase) withInvitationAccounts(ctx context.Context, invitations ...*domain.Invitation) error {
+func (uc *TenantUseCase) withInvitationUsers(ctx context.Context, invitations ...*domain.Invitation) error {
 	ids := make([]string, 0, 2*len(invitations))
 	for _, inv := range invitations {
-		ids = append(ids, inv.AccountID, inv.InvitedBy)
+		ids = append(ids, inv.UserID, inv.InvitedBy)
 	}
 
-	accounts, err := uc.Accounts.ListByIDs(ctx, ids)
+	users, err := uc.Users.ListByIDs(ctx, ids)
 	if err != nil {
-		return toAppError("load invitation accounts", err)
+		return toAppError("load invitation users", err)
 	}
 
 	for _, inv := range invitations {
-		if acc, ok := accounts[inv.AccountID]; ok {
-			inv.FullName, inv.Email = acc.FullName, acc.Email
+		if user, ok := users[inv.UserID]; ok {
+			inv.FullName, inv.Email = user.FullName, user.Email
 		}
 
-		if acc, ok := accounts[inv.InvitedBy]; ok {
-			inv.InvitedByName = acc.FullName
+		if user, ok := users[inv.InvitedBy]; ok {
+			inv.InvitedByName = user.FullName
 		}
 	}
 

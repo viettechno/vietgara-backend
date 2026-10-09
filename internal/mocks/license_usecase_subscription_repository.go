@@ -106,47 +106,47 @@ func (_c *MockSubscriptionRepository_CreateIfAbsent_Call) RunAndReturn(run func(
 	return _c
 }
 
-// FindByAccountID provides a mock function for the type MockSubscriptionRepository
-func (_mock *MockSubscriptionRepository) FindByAccountID(ctx context.Context, accountID string) (*domain.Subscription, error) {
-	ret := _mock.Called(ctx, accountID)
+// FindByUserID provides a mock function for the type MockSubscriptionRepository
+func (_mock *MockSubscriptionRepository) FindByUserID(ctx context.Context, userID string) (*domain.Subscription, error) {
+	ret := _mock.Called(ctx, userID)
 
 	if len(ret) == 0 {
-		panic("no return value specified for FindByAccountID")
+		panic("no return value specified for FindByUserID")
 	}
 
 	var r0 *domain.Subscription
 	var r1 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (*domain.Subscription, error)); ok {
-		return returnFunc(ctx, accountID)
+		return returnFunc(ctx, userID)
 	}
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) *domain.Subscription); ok {
-		r0 = returnFunc(ctx, accountID)
+		r0 = returnFunc(ctx, userID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*domain.Subscription)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, accountID)
+		r1 = returnFunc(ctx, userID)
 	} else {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
 }
 
-// MockSubscriptionRepository_FindByAccountID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindByAccountID'
-type MockSubscriptionRepository_FindByAccountID_Call struct {
+// MockSubscriptionRepository_FindByUserID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindByUserID'
+type MockSubscriptionRepository_FindByUserID_Call struct {
 	*mock.Call
 }
 
-// FindByAccountID is a helper method to define mock.On call
+// FindByUserID is a helper method to define mock.On call
 //   - ctx context.Context
-//   - accountID string
-func (_e *MockSubscriptionRepository_Expecter) FindByAccountID(ctx any, accountID any) *MockSubscriptionRepository_FindByAccountID_Call {
-	return &MockSubscriptionRepository_FindByAccountID_Call{Call: _e.mock.On("FindByAccountID", ctx, accountID)}
+//   - userID string
+func (_e *MockSubscriptionRepository_Expecter) FindByUserID(ctx any, userID any) *MockSubscriptionRepository_FindByUserID_Call {
+	return &MockSubscriptionRepository_FindByUserID_Call{Call: _e.mock.On("FindByUserID", ctx, userID)}
 }
 
-func (_c *MockSubscriptionRepository_FindByAccountID_Call) Run(run func(ctx context.Context, accountID string)) *MockSubscriptionRepository_FindByAccountID_Call {
+func (_c *MockSubscriptionRepository_FindByUserID_Call) Run(run func(ctx context.Context, userID string)) *MockSubscriptionRepository_FindByUserID_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -164,22 +164,22 @@ func (_c *MockSubscriptionRepository_FindByAccountID_Call) Run(run func(ctx cont
 	return _c
 }
 
-func (_c *MockSubscriptionRepository_FindByAccountID_Call) Return(subscription *domain.Subscription, err error) *MockSubscriptionRepository_FindByAccountID_Call {
+func (_c *MockSubscriptionRepository_FindByUserID_Call) Return(subscription *domain.Subscription, err error) *MockSubscriptionRepository_FindByUserID_Call {
 	_c.Call.Return(subscription, err)
 	return _c
 }
 
-func (_c *MockSubscriptionRepository_FindByAccountID_Call) RunAndReturn(run func(ctx context.Context, accountID string) (*domain.Subscription, error)) *MockSubscriptionRepository_FindByAccountID_Call {
+func (_c *MockSubscriptionRepository_FindByUserID_Call) RunAndReturn(run func(ctx context.Context, userID string) (*domain.Subscription, error)) *MockSubscriptionRepository_FindByUserID_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// ListAccountIDsDueBefore provides a mock function for the type MockSubscriptionRepository
-func (_mock *MockSubscriptionRepository) ListAccountIDsDueBefore(ctx context.Context, t time.Time) ([]string, error) {
+// ListUserIDsDueBefore provides a mock function for the type MockSubscriptionRepository
+func (_mock *MockSubscriptionRepository) ListUserIDsDueBefore(ctx context.Context, t time.Time) ([]string, error) {
 	ret := _mock.Called(ctx, t)
 
 	if len(ret) == 0 {
-		panic("no return value specified for ListAccountIDsDueBefore")
+		panic("no return value specified for ListUserIDsDueBefore")
 	}
 
 	var r0 []string
@@ -202,19 +202,19 @@ func (_mock *MockSubscriptionRepository) ListAccountIDsDueBefore(ctx context.Con
 	return r0, r1
 }
 
-// MockSubscriptionRepository_ListAccountIDsDueBefore_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListAccountIDsDueBefore'
-type MockSubscriptionRepository_ListAccountIDsDueBefore_Call struct {
+// MockSubscriptionRepository_ListUserIDsDueBefore_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListUserIDsDueBefore'
+type MockSubscriptionRepository_ListUserIDsDueBefore_Call struct {
 	*mock.Call
 }
 
-// ListAccountIDsDueBefore is a helper method to define mock.On call
+// ListUserIDsDueBefore is a helper method to define mock.On call
 //   - ctx context.Context
 //   - t time.Time
-func (_e *MockSubscriptionRepository_Expecter) ListAccountIDsDueBefore(ctx any, t any) *MockSubscriptionRepository_ListAccountIDsDueBefore_Call {
-	return &MockSubscriptionRepository_ListAccountIDsDueBefore_Call{Call: _e.mock.On("ListAccountIDsDueBefore", ctx, t)}
+func (_e *MockSubscriptionRepository_Expecter) ListUserIDsDueBefore(ctx any, t any) *MockSubscriptionRepository_ListUserIDsDueBefore_Call {
+	return &MockSubscriptionRepository_ListUserIDsDueBefore_Call{Call: _e.mock.On("ListUserIDsDueBefore", ctx, t)}
 }
 
-func (_c *MockSubscriptionRepository_ListAccountIDsDueBefore_Call) Run(run func(ctx context.Context, t time.Time)) *MockSubscriptionRepository_ListAccountIDsDueBefore_Call {
+func (_c *MockSubscriptionRepository_ListUserIDsDueBefore_Call) Run(run func(ctx context.Context, t time.Time)) *MockSubscriptionRepository_ListUserIDsDueBefore_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -232,57 +232,57 @@ func (_c *MockSubscriptionRepository_ListAccountIDsDueBefore_Call) Run(run func(
 	return _c
 }
 
-func (_c *MockSubscriptionRepository_ListAccountIDsDueBefore_Call) Return(strings []string, err error) *MockSubscriptionRepository_ListAccountIDsDueBefore_Call {
+func (_c *MockSubscriptionRepository_ListUserIDsDueBefore_Call) Return(strings []string, err error) *MockSubscriptionRepository_ListUserIDsDueBefore_Call {
 	_c.Call.Return(strings, err)
 	return _c
 }
 
-func (_c *MockSubscriptionRepository_ListAccountIDsDueBefore_Call) RunAndReturn(run func(ctx context.Context, t time.Time) ([]string, error)) *MockSubscriptionRepository_ListAccountIDsDueBefore_Call {
+func (_c *MockSubscriptionRepository_ListUserIDsDueBefore_Call) RunAndReturn(run func(ctx context.Context, t time.Time) ([]string, error)) *MockSubscriptionRepository_ListUserIDsDueBefore_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
-// LockByAccountID provides a mock function for the type MockSubscriptionRepository
-func (_mock *MockSubscriptionRepository) LockByAccountID(ctx context.Context, accountID string) (*domain.Subscription, error) {
-	ret := _mock.Called(ctx, accountID)
+// LockByUserID provides a mock function for the type MockSubscriptionRepository
+func (_mock *MockSubscriptionRepository) LockByUserID(ctx context.Context, userID string) (*domain.Subscription, error) {
+	ret := _mock.Called(ctx, userID)
 
 	if len(ret) == 0 {
-		panic("no return value specified for LockByAccountID")
+		panic("no return value specified for LockByUserID")
 	}
 
 	var r0 *domain.Subscription
 	var r1 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (*domain.Subscription, error)); ok {
-		return returnFunc(ctx, accountID)
+		return returnFunc(ctx, userID)
 	}
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) *domain.Subscription); ok {
-		r0 = returnFunc(ctx, accountID)
+		r0 = returnFunc(ctx, userID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*domain.Subscription)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, accountID)
+		r1 = returnFunc(ctx, userID)
 	} else {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
 }
 
-// MockSubscriptionRepository_LockByAccountID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LockByAccountID'
-type MockSubscriptionRepository_LockByAccountID_Call struct {
+// MockSubscriptionRepository_LockByUserID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LockByUserID'
+type MockSubscriptionRepository_LockByUserID_Call struct {
 	*mock.Call
 }
 
-// LockByAccountID is a helper method to define mock.On call
+// LockByUserID is a helper method to define mock.On call
 //   - ctx context.Context
-//   - accountID string
-func (_e *MockSubscriptionRepository_Expecter) LockByAccountID(ctx any, accountID any) *MockSubscriptionRepository_LockByAccountID_Call {
-	return &MockSubscriptionRepository_LockByAccountID_Call{Call: _e.mock.On("LockByAccountID", ctx, accountID)}
+//   - userID string
+func (_e *MockSubscriptionRepository_Expecter) LockByUserID(ctx any, userID any) *MockSubscriptionRepository_LockByUserID_Call {
+	return &MockSubscriptionRepository_LockByUserID_Call{Call: _e.mock.On("LockByUserID", ctx, userID)}
 }
 
-func (_c *MockSubscriptionRepository_LockByAccountID_Call) Run(run func(ctx context.Context, accountID string)) *MockSubscriptionRepository_LockByAccountID_Call {
+func (_c *MockSubscriptionRepository_LockByUserID_Call) Run(run func(ctx context.Context, userID string)) *MockSubscriptionRepository_LockByUserID_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -300,12 +300,12 @@ func (_c *MockSubscriptionRepository_LockByAccountID_Call) Run(run func(ctx cont
 	return _c
 }
 
-func (_c *MockSubscriptionRepository_LockByAccountID_Call) Return(subscription *domain.Subscription, err error) *MockSubscriptionRepository_LockByAccountID_Call {
+func (_c *MockSubscriptionRepository_LockByUserID_Call) Return(subscription *domain.Subscription, err error) *MockSubscriptionRepository_LockByUserID_Call {
 	_c.Call.Return(subscription, err)
 	return _c
 }
 
-func (_c *MockSubscriptionRepository_LockByAccountID_Call) RunAndReturn(run func(ctx context.Context, accountID string) (*domain.Subscription, error)) *MockSubscriptionRepository_LockByAccountID_Call {
+func (_c *MockSubscriptionRepository_LockByUserID_Call) RunAndReturn(run func(ctx context.Context, userID string) (*domain.Subscription, error)) *MockSubscriptionRepository_LockByUserID_Call {
 	_c.Call.Return(run)
 	return _c
 }

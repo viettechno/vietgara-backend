@@ -11,14 +11,14 @@ import (
 // Refresh exchanges a still-valid refresh token for a fresh session
 // (FR-IAM-02). The old refresh token is rotated: revoked and replaced, so
 // a stolen token has a limited window of reuse. The new access token
-// reflects the account's current verification and admin flags.
+// reflects the user's current verification and admin flags.
 func (uc *IdentityUseCase) Refresh(ctx context.Context, refreshToken string) (*Session, error) {
-	accountID, err := uc.sessions.RefreshTokenAccount(ctx, refreshToken)
+	userID, err := uc.sessions.RefreshTokenUser(ctx, refreshToken)
 	if err != nil {
 		return nil, refreshError(err)
 	}
 
-	acc, err := uc.findAccount(ctx, accountID)
+	user, err := uc.findUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +27,7 @@ func (uc *IdentityUseCase) Refresh(ctx context.Context, refreshToken string) (*S
 		return nil, apperror.Internal("revoke old refresh token", err)
 	}
 
-	return uc.issueSession(ctx, acc)
+	return uc.issueSession(ctx, user)
 }
 
 // Logout revokes the presented refresh token (FR-IAM-02).

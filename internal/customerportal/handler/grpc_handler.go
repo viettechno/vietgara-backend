@@ -27,14 +27,14 @@ func NewServer(uc *usecase.PortalUseCase) *Server {
 }
 
 // Policies declares the RPCs' requirements: both are the signed-in
-// (verified) account's own. The
+// (verified) user's own. The
 // garage in GetMyVehicleHistory's path is not a membership check -- the
 // person is a customer there, not staff -- so the use case checks the
 // vehicle is on one of their customer records instead.
 func Policies() middleware.Policies {
 	return middleware.Policies{
-		customerportalv1.CustomerPortalService_ListMyVehicles_FullMethodName:      middleware.AccountMethod(),
-		customerportalv1.CustomerPortalService_GetMyVehicleHistory_FullMethodName: middleware.AccountMethod(),
+		customerportalv1.CustomerPortalService_ListMyVehicles_FullMethodName:      middleware.UserMethod(),
+		customerportalv1.CustomerPortalService_GetMyVehicleHistory_FullMethodName: middleware.UserMethod(),
 	}
 }
 
@@ -42,7 +42,7 @@ func Policies() middleware.Policies {
 func (s *Server) ListMyVehicles(
 	ctx context.Context, _ *customerportalv1.ListMyVehiclesRequest,
 ) (*customerportalv1.ListMyVehiclesResponse, error) {
-	garages, err := s.uc.ListMyVehicles(ctx, middleware.AccountID(ctx))
+	garages, err := s.uc.ListMyVehicles(ctx, middleware.UserID(ctx))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -68,7 +68,7 @@ func (s *Server) ListMyVehicles(
 func (s *Server) GetMyVehicleHistory(
 	ctx context.Context, req *customerportalv1.GetMyVehicleHistoryRequest,
 ) (*customerportalv1.GetMyVehicleHistoryResponse, error) {
-	entries, err := s.uc.GetMyVehicleHistory(ctx, middleware.AccountID(ctx), req.GetGarageId(), req.GetVehicleId())
+	entries, err := s.uc.GetMyVehicleHistory(ctx, middleware.UserID(ctx), req.GetGarageId(), req.GetVehicleId())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}

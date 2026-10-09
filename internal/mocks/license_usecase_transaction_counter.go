@@ -38,8 +38,8 @@ func (_m *MockTransactionCounter) EXPECT() *MockTransactionCounter_Expecter {
 }
 
 // Get provides a mock function for the type MockTransactionCounter
-func (_mock *MockTransactionCounter) Get(ctx context.Context, accountID string, day string) (int, error) {
-	ret := _mock.Called(ctx, accountID, day)
+func (_mock *MockTransactionCounter) Get(ctx context.Context, userID string, day string) (int, error) {
+	ret := _mock.Called(ctx, userID, day)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Get")
@@ -48,15 +48,15 @@ func (_mock *MockTransactionCounter) Get(ctx context.Context, accountID string, 
 	var r0 int
 	var r1 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (int, error)); ok {
-		return returnFunc(ctx, accountID, day)
+		return returnFunc(ctx, userID, day)
 	}
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) int); ok {
-		r0 = returnFunc(ctx, accountID, day)
+		r0 = returnFunc(ctx, userID, day)
 	} else {
 		r0 = ret.Get(0).(int)
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
-		r1 = returnFunc(ctx, accountID, day)
+		r1 = returnFunc(ctx, userID, day)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -70,13 +70,13 @@ type MockTransactionCounter_Get_Call struct {
 
 // Get is a helper method to define mock.On call
 //   - ctx context.Context
-//   - accountID string
+//   - userID string
 //   - day string
-func (_e *MockTransactionCounter_Expecter) Get(ctx any, accountID any, day any) *MockTransactionCounter_Get_Call {
-	return &MockTransactionCounter_Get_Call{Call: _e.mock.On("Get", ctx, accountID, day)}
+func (_e *MockTransactionCounter_Expecter) Get(ctx any, userID any, day any) *MockTransactionCounter_Get_Call {
+	return &MockTransactionCounter_Get_Call{Call: _e.mock.On("Get", ctx, userID, day)}
 }
 
-func (_c *MockTransactionCounter_Get_Call) Run(run func(ctx context.Context, accountID string, day string)) *MockTransactionCounter_Get_Call {
+func (_c *MockTransactionCounter_Get_Call) Run(run func(ctx context.Context, userID string, day string)) *MockTransactionCounter_Get_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -104,14 +104,14 @@ func (_c *MockTransactionCounter_Get_Call) Return(n int, err error) *MockTransac
 	return _c
 }
 
-func (_c *MockTransactionCounter_Get_Call) RunAndReturn(run func(ctx context.Context, accountID string, day string) (int, error)) *MockTransactionCounter_Get_Call {
+func (_c *MockTransactionCounter_Get_Call) RunAndReturn(run func(ctx context.Context, userID string, day string) (int, error)) *MockTransactionCounter_Get_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Increment provides a mock function for the type MockTransactionCounter
-func (_mock *MockTransactionCounter) Increment(ctx context.Context, accountID string, day string) (int, error) {
-	ret := _mock.Called(ctx, accountID, day)
+func (_mock *MockTransactionCounter) Increment(ctx context.Context, userID string, day string) (int, error) {
+	ret := _mock.Called(ctx, userID, day)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Increment")
@@ -120,15 +120,15 @@ func (_mock *MockTransactionCounter) Increment(ctx context.Context, accountID st
 	var r0 int
 	var r1 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (int, error)); ok {
-		return returnFunc(ctx, accountID, day)
+		return returnFunc(ctx, userID, day)
 	}
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) int); ok {
-		r0 = returnFunc(ctx, accountID, day)
+		r0 = returnFunc(ctx, userID, day)
 	} else {
 		r0 = ret.Get(0).(int)
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
-		r1 = returnFunc(ctx, accountID, day)
+		r1 = returnFunc(ctx, userID, day)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -142,13 +142,13 @@ type MockTransactionCounter_Increment_Call struct {
 
 // Increment is a helper method to define mock.On call
 //   - ctx context.Context
-//   - accountID string
+//   - userID string
 //   - day string
-func (_e *MockTransactionCounter_Expecter) Increment(ctx any, accountID any, day any) *MockTransactionCounter_Increment_Call {
-	return &MockTransactionCounter_Increment_Call{Call: _e.mock.On("Increment", ctx, accountID, day)}
+func (_e *MockTransactionCounter_Expecter) Increment(ctx any, userID any, day any) *MockTransactionCounter_Increment_Call {
+	return &MockTransactionCounter_Increment_Call{Call: _e.mock.On("Increment", ctx, userID, day)}
 }
 
-func (_c *MockTransactionCounter_Increment_Call) Run(run func(ctx context.Context, accountID string, day string)) *MockTransactionCounter_Increment_Call {
+func (_c *MockTransactionCounter_Increment_Call) Run(run func(ctx context.Context, userID string, day string)) *MockTransactionCounter_Increment_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -176,7 +176,7 @@ func (_c *MockTransactionCounter_Increment_Call) Return(n int, err error) *MockT
 	return _c
 }
 
-func (_c *MockTransactionCounter_Increment_Call) RunAndReturn(run func(ctx context.Context, accountID string, day string) (int, error)) *MockTransactionCounter_Increment_Call {
+func (_c *MockTransactionCounter_Increment_Call) RunAndReturn(run func(ctx context.Context, userID string, day string) (int, error)) *MockTransactionCounter_Increment_Call {
 	_c.Call.Return(run)
 	return _c
 }

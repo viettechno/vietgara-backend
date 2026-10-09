@@ -14,15 +14,15 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/technician/usecase"
 )
 
-const me = "acc-tech"
+const me = "user-tech"
 
 type memberships struct {
 	list []usecase.Membership
 	err  error
 }
 
-func (m memberships) ListForAccount(_ context.Context, accountID string) ([]usecase.Membership, error) {
-	if accountID != me {
+func (m memberships) ListForUser(_ context.Context, userID string) ([]usecase.Membership, error) {
+	if userID != me {
 		return nil, nil
 	}
 
@@ -35,8 +35,8 @@ type repairOrders struct {
 	err      error
 }
 
-func (r *repairOrders) ListAssigned(_ context.Context, garageID, accountID string) ([]*domain.RepairOrder, error) {
-	if accountID != me {
+func (r *repairOrders) ListAssigned(_ context.Context, garageID, userID string) ([]*domain.RepairOrder, error) {
+	if userID != me {
 		return nil, nil
 	}
 
@@ -104,9 +104,9 @@ func TestListMyWork_KeepsOpenOrdersAndOnlyMyLines(t *testing.T) {
 
 	assert.Equal(t, []string{"l1", "l3"}, ids)
 
-	// Each garage is read in its own scope, keeping the caller's account.
+	// Each garage is read in its own scope, keeping the caller's user.
 	assert.Equal(t, []platformdb.Scope{
-		{GarageID: "g-1", AccountID: me}, {GarageID: "g-2", AccountID: me},
+		{GarageID: "g-1", UserID: me}, {GarageID: "g-2", UserID: me},
 	}, scopes)
 }
 

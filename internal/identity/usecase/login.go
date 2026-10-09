@@ -10,33 +10,33 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-// dummyHash is compared against when the account does not exist, so a
+// dummyHash is compared against when the user does not exist, so a
 // wrong e-mail takes as long as a wrong password.
 var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("vietgara-timing-equalizer"), bcrypt.DefaultCost)
 
-// Login authenticates an account by e-mail and password (FR-IAM-02).
+// Login authenticates a user by e-mail and password (FR-IAM-02).
 // Unknown e-mails and wrong passwords return the same error, so the API
-// cannot be used to enumerate accounts.
+// cannot be used to enumerate users.
 func (uc *IdentityUseCase) Login(ctx context.Context, rawEmail, password string) (*Session, error) {
 	email, ok := domain.NormalizeEmail(rawEmail)
 	if !ok || password == "" {
 		return nil, invalidCredentials()
 	}
 
-	acc, err := uc.accounts.FindByEmail(ctx, email)
+	user, err := uc.users.FindByEmail(ctx, email)
 	if err != nil {
-		if errors.Is(err, domain.ErrAccountNotFound) {
+		if errors.Is(err, domain.ErrUserNotFound) {
 			_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))
 
 			return nil, invalidCredentials()
 		}
 
-		return nil, apperror.Internal("find account by email", err)
+		return nil, apperror.Internal("find user by email", err)
 	}
 
-	if acc.PasswordHash == nil || bcrypt.CompareHashAndPassword([]byte(*acc.PasswordHash), []byte(password)) != nil {
+	if user.PasswordHash == nil || bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(password)) != nil {
 		return nil, invalidCredentials()
 	}
 
-	return uc.issueSession(ctx, acc)
+	return uc.issueSession(ctx, user)
 }

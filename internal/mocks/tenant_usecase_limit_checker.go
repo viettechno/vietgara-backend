@@ -39,8 +39,8 @@ func (_m *MockLimitChecker) EXPECT() *MockLimitChecker_Expecter {
 }
 
 // CheckLimit provides a mock function for the type MockLimitChecker
-func (_mock *MockLimitChecker) CheckLimit(ctx context.Context, ownerAccountID string, limit usecase.Limit, current int) error {
-	ret := _mock.Called(ctx, ownerAccountID, limit, current)
+func (_mock *MockLimitChecker) CheckLimit(ctx context.Context, ownerUserID string, limit usecase.Limit, current int) error {
+	ret := _mock.Called(ctx, ownerUserID, limit, current)
 
 	if len(ret) == 0 {
 		panic("no return value specified for CheckLimit")
@@ -48,7 +48,7 @@ func (_mock *MockLimitChecker) CheckLimit(ctx context.Context, ownerAccountID st
 
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.Limit, int) error); ok {
-		r0 = returnFunc(ctx, ownerAccountID, limit, current)
+		r0 = returnFunc(ctx, ownerUserID, limit, current)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -62,14 +62,14 @@ type MockLimitChecker_CheckLimit_Call struct {
 
 // CheckLimit is a helper method to define mock.On call
 //   - ctx context.Context
-//   - ownerAccountID string
+//   - ownerUserID string
 //   - limit usecase.Limit
 //   - current int
-func (_e *MockLimitChecker_Expecter) CheckLimit(ctx any, ownerAccountID any, limit any, current any) *MockLimitChecker_CheckLimit_Call {
-	return &MockLimitChecker_CheckLimit_Call{Call: _e.mock.On("CheckLimit", ctx, ownerAccountID, limit, current)}
+func (_e *MockLimitChecker_Expecter) CheckLimit(ctx any, ownerUserID any, limit any, current any) *MockLimitChecker_CheckLimit_Call {
+	return &MockLimitChecker_CheckLimit_Call{Call: _e.mock.On("CheckLimit", ctx, ownerUserID, limit, current)}
 }
 
-func (_c *MockLimitChecker_CheckLimit_Call) Run(run func(ctx context.Context, ownerAccountID string, limit usecase.Limit, current int)) *MockLimitChecker_CheckLimit_Call {
+func (_c *MockLimitChecker_CheckLimit_Call) Run(run func(ctx context.Context, ownerUserID string, limit usecase.Limit, current int)) *MockLimitChecker_CheckLimit_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -102,7 +102,7 @@ func (_c *MockLimitChecker_CheckLimit_Call) Return(err error) *MockLimitChecker_
 	return _c
 }
 
-func (_c *MockLimitChecker_CheckLimit_Call) RunAndReturn(run func(ctx context.Context, ownerAccountID string, limit usecase.Limit, current int) error) *MockLimitChecker_CheckLimit_Call {
+func (_c *MockLimitChecker_CheckLimit_Call) RunAndReturn(run func(ctx context.Context, ownerUserID string, limit usecase.Limit, current int) error) *MockLimitChecker_CheckLimit_Call {
 	_c.Call.Return(run)
 	return _c
 }

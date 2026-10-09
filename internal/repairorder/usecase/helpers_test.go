@@ -56,7 +56,7 @@ func newUseCase(t *testing.T) (*usecase.RepairOrderUseCase, *deps) {
 
 func defaultGarage() usecase.GarageInfo {
 	return usecase.GarageInfo{
-		OwnerAccountID: ownerID, Timezone: "Asia/Ho_Chi_Minh", RepairOrderNumberTemplate: "LSC-{YYYY}{MM}-{SEQ:4}",
+		OwnerUserID: ownerID, Timezone: "Asia/Ho_Chi_Minh", RepairOrderNumberTemplate: "LSC-{YYYY}{MM}-{SEQ:4}",
 	}
 }
 

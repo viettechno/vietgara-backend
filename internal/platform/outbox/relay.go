@@ -30,18 +30,18 @@ type Event struct {
 	Type       string          `json:"event_type"`
 	OccurredAt time.Time       `json:"occurred_at"`
 	GarageID   string          `json:"garage_id,omitempty"`
-	AccountID  string          `json:"account_id,omitempty"`
+	UserID     string          `json:"user_id,omitempty"`
 	Version    int             `json:"version"`
 	Data       json.RawMessage `json:"data"`
 }
 
-// Key is the partition key: the garage, else the account.
+// Key is the partition key: the garage, else the user.
 func (e Event) Key() string {
 	if e.GarageID != "" {
 		return e.GarageID
 	}
 
-	return e.AccountID
+	return e.UserID
 }
 
 // Publisher delivers an event: the Kafka producer, or the in-process
@@ -72,7 +72,7 @@ func WithMaxAttempts(attempts int) RelayOption {
 // outbox_events and hands each one to the Publisher.
 //
 // Each event is delivered in its own transaction scoped to the event's
-// garage and account, holding a row lock (FOR UPDATE SKIP LOCKED, so
+// garage and user, holding a row lock (FOR UPDATE SKIP LOCKED, so
 // several instances can run the relay) while the publisher runs. With
 // Kafka the event is marked published once the broker acknowledged it; with
 // the in-process Dispatcher the consumers write through the same
@@ -181,10 +181,10 @@ func (r *Relay) deliver(ctx context.Context, id string) (bool, error) {
 		event := Event{Version: EnvelopeVersion}
 
 		err := q.QueryRow(txCtx, `
-			SELECT id, event_type, COALESCE(garage_id::text, ''), COALESCE(account_id::text, ''), payload, created_at
+			SELECT id, event_type, COALESCE(garage_id::text, ''), COALESCE(user_id::text, ''), payload, created_at
 			FROM outbox_events
 			WHERE id = $1 AND status = 'pending' FOR UPDATE SKIP LOCKED`, id,
-		).Scan(&event.ID, &event.Type, &event.GarageID, &event.AccountID, &event.Data, &event.OccurredAt)
+		).Scan(&event.ID, &event.Type, &event.GarageID, &event.UserID, &event.Data, &event.OccurredAt)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil
 		}
@@ -194,7 +194,7 @@ func (r *Relay) deliver(ctx context.Context, id string) (bool, error) {
 		}
 
 		// In-process consumers run inside the event's scope, like a request.
-		scope := platformdb.Scope{GarageID: event.GarageID, AccountID: event.AccountID}
+		scope := platformdb.Scope{GarageID: event.GarageID, UserID: event.UserID}
 
 		err = r.tx.WithTransaction(txCtx, scope, func(ctx context.Context) error {
 			return r.publisher.Publish(ctx, event)

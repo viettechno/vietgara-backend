@@ -3,7 +3,7 @@
 // in one consumer group.
 //
 // Topics: one per bounded context, "<prefix>.<context>.events" (e.g.
-// vietgara.tenant.events), keyed by garage_id (or account_id) so the
+// vietgara.tenant.events), keyed by garage_id (or user_id) so the
 // events of one tenant stay ordered. Handlers that keep failing are
 // parked on "<topic>.dlq".
 package kafka
@@ -25,7 +25,7 @@ const (
 
 // contexts maps an event's first name segment to its bounded context.
 var contexts = map[string]string{
-	"account":      contextIdentity,
+	"user":         contextIdentity,
 	"garage":       contextTenant,
 	"staff":        contextTenant,
 	"invitation":   contextTenant,

@@ -28,18 +28,18 @@ func NewServer(uc *usecase.TechnicianUseCase) *Server {
 }
 
 // Policies declares the RPC's requirements: the work list is the
-// signed-in (verified) account's own,
+// signed-in (verified) user's own,
 // across garages; each garage's access is checked by the use case.
 func Policies() middleware.Policies {
 	return middleware.Policies{
-		technicianv1.TechnicianService_ListMyWork_FullMethodName: middleware.AccountMethod(),
+		technicianv1.TechnicianService_ListMyWork_FullMethodName: middleware.UserMethod(),
 	}
 }
 
 // ListMyWork serves the Technician App's work list (FR-TAPP-01, UI Design
 // Spec 5.1).
 func (s *Server) ListMyWork(ctx context.Context, _ *technicianv1.ListMyWorkRequest) (*technicianv1.ListMyWorkResponse, error) {
-	work, err := s.uc.ListMyWork(ctx, middleware.AccountID(ctx))
+	work, err := s.uc.ListMyWork(ctx, middleware.UserID(ctx))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}

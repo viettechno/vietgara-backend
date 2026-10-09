@@ -37,7 +37,7 @@ func (f *fakeTx) WithTransaction(ctx context.Context, scope platformdb.Scope, fn
 func garagePipeline(t *testing.T, tx middleware.Transactor, reader access.Reader, license middleware.LicenseChecker, policy middleware.Policy, method string) func(req any, h func(ctx context.Context) error) error {
 	t.Helper()
 
-	tok := token(t, auth.Identity{AccountID: "acc-1", EmailVerified: true})
+	tok := token(t, auth.Identity{UserID: "user-1", EmailVerified: true})
 	pols := middleware.Policies{method: policy}
 	run := middleware.ChainUnaryInterceptors(middleware.Auth(issuer, pols), middleware.Garage(tx, reader, license))
 
@@ -50,14 +50,14 @@ func garagePipeline(t *testing.T, tx middleware.Transactor, reader access.Reader
 	}
 }
 
-func TestGarage_AccountScope(t *testing.T) {
+func TestGarage_UserScope(t *testing.T) {
 	t.Parallel()
 
 	tx := &fakeTx{}
-	call := garagePipeline(t, tx, nil, nil, middleware.AccountMethod(), methodAccount)
+	call := garagePipeline(t, tx, nil, nil, middleware.UserMethod(), methodUser)
 
 	require.NoError(t, call(nil, func(context.Context) error { return nil }))
-	assert.Equal(t, platformdb.AccountScope("acc-1"), tx.scope)
+	assert.Equal(t, platformdb.UserScope("user-1"), tx.scope)
 
 	failing := errors.New("handler failed")
 	err := call(nil, func(context.Context) error { return apperror.New(apperror.CodeNotFound, "gone") })
@@ -85,7 +85,7 @@ func TestGarage_Authorization(t *testing.T) {
 
 	rule := middleware.GarageMethod(access.Requires(access.CustomerWrite))
 	member := &access.Access{
-		GarageID: garageID, AccountID: "acc-1", OwnerAccountID: "owner", Active: true,
+		GarageID: garageID, UserID: "user-1", OwnerUserID: "owner", Active: true,
 		Permissions: []access.Permission{access.CustomerWrite},
 	}
 
@@ -127,7 +127,7 @@ func TestGarage_Authorization(t *testing.T) {
 
 			reader := mocks.NewMockAccessReader(t)
 			if tt.access != nil || tt.accessErr != nil {
-				reader.EXPECT().GarageAccess(mock.Anything, garageID, "acc-1").Return(tt.access, tt.accessErr)
+				reader.EXPECT().GarageAccess(mock.Anything, garageID, "user-1").Return(tt.access, tt.accessErr)
 			}
 
 			checker := mocks.NewMockLicenseChecker(t)
@@ -164,7 +164,7 @@ func TestGarage_Authorization(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Same(t, tt.access, gotAccess)
-			assert.Equal(t, platformdb.Scope{GarageID: garageID, AccountID: "acc-1"}, tx.scope)
+			assert.Equal(t, platformdb.Scope{GarageID: garageID, UserID: "user-1"}, tx.scope)
 		})
 	}
 }
@@ -173,7 +173,7 @@ func TestGarage_NilLicenseChecker(t *testing.T) {
 	t.Parallel()
 
 	reader := mocks.NewMockAccessReader(t)
-	reader.EXPECT().GarageAccess(mock.Anything, garageID, "acc-1").Return(&access.Access{Owner: true}, nil)
+	reader.EXPECT().GarageAccess(mock.Anything, garageID, "user-1").Return(&access.Access{Owner: true}, nil)
 
 	err := garagePipeline(t, &fakeTx{}, reader, nil, middleware.GarageMethod(access.Member()), methodGarage)(
 		garageReq{id: garageID}, func(context.Context) error { return nil })

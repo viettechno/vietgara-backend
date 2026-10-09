@@ -24,9 +24,9 @@ func TestGarageRepository(t *testing.T) {
 		ExpectQueryRow("WHERE g.id = $1", dbtest.Row(garageRow()...)).
 		ExpectQueryRow("WHERE g.id = $1", dbtest.ErrRow(pgx.ErrNoRows)).
 		ExpectQueryRow("WHERE g.id = $1", dbtest.Row(bad...)).
-		ExpectQuery("g.account_id = $1", dbtest.NewRows(garageRow()), nil).
-		ExpectQuery("g.account_id = $1", nil, errBoom).
-		ExpectQuery("g.account_id = $1", dbtest.NewRows(bad), nil).
+		ExpectQuery("g.user_id = $1", dbtest.NewRows(garageRow()), nil).
+		ExpectQuery("g.user_id = $1", nil, errBoom).
+		ExpectQuery("g.user_id = $1", dbtest.NewRows(bad), nil).
 		ExpectQueryRow("INSERT INTO garages", dbtest.Row(now, now)).
 		ExpectQueryRow("UPDATE garages", dbtest.Row(now)).
 		ExpectQueryRow("UPDATE garages", dbtest.ErrRow(pgx.ErrNoRows))
@@ -34,7 +34,7 @@ func TestGarageRepository(t *testing.T) {
 
 	g, err := repo.FindByID(ctx, "g-1")
 	require.NoError(t, err)
-	assert.Equal(t, "owner", g.OwnerAccountID)
+	assert.Equal(t, "owner", g.OwnerUserID)
 	assert.Equal(t, domain.GarageStatusActive, g.Status)
 	assert.Len(t, g.OperatingHours, 1)
 	assert.Equal(t, "a@b.vn", *g.Email)
@@ -44,13 +44,13 @@ func TestGarageRepository(t *testing.T) {
 	_, err = repo.FindByID(ctx, "x")
 	require.Error(t, err)
 
-	list, err := repo.ListForAccount(ctx, "owner")
+	list, err := repo.ListForUser(ctx, "owner")
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 
-	_, err = repo.ListForAccount(ctx, "owner")
+	_, err = repo.ListForUser(ctx, "owner")
 	require.ErrorIs(t, err, errBoom)
-	_, err = repo.ListForAccount(ctx, "owner")
+	_, err = repo.ListForUser(ctx, "owner")
 	require.Error(t, err)
 
 	require.NoError(t, repo.Create(ctx, g))
@@ -64,7 +64,7 @@ func TestAccessReader(t *testing.T) {
 	r := repository.NewPostgresAccessReader(nil)
 
 	tx := dbtest.New(t).
-		ExpectQueryRow("FROM garages g", dbtest.Row("acc-1", true, nil, []string{})).
+		ExpectQueryRow("FROM garages g", dbtest.Row("user-1", true, nil, []string{})).
 		ExpectQueryRow("FROM garages g", dbtest.Row("owner", true, "active", []string{"customer.read"})).
 		ExpectQueryRow("FROM garages g", dbtest.Row("owner", true, "inactive", []string{})).
 		ExpectQueryRow("FROM garages g", dbtest.Row("owner", true, nil, []string{})).
@@ -73,21 +73,21 @@ func TestAccessReader(t *testing.T) {
 		ExpectQueryRow("owner_usage", dbtest.Row(2, 7))
 	ctx := tx.Context(t.Context())
 
-	owner, err := r.GarageAccess(ctx, "g-1", "acc-1")
+	owner, err := r.GarageAccess(ctx, "g-1", "user-1")
 	require.NoError(t, err)
 	assert.True(t, owner.Owner)
 
-	member, err := r.GarageAccess(ctx, "g-1", "acc-1")
+	member, err := r.GarageAccess(ctx, "g-1", "user-1")
 	require.NoError(t, err)
 	assert.False(t, member.Owner)
 	assert.Equal(t, []access.Permission{access.CustomerRead}, member.Permissions)
 
 	for range 3 {
-		_, err = r.GarageAccess(ctx, "g-1", "acc-1")
+		_, err = r.GarageAccess(ctx, "g-1", "user-1")
 		require.ErrorIs(t, err, access.ErrNoMembership)
 	}
 
-	_, err = r.GarageAccess(ctx, "g-1", "acc-1")
+	_, err = r.GarageAccess(ctx, "g-1", "user-1")
 	require.ErrorIs(t, err, errBoom)
 
 	garages, staff, err := r.OwnerUsage(ctx, "owner")

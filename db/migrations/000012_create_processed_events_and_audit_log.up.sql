@@ -15,7 +15,7 @@ CREATE TABLE processed_events (
 -- SELECT (000013).
 CREATE TABLE audit_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    actor_account_id UUID,
+    actor_user_id UUID,
     garage_id UUID,
     action VARCHAR(100) NOT NULL,
     entity_type VARCHAR(50) NOT NULL,

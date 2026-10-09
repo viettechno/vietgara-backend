@@ -39,8 +39,8 @@ func (_m *MockEntitlementRepository) EXPECT() *MockEntitlementRepository_Expecte
 }
 
 // Replace provides a mock function for the type MockEntitlementRepository
-func (_mock *MockEntitlementRepository) Replace(ctx context.Context, accountID string, flags map[domain.Feature]bool) error {
-	ret := _mock.Called(ctx, accountID, flags)
+func (_mock *MockEntitlementRepository) Replace(ctx context.Context, userID string, flags map[domain.Feature]bool) error {
+	ret := _mock.Called(ctx, userID, flags)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Replace")
@@ -48,7 +48,7 @@ func (_mock *MockEntitlementRepository) Replace(ctx context.Context, accountID s
 
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string, map[domain.Feature]bool) error); ok {
-		r0 = returnFunc(ctx, accountID, flags)
+		r0 = returnFunc(ctx, userID, flags)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -62,13 +62,13 @@ type MockEntitlementRepository_Replace_Call struct {
 
 // Replace is a helper method to define mock.On call
 //   - ctx context.Context
-//   - accountID string
+//   - userID string
 //   - flags map[domain.Feature]bool
-func (_e *MockEntitlementRepository_Expecter) Replace(ctx any, accountID any, flags any) *MockEntitlementRepository_Replace_Call {
-	return &MockEntitlementRepository_Replace_Call{Call: _e.mock.On("Replace", ctx, accountID, flags)}
+func (_e *MockEntitlementRepository_Expecter) Replace(ctx any, userID any, flags any) *MockEntitlementRepository_Replace_Call {
+	return &MockEntitlementRepository_Replace_Call{Call: _e.mock.On("Replace", ctx, userID, flags)}
 }
 
-func (_c *MockEntitlementRepository_Replace_Call) Run(run func(ctx context.Context, accountID string, flags map[domain.Feature]bool)) *MockEntitlementRepository_Replace_Call {
+func (_c *MockEntitlementRepository_Replace_Call) Run(run func(ctx context.Context, userID string, flags map[domain.Feature]bool)) *MockEntitlementRepository_Replace_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -96,7 +96,7 @@ func (_c *MockEntitlementRepository_Replace_Call) Return(err error) *MockEntitle
 	return _c
 }
 
-func (_c *MockEntitlementRepository_Replace_Call) RunAndReturn(run func(ctx context.Context, accountID string, flags map[domain.Feature]bool) error) *MockEntitlementRepository_Replace_Call {
+func (_c *MockEntitlementRepository_Replace_Call) RunAndReturn(run func(ctx context.Context, userID string, flags map[domain.Feature]bool) error) *MockEntitlementRepository_Replace_Call {
 	_c.Call.Return(run)
 	return _c
 }

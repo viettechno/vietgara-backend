@@ -27,11 +27,11 @@ func (s InvitationStatus) IsValid() bool {
 	return false
 }
 
-// Invitation asks an existing account to join a garage.
+// Invitation asks an existing user to join a garage.
 type Invitation struct {
 	ID          string
 	GarageID    string
-	AccountID   string
+	UserID      string
 	GroupIDs    []string
 	Status      InvitationStatus
 	InvitedBy   string

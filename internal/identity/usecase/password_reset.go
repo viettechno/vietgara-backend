@@ -15,7 +15,7 @@ import (
 
 // RequestPasswordReset e-mails a password-reset OTP valid for 2 minutes
 // (FR-IAM-04). It answers the same way whether or not the e-mail belongs to
-// an account, so it cannot be used to discover accounts.
+// a user, so it cannot be used to discover users.
 func (uc *IdentityUseCase) RequestPasswordReset(ctx context.Context, rawEmail string) (Challenge, error) {
 	now := uc.now().UTC()
 	generic := Challenge{ExpiresAt: now.Add(domain.OTPTTL), ResendAvailableAt: now.Add(domain.OTPResendCooldown)}
@@ -25,26 +25,26 @@ func (uc *IdentityUseCase) RequestPasswordReset(ctx context.Context, rawEmail st
 		return Challenge{}, apperror.Validation("email", apperror.IssueInvalid, "email is invalid")
 	}
 
-	acc, err := uc.accounts.FindByEmail(ctx, email)
+	user, err := uc.users.FindByEmail(ctx, email)
 	if err != nil {
-		if errors.Is(err, domain.ErrAccountNotFound) {
+		if errors.Is(err, domain.ErrUserNotFound) {
 			return generic, nil
 		}
 
-		return Challenge{}, apperror.Internal("find account by email", err)
+		return Challenge{}, apperror.Internal("find user by email", err)
 	}
 
-	if acc.Status == domain.AccountStatusSuspended {
+	if user.Status == domain.UserStatusSuspended {
 		return generic, nil
 	}
 
-	challenge, err := uc.sendOTP(ctx, domain.OTPPasswordReset, acc)
+	challenge, err := uc.sendOTP(ctx, domain.OTPPasswordReset, user)
 	if err != nil {
 		if tooSoon, isTooSoon := errors.AsType[*resendTooSoonError](err); isTooSoon {
 			return tooSoon.challenge, nil
 		}
 
-		slog.Error("identity: sending the password reset e-mail failed", "account_id", acc.ID, "error", err)
+		slog.Error("identity: sending the password reset e-mail failed", "user_id", user.ID, "error", err)
 
 		return generic, nil
 	}
@@ -60,21 +60,21 @@ func (uc *IdentityUseCase) VerifyPasswordResetOTP(ctx context.Context, rawEmail,
 		return "", time.Time{}, otpError(domain.ErrOTPInvalid)
 	}
 
-	acc, err := uc.accounts.FindByEmail(ctx, email)
+	user, err := uc.users.FindByEmail(ctx, email)
 	if err != nil {
-		if errors.Is(err, domain.ErrAccountNotFound) {
+		if errors.Is(err, domain.ErrUserNotFound) {
 			return "", time.Time{}, otpError(domain.ErrOTPExpired)
 		}
 
-		return "", time.Time{}, apperror.Internal("find account by email", err)
+		return "", time.Time{}, apperror.Internal("find user by email", err)
 	}
 
-	if err := uc.checkOTP(ctx, domain.OTPPasswordReset, acc.ID, code); err != nil {
+	if err := uc.checkOTP(ctx, domain.OTPPasswordReset, user.ID, code); err != nil {
 		return "", time.Time{}, err
 	}
 
 	token := auth.NewOpaqueToken()
-	if err := uc.sessions.SaveResetToken(ctx, token, acc.ID, domain.ResetTokenTTL); err != nil {
+	if err := uc.sessions.SaveResetToken(ctx, token, user.ID, domain.ResetTokenTTL); err != nil {
 		return "", time.Time{}, apperror.Internal("store reset token", err)
 	}
 
@@ -89,7 +89,7 @@ func (uc *IdentityUseCase) ResetPassword(ctx context.Context, token, newPassword
 		return apperror.Validation("newPassword", apperror.IssueTooShort, "password must have at least 8 characters")
 	}
 
-	accountID, err := uc.sessions.ConsumeResetToken(ctx, token)
+	userID, err := uc.sessions.ConsumeResetToken(ctx, token)
 	if err != nil {
 		if errors.Is(err, domain.ErrResetTokenInvalid) {
 			return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err).WithReason(domain.ReasonResetTokenInvalid)
@@ -98,7 +98,7 @@ func (uc *IdentityUseCase) ResetPassword(ctx context.Context, token, newPassword
 		return apperror.Internal("read reset token", err)
 	}
 
-	acc, err := uc.findAccount(ctx, accountID)
+	user, err := uc.findUser(ctx, userID)
 	if err != nil {
 		return err
 	}
@@ -109,17 +109,17 @@ func (uc *IdentityUseCase) ResetPassword(ctx context.Context, token, newPassword
 	}
 
 	passwordHash := string(hash)
-	acc.PasswordHash = &passwordHash
+	user.PasswordHash = &passwordHash
 
-	if acc.EmailVerified() {
-		if err := uc.accounts.Update(ctx, acc); err != nil {
+	if user.EmailVerified() {
+		if err := uc.users.Update(ctx, user); err != nil {
 			return apperror.Internal("update password", err)
 		}
-	} else if err := uc.markVerified(ctx, acc); err != nil {
+	} else if err := uc.markVerified(ctx, user); err != nil {
 		return apperror.Internal("update password", err)
 	}
 
-	if err := uc.sessions.RevokeAllRefreshTokens(ctx, acc.ID); err != nil {
+	if err := uc.sessions.RevokeAllRefreshTokens(ctx, user.ID); err != nil {
 		return apperror.Internal("revoke sessions", err)
 	}
 

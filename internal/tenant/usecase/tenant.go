@@ -22,7 +22,7 @@ type Deps struct {
 	Access      access.Reader
 	Usage       UsageReader
 	Limits      LimitChecker
-	Accounts    AccountDirectory
+	Users       UserDirectory
 	Logos       LogoStore
 	Mailer      Mailer
 	Events      EventPublisher
@@ -53,15 +53,15 @@ func (uc *TenantUseCase) now() time.Time { return uc.Now().UTC() }
 // audit records a change made by the caller.
 func (uc *TenantUseCase) audit(ctx context.Context, garageID, action, entityType, entityID string, before, after any) error {
 	return uc.Audit.Record(ctx, audit.Entry{
-		Actor: middleware.AccountID(ctx), GarageID: garageID, Action: action,
+		Actor: middleware.UserID(ctx), GarageID: garageID, Action: action,
 		EntityType: entityType, EntityID: entityID, Before: before, After: after, IP: middleware.ClientIP(ctx),
 	})
 }
 
-// accountLocale returns the account's language, Vietnamese by default.
-func (uc *TenantUseCase) accountLocale(ctx context.Context, accountID string) string {
-	acc, err := uc.Accounts.FindByID(ctx, accountID)
-	if err != nil || acc.Locale != "en" {
+// userLocale returns the user's language, Vietnamese by default.
+func (uc *TenantUseCase) userLocale(ctx context.Context, userID string) string {
+	user, err := uc.Users.FindByID(ctx, userID)
+	if err != nil || user.Locale != "en" {
 		return "vi"
 	}
 

@@ -22,7 +22,7 @@ func NewPostgresInvitationRepository(pool *platformdb.Pool) *PostgresInvitationR
 }
 
 const invitationSelect = `
-	SELECT i.id, i.garage_id, i.account_id, i.group_ids::text[], i.status, i.invited_by, i.expires_at, i.responded_at,
+	SELECT i.id, i.garage_id, i.user_id, i.group_ids::text[], i.status, i.invited_by, i.expires_at, i.responded_at,
 		i.created_at, i.updated_at, COALESCE(g.name, '')
 	FROM staff_invitations i
 	LEFT JOIN garages g ON g.id = i.garage_id`
@@ -33,7 +33,7 @@ func scanInvitation(row pgx.Row) (*domain.Invitation, error) {
 		status string
 	)
 
-	err := row.Scan(&inv.ID, &inv.GarageID, &inv.AccountID, &inv.GroupIDs, &status, &inv.InvitedBy, &inv.ExpiresAt,
+	err := row.Scan(&inv.ID, &inv.GarageID, &inv.UserID, &inv.GroupIDs, &status, &inv.InvitedBy, &inv.ExpiresAt,
 		&inv.RespondedAt, &inv.CreatedAt, &inv.UpdatedAt, &inv.GarageName)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -71,9 +71,9 @@ func (r *PostgresInvitationRepository) ListByGarage(ctx context.Context, garageI
 	return r.list(ctx, `i.garage_id = $1`, garageID)
 }
 
-// ListByAccount returns the invitations sent to an account, newest first.
-func (r *PostgresInvitationRepository) ListByAccount(ctx context.Context, accountID string) ([]*domain.Invitation, error) {
-	return r.list(ctx, `i.account_id = $1`, accountID)
+// ListByUser returns the invitations sent to a user, newest first.
+func (r *PostgresInvitationRepository) ListByUser(ctx context.Context, userID string) ([]*domain.Invitation, error) {
+	return r.list(ctx, `i.user_id = $1`, userID)
 }
 
 // Create inserts a pending invitation.
@@ -86,10 +86,10 @@ func (r *PostgresInvitationRepository) Create(ctx context.Context, inv *domain.I
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
 	err := q.QueryRow(ctx, `
-		INSERT INTO staff_invitations (garage_id, account_id, group_ids, status, invited_by, expires_at)
+		INSERT INTO staff_invitations (garage_id, user_id, group_ids, status, invited_by, expires_at)
 		VALUES ($1, $2, $3::uuid[], $4, $5, $6)
 		RETURNING id, created_at, updated_at`,
-		inv.GarageID, inv.AccountID, groupIDs, string(inv.Status), inv.InvitedBy, inv.ExpiresAt,
+		inv.GarageID, inv.UserID, groupIDs, string(inv.Status), inv.InvitedBy, inv.ExpiresAt,
 	).Scan(&inv.ID, &inv.CreatedAt, &inv.UpdatedAt)
 	if isUniqueViolation(err, "") {
 		return domain.ErrAlreadyInvited
@@ -112,11 +112,11 @@ func (r *PostgresInvitationRepository) Update(ctx context.Context, inv *domain.I
 }
 
 // ExpireStale marks lapsed pending invitations as expired.
-func (r *PostgresInvitationRepository) ExpireStale(ctx context.Context, garageID, accountID string) error {
+func (r *PostgresInvitationRepository) ExpireStale(ctx context.Context, garageID, userID string) error {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 	_, err := q.Exec(ctx, `
 		UPDATE staff_invitations SET status = 'expired'
-		WHERE garage_id = $1 AND account_id = $2 AND status = 'pending' AND expires_at <= now()`, garageID, accountID)
+		WHERE garage_id = $1 AND user_id = $2 AND status = 'pending' AND expires_at <= now()`, garageID, userID)
 
 	return err
 }

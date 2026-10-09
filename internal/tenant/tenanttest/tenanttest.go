@@ -77,7 +77,7 @@ func (s *Store) FindByID(_ context.Context, id string) (*domain.Garage, error) {
 	return &copied, nil
 }
 
-func (s *Store) ListForAccount(_ context.Context, accountID string) ([]*domain.Garage, error) {
+func (s *Store) ListForUser(_ context.Context, userID string) ([]*domain.Garage, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -88,7 +88,7 @@ func (s *Store) ListForAccount(_ context.Context, accountID string) ([]*domain.G
 	var out []*domain.Garage
 
 	for _, g := range s.garages {
-		if g.OwnerAccountID == accountID {
+		if g.OwnerUserID == userID {
 			out = append(out, g)
 		}
 	}
@@ -112,7 +112,7 @@ func (s *Store) Update(_ context.Context, g *domain.Garage) error {
 
 // Access & usage
 
-func (s *Store) GarageAccess(_ context.Context, garageID, accountID string) (*access.Access, error) {
+func (s *Store) GarageAccess(_ context.Context, garageID, userID string) (*access.Access, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -126,8 +126,8 @@ func (s *Store) GarageAccess(_ context.Context, garageID, accountID string) (*ac
 	}
 
 	return &access.Access{
-		GarageID: garageID, AccountID: accountID, OwnerAccountID: g.OwnerAccountID,
-		Owner: g.OwnerAccountID == accountID, Active: g.Status == domain.GarageStatusActive,
+		GarageID: garageID, UserID: userID, OwnerUserID: g.OwnerUserID,
+		Owner: g.OwnerUserID == userID, Active: g.Status == domain.GarageStatusActive,
 	}, nil
 }
 
@@ -142,20 +142,20 @@ func (s *Store) OwnerUsage(_ context.Context, owner string) (int, int, error) {
 	garages, staff := 0, map[string]bool{}
 
 	for _, g := range s.garages {
-		if g.OwnerAccountID == owner && g.Status == domain.GarageStatusActive {
+		if g.OwnerUserID == owner && g.Status == domain.GarageStatusActive {
 			garages++
 		}
 	}
 
 	for _, m := range s.staff {
-		if g := s.garages[m.GarageID]; g != nil && g.OwnerAccountID == owner && m.AccountID != owner && m.Status == domain.StaffStatusActive {
-			staff[m.AccountID] = true
+		if g := s.garages[m.GarageID]; g != nil && g.OwnerUserID == owner && m.UserID != owner && m.Status == domain.StaffStatusActive {
+			staff[m.UserID] = true
 		}
 	}
 
 	for _, i := range s.invitations {
-		if g := s.garages[i.GarageID]; g != nil && g.OwnerAccountID == owner && i.Status == domain.InvitationPending {
-			staff[i.AccountID] = true
+		if g := s.garages[i.GarageID]; g != nil && g.OwnerUserID == owner && i.Status == domain.InvitationPending {
+			staff[i.UserID] = true
 		}
 	}
 
@@ -175,7 +175,7 @@ func (r StaffRepo) Create(_ context.Context, m *domain.Staff) error {
 	}
 
 	for _, existing := range r.staff {
-		if existing.GarageID == m.GarageID && existing.AccountID == m.AccountID {
+		if existing.GarageID == m.GarageID && existing.UserID == m.UserID {
 			return domain.ErrAlreadyMember
 		}
 	}
@@ -190,7 +190,7 @@ func (r StaffRepo) Create(_ context.Context, m *domain.Staff) error {
 func (r StaffRepo) load(m *domain.Staff) *domain.Staff {
 	copied := *m
 	copied.GroupIDs = append([]string{}, r.members[m.ID]...)
-	copied.Owner = r.garages[m.GarageID] != nil && r.garages[m.GarageID].OwnerAccountID == m.AccountID
+	copied.Owner = r.garages[m.GarageID] != nil && r.garages[m.GarageID].OwnerUserID == m.UserID
 	copied.Permissions = nil
 
 	for _, gid := range copied.GroupIDs {
@@ -220,16 +220,16 @@ func (r StaffRepo) FindByID(_ context.Context, garageID, staffID string) (*domai
 	return r.load(m), nil
 }
 
-func (r StaffRepo) FindByAccount(_ context.Context, garageID, accountID string) (*domain.Staff, error) {
+func (r StaffRepo) FindByUser(_ context.Context, garageID, userID string) (*domain.Staff, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	if err := r.err("staff.findByAccount"); err != nil {
+	if err := r.err("staff.findByUser"); err != nil {
 		return nil, err
 	}
 
 	for _, m := range r.staff {
-		if m.GarageID == garageID && m.AccountID == accountID {
+		if m.GarageID == garageID && m.UserID == userID {
 			return r.load(m), nil
 		}
 	}
@@ -310,7 +310,7 @@ func (r RoleRepo) ListByOwner(_ context.Context, owner string) ([]*domain.Role, 
 	var out []*domain.Role
 
 	for _, role := range r.roles {
-		if role.OwnerAccountID == owner {
+		if role.OwnerUserID == owner {
 			copied := *role
 			out = append(out, &copied)
 		}
@@ -337,7 +337,7 @@ func (r RoleRepo) FindByID(_ context.Context, id string) (*domain.Role, error) {
 
 func (r RoleRepo) nameTaken(role *domain.Role) bool {
 	for _, other := range r.roles {
-		if other.ID != role.ID && other.OwnerAccountID == role.OwnerAccountID && strings.EqualFold(other.Name, role.Name) {
+		if other.ID != role.ID && other.OwnerUserID == role.OwnerUserID && strings.EqualFold(other.Name, role.Name) {
 			return true
 		}
 	}
@@ -369,7 +369,7 @@ func (r RoleRepo) CreateDefault(_ context.Context, role *domain.Role) (bool, err
 	}
 
 	for _, other := range r.roles {
-		if other.OwnerAccountID == role.OwnerAccountID && other.DefaultKey != nil && *other.DefaultKey == *role.DefaultKey {
+		if other.OwnerUserID == role.OwnerUserID && other.DefaultKey != nil && *other.DefaultKey == *role.DefaultKey {
 			return false, nil
 		}
 	}
@@ -499,7 +499,7 @@ func (r InvitationRepo) Create(_ context.Context, inv *domain.Invitation) error 
 	defer r.mu.Unlock()
 
 	for _, other := range r.invitations {
-		if other.GarageID == inv.GarageID && other.AccountID == inv.AccountID && other.Status == domain.InvitationPending {
+		if other.GarageID == inv.GarageID && other.UserID == inv.UserID && other.Status == domain.InvitationPending {
 			return domain.ErrAlreadyInvited
 		}
 	}
@@ -550,8 +550,8 @@ func (r InvitationRepo) ListByGarage(_ context.Context, garageID string) ([]*dom
 	return r.list(func(i *domain.Invitation) bool { return i.GarageID == garageID })
 }
 
-func (r InvitationRepo) ListByAccount(_ context.Context, accountID string) ([]*domain.Invitation, error) {
-	return r.list(func(i *domain.Invitation) bool { return i.AccountID == accountID })
+func (r InvitationRepo) ListByUser(_ context.Context, userID string) ([]*domain.Invitation, error) {
+	return r.list(func(i *domain.Invitation) bool { return i.UserID == userID })
 }
 
 func (r InvitationRepo) Update(_ context.Context, inv *domain.Invitation) error {
@@ -572,49 +572,49 @@ func (r InvitationRepo) ExpireStale(context.Context, string, string) error {
 	return r.err("invitation.expire")
 }
 
-// Directory is a fake AccountDirectory.
+// Directory is a fake UserDirectory.
 type Directory struct {
-	Accounts map[string]*usecase.AccountSummary
-	Err      error
+	Users map[string]*usecase.UserSummary
+	Err   error
 }
 
-func (d *Directory) FindByEmail(_ context.Context, email string) (*usecase.AccountSummary, error) {
-	for _, a := range d.Accounts {
+func (d *Directory) FindByEmail(_ context.Context, email string) (*usecase.UserSummary, error) {
+	for _, a := range d.Users {
 		if strings.EqualFold(a.Email, email) {
 			return a, nil
 		}
 	}
 
-	return nil, domain.ErrAccountNotFound
+	return nil, domain.ErrUserNotFound
 }
 
-func (d *Directory) FindByPhone(_ context.Context, phone string) (*usecase.AccountSummary, error) {
-	for _, a := range d.Accounts {
+func (d *Directory) FindByPhone(_ context.Context, phone string) (*usecase.UserSummary, error) {
+	for _, a := range d.Users {
 		if a.Phone != nil && *a.Phone == phone {
 			return a, nil
 		}
 	}
 
-	return nil, domain.ErrAccountNotFound
+	return nil, domain.ErrUserNotFound
 }
 
-func (d *Directory) FindByID(_ context.Context, id string) (*usecase.AccountSummary, error) {
-	if a, ok := d.Accounts[id]; ok {
+func (d *Directory) FindByID(_ context.Context, id string) (*usecase.UserSummary, error) {
+	if a, ok := d.Users[id]; ok {
 		return a, nil
 	}
 
-	return nil, domain.ErrAccountNotFound
+	return nil, domain.ErrUserNotFound
 }
 
-func (d *Directory) ListByIDs(_ context.Context, ids []string) (map[string]*usecase.AccountSummary, error) {
+func (d *Directory) ListByIDs(_ context.Context, ids []string) (map[string]*usecase.UserSummary, error) {
 	if d.Err != nil {
 		return nil, d.Err
 	}
 
-	out := map[string]*usecase.AccountSummary{}
+	out := map[string]*usecase.UserSummary{}
 
 	for _, id := range ids {
-		if a, ok := d.Accounts[id]; ok {
+		if a, ok := d.Users[id]; ok {
 			out[id] = a
 		}
 	}
@@ -700,7 +700,7 @@ func (PassTx) WithTransaction(ctx context.Context, _ platformdb.Scope, fn func(c
 	return fn(ctx)
 }
 
-// Accounts of the fixture directory.
+// Users of the fixture directory.
 const (
 	Owner = "owner-1"
 	Staff = "staff-1"
@@ -719,13 +719,13 @@ type Env struct {
 }
 
 // NewEnv wires a use case whose directory knows Owner (English), Staff
-// (Vietnamese, phone 0901234567) and an inactive account "off".
+// (Vietnamese, phone 0901234567) and an inactive user "off".
 func NewEnv(lim Limits) *Env {
 	phone := "0901234567"
 	e := &Env{
 		Store: NewStore(), Mail: &Mailer{}, Events: &Events{}, Audit: &AuditLog{}, Logos: &Logos{},
 		Now: time.Date(2026, 9, 25, 9, 0, 0, 0, time.UTC),
-		Dir: &Directory{Accounts: map[string]*usecase.AccountSummary{
+		Dir: &Directory{Users: map[string]*usecase.UserSummary{
 			Owner: {ID: Owner, FullName: "Minh", Email: "owner@example.com", Locale: "en", Active: true, EmailVerified: true},
 			Staff: {ID: Staff, FullName: "Lan", Email: "lan@example.com", Phone: &phone, Locale: "vi", Active: true},
 			"off": {ID: "off", FullName: "Off", Email: "off@example.com", Active: false},
@@ -733,7 +733,7 @@ func NewEnv(lim Limits) *Env {
 	}
 	e.UC = usecase.NewTenantUseCase(usecase.Deps{
 		Garages: e.Store, Staff: StaffRepo{e.Store}, Roles: RoleRepo{e.Store}, Groups: GroupRepo{e.Store},
-		Invitations: InvitationRepo{e.Store}, Access: e.Store, Usage: e.Store, Limits: lim, Accounts: e.Dir,
+		Invitations: InvitationRepo{e.Store}, Access: e.Store, Usage: e.Store, Limits: lim, Users: e.Dir,
 		Logos: e.Logos, Mailer: e.Mail, Events: e.Events, Audit: e.Audit, Tx: PassTx{},
 		AppBaseURL: "https://vietgara.viettechno.com/", Now: func() time.Time { return e.Now },
 	})

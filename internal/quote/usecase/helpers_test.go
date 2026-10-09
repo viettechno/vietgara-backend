@@ -73,7 +73,7 @@ func newUseCase(t *testing.T) (*usecase.QuoteUseCase, *deps) {
 
 func defaultGarage() usecase.GarageInfo {
 	return usecase.GarageInfo{
-		OwnerAccountID: ownerID, Timezone: "Asia/Ho_Chi_Minh", QuoteNumberTemplate: "BG-{YYYY}{MM}-{SEQ:4}",
+		OwnerUserID: ownerID, Timezone: "Asia/Ho_Chi_Minh", QuoteNumberTemplate: "BG-{YYYY}{MM}-{SEQ:4}",
 		RepairOrderNumberTemplate: "LSC-{YYYY}{MM}-{SEQ:4}", DefaultQuoteApprovalMode: domain.ApprovalModeLink, Name: "QA Gara",
 	}
 }

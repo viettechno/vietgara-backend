@@ -4,8 +4,8 @@ import "context"
 
 // Route returns a Sender that delivers the messages whose recipient
 // matches through matched and every other message through rest. Staging
-// uses it to send the automated suite's test accounts (see package
-// testaccounts) to a Mailpit the suite can read, while real recipients
+// uses it to send the automated suite's test users (see package
+// testusers) to a Mailpit the suite can read, while real recipients
 // keep getting Mailjet.
 func Route(match func(email string) bool, matched, rest Sender) Sender {
 	return &router{match: match, matched: matched, rest: rest}

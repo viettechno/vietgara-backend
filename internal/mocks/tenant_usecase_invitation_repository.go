@@ -96,8 +96,8 @@ func (_c *MockInvitationRepository_Create_Call) RunAndReturn(run func(ctx contex
 }
 
 // ExpireStale provides a mock function for the type MockInvitationRepository
-func (_mock *MockInvitationRepository) ExpireStale(ctx context.Context, garageID string, accountID string) error {
-	ret := _mock.Called(ctx, garageID, accountID)
+func (_mock *MockInvitationRepository) ExpireStale(ctx context.Context, garageID string, userID string) error {
+	ret := _mock.Called(ctx, garageID, userID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ExpireStale")
@@ -105,7 +105,7 @@ func (_mock *MockInvitationRepository) ExpireStale(ctx context.Context, garageID
 
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
-		r0 = returnFunc(ctx, garageID, accountID)
+		r0 = returnFunc(ctx, garageID, userID)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -120,12 +120,12 @@ type MockInvitationRepository_ExpireStale_Call struct {
 // ExpireStale is a helper method to define mock.On call
 //   - ctx context.Context
 //   - garageID string
-//   - accountID string
-func (_e *MockInvitationRepository_Expecter) ExpireStale(ctx any, garageID any, accountID any) *MockInvitationRepository_ExpireStale_Call {
-	return &MockInvitationRepository_ExpireStale_Call{Call: _e.mock.On("ExpireStale", ctx, garageID, accountID)}
+//   - userID string
+func (_e *MockInvitationRepository_Expecter) ExpireStale(ctx any, garageID any, userID any) *MockInvitationRepository_ExpireStale_Call {
+	return &MockInvitationRepository_ExpireStale_Call{Call: _e.mock.On("ExpireStale", ctx, garageID, userID)}
 }
 
-func (_c *MockInvitationRepository_ExpireStale_Call) Run(run func(ctx context.Context, garageID string, accountID string)) *MockInvitationRepository_ExpireStale_Call {
+func (_c *MockInvitationRepository_ExpireStale_Call) Run(run func(ctx context.Context, garageID string, userID string)) *MockInvitationRepository_ExpireStale_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -153,7 +153,7 @@ func (_c *MockInvitationRepository_ExpireStale_Call) Return(err error) *MockInvi
 	return _c
 }
 
-func (_c *MockInvitationRepository_ExpireStale_Call) RunAndReturn(run func(ctx context.Context, garageID string, accountID string) error) *MockInvitationRepository_ExpireStale_Call {
+func (_c *MockInvitationRepository_ExpireStale_Call) RunAndReturn(run func(ctx context.Context, garageID string, userID string) error) *MockInvitationRepository_ExpireStale_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -226,47 +226,47 @@ func (_c *MockInvitationRepository_FindByID_Call) RunAndReturn(run func(ctx cont
 	return _c
 }
 
-// ListByAccount provides a mock function for the type MockInvitationRepository
-func (_mock *MockInvitationRepository) ListByAccount(ctx context.Context, accountID string) ([]*domain.Invitation, error) {
-	ret := _mock.Called(ctx, accountID)
+// ListByUser provides a mock function for the type MockInvitationRepository
+func (_mock *MockInvitationRepository) ListByUser(ctx context.Context, userID string) ([]*domain.Invitation, error) {
+	ret := _mock.Called(ctx, userID)
 
 	if len(ret) == 0 {
-		panic("no return value specified for ListByAccount")
+		panic("no return value specified for ListByUser")
 	}
 
 	var r0 []*domain.Invitation
 	var r1 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]*domain.Invitation, error)); ok {
-		return returnFunc(ctx, accountID)
+		return returnFunc(ctx, userID)
 	}
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []*domain.Invitation); ok {
-		r0 = returnFunc(ctx, accountID)
+		r0 = returnFunc(ctx, userID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*domain.Invitation)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, accountID)
+		r1 = returnFunc(ctx, userID)
 	} else {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
 }
 
-// MockInvitationRepository_ListByAccount_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListByAccount'
-type MockInvitationRepository_ListByAccount_Call struct {
+// MockInvitationRepository_ListByUser_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListByUser'
+type MockInvitationRepository_ListByUser_Call struct {
 	*mock.Call
 }
 
-// ListByAccount is a helper method to define mock.On call
+// ListByUser is a helper method to define mock.On call
 //   - ctx context.Context
-//   - accountID string
-func (_e *MockInvitationRepository_Expecter) ListByAccount(ctx any, accountID any) *MockInvitationRepository_ListByAccount_Call {
-	return &MockInvitationRepository_ListByAccount_Call{Call: _e.mock.On("ListByAccount", ctx, accountID)}
+//   - userID string
+func (_e *MockInvitationRepository_Expecter) ListByUser(ctx any, userID any) *MockInvitationRepository_ListByUser_Call {
+	return &MockInvitationRepository_ListByUser_Call{Call: _e.mock.On("ListByUser", ctx, userID)}
 }
 
-func (_c *MockInvitationRepository_ListByAccount_Call) Run(run func(ctx context.Context, accountID string)) *MockInvitationRepository_ListByAccount_Call {
+func (_c *MockInvitationRepository_ListByUser_Call) Run(run func(ctx context.Context, userID string)) *MockInvitationRepository_ListByUser_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -284,12 +284,12 @@ func (_c *MockInvitationRepository_ListByAccount_Call) Run(run func(ctx context.
 	return _c
 }
 
-func (_c *MockInvitationRepository_ListByAccount_Call) Return(invitations []*domain.Invitation, err error) *MockInvitationRepository_ListByAccount_Call {
+func (_c *MockInvitationRepository_ListByUser_Call) Return(invitations []*domain.Invitation, err error) *MockInvitationRepository_ListByUser_Call {
 	_c.Call.Return(invitations, err)
 	return _c
 }
 
-func (_c *MockInvitationRepository_ListByAccount_Call) RunAndReturn(run func(ctx context.Context, accountID string) ([]*domain.Invitation, error)) *MockInvitationRepository_ListByAccount_Call {
+func (_c *MockInvitationRepository_ListByUser_Call) RunAndReturn(run func(ctx context.Context, userID string) ([]*domain.Invitation, error)) *MockInvitationRepository_ListByUser_Call {
 	_c.Call.Return(run)
 	return _c
 }

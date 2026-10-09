@@ -7,10 +7,10 @@ import "errors"
 // being returned to the handler layer -- see internal/identity/usecase.
 var (
 	ErrInvalidCredential    = errors.New("invalid email or password")
-	ErrAccountNotFound      = errors.New("account not found")
-	ErrAccountSuspended     = errors.New("account is suspended")
-	ErrEmailAlreadyExists   = errors.New("an account with this email already exists")
-	ErrPhoneAlreadyExists   = errors.New("an account with this phone number already exists")
+	ErrUserNotFound         = errors.New("user not found")
+	ErrUserSuspended        = errors.New("user is suspended")
+	ErrEmailAlreadyExists   = errors.New("a user with this email already exists")
+	ErrPhoneAlreadyExists   = errors.New("a user with this phone number already exists")
 	ErrEmailAlreadyVerified = errors.New("the email address is already verified")
 	ErrOTPInvalid           = errors.New("the code is incorrect")
 	ErrOTPExpired           = errors.New("the code has expired, request a new one")
@@ -25,7 +25,7 @@ var (
 //nolint:gosec // G101: error codes, not credentials
 const (
 	ReasonInvalidCredentials   = "INVALID_CREDENTIALS"
-	ReasonAccountSuspended     = "ACCOUNT_SUSPENDED"
+	ReasonUserSuspended        = "USER_SUSPENDED"
 	ReasonEmailTaken           = "EMAIL_TAKEN"
 	ReasonPhoneTaken           = "PHONE_TAKEN"
 	ReasonEmailAlreadyVerified = "EMAIL_ALREADY_VERIFIED"

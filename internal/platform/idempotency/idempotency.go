@@ -27,11 +27,11 @@ const Retention = 24 * time.Hour
 const PurgeInterval = time.Hour
 
 // Key identifies one request: the caller's key, scoped to the garage and
-// the calling account.
+// the calling user.
 type Key struct {
-	GarageID  string
-	AccountID string
-	Key       string
+	GarageID string
+	UserID   string
+	Key      string
 }
 
 // Record is a stored request and, once it succeeded, its response.
@@ -65,10 +65,10 @@ func (s *Store) Claim(ctx context.Context, k Key, method string, requestHash []b
 	q := platformdb.QuerierFromContext(ctx, s.pool)
 
 	tag, err := q.Exec(ctx, `
-		INSERT INTO idempotency_keys (garage_id, account_id, idempotency_key, method, request_hash)
+		INSERT INTO idempotency_keys (garage_id, user_id, idempotency_key, method, request_hash)
 		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (garage_id, account_id, idempotency_key) DO NOTHING`,
-		k.GarageID, k.AccountID, k.Key, method, requestHash)
+		ON CONFLICT (garage_id, user_id, idempotency_key) DO NOTHING`,
+		k.GarageID, k.UserID, k.Key, method, requestHash)
 	if err != nil {
 		return nil, fmt.Errorf("claim idempotency key: %w", err)
 	}
@@ -86,8 +86,8 @@ func (s *Store) Claim(ctx context.Context, k Key, method string, requestHash []b
 	err = q.QueryRow(ctx, `
 		SELECT method, request_hash, response_type, response, http_status
 		FROM idempotency_keys
-		WHERE garage_id = $1 AND account_id = $2 AND idempotency_key = $3`,
-		k.GarageID, k.AccountID, k.Key,
+		WHERE garage_id = $1 AND user_id = $2 AND idempotency_key = $3`,
+		k.GarageID, k.UserID, k.Key,
 	).Scan(&rec.Method, &rec.RequestHash, &responseType, &rec.Response, &status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Deleted by the purge between the two statements: expired anyway.
@@ -120,8 +120,8 @@ func (s *Store) Complete(ctx context.Context, k Key, rec Record) error {
 
 	_, err := q.Exec(ctx, `
 		UPDATE idempotency_keys SET response_type = $4, response = $5, http_status = $6
-		WHERE garage_id = $1 AND account_id = $2 AND idempotency_key = $3`,
-		k.GarageID, k.AccountID, k.Key, rec.ResponseType, rec.Response, status)
+		WHERE garage_id = $1 AND user_id = $2 AND idempotency_key = $3`,
+		k.GarageID, k.UserID, k.Key, rec.ResponseType, rec.Response, status)
 	if err != nil {
 		return fmt.Errorf("store idempotent response: %w", err)
 	}

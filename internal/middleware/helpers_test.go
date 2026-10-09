@@ -17,7 +17,7 @@ import (
 
 const (
 	methodPublic   = "/test.v1.Svc/Public"
-	methodAccount  = "/test.v1.Svc/GetAccount"
+	methodUser     = "/test.v1.Svc/GetUser"
 	methodGarage   = "/test.v1.Svc/UpdateGarage"
 	methodGarageRO = "/test.v1.Svc/ListThings"
 	garageID       = "11111111-1111-4111-8111-111111111111"

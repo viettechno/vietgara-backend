@@ -117,7 +117,7 @@ func (uc *SubscriptionUseCase) ExtendSubscription(ctx context.Context, subscript
 
 func (uc *SubscriptionUseCase) auditPlan(ctx context.Context, action, planID string, before, after any) error {
 	err := uc.audit.Record(ctx, audit.Entry{
-		Actor: middleware.AccountID(ctx), Action: action, EntityType: "plan", EntityID: planID,
+		Actor: middleware.UserID(ctx), Action: action, EntityType: "plan", EntityID: planID,
 		Before: before, After: after, IP: middleware.ClientIP(ctx),
 	})
 	if err != nil {

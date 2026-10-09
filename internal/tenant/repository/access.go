@@ -10,7 +10,7 @@ import (
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 )
 
-// PostgresAccessReader implements access.Reader: an account's access to a
+// PostgresAccessReader implements access.Reader: a user's access to a
 // garage, read on every request (Security Architecture Section 3.2).
 type PostgresAccessReader struct {
 	pool *platformdb.Pool
@@ -21,10 +21,10 @@ func NewPostgresAccessReader(pool *platformdb.Pool) *PostgresAccessReader {
 	return &PostgresAccessReader{pool: pool}
 }
 
-// GarageAccess returns what accountID may do in garageID, or
+// GarageAccess returns what userID may do in garageID, or
 // access.ErrNoMembership when it neither owns the garage nor is an active
 // member (or cannot see it at all).
-func (r *PostgresAccessReader) GarageAccess(ctx context.Context, garageID, accountID string) (*access.Access, error) {
+func (r *PostgresAccessReader) GarageAccess(ctx context.Context, garageID, userID string) (*access.Access, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
 	var (
@@ -35,15 +35,15 @@ func (r *PostgresAccessReader) GarageAccess(ctx context.Context, garageID, accou
 	)
 
 	err := q.QueryRow(ctx, `
-		SELECT g.account_id, g.status = 'active', s.status::text,
+		SELECT g.user_id, g.status = 'active', s.status::text,
 			COALESCE(array_agg(DISTINCT rp.permission::text) FILTER (WHERE rp.permission IS NOT NULL), '{}')
 		FROM garages g
-		LEFT JOIN garage_staff s ON s.garage_id = g.id AND s.account_id = $2
+		LEFT JOIN garage_staff s ON s.garage_id = g.id AND s.user_id = $2
 		LEFT JOIN staff_group_members m ON m.staff_id = s.id
 		LEFT JOIN staff_groups sg ON sg.id = m.group_id
 		LEFT JOIN role_permissions rp ON rp.role_id = sg.role_id
 		WHERE g.id = $1
-		GROUP BY g.id, s.status`, garageID, accountID,
+		GROUP BY g.id, s.status`, garageID, userID,
 	).Scan(&ownerID, &active, &staffStatus, &permissions)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, access.ErrNoMembership
@@ -54,8 +54,8 @@ func (r *PostgresAccessReader) GarageAccess(ctx context.Context, garageID, accou
 	}
 
 	result := &access.Access{
-		GarageID: garageID, AccountID: accountID, OwnerAccountID: ownerID,
-		Owner: ownerID == accountID, Active: active,
+		GarageID: garageID, UserID: userID, OwnerUserID: ownerID,
+		Owner: ownerID == userID, Active: active,
 	}
 
 	if result.Owner {
@@ -74,9 +74,9 @@ func (r *PostgresAccessReader) GarageAccess(ctx context.Context, garageID, accou
 // OwnerUsage counts the owner's active garages and staff (distinct
 // non-owner members and live pending invitees) across all their garages,
 // through the owner_usage() function (it sees past the caller's RLS scope).
-func (r *PostgresAccessReader) OwnerUsage(ctx context.Context, ownerAccountID string) (garages, staff int, err error) {
+func (r *PostgresAccessReader) OwnerUsage(ctx context.Context, ownerUserID string) (garages, staff int, err error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
-	err = q.QueryRow(ctx, `SELECT garages, staff FROM owner_usage($1)`, ownerAccountID).Scan(&garages, &staff)
+	err = q.QueryRow(ctx, `SELECT garages, staff FROM owner_usage($1)`, ownerUserID).Scan(&garages, &staff)
 
 	return garages, staff, err
 }

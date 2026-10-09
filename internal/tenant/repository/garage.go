@@ -2,7 +2,7 @@
 // module on top of the shared Postgres pool. Every query runs under the
 // Row-Level Security scope set by the caller's transaction (see
 // db.TxManager): garage rows are visible in their garage's scope and to the
-// accounts that own or work in them.
+// users that own or work in them.
 // See: Database Design Section 2.2, LLD Section 4.
 package repository
 
@@ -29,7 +29,7 @@ func NewPostgresGarageRepository(pool *platformdb.Pool) *PostgresGarageRepositor
 	return &PostgresGarageRepository{pool: pool}
 }
 
-const garageColumns = `g.id, g.account_id, g.name, g.tax_code, g.address, g.phone, g.email, g.logo_url, g.timezone, g.currency,
+const garageColumns = `g.id, g.user_id, g.name, g.tax_code, g.address, g.phone, g.email, g.logo_url, g.timezone, g.currency,
 	g.status, g.operating_hours, g.quote_number_template, g.repair_order_number_template, g.settlement_number_template,
 	g.default_quote_approval_mode, g.created_by, g.updated_by, g.created_at, g.updated_at`
 
@@ -41,7 +41,7 @@ func scanGarage(row pgx.Row) (*domain.Garage, error) {
 		hours        []byte
 	)
 
-	err := row.Scan(&g.ID, &g.OwnerAccountID, &g.Name, &g.TaxCode, &g.Address, &g.Phone, &g.Email, &g.LogoURL,
+	err := row.Scan(&g.ID, &g.OwnerUserID, &g.Name, &g.TaxCode, &g.Address, &g.Phone, &g.Email, &g.LogoURL,
 		&g.Timezone, &g.Currency, &status, &hours, &g.QuoteNumberTemplate, &g.RepairOrderNumberTemplate,
 		&g.SettlementNumberTemplate, &approvalMode, &g.CreatedBy, &g.UpdatedBy, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
@@ -69,17 +69,17 @@ func (r *PostgresGarageRepository) FindByID(ctx context.Context, id string) (*do
 	return scanGarage(q.QueryRow(ctx, `SELECT `+garageColumns+` FROM garages g WHERE g.id = $1`, id))
 }
 
-// ListForAccount returns the garages accountID owns (any status) or is an
+// ListForUser returns the garages userID owns (any status) or is an
 // active member of (active garages only).
-func (r *PostgresGarageRepository) ListForAccount(ctx context.Context, accountID string) ([]*domain.Garage, error) {
+func (r *PostgresGarageRepository) ListForUser(ctx context.Context, userID string) ([]*domain.Garage, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
 	rows, err := q.Query(ctx, `
 		SELECT `+garageColumns+` FROM garages g
-		WHERE g.account_id = $1
+		WHERE g.user_id = $1
 		   OR (g.status = 'active' AND EXISTS (
-		       SELECT 1 FROM garage_staff s WHERE s.garage_id = g.id AND s.account_id = $1 AND s.status = 'active'))
-		ORDER BY g.created_at`, accountID)
+		       SELECT 1 FROM garage_staff s WHERE s.garage_id = g.id AND s.user_id = $1 AND s.status = 'active'))
+		ORDER BY g.created_at`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -97,12 +97,12 @@ func (r *PostgresGarageRepository) Create(ctx context.Context, g *domain.Garage)
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
 	return q.QueryRow(ctx, `
-		INSERT INTO garages (id, account_id, name, tax_code, address, phone, email, logo_url, timezone, currency, status,
+		INSERT INTO garages (id, user_id, name, tax_code, address, phone, email, logo_url, timezone, currency, status,
 			operating_hours, quote_number_template, repair_order_number_template, settlement_number_template,
 			default_quote_approval_mode, created_by, updated_by)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
 		RETURNING created_at, updated_at`,
-		g.ID, g.OwnerAccountID, g.Name, g.TaxCode, g.Address, g.Phone, g.Email, g.LogoURL, g.Timezone, g.Currency,
+		g.ID, g.OwnerUserID, g.Name, g.TaxCode, g.Address, g.Phone, g.Email, g.LogoURL, g.Timezone, g.Currency,
 		string(g.Status), hours, g.QuoteNumberTemplate, g.RepairOrderNumberTemplate, g.SettlementNumberTemplate,
 		string(g.DefaultQuoteApprovalMode), g.CreatedBy, g.UpdatedBy,
 	).Scan(&g.CreatedAt, &g.UpdatedAt)

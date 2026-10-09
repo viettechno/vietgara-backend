@@ -25,7 +25,7 @@ func TestPostgresRepository_Create(t *testing.T) {
 
 		repo := repository.NewPostgresRepository(nil)
 		log := &domain.Log{
-			ID: "n-1", AccountID: "acc-1", Channel: domain.ChannelEmail, Template: "registration_confirmation",
+			ID: "n-1", UserID: "user-1", Channel: domain.ChannelEmail, Template: "registration_confirmation",
 			Recipient: "an@example.com", Status: domain.StatusSent,
 		}
 

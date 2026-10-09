@@ -11,7 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/viettechno/vietgara-backend/internal/identity/usecase"
-	"github.com/viettechno/vietgara-backend/internal/platform/testaccounts"
+	"github.com/viettechno/vietgara-backend/internal/platform/testusers"
 )
 
 type fakeDeleter struct {
@@ -22,25 +22,25 @@ type fakeDeleter struct {
 	err     error
 }
 
-func (f *fakeDeleter) DeleteTestAccounts(_ context.Context, emailDomain string, createdBefore time.Time) (int64, error) {
+func (f *fakeDeleter) DeleteTestUsers(_ context.Context, emailDomain string, createdBefore time.Time) (int64, error) {
 	f.calls.Add(1)
 	f.domain, f.before = emailDomain, createdBefore
 
 	return f.deleted, f.err
 }
 
-func TestTestAccountPurgeJob(t *testing.T) {
+func TestTestUserPurgeJob(t *testing.T) {
 	t.Parallel()
 
 	now := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
-	domain, err := testaccounts.Parse("blackbox.vietgara.test")
+	domain, err := testusers.Parse("blackbox.vietgara.test")
 	require.NoError(t, err)
 
-	t.Run("deletes accounts older than the retention", func(t *testing.T) {
+	t.Run("deletes users older than the retention", func(t *testing.T) {
 		t.Parallel()
 
 		deleter := &fakeDeleter{deleted: 3}
-		job := usecase.NewTestAccountPurgeJob(deleter, domain, 24*time.Hour).WithClock(func() time.Time { return now })
+		job := usecase.NewTestUserPurgeJob(deleter, domain, 24*time.Hour).WithClock(func() time.Time { return now })
 
 		require.NoError(t, job.Run(t.Context()))
 		assert.Equal(t, "blackbox.vietgara.test", deleter.domain)
@@ -51,7 +51,7 @@ func TestTestAccountPurgeJob(t *testing.T) {
 		t.Parallel()
 
 		deleter := &fakeDeleter{deleted: 1, err: errors.New("invited_by")}
-		job := usecase.NewTestAccountPurgeJob(deleter, domain, time.Hour)
+		job := usecase.NewTestUserPurgeJob(deleter, domain, time.Hour)
 
 		require.ErrorContains(t, job.Run(t.Context()), "invited_by")
 	})
@@ -60,7 +60,7 @@ func TestTestAccountPurgeJob(t *testing.T) {
 		t.Parallel()
 
 		deleter := &fakeDeleter{}
-		job := usecase.NewTestAccountPurgeJob(deleter, testaccounts.Domain{}, time.Hour)
+		job := usecase.NewTestUserPurgeJob(deleter, testusers.Domain{}, time.Hour)
 
 		require.NoError(t, job.Run(t.Context()))
 		assert.Zero(t, deleter.calls.Load())
@@ -70,7 +70,7 @@ func TestTestAccountPurgeJob(t *testing.T) {
 		t.Parallel()
 
 		deleter := &fakeDeleter{err: errors.New("db down")}
-		job := usecase.NewTestAccountPurgeJob(deleter, domain, time.Hour)
+		job := usecase.NewTestUserPurgeJob(deleter, domain, time.Hour)
 
 		ctx, cancel := context.WithCancel(t.Context())
 		done := make(chan struct{})

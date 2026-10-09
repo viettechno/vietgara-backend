@@ -63,13 +63,13 @@ func (passTx) WithTransaction(ctx context.Context, _ platformdb.Scope, fn func(c
 
 func server(f fake) *handler.Server {
 	return handler.NewServer(usecase.NewPortalUseCase(usecase.Deps{
-		Accounts: f, Customers: f, Vehicles: vehicles{}, Garages: garages{}, Tx: passTx{},
+		Users: f, Customers: f, Vehicles: vehicles{}, Garages: garages{}, Tx: passTx{},
 	}))
 }
 
 func signedIn() context.Context {
 	return middleware.WithClaims(context.Background(), &auth.Claims{
-		RegisteredClaims: jwt.RegisteredClaims{Subject: "acc-binh"}, EmailVerified: true,
+		RegisteredClaims: jwt.RegisteredClaims{Subject: "user-binh"}, EmailVerified: true,
 	})
 }
 
@@ -118,6 +118,6 @@ func TestErrors(t *testing.T) {
 func TestPolicies(t *testing.T) {
 	p := handler.Policies()
 	assert.Len(t, p, 2)
-	assert.Equal(t, middleware.AccountMethod(), p[customerportalv1.CustomerPortalService_ListMyVehicles_FullMethodName])
-	assert.Equal(t, middleware.AccountMethod(), p[customerportalv1.CustomerPortalService_GetMyVehicleHistory_FullMethodName])
+	assert.Equal(t, middleware.UserMethod(), p[customerportalv1.CustomerPortalService_ListMyVehicles_FullMethodName])
+	assert.Equal(t, middleware.UserMethod(), p[customerportalv1.CustomerPortalService_GetMyVehicleHistory_FullMethodName])
 }

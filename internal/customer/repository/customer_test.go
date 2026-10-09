@@ -77,7 +77,7 @@ func TestPostgresCustomerRepository_FindByID(t *testing.T) {
 
 		conn, pool := newPool(t)
 		conn.EXPECT().QueryRow(mock.Anything, sqlContaining("FROM customers c WHERE"), []any{garageID, customerID}).
-			Return(valuesRow(t, customerValues(`[{"granted":true,"recorded_at":"2026-09-23T10:00:00Z","recorded_by":"acc-1"}]`)...)).Once()
+			Return(valuesRow(t, customerValues(`[{"granted":true,"recorded_at":"2026-09-23T10:00:00Z","recorded_by":"user-1"}]`)...)).Once()
 
 		c, err := repository.NewPostgresCustomerRepository(pool).FindByID(t.Context(), garageID, customerID)
 		require.NoError(t, err)
@@ -85,7 +85,7 @@ func TestPostgresCustomerRepository_FindByID(t *testing.T) {
 		assert.Equal(t, "0912345678", *c.Phone)
 		assert.Nil(t, c.Email)
 		assert.Equal(t, 2, c.VehicleCount)
-		assert.Equal(t, []domain.ConsentRecord{{Granted: true, RecordedAt: testTime, RecordedBy: "acc-1"}}, c.ConsentLog)
+		assert.Equal(t, []domain.ConsentRecord{{Granted: true, RecordedAt: testTime, RecordedBy: "user-1"}}, c.ConsentLog)
 	})
 
 	t.Run("no row is not found", func(t *testing.T) {

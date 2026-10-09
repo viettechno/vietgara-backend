@@ -88,7 +88,7 @@ func TestRowsAndErrors(t *testing.T) {
 
 	var pgErr *pgconn.PgError
 
-	require.ErrorAs(t, dbtest.UniqueViolation("accounts_email_key"), &pgErr)
+	require.ErrorAs(t, dbtest.UniqueViolation("users_email_key"), &pgErr)
 	assert.Equal(t, "23505", pgErr.Code)
 	require.ErrorAs(t, dbtest.ForeignKeyViolation(), &pgErr)
 	assert.Equal(t, "23503", pgErr.Code)

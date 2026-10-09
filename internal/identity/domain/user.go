@@ -10,7 +10,7 @@ import (
 	"unicode/utf8"
 )
 
-// AuthProvider identifies how an account signs in (FR-IAM-01/02): e-mail +
+// AuthProvider identifies how a user signs in (FR-IAM-01/02): e-mail +
 // password, or Google.
 type AuthProvider string
 
@@ -25,21 +25,21 @@ func (p AuthProvider) IsValid() bool {
 	return p == AuthProviderEmail || p == AuthProviderGoogle
 }
 
-// AccountStatus is the lifecycle status of an account.
-type AccountStatus string
+// UserStatus is the lifecycle status of a user.
+type UserStatus string
 
-// Valid AccountStatus values.
+// Valid UserStatus values.
 const (
-	AccountStatusActive    AccountStatus = "active"
-	AccountStatusSuspended AccountStatus = "suspended"
+	UserStatusActive    UserStatus = "active"
+	UserStatusSuspended UserStatus = "suspended"
 )
 
-// IsValid reports whether s is one of the defined AccountStatus values.
-func (s AccountStatus) IsValid() bool {
-	return s == AccountStatusActive || s == AccountStatusSuspended
+// IsValid reports whether s is one of the defined UserStatus values.
+func (s UserStatus) IsValid() bool {
+	return s == UserStatusActive || s == UserStatusSuspended
 }
 
-// Locale is the account's interface and e-mail language (NFR-US-01).
+// Locale is the user's interface and e-mail language (NFR-US-01).
 type Locale string
 
 // Valid Locale values; Vietnamese is the default.
@@ -57,21 +57,21 @@ func (l Locale) OrDefault() Locale {
 	return LocaleVI
 }
 
-// Account is the login identity. It may own multiple garages and be staff
-// of others (see the Tenant module) -- Account itself carries no garage_id
+// User is the login identity. It may own multiple garages and be staff
+// of others (see the Tenant module) -- User itself carries no garage_id
 // and is not subject to Row-Level Security, since it sits above the tenant
 // level. See: Database Design Section 2.1.
-type Account struct {
+type User struct {
 	ID    string
 	Email string
 	Phone *string
 	// GoogleSubject is Google's stable user id (the identity_platform_uid
-	// column), set for accounts that signed in with Google.
+	// column), set for users that signed in with Google.
 	GoogleSubject   *string
 	AuthProvider    AuthProvider
 	FullName        string
-	PasswordHash    *string // only set for accounts with a password
-	Status          AccountStatus
+	PasswordHash    *string // only set for users with a password
+	Status          UserStatus
 	EmailVerifiedAt *time.Time
 	Locale          Locale
 	// PlatformAdmin is loaded from platform_admins.
@@ -81,13 +81,13 @@ type Account struct {
 }
 
 // EmailVerified reports whether the e-mail OTP was confirmed.
-func (a *Account) EmailVerified() bool {
+func (a *User) EmailVerified() bool {
 	return a.EmailVerifiedAt != nil
 }
 
 // MarkEmailVerified records verification at now; it reports false when the
 // e-mail was already verified.
-func (a *Account) MarkEmailVerified(now time.Time) bool {
+func (a *User) MarkEmailVerified(now time.Time) bool {
 	if a.EmailVerified() {
 		return false
 	}
@@ -97,7 +97,7 @@ func (a *Account) MarkEmailVerified(now time.Time) bool {
 	return true
 }
 
-// Limits of account fields.
+// Limits of user fields.
 const (
 	MaxFullNameLength = 255
 	MinPasswordLength = 8

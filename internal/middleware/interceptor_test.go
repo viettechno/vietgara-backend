@@ -42,7 +42,7 @@ func TestPolicyBuilders(t *testing.T) {
 	assert.True(t, middleware.PublicMethod().Public)
 	assert.True(t, middleware.UnverifiedMethod().AllowUnverified)
 	assert.True(t, middleware.AdminMethod().PlatformAdmin)
-	assert.Equal(t, middleware.Policy{}, middleware.AccountMethod())
+	assert.Equal(t, middleware.Policy{}, middleware.UserMethod())
 
 	p := middleware.GarageMethod(access.Requires(access.CustomerRead))
 	require.NotNil(t, p.Garage)

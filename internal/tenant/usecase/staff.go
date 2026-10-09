@@ -15,7 +15,7 @@ type StaffFields struct {
 	GroupIDs *[]string
 }
 
-// ListStaff returns the garage's members with account details, groups and
+// ListStaff returns the garage's members with user details, groups and
 // effective permissions.
 func (uc *TenantUseCase) ListStaff(ctx context.Context, garageID string) ([]*domain.Staff, error) {
 	members, err := uc.Staff.List(ctx, garageID)
@@ -23,7 +23,7 @@ func (uc *TenantUseCase) ListStaff(ctx context.Context, garageID string) ([]*dom
 		return nil, toAppError("list staff", err)
 	}
 
-	if err := uc.withAccounts(ctx, members...); err != nil {
+	if err := uc.withUsers(ctx, members...); err != nil {
 		return nil, err
 	}
 
@@ -67,7 +67,7 @@ func (uc *TenantUseCase) UpdateStaff(ctx context.Context, garageID, staffID stri
 		return nil, toAppError("reload staff", err)
 	}
 
-	if err := uc.withAccounts(ctx, updated); err != nil {
+	if err := uc.withUsers(ctx, updated); err != nil {
 		return nil, err
 	}
 
@@ -118,8 +118,8 @@ func (uc *TenantUseCase) DeleteStaff(ctx context.Context, garageID, staffID stri
 		return toAppError("audit staff", err)
 	}
 
-	return uc.Events.Publish(ctx, EventStaffRemoved, garageID, member.AccountID, map[string]any{
-		keyGarageID: garageID, "account_id": member.AccountID,
+	return uc.Events.Publish(ctx, EventStaffRemoved, garageID, member.UserID, map[string]any{
+		keyGarageID: garageID, "user_id": member.UserID,
 	})
 }
 
@@ -152,5 +152,5 @@ func (uc *TenantUseCase) checkGarageOwnerUsage(ctx context.Context, garageID str
 		return toAppError("load garage", err)
 	}
 
-	return uc.checkUsage(ctx, garage.OwnerAccountID, limit)
+	return uc.checkUsage(ctx, garage.OwnerUserID, limit)
 }

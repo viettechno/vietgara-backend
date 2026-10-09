@@ -64,20 +64,20 @@ func (j *ExpiryJob) Schedule(ctx context.Context, interval time.Duration) {
 }
 
 // Run checks every subscription whose period ends within the reminder
-// window. A failure on one account does not stop the others; all failures
+// window. A failure on one user does not stop the others; all failures
 // are returned together.
 func (j *ExpiryJob) Run(ctx context.Context) error {
 	now := j.opts.now().UTC()
 
-	accountIDs, err := j.subscriptions.ListAccountIDsDueBefore(ctx, now.Add(domain.ExpiringSoonWindow))
+	userIDs, err := j.subscriptions.ListUserIDsDueBefore(ctx, now.Add(domain.ExpiringSoonWindow))
 	if err != nil {
 		return err
 	}
 
 	var errs []error
 
-	for _, accountID := range accountIDs {
-		if err := j.process(ctx, accountID, now); err != nil {
+	for _, userID := range userIDs {
+		if err := j.process(ctx, userID, now); err != nil {
 			errs = append(errs, err)
 		}
 	}
@@ -85,9 +85,9 @@ func (j *ExpiryJob) Run(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-func (j *ExpiryJob) process(ctx context.Context, accountID string, now time.Time) error {
-	return j.tx.WithTransaction(ctx, platformdb.AccountScope(accountID), func(ctx context.Context) error {
-		sub, err := j.subscriptions.LockByAccountID(ctx, accountID)
+func (j *ExpiryJob) process(ctx context.Context, userID string, now time.Time) error {
+	return j.tx.WithTransaction(ctx, platformdb.UserScope(userID), func(ctx context.Context) error {
+		sub, err := j.subscriptions.LockByUserID(ctx, userID)
 		if err != nil {
 			return err
 		}
@@ -95,9 +95,9 @@ func (j *ExpiryJob) process(ctx context.Context, accountID string, now time.Time
 		changed := false
 
 		if sub.NeedsExpiryReminder(now, domain.ExpiringSoonWindow) {
-			err := j.sync.events.Publish(ctx, EventSubscriptionExpiringSoon, "", accountID, map[string]any{
+			err := j.sync.events.Publish(ctx, EventSubscriptionExpiringSoon, "", userID, map[string]any{
 				"subscription_id":    sub.ID,
-				keyAccountID:         accountID,
+				keyUserID:            userID,
 				"status":             sub.Status,
 				"plan_code":          sub.Plan.Code,
 				"current_period_end": sub.CurrentPeriodEnd.Format(time.RFC3339),

@@ -63,21 +63,21 @@ func (s *MigrationsTestSuite) openRLSConnection() *sql.Conn {
 }
 
 func (s *MigrationsTestSuite) TestRLS_QueryFailsWithoutSessionVariable() {
-	accountID := "00000000-0000-0000-0000-000000000001"
+	userID := "00000000-0000-0000-0000-000000000001"
 	garageID := "00000000-0000-0000-0000-000000000002"
 
-	insertAccount := fmt.Sprintf(
-		`INSERT INTO accounts (id, email, auth_provider, identity_platform_uid, full_name, status)
+	insertUser := fmt.Sprintf(
+		`INSERT INTO users (id, email, auth_provider, identity_platform_uid, full_name, status)
 		 VALUES ('%s', 'test@example.com', 'email', 'uid-001', 'Test User', 'active')`,
-		accountID,
+		userID,
 	)
-	_, err := s.pg.Admin.ExecContext(s.ctx, insertAccount)
+	_, err := s.pg.Admin.ExecContext(s.ctx, insertUser)
 	s.Require().NoError(err)
 
 	insertGarage := fmt.Sprintf(
-		`INSERT INTO garages (id, account_id, name, timezone, currency, status)
+		`INSERT INTO garages (id, user_id, name, timezone, currency, status)
 		 VALUES ('%s', '%s', 'Test Garage', 'UTC', 'USD', 'active')`,
-		garageID, accountID,
+		garageID, userID,
 	)
 	_, err = s.pg.Admin.ExecContext(s.ctx, insertGarage)
 	s.Require().NoError(err)
@@ -92,21 +92,21 @@ func (s *MigrationsTestSuite) TestRLS_QueryFailsWithoutSessionVariable() {
 }
 
 func (s *MigrationsTestSuite) TestRLS_QuerySucceedsWithCorrectSessionVariable() {
-	accountID := "00000000-0000-0000-0000-000000000003"
+	userID := "00000000-0000-0000-0000-000000000003"
 	garageID := "00000000-0000-0000-0000-000000000004"
 
-	insertAccount := fmt.Sprintf(
-		`INSERT INTO accounts (id, email, auth_provider, identity_platform_uid, full_name, status)
+	insertUser := fmt.Sprintf(
+		`INSERT INTO users (id, email, auth_provider, identity_platform_uid, full_name, status)
 		 VALUES ('%s', 'test2@example.com', 'email', 'uid-002', 'Test User 2', 'active')`,
-		accountID,
+		userID,
 	)
-	_, err := s.pg.Admin.ExecContext(s.ctx, insertAccount)
+	_, err := s.pg.Admin.ExecContext(s.ctx, insertUser)
 	s.Require().NoError(err)
 
 	insertGarage := fmt.Sprintf(
-		`INSERT INTO garages (id, account_id, name, timezone, currency, status)
+		`INSERT INTO garages (id, user_id, name, timezone, currency, status)
 		 VALUES ('%s', '%s', 'Test Garage 2', 'UTC', 'USD', 'active')`,
-		garageID, accountID,
+		garageID, userID,
 	)
 	_, err = s.pg.Admin.ExecContext(s.ctx, insertGarage)
 	s.Require().NoError(err)
@@ -131,39 +131,39 @@ func (s *MigrationsTestSuite) TestRLS_QuerySucceedsWithCorrectSessionVariable() 
 }
 
 func (s *MigrationsTestSuite) TestRLS_QueryBlockedWithWrongSessionVariable() {
-	accountID1 := "00000000-0000-0000-0000-000000000005"
-	accountID2 := "00000000-0000-0000-0000-000000000006"
+	userID1 := "00000000-0000-0000-0000-000000000005"
+	userID2 := "00000000-0000-0000-0000-000000000006"
 	garageID1 := "00000000-0000-0000-0000-000000000007"
 	garageID2 := "00000000-0000-0000-0000-000000000008"
 
-	for _, account := range []struct {
+	for _, user := range []struct {
 		id    string
 		email string
 		uid   string
 	}{
-		{id: accountID1, email: "test3@example.com", uid: "uid-003"},
-		{id: accountID2, email: "test4@example.com", uid: "uid-004"},
+		{id: userID1, email: "test3@example.com", uid: "uid-003"},
+		{id: userID2, email: "test4@example.com", uid: "uid-004"},
 	} {
 		_, err := s.pg.Admin.ExecContext(s.ctx,
-			`INSERT INTO accounts (id, email, auth_provider, identity_platform_uid, full_name, status)
+			`INSERT INTO users (id, email, auth_provider, identity_platform_uid, full_name, status)
 			 VALUES ($1, $2, 'email', $3, 'Test User', 'active')`,
-			account.id, account.email, account.uid,
+			user.id, user.email, user.uid,
 		)
 		s.Require().NoError(err)
 	}
 
 	insertGarage1 := fmt.Sprintf(
-		`INSERT INTO garages (id, account_id, name, timezone, currency, status)
+		`INSERT INTO garages (id, user_id, name, timezone, currency, status)
 		 VALUES ('%s', '%s', 'Garage 1', 'UTC', 'USD', 'active')`,
-		garageID1, accountID1,
+		garageID1, userID1,
 	)
 	_, err := s.pg.Admin.ExecContext(s.ctx, insertGarage1)
 	s.Require().NoError(err)
 
 	insertGarage2 := fmt.Sprintf(
-		`INSERT INTO garages (id, account_id, name, timezone, currency, status)
+		`INSERT INTO garages (id, user_id, name, timezone, currency, status)
 		 VALUES ('%s', '%s', 'Garage 2', 'UTC', 'USD', 'active')`,
-		garageID2, accountID2,
+		garageID2, userID2,
 	)
 	_, err = s.pg.Admin.ExecContext(s.ctx, insertGarage2)
 	s.Require().NoError(err)
@@ -188,30 +188,30 @@ func (s *MigrationsTestSuite) TestRLS_QueryBlockedWithWrongSessionVariable() {
 }
 
 func (s *MigrationsTestSuite) TestRLS_GarageStaffRowLevelSecurity() {
-	accountID := "00000000-0000-0000-0000-000000000009"
+	userID := "00000000-0000-0000-0000-000000000009"
 	garageID := "00000000-0000-0000-0000-00000000000a"
 	staffID := "00000000-0000-0000-0000-00000000000b"
 
-	insertAccount := fmt.Sprintf(
-		`INSERT INTO accounts (id, email, auth_provider, identity_platform_uid, full_name, status)
+	insertUser := fmt.Sprintf(
+		`INSERT INTO users (id, email, auth_provider, identity_platform_uid, full_name, status)
 		 VALUES ('%s', 'staff@example.com', 'email', 'uid-staff-001', 'Staff User', 'active')`,
-		accountID,
+		userID,
 	)
-	_, err := s.pg.Admin.ExecContext(s.ctx, insertAccount)
+	_, err := s.pg.Admin.ExecContext(s.ctx, insertUser)
 	s.Require().NoError(err)
 
 	insertGarage := fmt.Sprintf(
-		`INSERT INTO garages (id, account_id, name, timezone, currency, status)
+		`INSERT INTO garages (id, user_id, name, timezone, currency, status)
 		 VALUES ('%s', '%s', 'Staff Garage', 'UTC', 'USD', 'active')`,
-		garageID, accountID,
+		garageID, userID,
 	)
 	_, err = s.pg.Admin.ExecContext(s.ctx, insertGarage)
 	s.Require().NoError(err)
 
 	insertStaff := fmt.Sprintf(
-		`INSERT INTO garage_staff (id, garage_id, account_id, status)
+		`INSERT INTO garage_staff (id, garage_id, user_id, status)
 		 VALUES ('%s', '%s', '%s', 'active')`,
-		staffID, garageID, accountID,
+		staffID, garageID, userID,
 	)
 	_, err = s.pg.Admin.ExecContext(s.ctx, insertStaff)
 	s.Require().NoError(err)

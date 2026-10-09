@@ -22,7 +22,7 @@ type ctxKeyClaims struct{}
 type ctxKeyPolicy struct{}
 
 // WithClaims stores verified token claims in ctx (tests and background
-// jobs acting for an account).
+// jobs acting for a user).
 func WithClaims(ctx context.Context, claims *auth.Claims) context.Context {
 	return context.WithValue(ctx, ctxKeyClaims{}, claims)
 }
@@ -34,10 +34,10 @@ func ClaimsFromContext(ctx context.Context) (*auth.Claims, bool) {
 	return c, ok
 }
 
-// AccountID returns the signed-in account, or "".
-func AccountID(ctx context.Context) string {
+// UserID returns the signed-in user, or "".
+func UserID(ctx context.Context) string {
 	if c, ok := ClaimsFromContext(ctx); ok {
-		return c.AccountID()
+		return c.UserID()
 	}
 
 	return ""
@@ -78,7 +78,7 @@ func Auth(issuer *auth.TokenIssuer, policies Policies) grpc.UnaryServerIntercept
 	}
 }
 
-// EmailVerified rejects accounts that have not verified their e-mail yet,
+// EmailVerified rejects users that have not verified their e-mail yet,
 // except on RPCs that allow it (FR-IAM-01).
 func EmailVerified() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {

@@ -65,7 +65,7 @@ func insurerIDPtr() *string {
 }
 
 func defaultGarage() usecase.GarageInfo {
-	return usecase.GarageInfo{OwnerAccountID: ownerID, Timezone: "Asia/Ho_Chi_Minh", SettlementNumberTemplate: "QT-{SEQ:4}"}
+	return usecase.GarageInfo{OwnerUserID: ownerID, Timezone: "Asia/Ho_Chi_Minh", SettlementNumberTemplate: "QT-{SEQ:4}"}
 }
 
 func signedIn(t *testing.T) context.Context {

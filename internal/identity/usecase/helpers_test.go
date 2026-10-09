@@ -24,19 +24,19 @@ import (
 
 var errBoom = errors.New("boom")
 
-// fakeAccounts is an in-memory AccountRepository.
-type fakeAccounts struct {
+// fakeUsers is an in-memory UserRepository.
+type fakeUsers struct {
 	mu        sync.Mutex
-	byID      map[string]*domain.Account
+	byID      map[string]*domain.User
 	createErr error
 	updateErr error
 	findErr   error
 	granted   []string
 }
 
-func newFakeAccounts() *fakeAccounts { return &fakeAccounts{byID: map[string]*domain.Account{}} }
+func newFakeUsers() *fakeUsers { return &fakeUsers{byID: map[string]*domain.User{}} }
 
-func (f *fakeAccounts) find(match func(*domain.Account) bool) (*domain.Account, error) {
+func (f *fakeUsers) find(match func(*domain.User) bool) (*domain.User, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -52,26 +52,26 @@ func (f *fakeAccounts) find(match func(*domain.Account) bool) (*domain.Account, 
 		}
 	}
 
-	return nil, domain.ErrAccountNotFound
+	return nil, domain.ErrUserNotFound
 }
 
-func (f *fakeAccounts) FindByID(_ context.Context, id string) (*domain.Account, error) {
-	return f.find(func(a *domain.Account) bool { return a.ID == id })
+func (f *fakeUsers) FindByID(_ context.Context, id string) (*domain.User, error) {
+	return f.find(func(a *domain.User) bool { return a.ID == id })
 }
 
-func (f *fakeAccounts) FindByEmail(_ context.Context, email string) (*domain.Account, error) {
-	return f.find(func(a *domain.Account) bool { return strings.EqualFold(a.Email, email) })
+func (f *fakeUsers) FindByEmail(_ context.Context, email string) (*domain.User, error) {
+	return f.find(func(a *domain.User) bool { return strings.EqualFold(a.Email, email) })
 }
 
-func (f *fakeAccounts) FindByPhone(_ context.Context, phone string) (*domain.Account, error) {
-	return f.find(func(a *domain.Account) bool { return a.Phone != nil && *a.Phone == phone })
+func (f *fakeUsers) FindByPhone(_ context.Context, phone string) (*domain.User, error) {
+	return f.find(func(a *domain.User) bool { return a.Phone != nil && *a.Phone == phone })
 }
 
-func (f *fakeAccounts) FindByGoogleSubject(_ context.Context, subject string) (*domain.Account, error) {
-	return f.find(func(a *domain.Account) bool { return a.GoogleSubject != nil && *a.GoogleSubject == subject })
+func (f *fakeUsers) FindByGoogleSubject(_ context.Context, subject string) (*domain.User, error) {
+	return f.find(func(a *domain.User) bool { return a.GoogleSubject != nil && *a.GoogleSubject == subject })
 }
 
-func (f *fakeAccounts) Create(_ context.Context, acc *domain.Account) error {
+func (f *fakeUsers) Create(_ context.Context, user *domain.User) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -79,15 +79,15 @@ func (f *fakeAccounts) Create(_ context.Context, acc *domain.Account) error {
 		return f.createErr
 	}
 
-	acc.ID = uuid.NewString()
-	acc.CreatedAt, acc.UpdatedAt = time.Now(), time.Now()
-	copied := *acc
-	f.byID[acc.ID] = &copied
+	user.ID = uuid.NewString()
+	user.CreatedAt, user.UpdatedAt = time.Now(), time.Now()
+	copied := *user
+	f.byID[user.ID] = &copied
 
 	return nil
 }
 
-func (f *fakeAccounts) Update(_ context.Context, acc *domain.Account) error {
+func (f *fakeUsers) Update(_ context.Context, user *domain.User) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -95,13 +95,13 @@ func (f *fakeAccounts) Update(_ context.Context, acc *domain.Account) error {
 		return f.updateErr
 	}
 
-	copied := *acc
-	f.byID[acc.ID] = &copied
+	copied := *user
+	f.byID[user.ID] = &copied
 
 	return nil
 }
 
-func (f *fakeAccounts) GrantPlatformAdmins(_ context.Context, emails []string) (int, error) {
+func (f *fakeUsers) GrantPlatformAdmins(_ context.Context, emails []string) (int, error) {
 	f.granted = emails
 	if f.findErr != nil {
 		return 0, f.findErr
@@ -110,7 +110,7 @@ func (f *fakeAccounts) GrantPlatformAdmins(_ context.Context, emails []string) (
 	return len(emails), nil
 }
 
-func (f *fakeAccounts) get(id string) *domain.Account {
+func (f *fakeUsers) get(id string) *domain.User {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -180,14 +180,14 @@ func (p passTx) WithTransaction(ctx context.Context, _ platformdb.Scope, fn func
 }
 
 type env struct {
-	uc       *usecase.IdentityUseCase
-	accounts *fakeAccounts
-	store    *repository.MemoryStore
-	mailer   *fakeMailer
-	events   *fakeEvents
-	now      time.Time
-	clock    *time.Time
-	issuer   *auth.TokenIssuer
+	uc     *usecase.IdentityUseCase
+	users  *fakeUsers
+	store  *repository.MemoryStore
+	mailer *fakeMailer
+	events *fakeEvents
+	now    time.Time
+	clock  *time.Time
+	issuer *auth.TokenIssuer
 }
 
 func newEnv(t *testing.T) *env {
@@ -195,11 +195,11 @@ func newEnv(t *testing.T) *env {
 
 	now := time.Now().UTC().Truncate(time.Second)
 	e := &env{
-		accounts: newFakeAccounts(), store: repository.NewMemoryStore(), mailer: &fakeMailer{}, events: &fakeEvents{},
+		users: newFakeUsers(), store: repository.NewMemoryStore(), mailer: &fakeMailer{}, events: &fakeEvents{},
 		now: now, issuer: auth.NewTokenIssuer([]byte("k"), 20*time.Minute, time.Hour),
 	}
 	e.clock = &now
-	e.uc = usecase.NewIdentityUseCase(e.accounts, e.store, e.store, e.mailer, e.events, passTx{}, e.issuer,
+	e.uc = usecase.NewIdentityUseCase(e.users, e.store, e.store, e.mailer, e.events, passTx{}, e.issuer,
 		usecase.WithClock(func() time.Time { return *e.clock }))
 
 	return e

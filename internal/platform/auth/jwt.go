@@ -1,6 +1,6 @@
 // Package auth handles internal JWT issuance and verification.
 //
-// The access token identifies the account only: garage access and
+// The access token identifies the user only: garage access and
 // permissions are read from the database on every request (Security
 // Architecture Section 3.2), so a membership change or a garage created
 // after sign-in takes effect immediately.
@@ -32,14 +32,14 @@ type Claims struct {
 	PlatformAdmin bool `json:"platform_admin,omitempty"`
 }
 
-// AccountID is the subject of the token.
-func (c *Claims) AccountID() string {
+// UserID is the subject of the token.
+func (c *Claims) UserID() string {
 	return c.Subject
 }
 
-// Identity is what an access token asserts about its account.
+// Identity is what an access token asserts about its user.
 type Identity struct {
-	AccountID     string
+	UserID        string
 	EmailVerified bool
 	PlatformAdmin bool
 }
@@ -69,7 +69,7 @@ func (i *TokenIssuer) IssueAccessToken(id Identity) (string, time.Time, error) {
 	expiresAt := now.Add(i.accessTokenTTL)
 	claims := &Claims{
 		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   id.AccountID,
+			Subject:   id.UserID,
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
 			IssuedAt:  jwt.NewNumericDate(now),
 			ID:        uuid.NewString(),

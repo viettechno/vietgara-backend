@@ -150,7 +150,7 @@ func TestRLSContext_WithRLSSession(t *testing.T) {
 }
 
 func TestRLSContext_GetGarage(t *testing.T) {
-	garageRows := &rlsTestRows{columns: []string{"id", "account_id", "name", "timezone", "currency", "status"}, values: [][]driver.Value{{"garage-1", "account-1", "Main Garage", "Asia/Ho_Chi_Minh", "VND", "active"}}}
+	garageRows := &rlsTestRows{columns: []string{"id", "user_id", "name", "timezone", "currency", "status"}, values: [][]driver.Value{{"garage-1", "user-1", "Main Garage", "Asia/Ho_Chi_Minh", "VND", "active"}}}
 
 	tests := []struct {
 		name    string
@@ -158,7 +158,7 @@ func TestRLSContext_GetGarage(t *testing.T) {
 		want    map[string]any
 		wantErr string
 	}{
-		{name: "returns garage", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garages", rows: garageRows}}, want: map[string]any{"id": "garage-1", "account_id": "account-1", "name": "Main Garage", "timezone": "Asia/Ho_Chi_Minh", "currency": "VND", "status": "active"}},
+		{name: "returns garage", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garages", rows: garageRows}}, want: map[string]any{"id": "garage-1", "user_id": "user-1", "name": "Main Garage", "timezone": "Asia/Ho_Chi_Minh", "currency": "VND", "status": "active"}},
 		{name: "reports missing garage", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garages", rows: &rlsTestRows{columns: garageRows.columns}}}, wantErr: "garage not found"},
 		{name: "wraps query error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garages", err: errors.New("query failed")}}, wantErr: "query failed: query failed"},
 		{name: "wraps scan error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garages", rows: &rlsTestRows{columns: garageRows.columns, values: [][]driver.Value{{"only-one-column"}}}}}, wantErr: "scan failed:"},
@@ -188,7 +188,7 @@ func TestRLSContext_GetGarage(t *testing.T) {
 }
 
 func TestRLSContext_GetGarageStaff(t *testing.T) {
-	columns := []string{"id", "garage_id", "account_id", "role", "status", "created_at"}
+	columns := []string{"id", "garage_id", "user_id", "role", "status", "created_at"}
 
 	tests := []struct {
 		name    string
@@ -196,7 +196,7 @@ func TestRLSContext_GetGarageStaff(t *testing.T) {
 		wantLen int
 		wantErr string
 	}{
-		{name: "returns all staff", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garage_staff", rows: &rlsTestRows{columns: columns, values: [][]driver.Value{{"staff-1", "garage-1", "account-1", "owner", "active", "2026-01-01"}, {"staff-2", "garage-1", "account-2", "mechanic", "active", "2026-01-02"}}}}}, wantLen: 2},
+		{name: "returns all staff", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garage_staff", rows: &rlsTestRows{columns: columns, values: [][]driver.Value{{"staff-1", "garage-1", "user-1", "owner", "active", "2026-01-01"}, {"staff-2", "garage-1", "user-2", "mechanic", "active", "2026-01-02"}}}}}, wantLen: 2},
 		{name: "returns empty staff", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garage_staff", rows: &rlsTestRows{columns: columns}}}},
 		{name: "wraps query error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garage_staff", err: errors.New("query failed")}}, wantErr: "query failed: query failed"},
 		{name: "wraps scan error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garage_staff", rows: &rlsTestRows{columns: columns, values: [][]driver.Value{{"only-one-column"}}}}}, wantErr: "scan failed:"},
@@ -258,12 +258,12 @@ func TestRLSContext_AssignStaffToGarage(t *testing.T) {
 		steps   []rlsTestStep
 		wantErr string
 	}{
-		{name: "assigns staff", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "INSERT INTO garage_staff", args: []driver.Value{"garage-1", "account-1", "mechanic"}, result: driver.RowsAffected(1)}}},
+		{name: "assigns staff", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "INSERT INTO garage_staff", args: []driver.Value{"garage-1", "user-1", "mechanic"}, result: driver.RowsAffected(1)}}},
 		{name: "wraps insert error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "INSERT INTO garage_staff", err: errors.New("constraint violation")}}, wantErr: "insert/update failed: constraint violation"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := dbpkg.NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1").AssignStaffToGarage(t.Context(), "account-1", "mechanic")
+			err := dbpkg.NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1").AssignStaffToGarage(t.Context(), "user-1", "mechanic")
 			if tt.wantErr == "" && err != nil {
 				t.Fatalf("AssignStaffToGarage() error = %v", err)
 			}
@@ -281,14 +281,14 @@ func TestRLSContext_RemoveStaffFromGarage(t *testing.T) {
 		steps   []rlsTestStep
 		wantErr string
 	}{
-		{name: "removes staff", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garage_staff", args: []driver.Value{"garage-1", "account-1"}, result: driver.RowsAffected(1)}}},
+		{name: "removes staff", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garage_staff", args: []driver.Value{"garage-1", "user-1"}, result: driver.RowsAffected(1)}}},
 		{name: "wraps update error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garage_staff", err: errors.New("write failed")}}, wantErr: "update failed: write failed"},
 		{name: "reports missing staff", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garage_staff", result: driver.RowsAffected(0)}}, wantErr: "staff member not found"},
 		{name: "wraps rows affected error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garage_staff", result: rlsTestResult{err: errors.New("result unavailable")}}}, wantErr: "failed to get rows affected: result unavailable"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := dbpkg.NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1").RemoveStaffFromGarage(t.Context(), "account-1")
+			err := dbpkg.NewRLSContext(newRLSTestDB(t, tt.steps...), "garage-1").RemoveStaffFromGarage(t.Context(), "user-1")
 			if tt.wantErr == "" && err != nil {
 				t.Fatalf("RemoveStaffFromGarage() error = %v", err)
 			}

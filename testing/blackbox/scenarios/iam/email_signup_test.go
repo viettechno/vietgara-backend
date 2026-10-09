@@ -16,7 +16,7 @@ import (
 )
 
 // TestEmailSignUp walks a new owner from registration to a working session:
-// the account is locked out of garage APIs until the e-mailed OTP is
+// the user is locked out of garage APIs until the e-mailed OTP is
 // confirmed, then signs in again with its password and rotates its session.
 func TestEmailSignUp(t *testing.T) {
 	t.Parallel()
@@ -28,7 +28,7 @@ func TestEmailSignUp(t *testing.T) {
 
 	registered, err := api.Register(ctx, &identityv1.RegisterRequest{Email: email, Password: fixture.Password, FullName: "Blackbox Signup"})
 	require.NoError(t, err)
-	assert.False(t, registered.GetAccount().GetEmailVerified())
+	assert.False(t, registered.GetUser().GetEmailVerified())
 
 	unverified := api.WithToken(registered.GetAccessToken())
 	_, err = unverified.CreateGarage(ctx, &tenantv1.Garage{Name: "Too early"})
@@ -44,11 +44,11 @@ func TestEmailSignUp(t *testing.T) {
 
 	verified, err := unverified.VerifyEmail(ctx, otp, registered.GetRefreshToken())
 	require.NoError(t, err)
-	assert.True(t, verified.GetAccount().GetEmailVerified())
+	assert.True(t, verified.GetUser().GetEmailVerified())
 
 	garage, err := api.WithToken(verified.GetAccessToken()).CreateGarage(ctx, &tenantv1.Garage{Name: "Blackbox Garage"})
 	require.NoError(t, err)
-	assert.Equal(t, verified.GetAccount().GetId(), garage.GetOwnerAccountId())
+	assert.Equal(t, verified.GetUser().GetId(), garage.GetOwnerUserId())
 
 	t.Run("signs in with the password", func(t *testing.T) {
 		_, err := api.Login(ctx, email, "wrong-password")
@@ -56,8 +56,8 @@ func TestEmailSignUp(t *testing.T) {
 
 		session, err := api.Login(ctx, email, fixture.Password)
 		require.NoError(t, err)
-		assert.Equal(t, verified.GetAccount().GetId(), session.GetAccount().GetId())
-		assert.True(t, session.GetAccount().GetEmailVerified())
+		assert.Equal(t, verified.GetUser().GetId(), session.GetUser().GetId())
+		assert.True(t, session.GetUser().GetEmailVerified())
 	})
 
 	t.Run("refresh rotates the refresh token", func(t *testing.T) {

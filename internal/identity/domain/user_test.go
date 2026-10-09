@@ -16,9 +16,9 @@ func TestEnums(t *testing.T) {
 	assert.True(t, domain.AuthProviderEmail.IsValid())
 	assert.True(t, domain.AuthProviderGoogle.IsValid())
 	assert.False(t, domain.AuthProvider("facebook").IsValid())
-	assert.True(t, domain.AccountStatusActive.IsValid())
-	assert.True(t, domain.AccountStatusSuspended.IsValid())
-	assert.False(t, domain.AccountStatus("inactive").IsValid())
+	assert.True(t, domain.UserStatusActive.IsValid())
+	assert.True(t, domain.UserStatusSuspended.IsValid())
+	assert.False(t, domain.UserStatus("inactive").IsValid())
 	assert.Equal(t, domain.LocaleEN, domain.LocaleEN.OrDefault())
 	assert.Equal(t, domain.LocaleVI, domain.Locale("fr").OrDefault())
 }
@@ -26,14 +26,14 @@ func TestEnums(t *testing.T) {
 func TestEmailVerification(t *testing.T) {
 	t.Parallel()
 
-	acc := &domain.Account{}
-	assert.False(t, acc.EmailVerified())
+	user := &domain.User{}
+	assert.False(t, user.EmailVerified())
 
 	now := time.Now()
-	assert.True(t, acc.MarkEmailVerified(now))
-	assert.True(t, acc.EmailVerified())
-	assert.False(t, acc.MarkEmailVerified(now.Add(time.Hour)))
-	assert.Equal(t, now, *acc.EmailVerifiedAt)
+	assert.True(t, user.MarkEmailVerified(now))
+	assert.True(t, user.EmailVerified())
+	assert.False(t, user.MarkEmailVerified(now.Add(time.Hour)))
+	assert.Equal(t, now, *user.EmailVerifiedAt)
 }
 
 func TestNormalizeEmail(t *testing.T) {
@@ -101,14 +101,14 @@ func TestOTP(t *testing.T) {
 	code := domain.NewOTPCode()
 	assert.Len(t, code, domain.OTPLength)
 
-	key := domain.OTPKey(domain.OTPEmailVerification, "acc-1")
-	assert.Equal(t, "email_verification:acc-1", key)
+	key := domain.OTPKey(domain.OTPEmailVerification, "user-1")
+	assert.Equal(t, "email_verification:user-1", key)
 
 	now := time.Now()
 	otp := domain.NewOTP(key, code, now)
 	assert.True(t, otp.Matches(key, code))
 	assert.False(t, otp.Matches(key, "not-it"))
-	assert.False(t, otp.Matches(domain.OTPKey(domain.OTPPasswordReset, "acc-1"), code), "bound to its key")
+	assert.False(t, otp.Matches(domain.OTPKey(domain.OTPPasswordReset, "user-1"), code), "bound to its key")
 	assert.Equal(t, now.Add(domain.OTPTTL), otp.ExpiresAt)
 	assert.Equal(t, now.Add(domain.OTPResendCooldown), otp.ResendAt)
 	assert.False(t, otp.Expired(now.Add(time.Minute)))

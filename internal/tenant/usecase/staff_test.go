@@ -27,7 +27,7 @@ func TestInvitationFlow(t *testing.T) {
 
 	candidate, err = e.UC.LookupCandidate(ctx, id, "0901234567")
 	require.NoError(t, err)
-	assert.Equal(t, staff, candidate.Account.ID)
+	assert.Equal(t, staff, candidate.User.ID)
 
 	inv, err := e.UC.CreateInvitation(ctx, id, staff, []string{advisor.ID, advisor.ID})
 	require.NoError(t, err)
@@ -89,16 +89,16 @@ func TestInvitationValidation(t *testing.T) {
 	ctx := e.as(t, owner, id)
 
 	_, err := e.UC.CreateInvitation(ctx, id, "ghost", nil)
-	requireReason(t, err, domain.ReasonAccountNotFound)
+	requireReason(t, err, domain.ReasonUserNotFound)
 	_, err = e.UC.CreateInvitation(ctx, id, "off", nil)
-	requireReason(t, err, domain.ReasonAccountInactive)
+	requireReason(t, err, domain.ReasonUserInactive)
 	_, err = e.UC.CreateInvitation(ctx, id, staff, []string{"not-a-group"})
 	requireReason(t, err, apperror.ReasonValidation)
 
 	_, err = e.UC.LookupCandidate(ctx, id, "ghost@example.com")
-	requireReason(t, err, domain.ReasonAccountNotFound)
+	requireReason(t, err, domain.ReasonUserNotFound)
 	_, err = e.UC.LookupCandidate(ctx, id, "off@example.com")
-	requireReason(t, err, domain.ReasonAccountInactive)
+	requireReason(t, err, domain.ReasonUserInactive)
 
 	inv, err := e.UC.CreateInvitation(ctx, id, staff, nil)
 	require.NoError(t, err)
@@ -223,14 +223,14 @@ func TestStaffFailures(t *testing.T) {
 			return err
 		},
 		"invitation.expire": func() error { _, err := e.UC.CreateInvitation(ctx, id, "off2", nil); return err },
-		"staff.findByAccount": func() error {
+		"staff.findByUser": func() error {
 			_, err := e.UC.LookupCandidate(ctx, id, "lan@example.com")
 			return err
 		},
 	} {
 		e.Store.Fail[op] = errBoom
 		if op == "invitation.expire" {
-			e.Dir.Accounts["off2"] = &usecase.AccountSummary{ID: "off2", Active: true}
+			e.Dir.Users["off2"] = &usecase.UserSummary{ID: "off2", Active: true}
 		}
 
 		require.Error(t, call(), op)

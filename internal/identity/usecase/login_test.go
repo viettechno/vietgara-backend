@@ -18,19 +18,19 @@ func TestLogin(t *testing.T) {
 
 	session, err := e.uc.Login(t.Context(), " OWNER@example.com", "secret123")
 	require.NoError(t, err)
-	assert.Equal(t, registered.Account.ID, session.Account.ID)
+	assert.Equal(t, registered.User.ID, session.User.ID)
 
 	for _, tc := range [][2]string{{"owner@example.com", "wrong-pass"}, {"nobody@example.com", "secret123"}, {"bad", "x"}, {"owner@example.com", ""}} {
 		_, err := e.uc.Login(t.Context(), tc[0], tc[1])
 		requireReason(t, err, domain.ReasonInvalidCredentials)
 	}
 
-	acc := e.accounts.get(registered.Account.ID)
-	acc.Status = domain.AccountStatusSuspended
+	user := e.users.get(registered.User.ID)
+	user.Status = domain.UserStatusSuspended
 	_, err = e.uc.Login(t.Context(), "owner@example.com", "secret123")
-	requireReason(t, err, domain.ReasonAccountSuspended)
+	requireReason(t, err, domain.ReasonUserSuspended)
 
-	e.accounts.findErr = errBoom
+	e.users.findErr = errBoom
 	_, err = e.uc.Login(t.Context(), "owner@example.com", "secret123")
 	requireReason(t, err, apperror.ReasonInternal)
 }
@@ -55,7 +55,7 @@ func TestRefreshAndLogout(t *testing.T) {
 	third, err := e.uc.Login(t.Context(), "owner@example.com", "secret123")
 	require.NoError(t, err)
 
-	delete(e.accounts.byID, third.Account.ID)
+	delete(e.users.byID, third.User.ID)
 	_, err = e.uc.Refresh(t.Context(), third.RefreshToken)
 	requireReason(t, err, apperror.ReasonUnauthenticated)
 }

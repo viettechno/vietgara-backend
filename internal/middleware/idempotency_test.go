@@ -26,7 +26,7 @@ import (
 const (
 	methodCreate = "/test.v1.Svc/CreateThing"
 	methodPay    = "/test.v1.Svc/PayThing"
-	accountID    = "22222222-2222-4222-8222-222222222222"
+	userID       = "22222222-2222-4222-8222-222222222222"
 )
 
 // memStore is an in-memory IdempotencyStore; the real one is covered by
@@ -94,7 +94,7 @@ func (p *pipeline) call(t *testing.T, method, key string, req proto.Message) (an
 		methodGarage: middleware.GarageMethod(rule),
 	}
 
-	pairs := []string{"authorization", "Bearer " + token(t, auth.Identity{AccountID: accountID, EmailVerified: true})}
+	pairs := []string{"authorization", "Bearer " + token(t, auth.Identity{UserID: userID, EmailVerified: true})}
 	if key != "" {
 		pairs = append(pairs, "idempotency-key", key)
 	}

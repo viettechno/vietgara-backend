@@ -17,10 +17,10 @@ import (
 	"github.com/viettechno/vietgara-backend/testing/blackbox/env"
 )
 
-// Password is the password of every account the suite registers.
+// Password is the password of every user the suite registers.
 const Password = "Blackbox#2026"
 
-// Actor is a signed-in account.
+// Actor is a signed-in user.
 type Actor struct {
 	Email    string
 	Password string
@@ -66,7 +66,7 @@ func UniqueEmail(tb testing.TB, label string) string {
 	return fmt.Sprintf("bb.%s.%d.%d@%s", strings.ToLower(label), time.Now().UnixNano(), seq.Add(1), env.Get(tb).EmailDomain)
 }
 
-// NewVerifiedOwner registers a fresh account, reads its OTP from the test
+// NewVerifiedOwner registers a fresh user, reads its OTP from the test
 // inbox and verifies it: the state every garage scenario starts from.
 func NewVerifiedOwner(tb testing.TB, label string) *Actor {
 	tb.Helper()
@@ -102,9 +102,9 @@ func NewVerifiedOwner(tb testing.TB, label string) *Actor {
 
 // Owner returns a verified owner on any target: a fresh one when the
 // target has a test inbox, otherwise the pre-provisioned
-// BLACKBOX_OWNER_EMAIL account (skipping tb when that is not configured
+// BLACKBOX_OWNER_EMAIL user (skipping tb when that is not configured
 // either). Scenarios that use it must not change shared state they cannot
-// undo, since the account may be shared.
+// undo, since the user may be shared.
 func Owner(tb testing.TB) *Actor {
 	tb.Helper()
 

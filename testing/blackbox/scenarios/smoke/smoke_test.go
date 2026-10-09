@@ -22,7 +22,7 @@ func TestProtectedAPIsRejectAnonymousCalls(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusUnauthorized, "UNAUTHENTICATED")
 }
 
-func TestOwnerReadsAccountGaragesAndSubscription(t *testing.T) {
+func TestOwnerReadsUserGaragesAndSubscription(t *testing.T) {
 	t.Parallel()
 
 	owner := fixture.Owner(t)

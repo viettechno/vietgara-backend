@@ -59,10 +59,10 @@ func Policies() middleware.Policies {
 	}
 }
 
-// run calls fn with the caller's account id and converts use case errors
+// run calls fn with the caller's user id and converts use case errors
 // to gRPC status errors.
 func run[T any](ctx context.Context, fn func(actorID string) (T, error)) (T, error) {
-	resp, err := fn(middleware.AccountID(ctx))
+	resp, err := fn(middleware.UserID(ctx))
 	if err != nil {
 		var zero T
 

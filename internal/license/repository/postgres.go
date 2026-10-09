@@ -24,7 +24,7 @@ const (
 		p.max_garages, p.max_staff, p.max_transactions_per_day, p.features::text[], p.is_public, p.is_active,
 		p.sort_order, p.created_at, p.updated_at`
 
-	subscriptionColumns = `s.id, s.account_id, s.plan_id, s.status, s.trial_end_at,
+	subscriptionColumns = `s.id, s.user_id, s.plan_id, s.status, s.trial_end_at,
 		s.current_period_start, s.current_period_end, s.grace_period_end, s.auto_renew,
 		s.reminder_period_end, s.created_at, s.updated_at, ` + planColumns
 
@@ -97,7 +97,7 @@ func subscriptionDest(s *domain.Subscription, plan *domain.Plan, status *string)
 	planFields, finish := planDest(plan)
 
 	return append([]any{
-		&s.ID, &s.AccountID, &s.PlanID, status, &s.TrialEndAt,
+		&s.ID, &s.UserID, &s.PlanID, status, &s.TrialEndAt,
 		&s.CurrentPeriodStart, &s.CurrentPeriodEnd, &s.GracePeriodEnd, &s.AutoRenew,
 		&s.ReminderPeriodEnd, &s.CreatedAt, &s.UpdatedAt,
 	}, planFields...), finish
@@ -216,15 +216,15 @@ func (r *PostgresPlanRepository) Update(ctx context.Context, p *domain.Plan) err
 	return err
 }
 
-// CreateIfAbsent inserts s unless the account has a subscription already.
+// CreateIfAbsent inserts s unless the user has a subscription already.
 func (r *PostgresRepository) CreateIfAbsent(ctx context.Context, s *domain.Subscription) (bool, error) {
 	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
-		INSERT INTO subscriptions (account_id, plan_id, status, trial_end_at, current_period_start,
+		INSERT INTO subscriptions (user_id, plan_id, status, trial_end_at, current_period_start,
 			current_period_end, auto_renew)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		ON CONFLICT (account_id) DO NOTHING
+		ON CONFLICT (user_id) DO NOTHING
 		RETURNING id, created_at, updated_at`,
-		s.AccountID, s.PlanID, string(s.Status), s.TrialEndAt, s.CurrentPeriodStart, s.CurrentPeriodEnd, s.AutoRenew,
+		s.UserID, s.PlanID, string(s.Status), s.TrialEndAt, s.CurrentPeriodStart, s.CurrentPeriodEnd, s.AutoRenew,
 	).Scan(&s.ID, &s.CreatedAt, &s.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
@@ -233,16 +233,16 @@ func (r *PostgresRepository) CreateIfAbsent(ctx context.Context, s *domain.Subsc
 	return err == nil, err
 }
 
-// FindByAccountID returns the account's subscription with its plan.
-func (r *PostgresRepository) FindByAccountID(ctx context.Context, accountID string) (*domain.Subscription, error) {
+// FindByUserID returns the user's subscription with its plan.
+func (r *PostgresRepository) FindByUserID(ctx context.Context, userID string) (*domain.Subscription, error) {
 	return scanSubscription(platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx,
-		`SELECT `+subscriptionColumns+subscriptionFrom+` WHERE s.account_id = $1`, accountID))
+		`SELECT `+subscriptionColumns+subscriptionFrom+` WHERE s.user_id = $1`, userID))
 }
 
-// LockByAccountID reads the subscription holding a row lock.
-func (r *PostgresRepository) LockByAccountID(ctx context.Context, accountID string) (*domain.Subscription, error) {
+// LockByUserID reads the subscription holding a row lock.
+func (r *PostgresRepository) LockByUserID(ctx context.Context, userID string) (*domain.Subscription, error) {
 	return scanSubscription(platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx,
-		`SELECT `+subscriptionColumns+subscriptionFrom+` WHERE s.account_id = $1 FOR UPDATE OF s`, accountID))
+		`SELECT `+subscriptionColumns+subscriptionFrom+` WHERE s.user_id = $1 FOR UPDATE OF s`, userID))
 }
 
 // LockByID reads a subscription by id holding a row lock.
@@ -263,11 +263,11 @@ func (r *PostgresRepository) Update(ctx context.Context, s *domain.Subscription)
 	).Scan(&s.UpdatedAt)
 }
 
-// ListAccountIDsDueBefore returns accounts with a live subscription ending
+// ListUserIDsDueBefore returns users with a live subscription ending
 // before t.
-func (r *PostgresRepository) ListAccountIDsDueBefore(ctx context.Context, t time.Time) ([]string, error) {
+func (r *PostgresRepository) ListUserIDsDueBefore(ctx context.Context, t time.Time) ([]string, error) {
 	rows, err := platformdb.QuerierFromContext(ctx, r.pool).Query(ctx, `
-		SELECT account_id FROM subscriptions
+		SELECT user_id FROM subscriptions
 		WHERE status IN ('trial', 'active', 'past_due') AND current_period_end < $1
 		ORDER BY current_period_end`, t)
 	if err != nil {
@@ -289,7 +289,7 @@ func (r *PostgresRepository) ListAccountIDsDueBefore(ctx context.Context, t time
 	return ids, rows.Err()
 }
 
-// Search lists subscriptions with their owners, newest first. accounts is
+// Search lists subscriptions with their owners, newest first. users is
 // read for display only (platform admin view).
 func (r *PostgresRepository) Search(ctx context.Context, f usecase.SubscriptionFilter) (*usecase.SubscriptionPage, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
@@ -302,14 +302,14 @@ func (r *PostgresRepository) Search(ctx context.Context, f usecase.SubscriptionF
 
 	page := &usecase.SubscriptionPage{}
 
-	err := q.QueryRow(ctx, `SELECT count(*)`+subscriptionFrom+` JOIN accounts a ON a.id = s.account_id`+where,
+	err := q.QueryRow(ctx, `SELECT count(*)`+subscriptionFrom+` JOIN users a ON a.id = s.user_id`+where,
 		pattern, string(f.Status)).Scan(&page.Total)
 	if err != nil {
 		return nil, err
 	}
 
 	rows, err := q.Query(ctx, `SELECT `+subscriptionColumns+`, COALESCE(a.email, ''), a.full_name`+subscriptionFrom+
-		` JOIN accounts a ON a.id = s.account_id`+where+` ORDER BY s.created_at DESC LIMIT $3 OFFSET $4`,
+		` JOIN users a ON a.id = s.user_id`+where+` ORDER BY s.created_at DESC LIMIT $3 OFFSET $4`,
 		pattern, string(f.Status), f.PageSize, (f.Page-1)*f.PageSize)
 	if err != nil {
 		return nil, err
@@ -339,8 +339,8 @@ func (r *PostgresRepository) Search(ctx context.Context, f usecase.SubscriptionF
 	return page, rows.Err()
 }
 
-// Replace sets the account's feature switches to flags.
-func (r *PostgresRepository) Replace(ctx context.Context, accountID string, flags map[domain.Feature]bool) error {
+// Replace sets the user's feature switches to flags.
+func (r *PostgresRepository) Replace(ctx context.Context, userID string, flags map[domain.Feature]bool) error {
 	features := make([]string, 0, len(flags))
 	enabled := make([]bool, 0, len(flags))
 
@@ -350,10 +350,10 @@ func (r *PostgresRepository) Replace(ctx context.Context, accountID string, flag
 	}
 
 	_, err := platformdb.QuerierFromContext(ctx, r.pool).Exec(ctx, `
-		INSERT INTO entitlements (account_id, feature, enabled, updated_at)
+		INSERT INTO entitlements (user_id, feature, enabled, updated_at)
 		SELECT $1, f::plan_feature, e, now() FROM unnest($2::text[], $3::boolean[]) AS t(f, e)
-		ON CONFLICT (account_id, feature) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = now()`,
-		accountID, features, enabled)
+		ON CONFLICT (user_id, feature) DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = now()`,
+		userID, features, enabled)
 
 	return err
 }

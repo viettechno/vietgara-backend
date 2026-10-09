@@ -44,10 +44,10 @@ type GarageWithAccess struct {
 	Access *access.Access
 }
 
-// ListGarages returns the garages the account owns or works in, each with
+// ListGarages returns the garages the user owns or works in, each with
 // the caller's access.
-func (uc *TenantUseCase) ListGarages(ctx context.Context, accountID string) ([]GarageWithAccess, error) {
-	garages, err := uc.Garages.ListForAccount(ctx, accountID)
+func (uc *TenantUseCase) ListGarages(ctx context.Context, userID string) ([]GarageWithAccess, error) {
+	garages, err := uc.Garages.ListForUser(ctx, userID)
 	if err != nil {
 		return nil, toAppError("list garages", err)
 	}
@@ -55,12 +55,12 @@ func (uc *TenantUseCase) ListGarages(ctx context.Context, accountID string) ([]G
 	result := make([]GarageWithAccess, 0, len(garages))
 
 	for _, g := range garages {
-		acc, err := uc.Access.GarageAccess(ctx, g.ID, accountID)
+		user, err := uc.Access.GarageAccess(ctx, g.ID, userID)
 		if err != nil {
 			return nil, toAppError("load garage access", err)
 		}
 
-		result = append(result, GarageWithAccess{Garage: g, Access: acc})
+		result = append(result, GarageWithAccess{Garage: g, Access: user})
 	}
 
 	return result, nil
@@ -72,7 +72,7 @@ func (uc *TenantUseCase) ListGarages(ctx context.Context, accountID string) ([]G
 func (uc *TenantUseCase) CreateGarage(ctx context.Context, ownerID string, fields GarageFields) (*GarageWithAccess, error) {
 	g := &domain.Garage{
 		ID:                        uuid.NewString(),
-		OwnerAccountID:            ownerID,
+		OwnerUserID:               ownerID,
 		Timezone:                  domain.DefaultTimezone,
 		Currency:                  domain.DefaultCurrency,
 		Status:                    domain.GarageStatusActive,
@@ -98,8 +98,8 @@ func (uc *TenantUseCase) CreateGarage(ctx context.Context, ownerID string, field
 		return nil, err
 	}
 
-	err := uc.Tx.WithTransaction(ctx, platformdb.AccountScope(ownerID).Garage(g.ID), func(ctx context.Context) error {
-		if err := uc.EnsureDefaultRoles(ctx, ownerID, uc.accountLocale(ctx, ownerID)); err != nil {
+	err := uc.Tx.WithTransaction(ctx, platformdb.UserScope(ownerID).Garage(g.ID), func(ctx context.Context) error {
+		if err := uc.EnsureDefaultRoles(ctx, ownerID, uc.userLocale(ctx, ownerID)); err != nil {
 			return err
 		}
 
@@ -107,7 +107,7 @@ func (uc *TenantUseCase) CreateGarage(ctx context.Context, ownerID string, field
 			return err
 		}
 
-		owner := &domain.Staff{GarageID: g.ID, AccountID: ownerID, Status: domain.StaffStatusActive}
+		owner := &domain.Staff{GarageID: g.ID, UserID: ownerID, Status: domain.StaffStatusActive}
 		if err := uc.Staff.Create(ctx, owner); err != nil {
 			return err
 		}
@@ -121,7 +121,7 @@ func (uc *TenantUseCase) CreateGarage(ctx context.Context, ownerID string, field
 		}
 
 		return uc.Events.Publish(ctx, EventGarageCreated, g.ID, ownerID, map[string]any{
-			keyGarageID: g.ID, "owner_account_id": ownerID, "name": g.Name,
+			keyGarageID: g.ID, "owner_user_id": ownerID, "name": g.Name,
 		})
 	})
 	if err != nil {
@@ -129,7 +129,7 @@ func (uc *TenantUseCase) CreateGarage(ctx context.Context, ownerID string, field
 	}
 
 	return &GarageWithAccess{Garage: g, Access: &access.Access{
-		GarageID: g.ID, AccountID: ownerID, OwnerAccountID: ownerID, Owner: true, Active: true,
+		GarageID: g.ID, UserID: ownerID, OwnerUserID: ownerID, Owner: true, Active: true,
 	}}, nil
 }
 
@@ -140,9 +140,9 @@ func (uc *TenantUseCase) GetGarage(ctx context.Context, garageID string) (*Garag
 		return nil, toAppError("get garage", err)
 	}
 
-	acc, _ := access.FromContext(ctx)
+	user, _ := access.FromContext(ctx)
 
-	return &GarageWithAccess{Garage: g, Access: acc}, nil
+	return &GarageWithAccess{Garage: g, Access: user}, nil
 }
 
 // UpdateGarage changes a garage's profile and configuration (FR-TEN-01/05).
@@ -163,7 +163,7 @@ func (uc *TenantUseCase) UpdateGarage(ctx context.Context, garageID string, fiel
 		}
 
 		if *fields.Status == domain.GarageStatusActive {
-			if err := uc.checkUsage(ctx, g.OwnerAccountID, LimitGarages); err != nil {
+			if err := uc.checkUsage(ctx, g.OwnerUserID, LimitGarages); err != nil {
 				return nil, err
 			}
 		}
@@ -269,7 +269,7 @@ func callerID(caller *access.Access) string {
 		return ""
 	}
 
-	return caller.AccountID
+	return caller.UserID
 }
 
 // applyGarageFields validates and applies fields to g.

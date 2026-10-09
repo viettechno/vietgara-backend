@@ -11,5 +11,5 @@ const ConsumerName = "tenant"
 // Subscribe registers the module's event consumers (Event Design Section 4):
 // every verified owner gets the default roles (FR-IAM-03).
 func Subscribe(bus outbox.Subscriber, processor *outbox.Processor, uc *usecase.TenantUseCase) {
-	bus.Subscribe("account.email_verified", processor.Wrap(ConsumerName, uc.HandleAccountEmailVerified))
+	bus.Subscribe("user.email_verified", processor.Wrap(ConsumerName, uc.HandleUserEmailVerified))
 }

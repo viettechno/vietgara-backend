@@ -126,29 +126,29 @@ func Normalize(perms []Permission) []Permission {
 
 // Errors reported to callers; the messages reach the API response.
 var (
-	ErrNoMembership = errors.New("account has no access to this garage")
+	ErrNoMembership = errors.New("user has no access to this garage")
 	ErrRoleDenied   = errors.New("your role does not allow this action")
 	ErrOwnerOnly    = errors.New("only the garage owner can perform this action")
 	ErrGarageClosed = errors.New("this garage is inactive")
 )
 
-// Access is what one account may do in one garage.
+// Access is what one user may do in one garage.
 type Access struct {
-	GarageID  string
-	AccountID string
-	// OwnerAccountID owns the garage (and its subscription).
-	OwnerAccountID string
-	Owner          bool
-	Active         bool // the garage is active
-	Permissions    []Permission
+	GarageID string
+	UserID   string
+	// OwnerUserID owns the garage (and its subscription).
+	OwnerUserID string
+	Owner       bool
+	Active      bool // the garage is active
+	Permissions []Permission
 }
 
-// Has reports whether the account holds p (owners hold everything).
+// Has reports whether the user holds p (owners hold everything).
 func (a *Access) Has(p Permission) bool {
 	return a.Owner || slices.Contains(a.Permissions, p)
 }
 
-// Effective returns the permissions the account holds, owners getting the
+// Effective returns the permissions the user holds, owners getting the
 // full catalog.
 func (a *Access) Effective() []Permission {
 	if a.Owner {
@@ -158,11 +158,11 @@ func (a *Access) Effective() []Permission {
 	return Normalize(a.Permissions)
 }
 
-// Reader loads an account's access to a garage, returning ErrNoMembership
-// when the account is neither the owner nor an active member. Implemented
+// Reader loads a user's access to a garage, returning ErrNoMembership
+// when the user is neither the owner nor an active member. Implemented
 // by the Tenant module.
 type Reader interface {
-	GarageAccess(ctx context.Context, garageID, accountID string) (*Access, error)
+	GarageAccess(ctx context.Context, garageID, userID string) (*Access, error)
 }
 
 // Rule is what an endpoint requires from the caller.

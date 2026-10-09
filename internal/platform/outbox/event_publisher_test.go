@@ -41,8 +41,8 @@ func TestEventPublisher(t *testing.T) {
 func TestEventKey(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, "g", outbox.Event{GarageID: "g", AccountID: "a"}.Key())
-	assert.Equal(t, "a", outbox.Event{AccountID: "a"}.Key())
+	assert.Equal(t, "g", outbox.Event{GarageID: "g", UserID: "a"}.Key())
+	assert.Equal(t, "a", outbox.Event{UserID: "a"}.Key())
 }
 
 func TestDispatcher(t *testing.T) {
@@ -85,7 +85,7 @@ func (s *scopeTx) WithTransaction(ctx context.Context, scope platformdb.Scope, f
 func TestProcessor(t *testing.T) {
 	t.Parallel()
 
-	event := outbox.Event{ID: "e-1", Type: "x", GarageID: "g", AccountID: "a"}
+	event := outbox.Event{ID: "e-1", Type: "x", GarageID: "g", UserID: "a"}
 
 	t.Run("runs once", func(t *testing.T) {
 		t.Parallel()
@@ -97,7 +97,7 @@ func TestProcessor(t *testing.T) {
 		h := outbox.NewProcessor(nil, tx).Wrap("tenant", func(context.Context, outbox.Event) error { ran = true; return nil })
 		require.NoError(t, h(t.Context(), event))
 		assert.True(t, ran)
-		assert.Equal(t, []platformdb.Scope{{GarageID: "g", AccountID: "a"}}, tx.scopes)
+		assert.Equal(t, []platformdb.Scope{{GarageID: "g", UserID: "a"}}, tx.scopes)
 	})
 
 	t.Run("skips processed events", func(t *testing.T) {
@@ -155,10 +155,10 @@ func TestRelay(t *testing.T) {
 		assert.Equal(t, 1, n)
 		require.Len(t, pub.events, 1)
 		assert.Equal(t, outbox.Event{
-			ID: "e-1", Type: "garage.created", GarageID: "g-1", AccountID: "a-1",
+			ID: "e-1", Type: "garage.created", GarageID: "g-1", UserID: "a-1",
 			OccurredAt: occurred, Version: 1, Data: []byte(`{"k":1}`),
 		}, pub.events[0])
-		assert.Contains(t, tx.scopes, platformdb.Scope{GarageID: "g-1", AccountID: "a-1"})
+		assert.Contains(t, tx.scopes, platformdb.Scope{GarageID: "g-1", UserID: "a-1"})
 	})
 
 	t.Run("records failures", func(t *testing.T) {

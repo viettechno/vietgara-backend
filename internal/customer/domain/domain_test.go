@@ -133,13 +133,13 @@ func TestCustomerConsent(t *testing.T) {
 	c := &domain.Customer{}
 	assert.Nil(t, c.LatestConsent())
 
-	c.RecordConsent(true, at, "acc-1")
-	c.RecordConsent(true, at.Add(time.Hour), "acc-2")
+	c.RecordConsent(true, at, "user-1")
+	c.RecordConsent(true, at.Add(time.Hour), "user-2")
 	require.Len(t, c.ConsentLog, 1, "an unchanged decision is not recorded twice")
 
-	c.RecordConsent(false, at.Add(2*time.Hour), "acc-2")
+	c.RecordConsent(false, at.Add(2*time.Hour), "user-2")
 	require.Len(t, c.ConsentLog, 2)
-	assert.Equal(t, domain.ConsentRecord{Granted: false, RecordedAt: at.Add(2 * time.Hour), RecordedBy: "acc-2"}, *c.LatestConsent())
+	assert.Equal(t, domain.ConsentRecord{Granted: false, RecordedAt: at.Add(2 * time.Hour), RecordedBy: "user-2"}, *c.LatestConsent())
 }
 
 func TestCheckLength(t *testing.T) {

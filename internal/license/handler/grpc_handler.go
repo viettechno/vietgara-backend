@@ -46,8 +46,8 @@ func Policies() middleware.Policies {
 
 	return middleware.Policies{
 		licensev1.LicenseService_ListPlans_FullMethodName:             middleware.UnverifiedMethod(),
-		licensev1.LicenseService_GetMySubscription_FullMethodName:     middleware.AccountMethod(),
-		licensev1.LicenseService_ChangeMyPlan_FullMethodName:          middleware.AccountMethod(),
+		licensev1.LicenseService_GetMySubscription_FullMethodName:     middleware.UserMethod(),
+		licensev1.LicenseService_ChangeMyPlan_FullMethodName:          middleware.UserMethod(),
 		licensev1.LicenseService_GetGarageEntitlements_FullMethodName: entitlements,
 
 		licensev1.LicenseAdminService_ListAllPlans_FullMethodName:       middleware.AdminMethod(),
@@ -70,7 +70,7 @@ func (s *Server) ListPlans(ctx context.Context, _ *licensev1.ListPlansRequest) (
 
 // GetMySubscription returns the caller's subscription and usage.
 func (s *Server) GetMySubscription(ctx context.Context, _ *licensev1.GetMySubscriptionRequest) (*licensev1.GetMySubscriptionResponse, error) {
-	sub, usage, err := s.subscriptions.GetMine(ctx, middleware.AccountID(ctx))
+	sub, usage, err := s.subscriptions.GetMine(ctx, middleware.UserID(ctx))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -80,7 +80,7 @@ func (s *Server) GetMySubscription(ctx context.Context, _ *licensev1.GetMySubscr
 
 // ChangeMyPlan switches the caller's plan.
 func (s *Server) ChangeMyPlan(ctx context.Context, req *licensev1.ChangeMyPlanRequest) (*licensev1.ChangeMyPlanResponse, error) {
-	sub, usage, err := s.subscriptions.ChangeMyPlan(ctx, middleware.AccountID(ctx), req.GetPlanId())
+	sub, usage, err := s.subscriptions.ChangeMyPlan(ctx, middleware.UserID(ctx), req.GetPlanId())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}

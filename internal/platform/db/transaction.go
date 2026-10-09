@@ -19,16 +19,16 @@ var (
 )
 
 // SetScopeSQL (re)sets the session variables read by the Row-Level
-// Security policies (app_current_garage_id() / app_current_account_id()):
-// the tenant garage and the calling account. Empty strings mean "none".
-const SetScopeSQL = "SELECT set_config('app.current_garage_id', $1, true), set_config('app.current_account_id', $2, true)"
+// Security policies (app_current_garage_id() / app_current_user_id()):
+// the tenant garage and the calling user. Empty strings mean "none".
+const SetScopeSQL = "SELECT set_config('app.current_garage_id', $1, true), set_config('app.current_user_id', $2, true)"
 
 // Scope is the Row-Level Security context of a transaction: the garage
-// (tenant) whose rows are written, and the account whose own memberships,
+// (tenant) whose rows are written, and the user whose own memberships,
 // invitations and roles are readable across garages.
 type Scope struct {
-	GarageID  string
-	AccountID string
+	GarageID string
+	UserID   string
 }
 
 // IsZero reports whether the scope sets nothing.
@@ -44,8 +44,8 @@ func (s Scope) Garage(garageID string) Scope {
 // GarageScope scopes a transaction to one garage.
 func GarageScope(garageID string) Scope { return Scope{GarageID: garageID} }
 
-// AccountScope scopes a transaction to one calling account.
-func AccountScope(accountID string) Scope { return Scope{AccountID: accountID} }
+// UserScope scopes a transaction to one calling user.
+func UserScope(userID string) Scope { return Scope{UserID: userID} }
 
 type scopeKey struct{}
 
@@ -89,7 +89,7 @@ func (m *TxManager) WithTransaction(ctx context.Context, scope Scope, fn func(ct
 	defer func() { _ = tx.Rollback(ctx) }() // no-op if already committed
 
 	if !scope.IsZero() {
-		if _, err := tx.Exec(ctx, SetScopeSQL, scope.GarageID, scope.AccountID); err != nil {
+		if _, err := tx.Exec(ctx, SetScopeSQL, scope.GarageID, scope.UserID); err != nil {
 			return fmt.Errorf("%w: %w", ErrSetTenantContext, err)
 		}
 	}
@@ -121,13 +121,13 @@ func (m *TxManager) join(ctx context.Context, tx Querier, scope Scope, fn func(c
 		return fn(ctx)
 	}
 
-	if _, err := tx.Exec(ctx, SetScopeSQL, scope.GarageID, scope.AccountID); err != nil {
+	if _, err := tx.Exec(ctx, SetScopeSQL, scope.GarageID, scope.UserID); err != nil {
 		return fmt.Errorf("%w: %w", ErrSetTenantContext, err)
 	}
 
 	err := fn(context.WithValue(ctx, scopeKey{}, scope))
 
-	if _, restoreErr := tx.Exec(ctx, SetScopeSQL, previous.GarageID, previous.AccountID); restoreErr != nil && err == nil {
+	if _, restoreErr := tx.Exec(ctx, SetScopeSQL, previous.GarageID, previous.UserID); restoreErr != nil && err == nil {
 		err = fmt.Errorf("%w: %w", ErrSetTenantContext, restoreErr)
 	}
 

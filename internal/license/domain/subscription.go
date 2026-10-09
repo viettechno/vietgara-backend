@@ -18,7 +18,7 @@ const (
 
 // Errors of the License module; their messages reach API responses.
 var (
-	ErrSubscriptionNotFound  = errors.New("this account has no subscription yet")
+	ErrSubscriptionNotFound  = errors.New("this user has no subscription yet")
 	ErrPlanNotFound          = errors.New("plan not found")
 	ErrPlanNotAvailable      = errors.New("this plan cannot be chosen")
 	ErrPlanCodeTaken         = errors.New("a plan with this code already exists")
@@ -63,12 +63,12 @@ func (s SubscriptionStatus) AllowsReads() bool {
 	return s == StatusTrial || s == StatusActive || s == StatusPastDue
 }
 
-// Subscription is the license of one owner account, covering all their
+// Subscription is the license of one owner user, covering all their
 // garages (FR-LIC-01..04). See Database Design Section 6.3.
 type Subscription struct {
-	ID        string
-	AccountID string
-	PlanID    string
+	ID     string
+	UserID string
+	PlanID string
 	// Plan is loaded alongside the subscription when reading.
 	Plan               *Plan
 	Status             SubscriptionStatus
@@ -86,11 +86,11 @@ type Subscription struct {
 }
 
 // NewTrial starts a TrialPeriod-long trial on the trial plan at start.
-func NewTrial(accountID string, plan *Plan, start time.Time) *Subscription {
+func NewTrial(userID string, plan *Plan, start time.Time) *Subscription {
 	end := start.Add(TrialPeriod)
 
 	return &Subscription{
-		AccountID:          accountID,
+		UserID:             userID,
 		PlanID:             plan.ID,
 		Plan:               plan,
 		Status:             StatusTrial,

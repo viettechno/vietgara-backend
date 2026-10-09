@@ -83,9 +83,9 @@ CREATE TABLE repair_order_lines (
     unit_price BIGINT NOT NULL DEFAULT 0,
     line_total BIGINT NOT NULL DEFAULT 0,
     status repair_order_line_status NOT NULL DEFAULT 'not_started',
-    -- Technician account ids assigned to this line (FR-REP-02); a garage
+    -- Technicia user ids assigned to this line (FR-REP-02); a garage
     -- membership is not enforced at the database level, the same way
-    -- garage_staff.account_id elsewhere is not FK-constrained to a
+    -- garage_staff.user_id elsewhere is not FK-constrained to a
     -- specific garage's roster.
     assigned_technicians UUID[] NOT NULL DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),

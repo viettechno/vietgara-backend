@@ -16,7 +16,7 @@ func (s *Server) sessionToProto(session *usecase.Session) *identityv1.Session {
 		RefreshToken: session.RefreshToken,
 		TokenType:    "Bearer",
 		ExpiresIn:    s.accessTTL,
-		Account:      accountToProto(session.Account),
+		User:         userToProto(session.User),
 	}
 }
 
@@ -27,19 +27,19 @@ func challengeToProto(c usecase.Challenge) *identityv1.OtpChallenge {
 	}
 }
 
-func accountToProto(acc *domain.Account) *identityv1.Account {
-	return &identityv1.Account{
-		Id:            acc.ID,
-		Email:         acc.Email,
-		Phone:         acc.Phone,
-		AuthProvider:  authProviderToProto(acc.AuthProvider),
-		FullName:      acc.FullName,
-		Status:        accountStatusToProto(acc.Status),
-		EmailVerified: acc.EmailVerified(),
-		Locale:        localeToProto(acc.Locale),
-		PlatformAdmin: acc.PlatformAdmin,
-		CreatedAt:     converter.TimeToProto(acc.CreatedAt),
-		UpdatedAt:     converter.TimeToProto(acc.UpdatedAt),
+func userToProto(user *domain.User) *identityv1.User {
+	return &identityv1.User{
+		Id:            user.ID,
+		Email:         user.Email,
+		Phone:         user.Phone,
+		AuthProvider:  authProviderToProto(user.AuthProvider),
+		FullName:      user.FullName,
+		Status:        userStatusToProto(user.Status),
+		EmailVerified: user.EmailVerified(),
+		Locale:        localeToProto(user.Locale),
+		PlatformAdmin: user.PlatformAdmin,
+		CreatedAt:     converter.TimeToProto(user.CreatedAt),
+		UpdatedAt:     converter.TimeToProto(user.UpdatedAt),
 	}
 }
 
@@ -51,12 +51,12 @@ func authProviderToProto(p domain.AuthProvider) identityv1.AuthProvider {
 	return identityv1.AuthProvider_AUTH_PROVIDER_EMAIL
 }
 
-func accountStatusToProto(s domain.AccountStatus) identityv1.AccountStatus {
-	if s == domain.AccountStatusSuspended {
-		return identityv1.AccountStatus_ACCOUNT_STATUS_SUSPENDED
+func userStatusToProto(s domain.UserStatus) identityv1.UserStatus {
+	if s == domain.UserStatusSuspended {
+		return identityv1.UserStatus_USER_STATUS_SUSPENDED
 	}
 
-	return identityv1.AccountStatus_ACCOUNT_STATUS_ACTIVE
+	return identityv1.UserStatus_USER_STATUS_ACTIVE
 }
 
 func localeToProto(l domain.Locale) identityv1.Locale {

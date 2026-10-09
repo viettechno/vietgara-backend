@@ -1,4 +1,4 @@
-package testaccounts_test
+package testusers_test
 
 import (
 	"testing"
@@ -6,14 +6,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/viettechno/vietgara-backend/internal/platform/testaccounts"
+	"github.com/viettechno/vietgara-backend/internal/platform/testusers"
 )
 
 func TestParse(t *testing.T) {
 	t.Parallel()
 
 	for _, raw := range []string{"blackbox.vietgara.test", " QA.Example ", "x.invalid", "a-b.localhost"} {
-		d, err := testaccounts.Parse(raw)
+		d, err := testusers.Parse(raw)
 		require.NoError(t, err, raw)
 		assert.False(t, d.IsZero())
 	}
@@ -21,15 +21,15 @@ func TestParse(t *testing.T) {
 	for _, raw := range []string{
 		"", "test", ".test", "gmail.com", "viettechno.com", "evil.test.com", "a..test", "a_b.test", "a@b.test", "x.testing",
 	} {
-		_, err := testaccounts.Parse(raw)
-		require.ErrorIs(t, err, testaccounts.ErrDomain, raw)
+		_, err := testusers.Parse(raw)
+		require.ErrorIs(t, err, testusers.ErrDomain, raw)
 	}
 }
 
 func TestOwns(t *testing.T) {
 	t.Parallel()
 
-	d, err := testaccounts.Parse("blackbox.vietgara.test")
+	d, err := testusers.Parse("blackbox.vietgara.test")
 	require.NoError(t, err)
 
 	assert.Equal(t, "blackbox.vietgara.test", d.String())
@@ -39,7 +39,7 @@ func TestOwns(t *testing.T) {
 	assert.False(t, d.Owns("x@evilblackbox.vietgara.test"), "only the exact domain")
 	assert.False(t, d.Owns("blackbox.vietgara.test"))
 
-	var zero testaccounts.Domain
+	var zero testusers.Domain
 	assert.True(t, zero.IsZero())
 	assert.False(t, zero.Owns("a@blackbox.vietgara.test"))
 }

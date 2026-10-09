@@ -23,15 +23,15 @@ type Membership struct {
 	CanReadRepairOrders bool
 }
 
-// Memberships lists the garages an account owns or works in (Tenant).
+// Memberships lists the garages a user owns or works in (Tenant).
 type Memberships interface {
-	ListForAccount(ctx context.Context, accountID string) ([]Membership, error)
+	ListForUser(ctx context.Context, userID string) ([]Membership, error)
 }
 
 // RepairOrders lists a garage's repair orders with a line assigned to an
-// account (Repair Order); called inside that garage's scope.
+// user (Repair Order); called inside that garage's scope.
 type RepairOrders interface {
-	ListAssigned(ctx context.Context, garageID, accountID string) ([]*domain.RepairOrder, error)
+	ListAssigned(ctx context.Context, garageID, userID string) ([]*domain.RepairOrder, error)
 }
 
 // Transactor switches the transaction's Row-Level Security scope for fn.
@@ -65,12 +65,12 @@ type WorkOrder struct {
 }
 
 // ListMyWork returns the open repair orders (not closed) with at least one
-// line assigned to accountID, across every active garage where the account
+// line assigned to userID, across every active garage where the user
 // may read repair orders, oldest first (FR-TAPP-01). There is no schedule
 // or priority field yet, so "today's work" is everything still open, in
 // the order it arrived.
-func (uc *TechnicianUseCase) ListMyWork(ctx context.Context, accountID string) ([]WorkOrder, error) {
-	memberships, err := uc.Memberships.ListForAccount(ctx, accountID)
+func (uc *TechnicianUseCase) ListMyWork(ctx context.Context, userID string) ([]WorkOrder, error) {
+	memberships, err := uc.Memberships.ListForUser(ctx, userID)
 	if err != nil {
 		return nil, apperror.Internal("list the technician's garages", err)
 	}
@@ -83,16 +83,16 @@ func (uc *TechnicianUseCase) ListMyWork(ctx context.Context, accountID string) (
 		}
 
 		// Each garage is read in its own Row-Level Security scope.
-		scope := platformdb.Scope{GarageID: m.GarageID, AccountID: accountID}
+		scope := platformdb.Scope{GarageID: m.GarageID, UserID: userID}
 
 		err := uc.Tx.WithTransaction(ctx, scope, func(ctx context.Context) error {
-			orders, err := uc.RepairOrders.ListAssigned(ctx, m.GarageID, accountID)
+			orders, err := uc.RepairOrders.ListAssigned(ctx, m.GarageID, userID)
 			if err != nil {
 				return err
 			}
 
 			for _, ro := range orders {
-				if mine := assignedTo(ro, accountID); mine != nil {
+				if mine := assignedTo(ro, userID); mine != nil {
 					work = append(work, WorkOrder{GarageID: m.GarageID, GarageName: m.GarageName, RepairOrder: mine})
 				}
 			}
@@ -111,9 +111,9 @@ func (uc *TechnicianUseCase) ListMyWork(ctx context.Context, accountID string) (
 	return work, nil
 }
 
-// assignedTo returns a copy of ro with only accountID's lines, or nil when
+// assignedTo returns a copy of ro with only userID's lines, or nil when
 // the order is closed or none of its lines is assigned to them.
-func assignedTo(ro *domain.RepairOrder, accountID string) *domain.RepairOrder {
+func assignedTo(ro *domain.RepairOrder, userID string) *domain.RepairOrder {
 	if ro.Status == domain.StatusClosed {
 		return nil
 	}
@@ -122,7 +122,7 @@ func assignedTo(ro *domain.RepairOrder, accountID string) *domain.RepairOrder {
 	mine.Lines = nil
 
 	for _, line := range ro.Lines {
-		if slices.Contains(line.AssignedTechnicianIDs, accountID) {
+		if slices.Contains(line.AssignedTechnicianIDs, userID) {
 			mine.Lines = append(mine.Lines, line)
 		}
 	}

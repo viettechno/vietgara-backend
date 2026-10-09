@@ -19,7 +19,7 @@ func TestPolicies(t *testing.T) {
 	p := handler.Policies()
 	assert.True(t, p[identityv1.AuthService_Login_FullMethodName].Public)
 	assert.True(t, p[identityv1.AuthService_VerifyEmail_FullMethodName].AllowUnverified)
-	assert.Equal(t, middleware.UnverifiedMethod(), p[identityv1.AccountService_GetMe_FullMethodName])
+	assert.Equal(t, middleware.UnverifiedMethod(), p[identityv1.UserService_GetMe_FullMethodName])
 	assert.True(t, p[identityv1.AuthService_SignInWithGoogleIdToken_FullMethodName].Public)
 	assert.Len(t, p, 12)
 }
@@ -37,10 +37,10 @@ func TestAuthFlow(t *testing.T) {
 	s := reg.GetSession()
 	assert.Equal(t, "Bearer", s.GetTokenType())
 	assert.EqualValues(t, 1200, s.GetExpiresIn())
-	assert.Equal(t, identityv1.Locale_LOCALE_EN, s.GetAccount().GetLocale())
-	assert.Equal(t, identityv1.AuthProvider_AUTH_PROVIDER_EMAIL, s.GetAccount().GetAuthProvider())
-	assert.Equal(t, identityv1.AccountStatus_ACCOUNT_STATUS_ACTIVE, s.GetAccount().GetStatus())
-	assert.False(t, s.GetAccount().GetEmailVerified())
+	assert.Equal(t, identityv1.Locale_LOCALE_EN, s.GetUser().GetLocale())
+	assert.Equal(t, identityv1.AuthProvider_AUTH_PROVIDER_EMAIL, s.GetUser().GetAuthProvider())
+	assert.Equal(t, identityv1.UserStatus_USER_STATUS_ACTIVE, s.GetUser().GetStatus())
+	assert.False(t, s.GetUser().GetEmailVerified())
 
 	_, err = e.srv.Register(ctx, &identityv1.RegisterRequest{Email: "bad"})
 	assert.Equal(t, "VALIDATION_ERROR", reason(err))
@@ -55,7 +55,7 @@ func TestAuthFlow(t *testing.T) {
 
 	verified, err := e.srv.VerifyEmail(me, &identityv1.VerifyEmailRequest{OtpCode: e.mail.lastCode(), RefreshToken: s.GetRefreshToken()})
 	require.NoError(t, err)
-	assert.True(t, verified.GetSession().GetAccount().GetEmailVerified())
+	assert.True(t, verified.GetSession().GetUser().GetEmailVerified())
 
 	_, err = e.srv.SendEmailVerificationOtp(me, &identityv1.SendEmailVerificationOtpRequest{})
 	assert.Equal(t, "EMAIL_ALREADY_VERIFIED", reason(err))
@@ -113,26 +113,26 @@ func TestProfileRPCs(t *testing.T) {
 
 	got, err := e.srv.GetMe(me, &identityv1.GetMeRequest{})
 	require.NoError(t, err)
-	assert.Equal(t, "a@b.vn", got.GetAccount().GetEmail())
+	assert.Equal(t, "a@b.vn", got.GetUser().GetEmail())
 
 	phone := "0901112222"
-	updated, err := e.srv.UpdateMe(me, &identityv1.UpdateMeRequest{Account: &identityv1.Account{FullName: "B", Phone: &phone, Locale: identityv1.Locale_LOCALE_EN}})
+	updated, err := e.srv.UpdateMe(me, &identityv1.UpdateMeRequest{User: &identityv1.User{FullName: "B", Phone: &phone, Locale: identityv1.Locale_LOCALE_EN}})
 	require.NoError(t, err)
-	assert.Equal(t, "B", updated.GetAccount().GetFullName())
-	assert.Equal(t, identityv1.Locale_LOCALE_EN, updated.GetAccount().GetLocale())
+	assert.Equal(t, "B", updated.GetUser().GetFullName())
+	assert.Equal(t, identityv1.Locale_LOCALE_EN, updated.GetUser().GetLocale())
 
 	masked, err := e.srv.UpdateMe(me, &identityv1.UpdateMeRequest{
-		Account:    &identityv1.Account{FullName: "C", Locale: identityv1.Locale_LOCALE_VI},
+		User:       &identityv1.User{FullName: "C", Locale: identityv1.Locale_LOCALE_VI},
 		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"locale"}},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, "B", masked.GetAccount().GetFullName())
-	assert.Equal(t, identityv1.Locale_LOCALE_VI, masked.GetAccount().GetLocale())
+	assert.Equal(t, "B", masked.GetUser().GetFullName())
+	assert.Equal(t, identityv1.Locale_LOCALE_VI, masked.GetUser().GetLocale())
 
-	_, err = e.srv.UpdateMe(me, &identityv1.UpdateMeRequest{Account: &identityv1.Account{}, UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"email"}}})
+	_, err = e.srv.UpdateMe(me, &identityv1.UpdateMeRequest{User: &identityv1.User{}, UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"email"}}})
 	assert.Equal(t, "VALIDATION_ERROR", reason(err))
 
-	_, err = e.srv.UpdateMe(me, &identityv1.UpdateMeRequest{Account: &identityv1.Account{FullName: " "}})
+	_, err = e.srv.UpdateMe(me, &identityv1.UpdateMeRequest{User: &identityv1.User{FullName: " "}})
 	assert.Equal(t, "VALIDATION_ERROR", reason(err))
 
 	_, err = e.srv.GetMe(t.Context(), &identityv1.GetMeRequest{})

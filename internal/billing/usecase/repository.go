@@ -84,7 +84,7 @@ type PartnerReader interface {
 // Settlement needs: its owner (for License checks) and numbering
 // configuration.
 type GarageInfo struct {
-	OwnerAccountID           string
+	OwnerUserID              string
 	Timezone                 string
 	SettlementNumberTemplate string
 }
@@ -99,7 +99,7 @@ type GarageReader interface {
 // (FR-LIC-02); implemented directly by the License module's
 // EntitlementUseCase.
 type TransactionLimiter interface {
-	ConsumeTransaction(ctx context.Context, ownerAccountID string) error
+	ConsumeTransaction(ctx context.Context, ownerUserID string) error
 }
 
 // Sequencer hands out document sequence numbers (FR-TEN-05); implemented
@@ -111,7 +111,7 @@ type Sequencer interface {
 // EventPublisher writes domain events to the outbox in the caller's
 // transaction.
 type EventPublisher interface {
-	Publish(ctx context.Context, eventType, garageID, accountID string, payload any) error
+	Publish(ctx context.Context, eventType, garageID, userID string, payload any) error
 }
 
 // AuditLogger records audited changes in the caller's transaction

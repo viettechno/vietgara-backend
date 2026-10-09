@@ -40,8 +40,8 @@ type technicianMemberships struct {
 	tenant *tenantUsecase.TenantUseCase
 }
 
-func (m technicianMemberships) ListForAccount(ctx context.Context, accountID string) ([]technicianUsecase.Membership, error) {
-	garages, err := m.tenant.ListGarages(ctx, accountID)
+func (m technicianMemberships) ListForUser(ctx context.Context, userID string) ([]technicianUsecase.Membership, error) {
+	garages, err := m.tenant.ListGarages(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -61,16 +61,16 @@ func (m technicianMemberships) ListForAccount(ctx context.Context, accountID str
 }
 
 // technicianRepairOrders reads every page of a garage's repair orders with
-// a line assigned to the account.
+// a line assigned to the user.
 type technicianRepairOrders struct {
 	uc *repairorderUsecase.RepairOrderUseCase
 }
 
-func (r technicianRepairOrders) ListAssigned(ctx context.Context, garageID, accountID string) ([]*repairorderDomain.RepairOrder, error) {
+func (r technicianRepairOrders) ListAssigned(ctx context.Context, garageID, userID string) ([]*repairorderDomain.RepairOrder, error) {
 	return allPages(func(page int) ([]*repairorderDomain.RepairOrder, int, error) {
 		result, err := r.uc.List(ctx, repairorderUsecase.ListRepairOrdersRequest{
 			PageRequest: repairorderUsecase.PageRequest{Page: page, PageSize: repairorderUsecase.MaxPageSize},
-			GarageID:    garageID, TechnicianID: accountID,
+			GarageID:    garageID, TechnicianID: userID,
 		})
 		if err != nil {
 			return nil, 0, err
@@ -105,7 +105,7 @@ func buildCustomerPortal(
 	garages *tenantRepo.PostgresGarageRepository,
 ) *customerportalHandler.Server {
 	return customerportalHandler.NewServer(customerportalUsecase.NewPortalUseCase(customerportalUsecase.Deps{
-		Accounts:  portalAccounts{identity: identity},
+		Users:     portalUsers{identity: identity},
 		Customers: portalCustomers{customers: customers},
 		Vehicles:  portalVehicles{vehicles: vehicles},
 		Garages:   portalGarages{garages: garages},
@@ -113,17 +113,17 @@ func buildCustomerPortal(
 	}))
 }
 
-type portalAccounts struct {
+type portalUsers struct {
 	identity *identityUsecase.IdentityUseCase
 }
 
-func (a portalAccounts) Email(ctx context.Context, accountID string) (string, error) {
-	acc, err := a.identity.GetMe(ctx, accountID)
+func (a portalUsers) Email(ctx context.Context, userID string) (string, error) {
+	user, err := a.identity.GetMe(ctx, userID)
 	if err != nil {
 		return "", err
 	}
 
-	return acc.Email, nil
+	return user.Email, nil
 }
 
 type portalCustomers struct {

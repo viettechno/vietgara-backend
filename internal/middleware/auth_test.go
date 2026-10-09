@@ -15,7 +15,7 @@ import (
 
 var policies = middleware.Policies{
 	methodPublic:         middleware.PublicMethod(),
-	methodAccount:        middleware.AccountMethod(),
+	methodUser:           middleware.UserMethod(),
 	"/test.v1.Svc/GetMe": middleware.UnverifiedMethod(),
 	"/test.v1.Svc/Admin": middleware.AdminMethod(),
 }
@@ -28,9 +28,9 @@ func chain() grpc.UnaryServerInterceptor {
 func TestAuthPipeline(t *testing.T) {
 	t.Parallel()
 
-	verified := token(t, auth.Identity{AccountID: "acc-1", EmailVerified: true})
-	unverified := token(t, auth.Identity{AccountID: "acc-2"})
-	admin := token(t, auth.Identity{AccountID: "acc-3", EmailVerified: true, PlatformAdmin: true})
+	verified := token(t, auth.Identity{UserID: "user-1", EmailVerified: true})
+	unverified := token(t, auth.Identity{UserID: "user-2"})
+	admin := token(t, auth.Identity{UserID: "user-3", EmailVerified: true, PlatformAdmin: true})
 
 	tests := []struct {
 		name       string
@@ -42,13 +42,13 @@ func TestAuthPipeline(t *testing.T) {
 	}{
 		{name: "public without token", method: methodPublic, ctx: context.Background()},
 		{name: "unknown method fails closed", method: "/test.v1.Svc/Nope", ctx: context.Background(), wantCode: codes.PermissionDenied, wantReason: middleware.ReasonNoPolicy},
-		{name: "no metadata", method: methodAccount, ctx: context.Background(), wantCode: codes.Unauthenticated, wantReason: "UNAUTHENTICATED"},
-		{name: "bad token", method: methodAccount, ctx: withToken(context.Background(), "garbage"), wantCode: codes.Unauthenticated, wantReason: "UNAUTHENTICATED"},
-		{name: "verified account", method: methodAccount, ctx: withToken(context.Background(), verified), wantID: "acc-1"},
-		{name: "unverified blocked", method: methodAccount, ctx: withToken(context.Background(), unverified), wantCode: codes.PermissionDenied, wantReason: middleware.ReasonEmailNotVerified},
-		{name: "unverified allowed", method: "/test.v1.Svc/GetMe", ctx: withToken(context.Background(), unverified), wantID: "acc-2"},
+		{name: "no metadata", method: methodUser, ctx: context.Background(), wantCode: codes.Unauthenticated, wantReason: "UNAUTHENTICATED"},
+		{name: "bad token", method: methodUser, ctx: withToken(context.Background(), "garbage"), wantCode: codes.Unauthenticated, wantReason: "UNAUTHENTICATED"},
+		{name: "verified user", method: methodUser, ctx: withToken(context.Background(), verified), wantID: "user-1"},
+		{name: "unverified blocked", method: methodUser, ctx: withToken(context.Background(), unverified), wantCode: codes.PermissionDenied, wantReason: middleware.ReasonEmailNotVerified},
+		{name: "unverified allowed", method: "/test.v1.Svc/GetMe", ctx: withToken(context.Background(), unverified), wantID: "user-2"},
 		{name: "admin method for non-admin", method: "/test.v1.Svc/Admin", ctx: withToken(context.Background(), verified), wantCode: codes.PermissionDenied, wantReason: "PERMISSION_DENIED"},
-		{name: "admin method for admin", method: "/test.v1.Svc/Admin", ctx: withToken(context.Background(), admin), wantID: "acc-3"},
+		{name: "admin method for admin", method: "/test.v1.Svc/Admin", ctx: withToken(context.Background(), admin), wantID: "user-3"},
 	}
 
 	for _, tt := range tests {
@@ -58,7 +58,7 @@ func TestAuthPipeline(t *testing.T) {
 			var gotID string
 
 			_, err := chain()(tt.ctx, nil, info(tt.method), func(ctx context.Context, _ any) (any, error) {
-				gotID = middleware.AccountID(ctx)
+				gotID = middleware.UserID(ctx)
 
 				return nil, nil
 			})
@@ -80,11 +80,11 @@ func TestInterceptorsWithoutAuth(t *testing.T) {
 
 	// Without Auth in front there is no policy: nothing is gated.
 	ran := false
-	_, err := middleware.EmailVerified()(context.Background(), nil, info(methodAccount), okHandler(&ran))
-	require.Error(t, err, "no policy means a signed-in account is required")
+	_, err := middleware.EmailVerified()(context.Background(), nil, info(methodUser), okHandler(&ran))
+	require.Error(t, err, "no policy means a signed-in user is required")
 
 	ran = false
-	_, err = middleware.PlatformAdmin()(context.Background(), nil, info(methodAccount), okHandler(&ran))
+	_, err = middleware.PlatformAdmin()(context.Background(), nil, info(methodUser), okHandler(&ran))
 	require.NoError(t, err)
 	assert.True(t, ran)
 }
@@ -92,13 +92,13 @@ func TestInterceptorsWithoutAuth(t *testing.T) {
 func TestClaimsHelpers(t *testing.T) {
 	t.Parallel()
 
-	assert.Empty(t, middleware.AccountID(context.Background()))
+	assert.Empty(t, middleware.UserID(context.Background()))
 
 	_, ok := middleware.ClaimsFromContext(context.Background())
 	assert.False(t, ok)
 
 	claims := &auth.Claims{}
-	claims.Subject = "acc-9"
+	claims.Subject = "user-9"
 	ctx := middleware.WithClaims(context.Background(), claims)
-	assert.Equal(t, "acc-9", middleware.AccountID(ctx))
+	assert.Equal(t, "user-9", middleware.UserID(ctx))
 }

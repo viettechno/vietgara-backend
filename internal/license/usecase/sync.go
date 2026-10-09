@@ -19,30 +19,30 @@ type syncer struct {
 }
 
 func (s syncer) entitlementsChanged(ctx context.Context, sub *domain.Subscription) error {
-	if err := s.entitlements.Replace(ctx, sub.AccountID, domain.FeatureFlags(sub)); err != nil {
+	if err := s.entitlements.Replace(ctx, sub.UserID, domain.FeatureFlags(sub)); err != nil {
 		return err
 	}
 
-	err := s.events.Publish(ctx, EventEntitlementUpdated, "", sub.AccountID, map[string]any{
-		keyAccountID: sub.AccountID,
-		"status":     sub.Status,
-		"plan_code":  sub.Plan.Code,
+	err := s.events.Publish(ctx, EventEntitlementUpdated, "", sub.UserID, map[string]any{
+		keyUserID:   sub.UserID,
+		"status":    sub.Status,
+		"plan_code": sub.Plan.Code,
 	})
 	if err != nil {
 		return err
 	}
 
-	accountID := sub.AccountID
+	userID := sub.UserID
 
-	platformdb.AfterCommit(ctx, func() { s.invalidate(context.WithoutCancel(ctx), accountID) })
+	platformdb.AfterCommit(ctx, func() { s.invalidate(context.WithoutCancel(ctx), userID) })
 
 	return nil
 }
 
 func (s syncer) statusChanged(ctx context.Context, sub *domain.Subscription, from domain.SubscriptionStatus) error {
-	return s.events.Publish(ctx, EventSubscriptionStatusChanged, "", sub.AccountID, map[string]any{
+	return s.events.Publish(ctx, EventSubscriptionStatusChanged, "", sub.UserID, map[string]any{
 		"subscription_id":    sub.ID,
-		keyAccountID:         sub.AccountID,
+		keyUserID:            sub.UserID,
 		"from":               from,
 		"to":                 sub.Status,
 		"current_period_end": sub.CurrentPeriodEnd.Format(time.RFC3339),
@@ -51,8 +51,8 @@ func (s syncer) statusChanged(ctx context.Context, sub *domain.Subscription, fro
 
 // invalidate drops a cache entry. A failure only delays the change until
 // the entry's TTL expires, so it is logged rather than returned.
-func (s syncer) invalidate(ctx context.Context, accountID string) {
-	if err := s.cache.Delete(ctx, accountID); err != nil {
-		slog.Warn("license: invalidating the entitlement cache failed", "account_id", accountID, "error", err)
+func (s syncer) invalidate(ctx context.Context, userID string) {
+	if err := s.cache.Delete(ctx, userID); err != nil {
+		slog.Warn("license: invalidating the entitlement cache failed", "user_id", userID, "error", err)
 	}
 }

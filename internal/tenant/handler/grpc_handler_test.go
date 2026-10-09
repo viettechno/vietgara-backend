@@ -42,18 +42,18 @@ func newEnv() *env {
 	return &env{Env: e, srv: handler.NewServer(e.UC)}
 }
 
-func (e *env) as(t *testing.T, accountID, garageID string) context.Context {
+func (e *env) as(t *testing.T, userID, garageID string) context.Context {
 	t.Helper()
 
 	claims := &auth.Claims{}
-	claims.Subject = accountID
+	claims.Subject = userID
 	ctx := middleware.WithClaims(t.Context(), claims)
 
 	if garageID != "" {
-		acc, err := e.Store.GarageAccess(ctx, garageID, accountID)
+		user, err := e.Store.GarageAccess(ctx, garageID, userID)
 		require.NoError(t, err)
 
-		ctx = access.WithAccess(ctx, acc)
+		ctx = access.WithAccess(ctx, user)
 	}
 
 	return ctx
@@ -76,7 +76,7 @@ func TestSubscribe(t *testing.T) {
 
 	d := outbox.NewDispatcher()
 	handler.Subscribe(d, outbox.NewProcessor(nil, nil), newEnv().UC)
-	assert.Len(t, d.Handlers("account.email_verified"), 1)
+	assert.Len(t, d.Handlers("user.email_verified"), 1)
 }
 
 func TestGarageRPCs(t *testing.T) {
@@ -131,7 +131,7 @@ func TestGarageRPCs(t *testing.T) {
 	assert.Equal(t, tenantv1.GarageStatus_GARAGE_STATUS_INACTIVE, updated.GetGarage().GetStatus())
 	assert.Equal(t, "B-{SEQ:2}", updated.GetGarage().GetNumbering().GetRepairOrder())
 
-	for _, m := range []*fieldmaskpb.FieldMask{mask("owner_account_id"), mask("status"), nil} {
+	for _, m := range []*fieldmaskpb.FieldMask{mask("owner_user_id"), mask("status"), nil} {
 		_, err = e.srv.UpdateGarage(gctx, &tenantv1.UpdateGarageRequest{GarageId: g.GetId(), Garage: &tenantv1.Garage{}, UpdateMask: m})
 		assert.Equal(t, "VALIDATION_ERROR", reason(err))
 	}
@@ -184,13 +184,13 @@ func TestStaffAndInvitationRPCs(t *testing.T) {
 	assert.Equal(t, tenantv1.CandidateMembership_CANDIDATE_MEMBERSHIP_NONE, cand.GetCandidate().GetMembership())
 
 	_, err = e.srv.LookupStaffCandidate(ctx, &tenantv1.LookupStaffCandidateRequest{GarageId: gid, Query: "ghost@x.vn"})
-	assert.Equal(t, "ACCOUNT_NOT_FOUND", reason(err))
+	assert.Equal(t, "USER_NOT_FOUND", reason(err))
 
-	inv, err := e.srv.CreateInvitation(ctx, &tenantv1.CreateInvitationRequest{GarageId: gid, AccountId: tenanttest.Staff, GroupIds: []string{groupID}})
+	inv, err := e.srv.CreateInvitation(ctx, &tenantv1.CreateInvitationRequest{GarageId: gid, UserId: tenanttest.Staff, GroupIds: []string{groupID}})
 	require.NoError(t, err)
 	assert.Equal(t, tenantv1.InvitationStatus_INVITATION_STATUS_PENDING, inv.GetInvitation().GetStatus())
 
-	_, err = e.srv.CreateInvitation(ctx, &tenantv1.CreateInvitationRequest{GarageId: gid, AccountId: tenanttest.Staff})
+	_, err = e.srv.CreateInvitation(ctx, &tenantv1.CreateInvitationRequest{GarageId: gid, UserId: tenanttest.Staff})
 	assert.Equal(t, "ALREADY_INVITED", reason(err))
 
 	list, err := e.srv.ListInvitations(ctx, &tenantv1.ListInvitationsRequest{GarageId: gid, Status: tenantv1.InvitationStatus_INVITATION_STATUS_PENDING})
@@ -235,7 +235,7 @@ func TestStaffAndInvitationRPCs(t *testing.T) {
 	assert.Equal(t, tenantv1.StaffStatus_STAFF_STATUS_INACTIVE, updated.GetStaff().GetStatus())
 	assert.Empty(t, updated.GetStaff().GetGroupIds())
 
-	_, err = e.srv.UpdateStaff(ctx, &tenantv1.UpdateStaffRequest{GarageId: gid, StaffId: member.GetId(), Staff: &tenantv1.Staff{}, UpdateMask: mask("account_id")})
+	_, err = e.srv.UpdateStaff(ctx, &tenantv1.UpdateStaffRequest{GarageId: gid, StaffId: member.GetId(), Staff: &tenantv1.Staff{}, UpdateMask: mask("user_id")})
 	assert.Equal(t, "VALIDATION_ERROR", reason(err))
 	_, err = e.srv.UpdateStaff(ctx, &tenantv1.UpdateStaffRequest{GarageId: gid, StaffId: member.GetId(), Staff: &tenantv1.Staff{}, UpdateMask: mask("status")})
 	assert.Equal(t, "VALIDATION_ERROR", reason(err))
@@ -245,13 +245,13 @@ func TestStaffAndInvitationRPCs(t *testing.T) {
 	_, err = e.srv.DeleteStaff(ctx, &tenantv1.DeleteStaffRequest{GarageId: gid, StaffId: ownerRow.GetId()})
 	assert.Equal(t, "OWNER_MEMBERSHIP", reason(err))
 
-	second, err := e.srv.CreateInvitation(ctx, &tenantv1.CreateInvitationRequest{GarageId: gid, AccountId: tenanttest.Staff})
+	second, err := e.srv.CreateInvitation(ctx, &tenantv1.CreateInvitationRequest{GarageId: gid, UserId: tenanttest.Staff})
 	require.NoError(t, err)
 	declined, err := e.srv.DeclineInvitation(staffCtx, &tenantv1.DeclineInvitationRequest{InvitationId: second.GetInvitation().GetId()})
 	require.NoError(t, err)
 	assert.Equal(t, tenantv1.InvitationStatus_INVITATION_STATUS_DECLINED, declined.GetInvitation().GetStatus())
 
-	third, err := e.srv.CreateInvitation(ctx, &tenantv1.CreateInvitationRequest{GarageId: gid, AccountId: tenanttest.Staff})
+	third, err := e.srv.CreateInvitation(ctx, &tenantv1.CreateInvitationRequest{GarageId: gid, UserId: tenanttest.Staff})
 	require.NoError(t, err)
 	revoked, err := e.srv.RevokeInvitation(ctx, &tenantv1.RevokeInvitationRequest{GarageId: gid, InvitationId: third.GetInvitation().GetId()})
 	require.NoError(t, err)

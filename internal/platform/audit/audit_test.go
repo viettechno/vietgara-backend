@@ -16,7 +16,7 @@ func TestLogger(t *testing.T) {
 	tx := dbtest.New(t).
 		ExpectExec("INSERT INTO audit_log", dbtest.Tag(1), nil).
 		WithArgs(func(args []any) {
-			assert.Equal(t, []any{"acc", "g", "role.updated", "role", "r1"}, args[:5])
+			assert.Equal(t, []any{"user", "g", "role.updated", "role", "r1"}, args[:5])
 			assert.Nil(t, args[5])
 			after, _ := args[6].([]byte)
 			assert.JSONEq(t, `{"name":"x"}`, string(after))
@@ -25,7 +25,7 @@ func TestLogger(t *testing.T) {
 
 	l := audit.NewLogger(nil)
 	require.NoError(t, l.Record(tx.Context(t.Context()), audit.Entry{
-		Actor: "acc", GarageID: "g", Action: "role.updated", EntityType: "role", EntityID: "r1",
+		Actor: "user", GarageID: "g", Action: "role.updated", EntityType: "role", EntityID: "r1",
 		After: map[string]string{"name": "x"}, IP: "1.2.3.4",
 	}))
 

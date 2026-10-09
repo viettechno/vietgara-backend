@@ -38,8 +38,8 @@ func (_m *MockUsageReader) EXPECT() *MockUsageReader_Expecter {
 }
 
 // OwnerUsage provides a mock function for the type MockUsageReader
-func (_mock *MockUsageReader) OwnerUsage(ctx context.Context, ownerAccountID string) (int, int, error) {
-	ret := _mock.Called(ctx, ownerAccountID)
+func (_mock *MockUsageReader) OwnerUsage(ctx context.Context, ownerUserID string) (int, int, error) {
+	ret := _mock.Called(ctx, ownerUserID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for OwnerUsage")
@@ -49,20 +49,20 @@ func (_mock *MockUsageReader) OwnerUsage(ctx context.Context, ownerAccountID str
 	var r1 int
 	var r2 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (int, int, error)); ok {
-		return returnFunc(ctx, ownerAccountID)
+		return returnFunc(ctx, ownerUserID)
 	}
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) int); ok {
-		r0 = returnFunc(ctx, ownerAccountID)
+		r0 = returnFunc(ctx, ownerUserID)
 	} else {
 		r0 = ret.Get(0).(int)
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string) int); ok {
-		r1 = returnFunc(ctx, ownerAccountID)
+		r1 = returnFunc(ctx, ownerUserID)
 	} else {
 		r1 = ret.Get(1).(int)
 	}
 	if returnFunc, ok := ret.Get(2).(func(context.Context, string) error); ok {
-		r2 = returnFunc(ctx, ownerAccountID)
+		r2 = returnFunc(ctx, ownerUserID)
 	} else {
 		r2 = ret.Error(2)
 	}
@@ -76,12 +76,12 @@ type MockUsageReader_OwnerUsage_Call struct {
 
 // OwnerUsage is a helper method to define mock.On call
 //   - ctx context.Context
-//   - ownerAccountID string
-func (_e *MockUsageReader_Expecter) OwnerUsage(ctx any, ownerAccountID any) *MockUsageReader_OwnerUsage_Call {
-	return &MockUsageReader_OwnerUsage_Call{Call: _e.mock.On("OwnerUsage", ctx, ownerAccountID)}
+//   - ownerUserID string
+func (_e *MockUsageReader_Expecter) OwnerUsage(ctx any, ownerUserID any) *MockUsageReader_OwnerUsage_Call {
+	return &MockUsageReader_OwnerUsage_Call{Call: _e.mock.On("OwnerUsage", ctx, ownerUserID)}
 }
 
-func (_c *MockUsageReader_OwnerUsage_Call) Run(run func(ctx context.Context, ownerAccountID string)) *MockUsageReader_OwnerUsage_Call {
+func (_c *MockUsageReader_OwnerUsage_Call) Run(run func(ctx context.Context, ownerUserID string)) *MockUsageReader_OwnerUsage_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -104,7 +104,7 @@ func (_c *MockUsageReader_OwnerUsage_Call) Return(garages int, staff int, err er
 	return _c
 }
 
-func (_c *MockUsageReader_OwnerUsage_Call) RunAndReturn(run func(ctx context.Context, ownerAccountID string) (int, int, error)) *MockUsageReader_OwnerUsage_Call {
+func (_c *MockUsageReader_OwnerUsage_Call) RunAndReturn(run func(ctx context.Context, ownerUserID string) (int, int, error)) *MockUsageReader_OwnerUsage_Call {
 	_c.Call.Return(run)
 	return _c
 }

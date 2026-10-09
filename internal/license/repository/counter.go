@@ -12,8 +12,8 @@ import (
 // counterTTL keeps a day's counter a little longer than the day.
 const counterTTL = 48 * time.Hour
 
-func counterKey(accountID, day string) string {
-	return "license:transactions:" + accountID + ":" + day
+func counterKey(userID, day string) string {
+	return "license:transactions:" + userID + ":" + day
 }
 
 // RedisTransactionCounter counts business documents per owner and day in
@@ -28,8 +28,8 @@ func NewRedisTransactionCounter(client redis.UniversalClient) *RedisTransactionC
 }
 
 // Increment adds one and returns the day's count.
-func (c *RedisTransactionCounter) Increment(ctx context.Context, accountID, day string) (int, error) {
-	key := counterKey(accountID, day)
+func (c *RedisTransactionCounter) Increment(ctx context.Context, userID, day string) (int, error) {
+	key := counterKey(userID, day)
 
 	pipe := c.client.TxPipeline()
 	incr := pipe.Incr(ctx, key)
@@ -43,8 +43,8 @@ func (c *RedisTransactionCounter) Increment(ctx context.Context, accountID, day 
 }
 
 // Get returns the day's count.
-func (c *RedisTransactionCounter) Get(ctx context.Context, accountID, day string) (int, error) {
-	n, err := c.client.Get(ctx, counterKey(accountID, day)).Int()
+func (c *RedisTransactionCounter) Get(ctx context.Context, userID, day string) (int, error) {
+	n, err := c.client.Get(ctx, counterKey(userID, day)).Int()
 	if errors.Is(err, redis.Nil) {
 		return 0, nil
 	}
@@ -64,19 +64,19 @@ func NewMemoryTransactionCounter() *MemoryTransactionCounter {
 }
 
 // Increment adds one and returns the day's count.
-func (c *MemoryTransactionCounter) Increment(_ context.Context, accountID, day string) (int, error) {
+func (c *MemoryTransactionCounter) Increment(_ context.Context, userID, day string) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.counts[counterKey(accountID, day)]++
+	c.counts[counterKey(userID, day)]++
 
-	return c.counts[counterKey(accountID, day)], nil
+	return c.counts[counterKey(userID, day)], nil
 }
 
 // Get returns the day's count.
-func (c *MemoryTransactionCounter) Get(_ context.Context, accountID, day string) (int, error) {
+func (c *MemoryTransactionCounter) Get(_ context.Context, userID, day string) (int, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	return c.counts[counterKey(accountID, day)], nil
+	return c.counts[counterKey(userID, day)], nil
 }

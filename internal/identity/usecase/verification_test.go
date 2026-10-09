@@ -17,7 +17,7 @@ func TestVerifyEmail(t *testing.T) {
 
 	e := newEnv(t)
 	session := e.register(t)
-	id := session.Account.ID
+	id := session.User.ID
 
 	_, err := e.uc.SendEmailVerificationOTP(t.Context(), id)
 	requireReason(t, err, domain.ReasonOTPResendTooSoon)
@@ -28,8 +28,8 @@ func TestVerifyEmail(t *testing.T) {
 	code := e.mailer.lastCode(t, "owner@example.com")
 	verified, err := e.uc.VerifyEmail(t.Context(), id, code, session.RefreshToken)
 	require.NoError(t, err)
-	assert.True(t, verified.Account.EmailVerified())
-	assert.Equal(t, []string{usecase.EventAccountEmailVerified}, e.events.types)
+	assert.True(t, verified.User.EmailVerified())
+	assert.Equal(t, []string{usecase.EventUserEmailVerified}, e.events.types)
 
 	claims, err := e.issuer.Verify(verified.AccessToken)
 	require.NoError(t, err)
@@ -49,7 +49,7 @@ func TestOTPLifecycle(t *testing.T) {
 
 	e := newEnv(t)
 	session := e.register(t)
-	id := session.Account.ID
+	id := session.User.ID
 
 	e.advance(domain.OTPResendCooldown)
 	challenge, err := e.uc.SendEmailVerificationOTP(t.Context(), id)
@@ -83,7 +83,7 @@ func TestVerificationFailures(t *testing.T) {
 
 	e := newEnv(t)
 	session := e.register(t)
-	id := session.Account.ID
+	id := session.User.ID
 
 	_, err := e.uc.SendEmailVerificationOTP(t.Context(), "missing")
 	requireReason(t, err, apperror.ReasonUnauthenticated)
@@ -99,11 +99,11 @@ func TestVerificationFailures(t *testing.T) {
 	_, err = e.uc.SendEmailVerificationOTP(t.Context(), id)
 	require.NoError(t, err)
 
-	e.accounts.updateErr = errBoom
+	e.users.updateErr = errBoom
 	_, err = e.uc.VerifyEmail(t.Context(), id, e.mailer.lastCode(t, "owner@example.com"), "")
 	requireReason(t, err, apperror.ReasonInternal)
 
-	e.accounts.findErr = errBoom
+	e.users.findErr = errBoom
 	_, err = e.uc.GetMe(t.Context(), id)
 	requireReason(t, err, apperror.ReasonInternal)
 }

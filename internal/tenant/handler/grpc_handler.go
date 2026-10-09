@@ -29,8 +29,8 @@ func NewServer(uc *usecase.TenantUseCase) *Server {
 // Policies declares what every Tenant RPC requires (see middleware.Policy).
 func Policies() middleware.Policies {
 	return middleware.Policies{
-		tenantv1.GarageService_ListGarages_FullMethodName:      middleware.AccountMethod(),
-		tenantv1.GarageService_CreateGarage_FullMethodName:     middleware.AccountMethod(),
+		tenantv1.GarageService_ListGarages_FullMethodName:      middleware.UserMethod(),
+		tenantv1.GarageService_CreateGarage_FullMethodName:     middleware.UserMethod(),
 		tenantv1.GarageService_GetGarage_FullMethodName:        withSkipLicense(middleware.GarageMethod(access.Member())),
 		tenantv1.GarageService_UpdateGarage_FullMethodName:     withSkipLicense(middleware.GarageMethod(access.Requires(access.GarageWrite))),
 		tenantv1.GarageService_UploadGarageLogo_FullMethodName: middleware.GarageMethod(access.Requires(access.GarageWrite)),
@@ -44,17 +44,17 @@ func Policies() middleware.Policies {
 		tenantv1.InvitationService_CreateInvitation_FullMethodName:  middleware.GarageMethod(access.Requires(access.StaffWrite)),
 		tenantv1.InvitationService_ListInvitations_FullMethodName:   middleware.GarageMethod(access.Requires(access.StaffRead)),
 		tenantv1.InvitationService_RevokeInvitation_FullMethodName:  middleware.GarageMethod(access.Requires(access.StaffWrite)),
-		tenantv1.InvitationService_ListMyInvitations_FullMethodName: middleware.AccountMethod(),
-		tenantv1.InvitationService_GetMyInvitation_FullMethodName:   middleware.AccountMethod(),
-		tenantv1.InvitationService_AcceptInvitation_FullMethodName:  middleware.AccountMethod(),
-		tenantv1.InvitationService_DeclineInvitation_FullMethodName: middleware.AccountMethod(),
+		tenantv1.InvitationService_ListMyInvitations_FullMethodName: middleware.UserMethod(),
+		tenantv1.InvitationService_GetMyInvitation_FullMethodName:   middleware.UserMethod(),
+		tenantv1.InvitationService_AcceptInvitation_FullMethodName:  middleware.UserMethod(),
+		tenantv1.InvitationService_DeclineInvitation_FullMethodName: middleware.UserMethod(),
 
-		tenantv1.RoleService_ListPermissions_FullMethodName: middleware.AccountMethod(),
-		tenantv1.RoleService_ListRoles_FullMethodName:       middleware.AccountMethod(),
-		tenantv1.RoleService_GetRole_FullMethodName:         middleware.AccountMethod(),
-		tenantv1.RoleService_CreateRole_FullMethodName:      middleware.AccountMethod(),
-		tenantv1.RoleService_UpdateRole_FullMethodName:      middleware.AccountMethod(),
-		tenantv1.RoleService_DeleteRole_FullMethodName:      middleware.AccountMethod(),
+		tenantv1.RoleService_ListPermissions_FullMethodName: middleware.UserMethod(),
+		tenantv1.RoleService_ListRoles_FullMethodName:       middleware.UserMethod(),
+		tenantv1.RoleService_GetRole_FullMethodName:         middleware.UserMethod(),
+		tenantv1.RoleService_CreateRole_FullMethodName:      middleware.UserMethod(),
+		tenantv1.RoleService_UpdateRole_FullMethodName:      middleware.UserMethod(),
+		tenantv1.RoleService_DeleteRole_FullMethodName:      middleware.UserMethod(),
 
 		tenantv1.StaffGroupService_ListStaffGroups_FullMethodName:  middleware.GarageMethod(access.Requires(access.StaffRead)),
 		tenantv1.StaffGroupService_CreateStaffGroup_FullMethodName: middleware.GarageMethod(access.OwnerOnly()),

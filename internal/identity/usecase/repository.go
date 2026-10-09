@@ -9,28 +9,28 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 )
 
-// EventAccountEmailVerified is published once an account's e-mail is
+// EventUserEmailVerified is published once a user's e-mail is
 // verified (by OTP, password reset, or Google); the Tenant module creates
 // the owner's default roles and the License module starts the trial.
-const EventAccountEmailVerified = "account.email_verified"
+const EventUserEmailVerified = "user.email_verified"
 
-// AccountRepository is implemented by
-// internal/identity/repository.PostgresAccountRepository. Finders return
-// domain.ErrAccountNotFound when nothing matches.
-type AccountRepository interface {
-	FindByID(ctx context.Context, id string) (*domain.Account, error)
+// UserRepository is implemented by
+// internal/identity/repository.PostgresUserRepository. Finders return
+// domain.ErrUserNotFound when nothing matches.
+type UserRepository interface {
+	FindByID(ctx context.Context, id string) (*domain.User, error)
 	// FindByEmail matches case-insensitively.
-	FindByEmail(ctx context.Context, email string) (*domain.Account, error)
+	FindByEmail(ctx context.Context, email string) (*domain.User, error)
 	// FindByPhone matches the normalized phone.
-	FindByPhone(ctx context.Context, phone string) (*domain.Account, error)
-	FindByGoogleSubject(ctx context.Context, subject string) (*domain.Account, error)
-	// Create inserts acc, filling ID and timestamps; a duplicate e-mail or
+	FindByPhone(ctx context.Context, phone string) (*domain.User, error)
+	FindByGoogleSubject(ctx context.Context, subject string) (*domain.User, error)
+	// Create inserts user, filling ID and timestamps; a duplicate e-mail or
 	// phone yields domain.ErrEmailAlreadyExists / ErrPhoneAlreadyExists.
-	Create(ctx context.Context, acc *domain.Account) error
-	// Update persists the mutable fields of acc (name, phone, locale,
+	Create(ctx context.Context, user *domain.User) error
+	// Update persists the mutable fields of user (name, phone, locale,
 	// password, verification, Google link).
-	Update(ctx context.Context, acc *domain.Account) error
-	// GrantPlatformAdmins makes the accounts with these e-mails platform
+	Update(ctx context.Context, user *domain.User) error
+	// GrantPlatformAdmins makes the users with these e-mails platform
 	// admins and returns how many were granted.
 	GrantPlatformAdmins(ctx context.Context, emails []string) (int, error)
 }
@@ -38,14 +38,14 @@ type AccountRepository interface {
 // SessionStore keeps refresh and password-reset tokens (Redis in
 // production, Security Architecture Section 2.2) so they can be revoked.
 type SessionStore interface {
-	SaveRefreshToken(ctx context.Context, token, accountID string, ttl time.Duration) error
-	// RefreshTokenAccount returns domain.ErrRefreshTokenInvalid for unknown
+	SaveRefreshToken(ctx context.Context, token, userID string, ttl time.Duration) error
+	// RefreshTokenUser returns domain.ErrRefreshTokenInvalid for unknown
 	// or revoked tokens.
-	RefreshTokenAccount(ctx context.Context, token string) (string, error)
+	RefreshTokenUser(ctx context.Context, token string) (string, error)
 	RevokeRefreshToken(ctx context.Context, token string) error
-	RevokeAllRefreshTokens(ctx context.Context, accountID string) error
-	SaveResetToken(ctx context.Context, token, accountID string, ttl time.Duration) error
-	// ConsumeResetToken returns the account and deletes the token, or
+	RevokeAllRefreshTokens(ctx context.Context, userID string) error
+	SaveResetToken(ctx context.Context, token, userID string, ttl time.Duration) error
+	// ConsumeResetToken returns the user and deletes the token, or
 	// domain.ErrResetTokenInvalid.
 	ConsumeResetToken(ctx context.Context, token string) (string, error)
 }
@@ -69,7 +69,7 @@ type Mailer interface {
 // EventPublisher writes domain events to the outbox in the caller's
 // transaction (internal/platform/outbox).
 type EventPublisher interface {
-	Publish(ctx context.Context, eventType, garageID, accountID string, payload any) error
+	Publish(ctx context.Context, eventType, garageID, userID string, payload any) error
 }
 
 // Transactor runs fn in a scoped transaction (see db.TxManager).

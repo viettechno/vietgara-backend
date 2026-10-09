@@ -58,11 +58,11 @@ func TestDefaultRolesConsumer(t *testing.T) {
 	t.Parallel()
 
 	e := newEnv(t, limits{Garages: 1, Staff: 5})
-	data, _ := json.Marshal(map[string]string{"account_id": staff, "locale": "vi"})
+	data, _ := json.Marshal(map[string]string{"user_id": staff, "locale": "vi"})
 
-	require.NoError(t, e.UC.HandleAccountEmailVerified(t.Context(), outbox.Event{Data: data}))
-	require.NoError(t, e.UC.HandleAccountEmailVerified(t.Context(), outbox.Event{Data: data}), "idempotent")
-	require.NoError(t, e.UC.HandleAccountEmailVerified(t.Context(), outbox.Event{Data: []byte("nope")}))
+	require.NoError(t, e.UC.HandleUserEmailVerified(t.Context(), outbox.Event{Data: data}))
+	require.NoError(t, e.UC.HandleUserEmailVerified(t.Context(), outbox.Event{Data: data}), "idempotent")
+	require.NoError(t, e.UC.HandleUserEmailVerified(t.Context(), outbox.Event{Data: []byte("nope")}))
 
 	roles, err := e.UC.ListRoles(t.Context(), staff)
 	require.NoError(t, err)

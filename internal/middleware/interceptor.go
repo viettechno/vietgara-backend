@@ -26,7 +26,7 @@ import (
 type Policy struct {
 	// Public RPCs need no access token (sign-in, password reset).
 	Public bool
-	// AllowUnverified lets accounts whose e-mail is not verified yet call
+	// AllowUnverified lets users whose e-mail is not verified yet call
 	// the RPC (profile, e-mail verification, plans).
 	AllowUnverified bool
 	// PlatformAdmin restricts the RPC to platform operators.
@@ -59,10 +59,10 @@ func Merge(tables ...Policies) Policies {
 // PublicMethod needs no access token.
 func PublicMethod() Policy { return Policy{Public: true} }
 
-// AccountMethod needs a verified account and no garage.
-func AccountMethod() Policy { return Policy{} }
+// UserMethod needs a verified user and no garage.
+func UserMethod() Policy { return Policy{} }
 
-// UnverifiedMethod needs any signed-in account.
+// UnverifiedMethod needs any signed-in user.
 func UnverifiedMethod() Policy { return Policy{AllowUnverified: true} }
 
 // AdminMethod needs a platform admin.

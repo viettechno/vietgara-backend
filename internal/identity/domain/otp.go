@@ -38,9 +38,9 @@ type OTP struct {
 	Attempts  int
 }
 
-// OTPKey identifies the OTP of one account and purpose.
-func OTPKey(purpose OTPPurpose, accountID string) string {
-	return string(purpose) + ":" + accountID
+// OTPKey identifies the OTP of one user and purpose.
+func OTPKey(purpose OTPPurpose, userID string) string {
+	return string(purpose) + ":" + userID
 }
 
 // NewOTPCode returns a random 6-digit code.
@@ -56,7 +56,7 @@ func NewOTPCode() string {
 }
 
 // HashOTP hashes code bound to key, so a stored hash is useless for any
-// other account or purpose.
+// other user or purpose.
 func HashOTP(key, code string) string {
 	sum := sha256.Sum256([]byte(key + "|" + code))
 

@@ -25,20 +25,20 @@ import (
 
 type memberships struct{ err error }
 
-func (m memberships) ListForAccount(context.Context, string) ([]usecase.Membership, error) {
+func (m memberships) ListForUser(context.Context, string) ([]usecase.Membership, error) {
 	return []usecase.Membership{{GarageID: "g-1", GarageName: "Gara An Phat", Active: true, CanReadRepairOrders: true}}, m.err
 }
 
-type repairOrders struct{ gotAccount string }
+type repairOrders struct{ gotUser string }
 
-func (r *repairOrders) ListAssigned(_ context.Context, _, accountID string) ([]*domain.RepairOrder, error) {
-	r.gotAccount = accountID
+func (r *repairOrders) ListAssigned(_ context.Context, _, userID string) ([]*domain.RepairOrder, error) {
+	r.gotUser = userID
 
 	return []*domain.RepairOrder{{
 		ID: "ro-1", Number: "LSC-0001", Status: domain.StatusInProgress, VehicleLicensePlate: "51A-12345",
 		CustomerName: "Tran Thi Binh", CreatedAt: time.Date(2026, 10, 5, 8, 0, 0, 0, time.UTC),
 		Lines: []domain.Line{
-			{ID: "l1", Description: "Oil change", Quantity: "1", Status: domain.LineInProgress, AssignedTechnicianIDs: []string{"acc-tech"}},
+			{ID: "l1", Description: "Oil change", Quantity: "1", Status: domain.LineInProgress, AssignedTechnicianIDs: []string{"user-tech"}},
 			{ID: "l2", Description: "Brakes", Quantity: "1", AssignedTechnicianIDs: []string{"other"}},
 		},
 	}}, nil
@@ -50,9 +50,9 @@ func (passTx) WithTransaction(ctx context.Context, _ platformdb.Scope, fn func(c
 	return fn(ctx)
 }
 
-func signedIn(accountID string) context.Context {
+func signedIn(userID string) context.Context {
 	return middleware.WithClaims(context.Background(), &auth.Claims{
-		RegisteredClaims: jwt.RegisteredClaims{Subject: accountID}, EmailVerified: true,
+		RegisteredClaims: jwt.RegisteredClaims{Subject: userID}, EmailVerified: true,
 	})
 }
 
@@ -62,10 +62,10 @@ func TestListMyWork(t *testing.T) {
 		Memberships: memberships{}, RepairOrders: orders, Tx: passTx{},
 	}))
 
-	resp, err := srv.ListMyWork(signedIn("acc-tech"), &technicianv1.ListMyWorkRequest{})
+	resp, err := srv.ListMyWork(signedIn("user-tech"), &technicianv1.ListMyWorkRequest{})
 
 	require.NoError(t, err)
-	assert.Equal(t, "acc-tech", orders.gotAccount)
+	assert.Equal(t, "user-tech", orders.gotUser)
 	require.Len(t, resp.GetData(), 1)
 	w := resp.GetData()[0]
 	assert.Equal(t, "g-1", w.GetGarageId())
@@ -86,13 +86,13 @@ func TestListMyWork_Error(t *testing.T) {
 		Memberships: memberships{err: errors.New("db down")}, RepairOrders: &repairOrders{}, Tx: passTx{},
 	}))
 
-	_, err := srv.ListMyWork(signedIn("acc-tech"), &technicianv1.ListMyWorkRequest{})
+	_, err := srv.ListMyWork(signedIn("user-tech"), &technicianv1.ListMyWorkRequest{})
 
 	assert.Equal(t, codes.Internal, status.Code(err))
 }
 
 func TestPolicies(t *testing.T) {
 	assert.Equal(t, middleware.Policies{
-		technicianv1.TechnicianService_ListMyWork_FullMethodName: middleware.AccountMethod(),
+		technicianv1.TechnicianService_ListMyWork_FullMethodName: middleware.UserMethod(),
 	}, handler.Policies())
 }

@@ -14,7 +14,7 @@ import (
 
 // ListGarages lists the garages the caller owns or works in.
 func (s *Server) ListGarages(ctx context.Context, _ *tenantv1.ListGaragesRequest) (*tenantv1.ListGaragesResponse, error) {
-	garages, err := s.uc.ListGarages(ctx, middleware.AccountID(ctx))
+	garages, err := s.uc.ListGarages(ctx, middleware.UserID(ctx))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -34,7 +34,7 @@ func (s *Server) CreateGarage(ctx context.Context, req *tenantv1.CreateGarageReq
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	garage, err := s.uc.CreateGarage(ctx, middleware.AccountID(ctx), fields)
+	garage, err := s.uc.CreateGarage(ctx, middleware.UserID(ctx), fields)
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}

@@ -1,10 +1,10 @@
-// Package testaccounts recognises the accounts an automated suite signs up
+// Package testusers recognises the users an automated suite signs up
 // on a shared deployment (staging): every address on one e-mail domain,
 // which must be under a TLD reserved for testing (RFC 2606, RFC 6761) so
-// no real person can own one. The backend treats these accounts like any
+// no real person can own one. The backend treats these users like any
 // other, except that their e-mail goes to a test mailbox (mail.RouteDomain)
 // and they are purged after a retention period.
-package testaccounts
+package testusers
 
 import (
 	"errors"
@@ -15,9 +15,9 @@ import (
 var reservedTLDs = []string{".test", ".example", ".invalid", ".localhost"}
 
 // ErrDomain is returned for a domain outside the reserved TLDs.
-var ErrDomain = errors.New("test account domain must be under .test, .example, .invalid or .localhost")
+var ErrDomain = errors.New("test user domain must be under .test, .example, .invalid or .localhost")
 
-// Domain is a validated test account e-mail domain; the zero value owns no
+// Domain is a validated test user e-mail domain; the zero value owns no
 // address.
 type Domain struct {
 	name string

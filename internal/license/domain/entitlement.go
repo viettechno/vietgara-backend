@@ -23,9 +23,9 @@ var ErrUnknownLimit = errors.New("unknown plan limit")
 // the owner's subscription. It is the value stored in the entitlement
 // cache (LLD Section 3.3).
 type Entitlements struct {
-	AccountID string             `json:"account_id"`
-	Status    SubscriptionStatus `json:"status"`
-	PlanCode  string             `json:"plan_code"`
+	UserID   string             `json:"user_id"`
+	Status   SubscriptionStatus `json:"status"`
+	PlanCode string             `json:"plan_code"`
 	// Features lists the enabled features, in display order.
 	Features              []Feature `json:"features"`
 	MaxGarages            int       `json:"max_garages"`
@@ -38,7 +38,7 @@ type Entitlements struct {
 // the plan's features and limits, no features while locked.
 func NewEntitlements(s *Subscription) *Entitlements {
 	e := &Entitlements{
-		AccountID:             s.AccountID,
+		UserID:                s.UserID,
 		Status:                s.Status,
 		PlanCode:              s.Plan.Code,
 		Features:              []Feature{},

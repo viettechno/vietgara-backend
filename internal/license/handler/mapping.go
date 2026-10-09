@@ -128,7 +128,7 @@ func limitsToProto(garages, staff, transactions int) *licensev1.PlanLimits {
 func subscriptionToProto(s *domain.Subscription, usage *usecase.Usage) *licensev1.Subscription {
 	out := &licensev1.Subscription{
 		Id:                 s.ID,
-		AccountId:          s.AccountID,
+		UserId:             s.UserID,
 		Status:             statuses[s.Status],
 		Plan:               planToProto(s.Plan),
 		CurrentPeriodStart: converter.TimeToProto(s.CurrentPeriodStart),
@@ -180,8 +180,8 @@ func listSubscriptionsToProto(page *usecase.SubscriptionPage, pageNo, pageSize i
 	for _, item := range page.Items {
 		resp.Data = append(resp.Data, &licensev1.SubscriptionSummary{
 			Subscription: subscriptionToProto(item.Subscription, nil),
-			AccountEmail: item.Email,
-			AccountName:  item.FullName,
+			UserEmail:    item.Email,
+			UserName:     item.FullName,
 		})
 	}
 

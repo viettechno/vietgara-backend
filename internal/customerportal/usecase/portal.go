@@ -1,5 +1,5 @@
 // Package usecase is the Customer BFF (Release 2.4, HLD Section 6). The
-// caller is a VietGara account (created by Google sign-in, FR-CAPP-01)
+// caller is a VietGara user (created by Google sign-in, FR-CAPP-01)
 // matched to garages' customer records by its verified e-mail; it reads
 // only those records, their vehicles and the vehicles' history, each in
 // the record's own garage scope. It owns no tables.
@@ -31,9 +31,9 @@ type GarageInfo struct {
 	Phone   string
 }
 
-// Accounts reads the signed-in account's verified e-mail (Identity).
-type Accounts interface {
-	Email(ctx context.Context, accountID string) (string, error)
+// Users reads the signed-in user's verified e-mail (Identity).
+type Users interface {
+	Email(ctx context.Context, userID string) (string, error)
 }
 
 // Customers finds customer records (Customer & Vehicle). FindByEmail
@@ -63,7 +63,7 @@ type Transactor interface {
 
 // Deps are the use case's collaborators.
 type Deps struct {
-	Accounts  Accounts
+	Users     Users
 	Customers Customers
 	Vehicles  Vehicles
 	Garages   Garages
@@ -96,8 +96,8 @@ var ErrVehicleNotFound = errors.New("vehicle not found")
 
 // ListMyVehicles returns the person's vehicles grouped by garage, by garage
 // name (FR-CAPP-02).
-func (uc *PortalUseCase) ListMyVehicles(ctx context.Context, accountID string) ([]MyGarage, error) {
-	refs, err := uc.myRecords(ctx, accountID)
+func (uc *PortalUseCase) ListMyVehicles(ctx context.Context, userID string) ([]MyGarage, error) {
+	refs, err := uc.myRecords(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (uc *PortalUseCase) ListMyVehicles(ctx context.Context, accountID string) (
 	for _, ref := range refs {
 		var mine MyGarage
 
-		err := uc.Tx.WithTransaction(ctx, scope(ref.GarageID, accountID), func(ctx context.Context) error {
+		err := uc.Tx.WithTransaction(ctx, scope(ref.GarageID, userID), func(ctx context.Context) error {
 			garage, err := uc.Garages.Get(ctx, ref.GarageID)
 			if err != nil {
 				return err
@@ -149,9 +149,9 @@ func (uc *PortalUseCase) ListMyVehicles(ctx context.Context, accountID string) (
 // on one of the person's customer records in that garage. Draft quotes are
 // the garage's work in progress and are left out.
 func (uc *PortalUseCase) GetMyVehicleHistory(
-	ctx context.Context, accountID, garageID, vehicleID string,
+	ctx context.Context, userID, garageID, vehicleID string,
 ) ([]customerusecase.HistoryEntry, error) {
-	refs, err := uc.myRecords(ctx, accountID)
+	refs, err := uc.myRecords(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func (uc *PortalUseCase) GetMyVehicleHistory(
 
 	var history []customerusecase.HistoryEntry
 
-	err = uc.Tx.WithTransaction(ctx, scope(garageID, accountID), func(ctx context.Context) error {
+	err = uc.Tx.WithTransaction(ctx, scope(garageID, userID), func(ctx context.Context) error {
 		vehicle, err := uc.Vehicles.Get(ctx, garageID, vehicleID)
 		if errors.Is(err, customerdomain.ErrVehicleNotFound) || (err == nil && !mine[vehicle.CustomerID]) {
 			return ErrVehicleNotFound
@@ -199,23 +199,23 @@ func isDraftQuote(e customerusecase.HistoryEntry) bool {
 	return e.Type == customerusecase.HistoryEntryQuote && e.Status == string(quotedomain.StatusDraft)
 }
 
-// myRecords returns the customer records carrying the account's e-mail.
-func (uc *PortalUseCase) myRecords(ctx context.Context, accountID string) ([]CustomerRef, error) {
-	email, err := uc.Accounts.Email(ctx, accountID)
+// myRecords returns the customer records carrying the user's e-mail.
+func (uc *PortalUseCase) myRecords(ctx context.Context, userID string) ([]CustomerRef, error) {
+	email, err := uc.Users.Email(ctx, userID)
 	if err != nil {
-		return nil, apperror.Internal("read the account's e-mail", err)
+		return nil, apperror.Internal("read the user's e-mail", err)
 	}
 
 	refs, err := uc.Customers.FindByEmail(ctx, email)
 	if err != nil {
-		return nil, apperror.Internal("find the account's customer records", err)
+		return nil, apperror.Internal("find the user's customer records", err)
 	}
 
 	return refs, nil
 }
 
-func scope(garageID, accountID string) platformdb.Scope {
-	return platformdb.Scope{GarageID: garageID, AccountID: accountID}
+func scope(garageID, userID string) platformdb.Scope {
+	return platformdb.Scope{GarageID: garageID, UserID: userID}
 }
 
 func notFound() error {

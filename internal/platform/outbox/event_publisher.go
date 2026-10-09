@@ -25,11 +25,11 @@ func NewEventPublisher(pool *platformdb.Pool) *EventPublisher {
 }
 
 // Publish inserts eventType with the marshalled payload into the outbox.
-// garageID and/or accountID name what the event is about: the garage it
-// belongs to (tenant events) or the account (identity and license events);
+// garageID and/or userID name what the event is about: the garage it
+// belongs to (tenant events) or the user (identity and license events);
 // the first non-empty one is the Kafka partition key. It runs on the
 // querier carried in ctx, so the row lands in the caller's transaction.
-func (p *EventPublisher) Publish(ctx context.Context, eventType, garageID, accountID string, payload any) error {
+func (p *EventPublisher) Publish(ctx context.Context, eventType, garageID, userID string, payload any) error {
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return err
@@ -37,9 +37,9 @@ func (p *EventPublisher) Publish(ctx context.Context, eventType, garageID, accou
 
 	q := platformdb.QuerierFromContext(ctx, p.pool)
 	_, err = q.Exec(ctx,
-		`INSERT INTO outbox_events (id, event_type, garage_id, account_id, payload, status)
+		`INSERT INTO outbox_events (id, event_type, garage_id, user_id, payload, status)
 		 VALUES ($1, $2, NULLIF($3, '')::uuid, NULLIF($4, '')::uuid, $5, 'pending')`,
-		uuid.NewString(), eventType, garageID, accountID, body)
+		uuid.NewString(), eventType, garageID, userID, body)
 
 	return err
 }

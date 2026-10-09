@@ -15,14 +15,14 @@ type ProfileUpdate struct {
 	Locale   *domain.Locale
 }
 
-// GetMe returns the signed-in account.
-func (uc *IdentityUseCase) GetMe(ctx context.Context, accountID string) (*domain.Account, error) {
-	return uc.findAccount(ctx, accountID)
+// GetMe returns the signed-in user.
+func (uc *IdentityUseCase) GetMe(ctx context.Context, userID string) (*domain.User, error) {
+	return uc.findUser(ctx, userID)
 }
 
-// UpdateMe changes the signed-in account's name, phone or language.
-func (uc *IdentityUseCase) UpdateMe(ctx context.Context, accountID string, update ProfileUpdate) (*domain.Account, error) {
-	acc, err := uc.findAccount(ctx, accountID)
+// UpdateMe changes the signed-in user's name, phone or language.
+func (uc *IdentityUseCase) UpdateMe(ctx context.Context, userID string, update ProfileUpdate) (*domain.User, error) {
+	user, err := uc.findUser(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +33,7 @@ func (uc *IdentityUseCase) UpdateMe(ctx context.Context, accountID string, updat
 			return nil, apperror.Validation("fullName", apperror.IssueRequired, "full name is required")
 		}
 
-		acc.FullName = name
+		user.FullName = name
 	}
 
 	if update.Phone != nil {
@@ -42,20 +42,20 @@ func (uc *IdentityUseCase) UpdateMe(ctx context.Context, accountID string, updat
 			return nil, err
 		}
 
-		if err := uc.ensureAvailable(ctx, "", phone, acc.ID); err != nil {
+		if err := uc.ensureAvailable(ctx, "", phone, user.ID); err != nil {
 			return nil, err
 		}
 
-		acc.Phone = phone
+		user.Phone = phone
 	}
 
 	if update.Locale != nil {
-		acc.Locale = update.Locale.OrDefault()
+		user.Locale = update.Locale.OrDefault()
 	}
 
-	if err := uc.accounts.Update(ctx, acc); err != nil {
+	if err := uc.users.Update(ctx, user); err != nil {
 		return nil, mapCreateError(err)
 	}
 
-	return acc, nil
+	return user, nil
 }

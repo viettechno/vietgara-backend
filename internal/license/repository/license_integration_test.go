@@ -60,30 +60,30 @@ func TestLicenseRepositoriesOnPostgres(t *testing.T) {
 	trial, err := plans.FindByCode(ctx, domain.TrialPlanCode)
 	require.NoError(t, err)
 
-	accountID := uuid.NewString()
-	_, err = admin.ExecContext(ctx, `INSERT INTO accounts (id, email, full_name) VALUES ($1, 'Owner@Example.com', 'Minh')`, accountID)
+	userID := uuid.NewString()
+	_, err = admin.ExecContext(ctx, `INSERT INTO users (id, email, full_name) VALUES ($1, 'Owner@Example.com', 'Minh')`, userID)
 	require.NoError(t, err)
 
-	sub := domain.NewTrial(accountID, trial, time.Now().UTC())
+	sub := domain.NewTrial(userID, trial, time.Now().UTC())
 	inserted, err := subs.CreateIfAbsent(ctx, sub)
 	require.NoError(t, err)
 	require.True(t, inserted)
 
-	inserted, err = subs.CreateIfAbsent(ctx, domain.NewTrial(accountID, trial, time.Now().UTC()))
+	inserted, err = subs.CreateIfAbsent(ctx, domain.NewTrial(userID, trial, time.Now().UTC()))
 	require.NoError(t, err)
 	assert.False(t, inserted)
 
-	require.NoError(t, subs.Replace(ctx, accountID, domain.FeatureFlags(sub)))
-	require.NoError(t, subs.Replace(ctx, accountID, domain.FeatureFlags(sub)), "upsert")
+	require.NoError(t, subs.Replace(ctx, userID, domain.FeatureFlags(sub)))
+	require.NoError(t, subs.Replace(ctx, userID, domain.FeatureFlags(sub)), "upsert")
 
-	locked, err := subs.LockByAccountID(ctx, accountID)
+	locked, err := subs.LockByUserID(ctx, userID)
 	require.NoError(t, err)
 	require.NoError(t, locked.Extend(5, time.Now().UTC()))
 	require.NoError(t, subs.Update(ctx, locked))
 
-	due, err := subs.ListAccountIDsDueBefore(ctx, time.Now().Add(30*24*time.Hour))
+	due, err := subs.ListUserIDsDueBefore(ctx, time.Now().Add(30*24*time.Hour))
 	require.NoError(t, err)
-	assert.Contains(t, due, accountID)
+	assert.Contains(t, due, userID)
 
 	page, err := subs.Search(ctx, usecase.SubscriptionFilter{Query: "owner@", Status: domain.StatusTrial, Page: 1, PageSize: 10})
 	require.NoError(t, err)
@@ -91,6 +91,6 @@ func TestLicenseRepositoriesOnPostgres(t *testing.T) {
 	assert.Equal(t, "Minh", page.Items[0].FullName)
 
 	var enabled int
-	require.NoError(t, admin.QueryRowContext(ctx, `SELECT count(*) FROM entitlements WHERE account_id = $1 AND enabled`, accountID).Scan(&enabled))
+	require.NoError(t, admin.QueryRowContext(ctx, `SELECT count(*) FROM entitlements WHERE user_id = $1 AND enabled`, userID).Scan(&enabled))
 	assert.Equal(t, 7, enabled, "the trial enables every feature")
 }

@@ -41,7 +41,7 @@ func TestCreateQuote(t *testing.T) {
 
 	e := newEnv(t)
 	e.garages.EXPECT().Get(anyArg, garageID).Return(usecase.GarageInfo{
-		OwnerAccountID: ownerID, Timezone: "Asia/Ho_Chi_Minh", QuoteNumberTemplate: "BG-{SEQ:4}",
+		OwnerUserID: ownerID, Timezone: "Asia/Ho_Chi_Minh", QuoteNumberTemplate: "BG-{SEQ:4}",
 		DefaultQuoteApprovalMode: domain.ApprovalModeLink,
 	}, nil).Once()
 	e.vehicles.EXPECT().Find(anyArg, garageID, customerID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
@@ -175,7 +175,7 @@ func TestCreateQuote_PartLineAndManualMode(t *testing.T) {
 
 	e := newEnv(t)
 	e.garages.EXPECT().Get(anyArg, garageID).Return(usecase.GarageInfo{
-		OwnerAccountID: ownerID, Timezone: "Asia/Ho_Chi_Minh", QuoteNumberTemplate: "BG-{SEQ:4}",
+		OwnerUserID: ownerID, Timezone: "Asia/Ho_Chi_Minh", QuoteNumberTemplate: "BG-{SEQ:4}",
 		DefaultQuoteApprovalMode: domain.ApprovalModeLink,
 	}, nil).Once()
 	e.vehicles.EXPECT().Find(anyArg, garageID, customerID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()

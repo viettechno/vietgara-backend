@@ -57,7 +57,7 @@ to the development `docker-compose.yml`:
 | --- | --- |
 | `BLACKBOX_API_URL` | `http://localhost:18000` (Kong; `BLACKBOX_KONG_PORT` for Compose) |
 | `BLACKBOX_MAILPIT_URL` | `http://localhost:18025` (`BLACKBOX_MAILPIT_PORT`) |
-| `BLACKBOX_EMAIL_DOMAIN` | `blackbox.vietgara.test`, the `TEST_ACCOUNTS_EMAIL_DOMAIN` set in `compose.yml` |
+| `BLACKBOX_EMAIL_DOMAIN` | `blackbox.vietgara.test`, the `TEST_USERS_EMAIL_DOMAIN` set in `compose.yml` |
 | `BLACKBOX_GOOGLE_STUB_URL` | `http://localhost:18090` (`BLACKBOX_GOOGLE_STUB_PORT`) |
 | `BLACKBOX_GOOGLE_CLIENT_ID` | the `GOOGLE_MOBILE_CLIENT_IDS` set in `compose.yml` |
 
@@ -76,11 +76,11 @@ Or run the **Blackbox tests (staging)** workflow in GitHub Actions, which
 reads the same values from repository secrets (see
 `.github/workflows/blackbox-staging.yml`).
 
-Staging uses the real Mailjet and Google, except for **test accounts**.
-Every account the suite signs up is on `BLACKBOX_EMAIL_DOMAIN`, which must
-equal the deployment's `TEST_ACCOUNTS_EMAIL_DOMAIN`. For that domain only,
+Staging uses the real Mailjet and Google, except for **test users**.
+Every user the suite signs up is on `BLACKBOX_EMAIL_DOMAIN`, which must
+equal the deployment's `TEST_USERS_EMAIL_DOMAIN`. For that domain only,
 the backend sends e-mail to a Mailpit that the suite reads (the "test
-inbox"), and it deletes the accounts and everything they own after 24 h.
+inbox"), and it deletes the users and everything they own after 24 h.
 The domain is under a reserved TLD (`.test` and similar), so no real
 person's mail is ever routed there. Authentication itself is unchanged:
 the OTPs are random, and the suite reads them like a user would.
@@ -108,10 +108,10 @@ compose.yml the stubbed stack
   status codes, error codes (`error.code` in the body), and response
   fields. Do not assert on database rows or logs.
 - **Use fresh actors.** `fixture.NewVerifiedOwner` gives each test a new
-  account with a unique e-mail, so tests can run in parallel
+  user with a unique e-mail, so tests can run in parallel
   (`t.Parallel()`) and can be re-run against the same stack without
   resetting it.
-- **Make it run on staging too.** Create accounts with the `fixture`
+- **Make it run on staging too.** Create users with the `fixture`
   helpers: they sign up on the test domain, which staging purges. Read
   e-mail with `fixture.Mailpit`, which skips the test when the target has
   no test inbox. Call `env.RequireStubbed(t, "<why>")` only when the

@@ -38,69 +38,69 @@ import (
 // consuming module, so no module imports another (ADR-001: modules stay
 // splittable into services).
 
-// accountDirectory gives the Tenant module a read-only view of Identity
-// accounts.
-type accountDirectory struct {
-	accounts *identityRepo.PostgresAccountRepository
+// userDirectory gives the Tenant module a read-only view of Identity
+// users.
+type userDirectory struct {
+	users *identityRepo.PostgresUserRepository
 }
 
-func (a accountDirectory) FindByEmail(ctx context.Context, email string) (*tenantUsecase.AccountSummary, error) {
+func (a userDirectory) FindByEmail(ctx context.Context, email string) (*tenantUsecase.UserSummary, error) {
 	normalized, ok := identityDomain.NormalizeEmail(email)
 	if !ok {
-		return nil, tenantDomain.ErrAccountNotFound
+		return nil, tenantDomain.ErrUserNotFound
 	}
 
-	return summaryOrNotFound(a.accounts.FindByEmail(ctx, normalized))
+	return summaryOrNotFound(a.users.FindByEmail(ctx, normalized))
 }
 
-func (a accountDirectory) FindByPhone(ctx context.Context, phone string) (*tenantUsecase.AccountSummary, error) {
+func (a userDirectory) FindByPhone(ctx context.Context, phone string) (*tenantUsecase.UserSummary, error) {
 	normalized, ok := identityDomain.NormalizePhone(phone)
 	if !ok {
-		return nil, tenantDomain.ErrAccountNotFound
+		return nil, tenantDomain.ErrUserNotFound
 	}
 
-	return summaryOrNotFound(a.accounts.FindByPhone(ctx, normalized))
+	return summaryOrNotFound(a.users.FindByPhone(ctx, normalized))
 }
 
-func (a accountDirectory) FindByID(ctx context.Context, id string) (*tenantUsecase.AccountSummary, error) {
-	return summaryOrNotFound(a.accounts.FindByID(ctx, id))
+func (a userDirectory) FindByID(ctx context.Context, id string) (*tenantUsecase.UserSummary, error) {
+	return summaryOrNotFound(a.users.FindByID(ctx, id))
 }
 
-func (a accountDirectory) ListByIDs(ctx context.Context, ids []string) (map[string]*tenantUsecase.AccountSummary, error) {
-	accounts, err := a.accounts.FindByIDs(ctx, ids)
+func (a userDirectory) ListByIDs(ctx context.Context, ids []string) (map[string]*tenantUsecase.UserSummary, error) {
+	users, err := a.users.FindByIDs(ctx, ids)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make(map[string]*tenantUsecase.AccountSummary, len(accounts))
-	for _, acc := range accounts {
-		result[acc.ID] = toSummary(acc)
+	result := make(map[string]*tenantUsecase.UserSummary, len(users))
+	for _, user := range users {
+		result[user.ID] = toSummary(user)
 	}
 
 	return result, nil
 }
 
-func summaryOrNotFound(acc *identityDomain.Account, err error) (*tenantUsecase.AccountSummary, error) {
+func summaryOrNotFound(user *identityDomain.User, err error) (*tenantUsecase.UserSummary, error) {
 	if err != nil {
-		if errors.Is(err, identityDomain.ErrAccountNotFound) {
-			return nil, tenantDomain.ErrAccountNotFound
+		if errors.Is(err, identityDomain.ErrUserNotFound) {
+			return nil, tenantDomain.ErrUserNotFound
 		}
 
 		return nil, err
 	}
 
-	return toSummary(acc), nil
+	return toSummary(user), nil
 }
 
-func toSummary(acc *identityDomain.Account) *tenantUsecase.AccountSummary {
-	return &tenantUsecase.AccountSummary{
-		ID:            acc.ID,
-		FullName:      acc.FullName,
-		Email:         acc.Email,
-		Phone:         acc.Phone,
-		Locale:        string(acc.Locale.OrDefault()),
-		Active:        acc.Status == identityDomain.AccountStatusActive,
-		EmailVerified: acc.EmailVerified(),
+func toSummary(user *identityDomain.User) *tenantUsecase.UserSummary {
+	return &tenantUsecase.UserSummary{
+		ID:            user.ID,
+		FullName:      user.FullName,
+		Email:         user.Email,
+		Phone:         user.Phone,
+		Locale:        string(user.Locale.OrDefault()),
+		Active:        user.Status == identityDomain.UserStatusActive,
+		EmailVerified: user.EmailVerified(),
 	}
 }
 
@@ -124,7 +124,7 @@ func (g garageOwners) GarageOwner(ctx context.Context, garageID string) (string,
 		return "", err
 	}
 
-	return garage.OwnerAccountID, nil
+	return garage.OwnerUserID, nil
 }
 
 // quoteCustomers gives the Quote module a read-only view of Customer &
@@ -184,7 +184,7 @@ func (g quoteGarages) Get(ctx context.Context, garageID string) (quoteUsecase.Ga
 	}
 
 	return quoteUsecase.GarageInfo{
-		OwnerAccountID: garage.OwnerAccountID, Timezone: garage.Timezone, Name: garage.Name,
+		OwnerUserID: garage.OwnerUserID, Timezone: garage.Timezone, Name: garage.Name,
 		QuoteNumberTemplate: garage.QuoteNumberTemplate, RepairOrderNumberTemplate: garage.RepairOrderNumberTemplate,
 		DefaultQuoteApprovalMode: mode,
 	}, nil
@@ -256,7 +256,7 @@ func (g repairOrderGarages) Get(ctx context.Context, garageID string) (repairord
 	}
 
 	return repairorderUsecase.GarageInfo{
-		OwnerAccountID: garage.OwnerAccountID, Timezone: garage.Timezone,
+		OwnerUserID: garage.OwnerUserID, Timezone: garage.Timezone,
 		RepairOrderNumberTemplate: garage.RepairOrderNumberTemplate,
 	}, nil
 }
@@ -364,7 +364,7 @@ func (g billingGarages) Get(ctx context.Context, garageID string) (billingUsecas
 	}
 
 	return billingUsecase.GarageInfo{
-		OwnerAccountID: garage.OwnerAccountID, Timezone: garage.Timezone,
+		OwnerUserID: garage.OwnerUserID, Timezone: garage.Timezone,
 		SettlementNumberTemplate: garage.SettlementNumberTemplate,
 	}, nil
 }
@@ -557,27 +557,27 @@ func (s reportingSettlements) RevenueByPeriod(
 	return points, nil
 }
 
-// notificationAccounts lets the Notification module address a reminder
-// e-mail by account id (FR-NOT-04) without importing Identity's use case;
-// it wraps the repository directly (the same choice accountDirectory
+// notificationUsers lets the Notification module address a reminder
+// e-mail by user id (FR-NOT-04) without importing Identity's use case;
+// it wraps the repository directly (the same choice userDirectory
 // above already makes), translating the raw repository's not-found
 // sentinel into this module's own.
-type notificationAccounts struct {
-	accounts *identityRepo.PostgresAccountRepository
+type notificationUsers struct {
+	users *identityRepo.PostgresUserRepository
 }
 
-func (a notificationAccounts) Get(ctx context.Context, accountID string) (notificationUsecase.AccountInfo, error) {
-	acc, err := a.accounts.FindByID(ctx, accountID)
+func (a notificationUsers) Get(ctx context.Context, userID string) (notificationUsecase.UserInfo, error) {
+	user, err := a.users.FindByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, identityDomain.ErrAccountNotFound) {
-			return notificationUsecase.AccountInfo{}, notificationUsecase.ErrAccountNotFound
+		if errors.Is(err, identityDomain.ErrUserNotFound) {
+			return notificationUsecase.UserInfo{}, notificationUsecase.ErrUserNotFound
 		}
 
-		return notificationUsecase.AccountInfo{}, err
+		return notificationUsecase.UserInfo{}, err
 	}
 
-	return notificationUsecase.AccountInfo{
-		Email: acc.Email, FullName: acc.FullName, Locale: string(acc.Locale.OrDefault()),
+	return notificationUsecase.UserInfo{
+		Email: user.Email, FullName: user.FullName, Locale: string(user.Locale.OrDefault()),
 	}, nil
 }
 

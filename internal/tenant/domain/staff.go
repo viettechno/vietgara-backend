@@ -20,20 +20,20 @@ func (s StaffStatus) IsValid() bool {
 	return s == StaffStatusActive || s == StaffStatusInactive
 }
 
-// Staff is an account's membership of one garage (FR-TEN-04). The garage
+// Staff is a user's membership of one garage (FR-TEN-04). The garage
 // owner also has a membership, flagged Owner.
 type Staff struct {
-	ID        string
-	GarageID  string
-	AccountID string
-	Status    StaffStatus
+	ID       string
+	GarageID string
+	UserID   string
+	Status   StaffStatus
 	// GroupIDs are the staff groups of the garage the member belongs to.
 	GroupIDs []string
 	// Owner is true for the garage owner's own membership.
 	Owner bool
 	// Permissions is the union of the member's groups' role permissions.
 	Permissions []access.Permission
-	// Account details, loaded for listings.
+	// User details, loaded for listings.
 	FullName  string
 	Email     string
 	Phone     *string

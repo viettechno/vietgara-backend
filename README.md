@@ -11,7 +11,7 @@
 | **Depends on** | `vietgara-proto` (API contracts), Postgres, Redis, Kafka |
 | **Related** | `vietgara-infra` (how it is run), `vietgara-gitops-config` (target deployment), `vietgara-docs` (architecture) |
 
-The Go modular monolith behind the VietGara front ends: the garage web admin
+The Go modular monolith behind the VietGara front ends: the owner web
 (`vietgara-owner-web`), the platform admin (`vietgara-admin-web`) and the
 mobile apps (Release 1.0–1.5). One
 process serves:
@@ -25,8 +25,8 @@ process serves:
 
 ```mermaid
 flowchart LR
-  W[Web admin] -->|/api| K[Kong]
-  P[Platform admin] -->|/api| K
+  W[Owner Web] -->|/api| K[Kong]
+  P[Admin Web] -->|/api| K
   K --> H["HTTP :8080<br/>grpc-gateway"]
   H -->|in-process| I["Interceptors<br/>Auth → EmailVerified →<br/>PlatformAdmin → Garage"]
   G["gRPC :50051"] --> I
@@ -38,7 +38,7 @@ flowchart LR
   M --> ST["Files<br/>local disk / GCS"]
 ```
 
-**Contents:** [Modules](#modules) · [Run locally](#run-locally) ·
+**Contents:** [Modules](#modules) · [Roadmap](#roadmap) · [Run locally](#run-locally) ·
 [Configuration](#configuration) · [Platform admins](#platform-admins) ·
 [E-mail](#e-mail) · [File storage](#file-storage) · [Events](#events) ·
 [Development](#development) · [Container image and staging](#container-image-and-staging)
@@ -50,11 +50,29 @@ flowchart LR
 | Identity | `internal/identity` | Users, sessions, e-mail verification and password-reset OTPs, Google sign-in, platform admins |
 | Tenant | `internal/tenant` | Garages, staff, invitations, roles and staff groups |
 | License | `internal/license` | Plans, per-user subscriptions, entitlements, plan limits |
-| Customer | `internal/customer` | Customers, vehicles, partners |
+| Customer | `internal/customer` | Customers, vehicles, partners (suppliers; the partners become the Supplier module in Release 5.0) |
 
 Shared infrastructure (db, access, mail, storage, kafka, outbox, audit,
 httpapi, auth) is in `internal/platform`. The gRPC interceptors are in
 `internal/middleware`.
+
+## Roadmap
+
+The plan is in `vietgara-docs` (Release Plan, Phases 3-17). What changes in this repository:
+
+| When | Change |
+| --- | --- |
+| Phase 3 | `account` becomes `user` in the database, proto, events, tokens and configuration (the backend part is merged in #20; proto and the clients follow); migrations are edited in place |
+| Phase 4 | The blackbox suite reads a shared dataset from `vietgara-testdata` and grows to every P1 scenario and at least 80% of API operations; a test-only purge of the test users (see `testing/blackbox/README.md`) |
+| Release 5.0 | Audit columns on every business table by trigger; edited user names kept (`full_name_source`); insurance code is removed (insurer split, insurer partner type); `partners` becomes the Supplier module (`suppliers`, `supplier.*`); delete-or-deactivate rule; legal profile; payment vouchers; file registry; `stock_transactions.quantity` becomes numeric |
+| Release 5.1 | Customers without a user, user links, tax profiles by kind with an invoice-requested check, vehicle identity fields locked while live documents use them (`customer.correct` to correct) |
+| Release 5.2 | Plan changes (upgrade and downgrade) take effect at the end of the billing period: pending change, applied by the daily job |
+| Releases 6.0, 6.1 | Units, selling price per part, part categories and images, Excel exports; MFA |
+| Phase 7 | A draft stock issue (phiếu xuất kho) created with each repair order, posted on close; goods receipt documents with a supplier on each line, average cost, stock count, write-off and returns, barcodes, import; job catalogue and stock reservation (Release 7.3) |
+| Phase 8 | Kong rate limiting and security headers; platform roles and groups; read-only support access |
+| Phase 9 | Load test, metrics and alerts, off-site backups, Terraform (the gate for an open launch) |
+| Phases 10-15 | Print templates and e-mail; push and mobile sync; booking; receivables, payables and purchase orders; thermal printing and the template designer; service split (Repair Order, Inventory, Quote first), silos, CQRS |
+| Phases 16-17 | Payment gateway, e-invoices, SMS/Zalo; insurers directory, claims, supplier portal |
 
 ## Run locally
 
@@ -62,8 +80,8 @@ Start the full stack with Docker Compose:
 
 ```bash
 cp .env_example .env
-docker compose up --build        # Postgres, Redis, Kafka, Mailpit, backend, web admin, platform admin, Kong
-open http://localhost:8000       # garage web admin through Kong
+docker compose up --build        # Postgres, Redis, Kafka, Mailpit, backend, owner web, admin web, Kong
+open http://localhost:8000       # owner web through Kong
 open http://admin.localhost:8000 # platform admin through Kong (plans, subscriptions)
 open http://localhost:8025       # Mailpit: every e-mail sent locally
 ```
@@ -117,7 +135,7 @@ local defaults.
 | `GOOGLE_MOBILE_CLIENT_IDS` | Google sign-in from the mobile apps (`POST /api/v1/auth/google/id-token`): comma-separated OAuth client IDs the apps' ID tokens are issued to (the Android "web/server" client and the iOS client). Empty disables it |
 | `GOOGLE_AUTH_ENDPOINT`, `GOOGLE_TOKEN_ENDPOINT`, `GOOGLE_USERINFO_URL`, `GOOGLE_CERTS_URL` | Google's OAuth endpoints and the JWKS that mobile ID tokens are verified against. Default to Google's own; override them only to point the backend at a Google stub (the blackbox tests) |
 | `PLATFORM_ADMIN_EMAILS` | Comma-separated e-mails granted platform admin. See [Platform admins](#platform-admins) |
-| `APP_BASE_URL` | Public URL of the deployment, such as `https://vietgara.viettechno.com`. The web admin origin for the Google popup, the Google callback host, and the base of e-mailed links. Defaults to `http://localhost:8000` |
+| `APP_BASE_URL` | Public URL of the deployment, such as `https://vietgara.viettechno.com`. The owner web origin for the Google popup, the Google callback host, and the base of e-mailed links. Defaults to `http://localhost:8000` |
 
 **Cache, licensing and events**
 
@@ -167,8 +185,8 @@ screen or API grants them.
 The `platform_admin` flag in the access token is read from the database each
 time a session is issued or refreshed. It therefore takes effect within
 `JWT_ACCESS_TTL` (20 minutes by default), or at once if the person signs out
-and back in. The platform admin app (`vietgara-admin-web`) accepts only users that
-have the flag; others see an access-denied page. The garage web admin has no
+and back in. The admin web (`vietgara-admin-web`) accepts only users that
+have the flag; others see an access-denied page. The owner web has no
 platform-admin pages.
 
 Things to know:

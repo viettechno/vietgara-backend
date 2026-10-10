@@ -67,8 +67,8 @@ The plan is in `vietgara-docs` (Release Plan, Phases 3-17). What changes in this
 | Release 5.0 | Insurance code is removed (insurer split, insurer partner type); `partners` becomes the Supplier module (`suppliers`, `supplier.*`); delete-or-deactivate rule; legal profile; payment vouchers; file registry; `stock_transactions.quantity` becomes numeric |
 | Release 5.1 | Customers without a user, user links, tax profiles |
 | Releases 6.0, 6.1 | Units, part categories and images, Excel exports; MFA |
-| Phase 7 | Kong rate limiting and security headers; platform roles and groups; read-only support access |
-| Phase 8 | Goods receipt documents with a supplier on each line, average cost, stock count, write-off and returns, barcodes, import; job catalogue and stock reservation (Release 8.3) |
+| Phase 7 | Goods receipt documents with a supplier on each line, average cost, stock count, write-off and returns, barcodes, import; job catalogue and stock reservation (Release 7.3) |
+| Phase 8 | Kong rate limiting and security headers; platform roles and groups; read-only support access |
 | Phase 9 | Load test, metrics and alerts, off-site backups, Terraform (the gate for an open launch) |
 | Phases 10-15 | Print templates and e-mail; push and mobile sync; booking; receivables, payables and purchase orders; thermal printing and the template designer; service split (Repair Order, Inventory, Quote first), silos, CQRS |
 | Phases 16-17 | Payment gateway, e-invoices, SMS/Zalo; insurers directory, claims, supplier portal |

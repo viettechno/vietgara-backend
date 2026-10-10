@@ -76,7 +76,7 @@ func (s *Server) googleLogin(w http.ResponseWriter, r *http.Request) {
 	query := url.Values{
 		"client_id": {s.googleOAuth.ClientID}, "redirect_uri": {s.googleOAuth.redirectURI()},
 		"response_type": {"code"}, "scope": {"openid email profile"},
-		"state": {state}, "prompt": {"select_account"},
+		"state": {state}, "prompt": {"select_user"},
 	}
 	http.Redirect(w, r, s.googleOAuth.AuthEndpoint+"?"+query.Encode(), http.StatusFound)
 }

@@ -15,15 +15,15 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-const me = "acc-binh"
+const me = "user-binh"
 
 var errBoom = errors.New("boom")
 
-type accounts struct{ err error }
+type users struct{ err error }
 
-func (a accounts) Email(_ context.Context, accountID string) (string, error) {
-	if accountID != me {
-		return "", errors.New("unexpected account")
+func (a users) Email(_ context.Context, userID string) (string, error) {
+	if userID != me {
+		return "", errors.New("unexpected user")
 	}
 
 	return "binh@example.com", a.err
@@ -149,16 +149,16 @@ func newWorld() *world {
 	}
 }
 
-func portal(w *world, acc accounts) *usecase.PortalUseCase {
+func portal(w *world, user users) *usecase.PortalUseCase {
 	return usecase.NewPortalUseCase(usecase.Deps{
-		Accounts: acc, Customers: w, Vehicles: vehicles{w}, Garages: garages{w}, Tx: tx{w},
+		Users: user, Customers: w, Vehicles: vehicles{w}, Garages: garages{w}, Tx: tx{w},
 	})
 }
 
 func TestListMyVehicles_GroupsByGarageReadingEachInItsScope(t *testing.T) {
 	w := newWorld()
 
-	mine, err := portal(w, accounts{}).ListMyVehicles(context.Background(), me)
+	mine, err := portal(w, users{}).ListMyVehicles(context.Background(), me)
 
 	require.NoError(t, err)
 	require.Len(t, mine, 2)
@@ -170,14 +170,14 @@ func TestListMyVehicles_GroupsByGarageReadingEachInItsScope(t *testing.T) {
 	assert.Equal(t, "c-1", mine[1].CustomerID)
 	require.Len(t, mine[1].Vehicles, 1, "never another customer's vehicle")
 	assert.Equal(t, "51A-12345", mine[1].Vehicles[0].LicensePlate)
-	assert.Equal(t, []platformdb.Scope{{GarageID: "g-1", AccountID: me}, {GarageID: "g-2", AccountID: me}}, w.scopes)
+	assert.Equal(t, []platformdb.Scope{{GarageID: "g-1", UserID: me}, {GarageID: "g-2", UserID: me}}, w.scopes)
 }
 
 func TestListMyVehicles_EmptyWithoutCustomerRecords(t *testing.T) {
 	w := newWorld()
 	w.refs = nil
 
-	mine, err := portal(w, accounts{}).ListMyVehicles(context.Background(), me)
+	mine, err := portal(w, users{}).ListMyVehicles(context.Background(), me)
 
 	require.NoError(t, err)
 	assert.Empty(t, mine)
@@ -185,24 +185,24 @@ func TestListMyVehicles_EmptyWithoutCustomerRecords(t *testing.T) {
 
 func TestListMyVehicles_Errors(t *testing.T) {
 	w := newWorld()
-	_, err := portal(w, accounts{err: errBoom}).ListMyVehicles(context.Background(), me)
+	_, err := portal(w, users{err: errBoom}).ListMyVehicles(context.Background(), me)
 	require.ErrorIs(t, err, errBoom)
 
 	w = newWorld()
 	w.findErr = errBoom
-	_, err = portal(w, accounts{}).ListMyVehicles(context.Background(), me)
+	_, err = portal(w, users{}).ListMyVehicles(context.Background(), me)
 	require.ErrorIs(t, err, errBoom)
 
 	w = newWorld()
 	w.readErr = errBoom
-	_, err = portal(w, accounts{}).ListMyVehicles(context.Background(), me)
+	_, err = portal(w, users{}).ListMyVehicles(context.Background(), me)
 	assert.ErrorIs(t, err, errBoom)
 }
 
 func TestGetMyVehicleHistory(t *testing.T) {
 	w := newWorld()
 
-	history, err := portal(w, accounts{}).GetMyVehicleHistory(context.Background(), me, "g-1", "v-1")
+	history, err := portal(w, users{}).GetMyVehicleHistory(context.Background(), me, "g-1", "v-1")
 
 	require.NoError(t, err)
 	// The draft quote is left out; only quotes have drafts.
@@ -212,7 +212,7 @@ func TestGetMyVehicleHistory(t *testing.T) {
 	}
 
 	assert.Equal(t, []string{"q-v-1", "ro-v-1"}, ids)
-	assert.Equal(t, []platformdb.Scope{{GarageID: "g-1", AccountID: me}}, w.scopes)
+	assert.Equal(t, []platformdb.Scope{{GarageID: "g-1", UserID: me}}, w.scopes)
 }
 
 func TestGetMyVehicleHistory_IsNotFoundOutsideTheirRecords(t *testing.T) {
@@ -225,7 +225,7 @@ func TestGetMyVehicleHistory_IsNotFoundOutsideTheirRecords(t *testing.T) {
 
 	for name, ids := range cases {
 		t.Run(name, func(t *testing.T) {
-			_, err := portal(newWorld(), accounts{}).GetMyVehicleHistory(context.Background(), me, ids[0], ids[1])
+			_, err := portal(newWorld(), users{}).GetMyVehicleHistory(context.Background(), me, ids[0], ids[1])
 
 			var appErr *apperror.AppError
 			require.ErrorAs(t, err, &appErr)
@@ -235,11 +235,11 @@ func TestGetMyVehicleHistory_IsNotFoundOutsideTheirRecords(t *testing.T) {
 }
 
 func TestGetMyVehicleHistory_Errors(t *testing.T) {
-	_, err := portal(newWorld(), accounts{err: errBoom}).GetMyVehicleHistory(context.Background(), me, "g-1", "v-1")
+	_, err := portal(newWorld(), users{err: errBoom}).GetMyVehicleHistory(context.Background(), me, "g-1", "v-1")
 	require.ErrorIs(t, err, errBoom)
 
 	w := newWorld()
 	w.readErr = errBoom
-	_, err = portal(w, accounts{}).GetMyVehicleHistory(context.Background(), me, "g-1", "v-1")
+	_, err = portal(w, users{}).GetMyVehicleHistory(context.Background(), me, "g-1", "v-1")
 	assert.ErrorIs(t, err, errBoom)
 }

@@ -30,7 +30,7 @@ func proPlan() *domain.Plan {
 func TestSubscriptionLifecycleOverTime(t *testing.T) {
 	t.Parallel()
 
-	sub := domain.NewTrial("acc-1", trialPlan(), start)
+	sub := domain.NewTrial("user-1", trialPlan(), start)
 	end := start.Add(domain.TrialPeriod)
 
 	require.Equal(t, domain.StatusTrial, sub.Status)
@@ -76,7 +76,7 @@ func TestSubscriptionLifecycleOverTime(t *testing.T) {
 func TestChangePlanAndExtend(t *testing.T) {
 	t.Parallel()
 
-	sub := domain.NewTrial("acc-1", trialPlan(), start)
+	sub := domain.NewTrial("user-1", trialPlan(), start)
 	require.ErrorIs(t, sub.ChangePlan(trialPlan(), start), domain.ErrPlanNotAvailable)
 
 	hidden := proPlan()
@@ -88,7 +88,7 @@ func TestChangePlanAndExtend(t *testing.T) {
 	require.NoError(t, sub.ChangePlan(yearly, start))
 	assert.Equal(t, start.AddDate(1, 0, 0), sub.CurrentPeriodEnd)
 
-	trial := domain.NewTrial("acc-2", trialPlan(), start)
+	trial := domain.NewTrial("user-2", trialPlan(), start)
 	require.NoError(t, trial.Extend(3, start))
 	assert.Equal(t, start.Add(domain.TrialPeriod+72*time.Hour), trial.CurrentPeriodEnd)
 	assert.Equal(t, trial.CurrentPeriodEnd, *trial.TrialEndAt)
@@ -125,7 +125,7 @@ func TestStatusAccess(t *testing.T) {
 func TestEntitlements(t *testing.T) {
 	t.Parallel()
 
-	sub := domain.NewTrial("acc-1", proPlan(), start)
+	sub := domain.NewTrial("user-1", proPlan(), start)
 	e := domain.NewEntitlements(sub)
 
 	assert.Equal(t, []domain.Feature{domain.FeatureQuotes, domain.FeatureReports}, e.Features)

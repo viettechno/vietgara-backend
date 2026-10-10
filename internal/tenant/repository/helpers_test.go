@@ -19,7 +19,7 @@ func garageRow() []any {
 }
 
 func staffRow() []any {
-	return []any{"s-1", "g-1", "acc-1", "active", false, []string{"grp-1"}, []string{"report.read", "customer.read"}, now, now}
+	return []any{"s-1", "g-1", "user-1", "active", false, []string{"grp-1"}, []string{"report.read", "customer.read"}, now, now}
 }
 
 func roleRow() []any {
@@ -31,5 +31,5 @@ func groupRow() []any {
 }
 
 func invitationRow() []any {
-	return []any{"i-1", "g-1", "acc-1", []string{"grp-1"}, "pending", "owner", now, nil, now, now, "Gara"}
+	return []any{"i-1", "g-1", "user-1", []string{"grp-1"}, "pending", "owner", now, nil, now, now, "Gara"}
 }

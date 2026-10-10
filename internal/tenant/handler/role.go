@@ -28,7 +28,7 @@ func (s *Server) ListPermissions(context.Context, *tenantv1.ListPermissionsReque
 
 // ListRoles lists the caller's roles.
 func (s *Server) ListRoles(ctx context.Context, _ *tenantv1.ListRolesRequest) (*tenantv1.ListRolesResponse, error) {
-	roles, err := s.uc.ListRoles(ctx, middleware.AccountID(ctx))
+	roles, err := s.uc.ListRoles(ctx, middleware.UserID(ctx))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -43,7 +43,7 @@ func (s *Server) ListRoles(ctx context.Context, _ *tenantv1.ListRolesRequest) (*
 
 // GetRole returns one of the caller's roles.
 func (s *Server) GetRole(ctx context.Context, req *tenantv1.GetRoleRequest) (*tenantv1.GetRoleResponse, error) {
-	role, err := s.uc.GetRole(ctx, middleware.AccountID(ctx), req.GetRoleId())
+	role, err := s.uc.GetRole(ctx, middleware.UserID(ctx), req.GetRoleId())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -58,7 +58,7 @@ func (s *Server) CreateRole(ctx context.Context, req *tenantv1.CreateRoleRequest
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	role, err := s.uc.CreateRole(ctx, middleware.AccountID(ctx), fields)
+	role, err := s.uc.CreateRole(ctx, middleware.UserID(ctx), fields)
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -75,7 +75,7 @@ func (s *Server) UpdateRole(ctx context.Context, req *tenantv1.UpdateRoleRequest
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	role, err := s.uc.UpdateRole(ctx, middleware.AccountID(ctx), req.GetRoleId(), fields)
+	role, err := s.uc.UpdateRole(ctx, middleware.UserID(ctx), req.GetRoleId(), fields)
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -85,7 +85,7 @@ func (s *Server) UpdateRole(ctx context.Context, req *tenantv1.UpdateRoleRequest
 
 // DeleteRole removes an unused role.
 func (s *Server) DeleteRole(ctx context.Context, req *tenantv1.DeleteRoleRequest) (*tenantv1.DeleteRoleResponse, error) {
-	if err := s.uc.DeleteRole(ctx, middleware.AccountID(ctx), req.GetRoleId()); err != nil {
+	if err := s.uc.DeleteRole(ctx, middleware.UserID(ctx), req.GetRoleId()); err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
 

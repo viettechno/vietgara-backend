@@ -38,8 +38,8 @@ func (_m *MockRepairOrderTransactionLimiter) EXPECT() *MockRepairOrderTransactio
 }
 
 // ConsumeTransaction provides a mock function for the type MockRepairOrderTransactionLimiter
-func (_mock *MockRepairOrderTransactionLimiter) ConsumeTransaction(ctx context.Context, ownerAccountID string) error {
-	ret := _mock.Called(ctx, ownerAccountID)
+func (_mock *MockRepairOrderTransactionLimiter) ConsumeTransaction(ctx context.Context, ownerUserID string) error {
+	ret := _mock.Called(ctx, ownerUserID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ConsumeTransaction")
@@ -47,7 +47,7 @@ func (_mock *MockRepairOrderTransactionLimiter) ConsumeTransaction(ctx context.C
 
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) error); ok {
-		r0 = returnFunc(ctx, ownerAccountID)
+		r0 = returnFunc(ctx, ownerUserID)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -61,12 +61,12 @@ type MockRepairOrderTransactionLimiter_ConsumeTransaction_Call struct {
 
 // ConsumeTransaction is a helper method to define mock.On call
 //   - ctx context.Context
-//   - ownerAccountID string
-func (_e *MockRepairOrderTransactionLimiter_Expecter) ConsumeTransaction(ctx any, ownerAccountID any) *MockRepairOrderTransactionLimiter_ConsumeTransaction_Call {
-	return &MockRepairOrderTransactionLimiter_ConsumeTransaction_Call{Call: _e.mock.On("ConsumeTransaction", ctx, ownerAccountID)}
+//   - ownerUserID string
+func (_e *MockRepairOrderTransactionLimiter_Expecter) ConsumeTransaction(ctx any, ownerUserID any) *MockRepairOrderTransactionLimiter_ConsumeTransaction_Call {
+	return &MockRepairOrderTransactionLimiter_ConsumeTransaction_Call{Call: _e.mock.On("ConsumeTransaction", ctx, ownerUserID)}
 }
 
-func (_c *MockRepairOrderTransactionLimiter_ConsumeTransaction_Call) Run(run func(ctx context.Context, ownerAccountID string)) *MockRepairOrderTransactionLimiter_ConsumeTransaction_Call {
+func (_c *MockRepairOrderTransactionLimiter_ConsumeTransaction_Call) Run(run func(ctx context.Context, ownerUserID string)) *MockRepairOrderTransactionLimiter_ConsumeTransaction_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -89,7 +89,7 @@ func (_c *MockRepairOrderTransactionLimiter_ConsumeTransaction_Call) Return(err 
 	return _c
 }
 
-func (_c *MockRepairOrderTransactionLimiter_ConsumeTransaction_Call) RunAndReturn(run func(ctx context.Context, ownerAccountID string) error) *MockRepairOrderTransactionLimiter_ConsumeTransaction_Call {
+func (_c *MockRepairOrderTransactionLimiter_ConsumeTransaction_Call) RunAndReturn(run func(ctx context.Context, ownerUserID string) error) *MockRepairOrderTransactionLimiter_ConsumeTransaction_Call {
 	_c.Call.Return(run)
 	return _c
 }

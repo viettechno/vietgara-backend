@@ -20,13 +20,13 @@ func TestScope(t *testing.T) {
 
 	assert.True(t, db.Scope{}.IsZero())
 	assert.Equal(t, db.Scope{GarageID: "g1"}, db.GarageScope("g1"))
-	assert.Equal(t, db.Scope{AccountID: "a1"}, db.AccountScope("a1"))
-	assert.Equal(t, db.Scope{GarageID: "g2", AccountID: "a1"}, db.AccountScope("a1").Garage("g2"))
+	assert.Equal(t, db.Scope{UserID: "a1"}, db.UserScope("a1"))
+	assert.Equal(t, db.Scope{GarageID: "g2", UserID: "a1"}, db.UserScope("a1").Garage("g2"))
 	assert.False(t, db.GarageScope("g1").IsZero())
 }
 
 func TestTxManager_WithTransaction(t *testing.T) {
-	scope := db.Scope{GarageID: "garage-1", AccountID: "account-1"}
+	scope := db.Scope{GarageID: "garage-1", UserID: "user-1"}
 	beginErr := errors.New("connection lost")
 	setScopeErr := errors.New("database unavailable")
 	callbackErr := errors.New("callback failed")
@@ -62,7 +62,7 @@ func TestTxManager_WithTransaction(t *testing.T) {
 
 			if tt.beginErr == nil {
 				if !tt.scope.IsZero() {
-					tx.EXPECT().Exec(ctx, db.SetScopeSQL, []any{tt.scope.GarageID, tt.scope.AccountID}).Return(pgconn.CommandTag{}, tt.setScopeErr)
+					tx.EXPECT().Exec(ctx, db.SetScopeSQL, []any{tt.scope.GarageID, tt.scope.UserID}).Return(pgconn.CommandTag{}, tt.setScopeErr)
 				}
 
 				if tt.setScopeErr == nil && tt.callbackErr == nil {
@@ -95,7 +95,7 @@ func TestTxManager_WithTransaction(t *testing.T) {
 }
 
 func TestTxManager_NestedTransactionsJoin(t *testing.T) {
-	outerScope := db.AccountScope("account-1")
+	outerScope := db.UserScope("user-1")
 	innerScope := outerScope.Garage("garage-1")
 
 	t.Run("same or empty scope runs directly", func(t *testing.T) {
@@ -104,7 +104,7 @@ func TestTxManager_NestedTransactionsJoin(t *testing.T) {
 		m := db.NewTxManager(db.NewPool(t.Context(), connPool))
 
 		connPool.EXPECT().Begin(mock.Anything).Return(tx, nil).Once()
-		tx.EXPECT().Exec(mock.Anything, db.SetScopeSQL, []any{"", "account-1"}).Return(pgconn.CommandTag{}, nil).Once()
+		tx.EXPECT().Exec(mock.Anything, db.SetScopeSQL, []any{"", "user-1"}).Return(pgconn.CommandTag{}, nil).Once()
 		tx.EXPECT().Commit(mock.Anything).Return(nil)
 		tx.EXPECT().Rollback(mock.Anything).Return(nil)
 
@@ -122,8 +122,8 @@ func TestTxManager_NestedTransactionsJoin(t *testing.T) {
 		m := db.NewTxManager(db.NewPool(t.Context(), connPool))
 
 		connPool.EXPECT().Begin(mock.Anything).Return(tx, nil).Once()
-		tx.EXPECT().Exec(mock.Anything, db.SetScopeSQL, []any{"", "account-1"}).Return(pgconn.CommandTag{}, nil).Twice()
-		tx.EXPECT().Exec(mock.Anything, db.SetScopeSQL, []any{"garage-1", "account-1"}).Return(pgconn.CommandTag{}, nil).Once()
+		tx.EXPECT().Exec(mock.Anything, db.SetScopeSQL, []any{"", "user-1"}).Return(pgconn.CommandTag{}, nil).Twice()
+		tx.EXPECT().Exec(mock.Anything, db.SetScopeSQL, []any{"garage-1", "user-1"}).Return(pgconn.CommandTag{}, nil).Once()
 		tx.EXPECT().Commit(mock.Anything).Return(nil)
 		tx.EXPECT().Rollback(mock.Anything).Return(nil)
 
@@ -144,10 +144,10 @@ func TestTxManager_NestedTransactionsJoin(t *testing.T) {
 		failure := errors.New("boom")
 
 		connPool.EXPECT().Begin(mock.Anything).Return(tx, nil).Once()
-		tx.EXPECT().Exec(mock.Anything, db.SetScopeSQL, []any{"", "account-1"}).Return(pgconn.CommandTag{}, nil).Once()
-		tx.EXPECT().Exec(mock.Anything, db.SetScopeSQL, []any{"garage-1", "account-1"}).Return(pgconn.CommandTag{}, failure).Once()
-		tx.EXPECT().Exec(mock.Anything, db.SetScopeSQL, []any{"garage-2", "account-1"}).Return(pgconn.CommandTag{}, nil).Once()
-		tx.EXPECT().Exec(mock.Anything, db.SetScopeSQL, []any{"", "account-1"}).Return(pgconn.CommandTag{}, failure).Once()
+		tx.EXPECT().Exec(mock.Anything, db.SetScopeSQL, []any{"", "user-1"}).Return(pgconn.CommandTag{}, nil).Once()
+		tx.EXPECT().Exec(mock.Anything, db.SetScopeSQL, []any{"garage-1", "user-1"}).Return(pgconn.CommandTag{}, failure).Once()
+		tx.EXPECT().Exec(mock.Anything, db.SetScopeSQL, []any{"garage-2", "user-1"}).Return(pgconn.CommandTag{}, nil).Once()
+		tx.EXPECT().Exec(mock.Anything, db.SetScopeSQL, []any{"", "user-1"}).Return(pgconn.CommandTag{}, failure).Once()
 		tx.EXPECT().Rollback(mock.Anything).Return(nil)
 
 		err := m.WithTransaction(t.Context(), outerScope, func(ctx context.Context) error {

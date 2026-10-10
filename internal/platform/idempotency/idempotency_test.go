@@ -14,7 +14,7 @@ import (
 
 var (
 	errBoom = errors.New("boom")
-	key     = idempotency.Key{GarageID: "g", AccountID: "a", Key: "k"}
+	key     = idempotency.Key{GarageID: "g", UserID: "a", Key: "k"}
 )
 
 func TestClaim(t *testing.T) {

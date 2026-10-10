@@ -1,5 +1,5 @@
 -- License Management (HLD module #3, Database Design 6.3): one subscription
--- per owner account covering all their garages; plans limit garages, staff
+-- per owner user covering all their garages; plans limit garages, staff
 -- and business transactions per day (FR-LIC-01/02/05). These tables are
 -- platform-level data without Row-Level Security; the License module
 -- authorizes access.
@@ -45,13 +45,13 @@ INSERT INTO plans (id, code, name, description, price, billing_cycle, max_garage
  '{billing,customers,documents,inventory,quotes,repair_orders,reports}', true, 30);
 
 -- ---------------------------------------------------------------------------
--- subscriptions: one per owner account (LLD Section 3.1).
+-- subscriptions: one per owner user (LLD Section 3.1).
 -- reminder_period_end remembers which period end the expiring-soon reminder
 -- was already sent for, so the expiry job sends it once.
 -- ---------------------------------------------------------------------------
 CREATE TABLE subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    account_id UUID NOT NULL UNIQUE REFERENCES accounts(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
     plan_id UUID NOT NULL REFERENCES plans(id),
     status subscription_status NOT NULL,
     trial_end_at TIMESTAMP WITH TIME ZONE,
@@ -81,13 +81,13 @@ FOR EACH ROW
 EXECUTE FUNCTION update_subscriptions_updated_at();
 
 -- ---------------------------------------------------------------------------
--- entitlements: per-account feature switches derived from the
+-- entitlements: per-user feature switches derived from the
 -- subscription's plan and status (source of the entitlement cache).
 -- ---------------------------------------------------------------------------
 CREATE TABLE entitlements (
-    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     feature plan_feature NOT NULL,
     enabled BOOLEAN NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (account_id, feature)
+    PRIMARY KEY (user_id, feature)
 );

@@ -22,64 +22,64 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 )
 
-type accounts struct {
+type users struct {
 	mu   sync.Mutex
-	byID map[string]*domain.Account
+	byID map[string]*domain.User
 }
 
-func (a *accounts) find(match func(*domain.Account) bool) (*domain.Account, error) {
+func (a *users) find(match func(*domain.User) bool) (*domain.User, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	for _, acc := range a.byID {
-		if match(acc) {
-			copied := *acc
+	for _, user := range a.byID {
+		if match(user) {
+			copied := *user
 
 			return &copied, nil
 		}
 	}
 
-	return nil, domain.ErrAccountNotFound
+	return nil, domain.ErrUserNotFound
 }
 
-func (a *accounts) FindByID(_ context.Context, id string) (*domain.Account, error) {
-	return a.find(func(acc *domain.Account) bool { return acc.ID == id })
+func (a *users) FindByID(_ context.Context, id string) (*domain.User, error) {
+	return a.find(func(user *domain.User) bool { return user.ID == id })
 }
 
-func (a *accounts) FindByEmail(_ context.Context, email string) (*domain.Account, error) {
-	return a.find(func(acc *domain.Account) bool { return strings.EqualFold(acc.Email, email) })
+func (a *users) FindByEmail(_ context.Context, email string) (*domain.User, error) {
+	return a.find(func(user *domain.User) bool { return strings.EqualFold(user.Email, email) })
 }
 
-func (a *accounts) FindByPhone(_ context.Context, phone string) (*domain.Account, error) {
-	return a.find(func(acc *domain.Account) bool { return acc.Phone != nil && *acc.Phone == phone })
+func (a *users) FindByPhone(_ context.Context, phone string) (*domain.User, error) {
+	return a.find(func(user *domain.User) bool { return user.Phone != nil && *user.Phone == phone })
 }
 
-func (a *accounts) FindByGoogleSubject(_ context.Context, sub string) (*domain.Account, error) {
-	return a.find(func(acc *domain.Account) bool { return acc.GoogleSubject != nil && *acc.GoogleSubject == sub })
+func (a *users) FindByGoogleSubject(_ context.Context, sub string) (*domain.User, error) {
+	return a.find(func(user *domain.User) bool { return user.GoogleSubject != nil && *user.GoogleSubject == sub })
 }
 
-func (a *accounts) Create(_ context.Context, acc *domain.Account) error {
+func (a *users) Create(_ context.Context, user *domain.User) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	acc.ID = uuid.NewString()
-	copied := *acc
-	a.byID[acc.ID] = &copied
+	user.ID = uuid.NewString()
+	copied := *user
+	a.byID[user.ID] = &copied
 
 	return nil
 }
 
-func (a *accounts) Update(_ context.Context, acc *domain.Account) error {
+func (a *users) Update(_ context.Context, user *domain.User) error {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	copied := *acc
-	a.byID[acc.ID] = &copied
+	copied := *user
+	a.byID[user.ID] = &copied
 
 	return nil
 }
 
-func (a *accounts) GrantPlatformAdmins(context.Context, []string) (int, error) { return 0, nil }
+func (a *users) GrantPlatformAdmins(context.Context, []string) (int, error) { return 0, nil }
 
 type mailer struct {
 	mu   sync.Mutex
@@ -126,12 +126,12 @@ func newEnv(t *testing.T, google handler.GoogleOAuthConfig) *env {
 	issuer := auth.NewTokenIssuer([]byte("k"), 20*time.Minute, time.Hour)
 	store := repository.NewMemoryStore()
 	m := &mailer{}
-	uc := usecase.NewIdentityUseCase(&accounts{byID: map[string]*domain.Account{}}, store, store, m, events{}, passTx{}, issuer)
+	uc := usecase.NewIdentityUseCase(&users{byID: map[string]*domain.User{}}, store, store, m, events{}, passTx{}, issuer)
 
 	return &env{srv: handler.NewServer(uc, 1200, google), issuer: issuer, mail: m}
 }
 
-// as returns ctx signed in as the token's account.
+// as returns ctx signed in as the token's user.
 func (e *env) as(t *testing.T, accessToken string) context.Context {
 	t.Helper()
 

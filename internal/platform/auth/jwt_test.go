@@ -24,7 +24,7 @@ func TestTokenIssuer_IssueAndVerify(t *testing.T) {
 	assert.Equal(t, 20*time.Minute, issuer.AccessTTL())
 	assert.Equal(t, 30*24*time.Hour, issuer.RefreshTTL())
 
-	token, expiresAt, err := issuer.IssueAccessToken(auth.Identity{AccountID: "acc-1", EmailVerified: true, PlatformAdmin: true})
+	token, expiresAt, err := issuer.IssueAccessToken(auth.Identity{UserID: "user-1", EmailVerified: true, PlatformAdmin: true})
 	require.NoError(t, err)
 	assert.WithinDuration(t, time.Now().Add(20*time.Minute), expiresAt, 5*time.Second)
 
@@ -43,7 +43,7 @@ func TestTokenIssuer_IssueAndVerify(t *testing.T) {
 
 			claims, err := issuer.Verify(tt.input)
 			require.NoError(t, err)
-			assert.Equal(t, "acc-1", claims.AccountID())
+			assert.Equal(t, "user-1", claims.UserID())
 			assert.True(t, claims.EmailVerified)
 			assert.True(t, claims.PlatformAdmin)
 			assert.NotEmpty(t, claims.ID)
@@ -57,10 +57,10 @@ func TestTokenIssuer_VerifyRejects(t *testing.T) {
 	issuer := newTestIssuer(time.Minute)
 	expired := newTestIssuer(-time.Minute)
 
-	expiredToken, _, err := expired.IssueAccessToken(auth.Identity{AccountID: "acc-1"})
+	expiredToken, _, err := expired.IssueAccessToken(auth.Identity{UserID: "user-1"})
 	require.NoError(t, err)
 
-	otherKey, _, err := auth.NewTokenIssuer([]byte("other"), time.Minute, time.Hour).IssueAccessToken(auth.Identity{AccountID: "acc-1"})
+	otherKey, _, err := auth.NewTokenIssuer([]byte("other"), time.Minute, time.Hour).IssueAccessToken(auth.Identity{UserID: "user-1"})
 	require.NoError(t, err)
 
 	noSubject, err := jwt.NewWithClaims(jwt.SigningMethodHS256, &auth.Claims{
@@ -69,7 +69,7 @@ func TestTokenIssuer_VerifyRejects(t *testing.T) {
 	require.NoError(t, err)
 
 	noneAlg, err := jwt.NewWithClaims(jwt.SigningMethodNone, &auth.Claims{
-		RegisteredClaims: jwt.RegisteredClaims{Subject: "acc-1"},
+		RegisteredClaims: jwt.RegisteredClaims{Subject: "user-1"},
 	}).SignedString(jwt.UnsafeAllowNoneSignatureType)
 	require.NoError(t, err)
 

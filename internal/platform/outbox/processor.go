@@ -21,10 +21,10 @@ func NewProcessor(pool *platformdb.Pool, tx Transactor) *Processor {
 }
 
 // Wrap returns h guarded by processed_events under consumer's name. The
-// handler runs in a transaction scoped to the event's garage and account.
+// handler runs in a transaction scoped to the event's garage and user.
 func (p *Processor) Wrap(consumer string, h Handler) Handler {
 	return func(ctx context.Context, event Event) error {
-		scope := platformdb.Scope{GarageID: event.GarageID, AccountID: event.AccountID}
+		scope := platformdb.Scope{GarageID: event.GarageID, UserID: event.UserID}
 
 		return p.tx.WithTransaction(ctx, scope, func(ctx context.Context) error {
 			tag, err := platformdb.QuerierFromContext(ctx, p.pool).Exec(ctx,

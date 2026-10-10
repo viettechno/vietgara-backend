@@ -200,7 +200,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		return nil, err
 	}
 
-	testAccountDomain, mailer, err := testAccountsFromEnv(mailer, mailFrom)
+	testUserDomain, mailer, err := testUsersFromEnv(mailer, mailFrom)
 	if err != nil {
 		return nil, err
 	}
@@ -216,7 +216,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	}
 
 	// Identity & Access
-	accounts := identityRepo.NewPostgresAccountRepository(pool)
+	users := identityRepo.NewPostgresUserRepository(pool)
 
 	var sessions interface {
 		identityUsecase.SessionStore
@@ -229,7 +229,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		slog.Warn("REDIS_ADDR is not set: sessions, OTPs and the entitlement cache live in memory (single instance only)")
 	}
 
-	identityUC := identityUsecase.NewIdentityUseCase(accounts, sessions, sessions, mailer, events, tx, issuer)
+	identityUC := identityUsecase.NewIdentityUseCase(users, sessions, sessions, mailer, events, tx, issuer)
 	if err := identityUC.GrantPlatformAdmins(ctx, envList("PLATFORM_ADMIN_EMAILS")); err != nil {
 		return nil, err
 	}
@@ -258,7 +258,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		Access:      accessReader,
 		Usage:       accessReader,
 		Limits:      limitChecker{entitlements: license.entitlements},
-		Accounts:    accountDirectory{accounts: accounts},
+		Users:       userDirectory{users: users},
 		Logos:       files,
 		Mailer:      mailer,
 		Events:      events,
@@ -307,7 +307,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// Notification (Release 1.5): the e-mail channel only (FR-NOT-04) --
 	// registration confirmation and license renewal reminders. No RPCs of
 	// its own; every e-mail is triggered by an event consumer (wireEvents).
-	notification := buildNotification(pool, mailer, accounts)
+	notification := buildNotification(pool, mailer, users)
 
 	// Mobile BFFs (Phase 2): the Technician App's work list (Release 2.2)
 	// and the Customer App's vehicles and history (Release 2.4).
@@ -323,12 +323,12 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		license.expiryJob.Schedule(ctx, envDuration("LICENSE_EXPIRY_JOB_INTERVAL", licenseUsecase.DefaultExpiryJobInterval))
 	})
 
-	if !testAccountDomain.IsZero() {
-		purge := identityUsecase.NewTestAccountPurgeJob(accounts, testAccountDomain,
-			envDuration("TEST_ACCOUNTS_RETENTION", identityUsecase.DefaultTestAccountRetention))
+	if !testUserDomain.IsZero() {
+		purge := identityUsecase.NewTestUserPurgeJob(users, testUserDomain,
+			envDuration("TEST_USERS_RETENTION", identityUsecase.DefaultTestUserRetention))
 
 		app.workers = append(app.workers, func(ctx context.Context) {
-			purge.Schedule(ctx, identityUsecase.DefaultTestAccountPurgeInterval)
+			purge.Schedule(ctx, identityUsecase.DefaultTestUserPurgeInterval)
 		})
 	}
 
@@ -359,7 +359,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	)
 
 	identityv1.RegisterAuthServiceServer(app.grpcServer, identitySrv)
-	identityv1.RegisterAccountServiceServer(app.grpcServer, identitySrv)
+	identityv1.RegisterUserServiceServer(app.grpcServer, identitySrv)
 	tenantv1.RegisterGarageServiceServer(app.grpcServer, tenantSrv)
 	tenantv1.RegisterStaffServiceServer(app.grpcServer, tenantSrv)
 	tenantv1.RegisterInvitationServiceServer(app.grpcServer, tenantSrv)
@@ -466,7 +466,7 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 	mux := httpapi.NewMux()
 
 	for _, register := range []func(context.Context, *runtime.ServeMux, *grpc.ClientConn) error{
-		identityv1.RegisterAuthServiceHandler, identityv1.RegisterAccountServiceHandler,
+		identityv1.RegisterAuthServiceHandler, identityv1.RegisterUserServiceHandler,
 		tenantv1.RegisterGarageServiceHandler, tenantv1.RegisterStaffServiceHandler,
 		tenantv1.RegisterInvitationServiceHandler, tenantv1.RegisterRoleServiceHandler,
 		tenantv1.RegisterStaffGroupServiceHandler,

@@ -1,5 +1,5 @@
 // Package usecase sends the Notification module's Phase 1 e-mails
-// (FR-NOT-04): a registration-confirmation e-mail once an account
+// (FR-NOT-04): a registration-confirmation e-mail once a user
 // verifies its address, and a license renewal reminder ahead of a
 // subscription's period end. Both are triggered by consuming an event
 // already published by another module (Event Design), not by a direct
@@ -19,26 +19,26 @@ type Mailer interface {
 	Send(ctx context.Context, msg mail.Message) error
 }
 
-// AccountInfo is the Identity module's view of an account that
+// UserInfo is the Identity module's view of a user that
 // Notification needs to address an e-mail.
-type AccountInfo struct {
+type UserInfo struct {
 	Email    string
 	FullName string
 	Locale   string
 }
 
-// ErrAccountNotFound is returned by AccountReader when the account no
+// ErrUserNotFound is returned by UserReader when the user no
 // longer exists; treated as a dropped, non-retryable event rather than a
-// handler failure (the account may have been deleted since the
+// handler failure (the user may have been deleted since the
 // triggering event was published).
-var ErrAccountNotFound = errors.New("account not found")
+var ErrUserNotFound = errors.New("user not found")
 
-// AccountReader reads the account an event concerns, when the event
+// UserReader reads the user an event concerns, when the event
 // itself doesn't already carry what's needed to address the e-mail (see
-// account.email_verified's payload, which does); implemented by an
+// user.email_verified's payload, which does); implemented by an
 // adapter over the Identity module in cmd/server.
-type AccountReader interface {
-	Get(ctx context.Context, accountID string) (AccountInfo, error)
+type UserReader interface {
+	Get(ctx context.Context, userID string) (UserInfo, error)
 }
 
 // Repository records what was sent (domain.Log), in the same transaction

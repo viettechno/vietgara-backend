@@ -12,10 +12,10 @@ import (
 const ConsumerName = "notification"
 
 // Subscribe registers the module's event consumers (Event Design Section
-// 4, FR-NOT-04): a registration-confirmation e-mail once an account
+// 4, FR-NOT-04): a registration-confirmation e-mail once a user
 // verifies its address, and a license renewal reminder ahead of a
 // subscription's period end.
 func Subscribe(bus outbox.Subscriber, processor *outbox.Processor, uc *usecase.NotificationUseCase) {
-	bus.Subscribe("account.email_verified", processor.Wrap(ConsumerName, uc.HandleAccountEmailVerified))
+	bus.Subscribe("user.email_verified", processor.Wrap(ConsumerName, uc.HandleUserEmailVerified))
 	bus.Subscribe("subscription.expiring_soon", processor.Wrap(ConsumerName, uc.HandleSubscriptionExpiringSoon))
 }

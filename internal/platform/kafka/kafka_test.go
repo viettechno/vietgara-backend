@@ -22,7 +22,7 @@ func TestTopicFor(t *testing.T) {
 	t.Parallel()
 
 	tests := map[string]string{
-		"account.email_verified":     "vietgara.identity.events",
+		"user.email_verified":        "vietgara.identity.events",
 		"garage.created":             "vietgara.tenant.events",
 		"invitation.created":         "vietgara.tenant.events",
 		"subscription.expiring_soon": "vietgara.license.events",
@@ -133,7 +133,7 @@ func TestConsumer(t *testing.T) {
 
 		return nil
 	})
-	consumer.Subscribe("account.email_verified", func(_ context.Context, e outbox.Event) error {
+	consumer.Subscribe("user.email_verified", func(_ context.Context, e outbox.Event) error {
 		if e.ID == "flaky" && failures.Add(1) < 2 {
 			return errors.New("transient")
 		}
@@ -154,8 +154,8 @@ func TestConsumer(t *testing.T) {
 	go func() { stopped <- consumer.Run(ctx) }()
 
 	require.NoError(t, producer.Publish(t.Context(), event("g-created", "garage.created")))
-	require.NoError(t, producer.Publish(t.Context(), event("flaky", "account.email_verified")))
-	require.NoError(t, producer.Publish(t.Context(), event("broken", "account.email_verified")))
+	require.NoError(t, producer.Publish(t.Context(), event("flaky", "user.email_verified")))
+	require.NoError(t, producer.Publish(t.Context(), event("broken", "user.email_verified")))
 
 	raw, err := kgo.NewClient(kgo.SeedBrokers(brokers...))
 	require.NoError(t, err)

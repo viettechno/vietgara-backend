@@ -6,7 +6,7 @@
 //
 //	pg := pgtest.StartMigrated(tb)
 //	pool := pg.AppPool(tb)
-//	_, err := pg.Admin.ExecContext(ctx, `INSERT INTO accounts ...`) // seed past RLS
+//	_, err := pg.Admin.ExecContext(ctx, `INSERT INTO users ...`) // seed past RLS
 package pgtest
 
 import (

@@ -15,11 +15,11 @@ import (
 )
 
 type store interface {
-	SaveRefreshToken(ctx context.Context, token, accountID string, ttl time.Duration) error
-	RefreshTokenAccount(ctx context.Context, token string) (string, error)
+	SaveRefreshToken(ctx context.Context, token, userID string, ttl time.Duration) error
+	RefreshTokenUser(ctx context.Context, token string) (string, error)
 	RevokeRefreshToken(ctx context.Context, token string) error
-	RevokeAllRefreshTokens(ctx context.Context, accountID string) error
-	SaveResetToken(ctx context.Context, token, accountID string, ttl time.Duration) error
+	RevokeAllRefreshTokens(ctx context.Context, userID string) error
+	SaveResetToken(ctx context.Context, token, userID string, ttl time.Duration) error
 	ConsumeResetToken(ctx context.Context, token string) (string, error)
 	Get(ctx context.Context, key string) (*domain.OTP, error)
 	Put(ctx context.Context, key string, otp *domain.OTP) error
@@ -45,26 +45,26 @@ func TestSessionStores(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			ctx := t.Context()
 
-			require.NoError(t, s.SaveRefreshToken(ctx, "r1", "acc", time.Hour))
-			require.NoError(t, s.SaveRefreshToken(ctx, "r2", "acc", time.Hour))
+			require.NoError(t, s.SaveRefreshToken(ctx, "r1", "user", time.Hour))
+			require.NoError(t, s.SaveRefreshToken(ctx, "r2", "user", time.Hour))
 
-			id, err := s.RefreshTokenAccount(ctx, "r1")
+			id, err := s.RefreshTokenUser(ctx, "r1")
 			require.NoError(t, err)
-			assert.Equal(t, "acc", id)
+			assert.Equal(t, "user", id)
 
 			require.NoError(t, s.RevokeRefreshToken(ctx, "r1"))
 			require.NoError(t, s.RevokeRefreshToken(ctx, "r1"), "revoking twice is fine")
-			_, err = s.RefreshTokenAccount(ctx, "r1")
+			_, err = s.RefreshTokenUser(ctx, "r1")
 			require.ErrorIs(t, err, domain.ErrRefreshTokenInvalid)
 
-			require.NoError(t, s.RevokeAllRefreshTokens(ctx, "acc"))
-			_, err = s.RefreshTokenAccount(ctx, "r2")
+			require.NoError(t, s.RevokeAllRefreshTokens(ctx, "user"))
+			_, err = s.RefreshTokenUser(ctx, "r2")
 			require.ErrorIs(t, err, domain.ErrRefreshTokenInvalid)
 
-			require.NoError(t, s.SaveResetToken(ctx, "reset", "acc", time.Minute))
+			require.NoError(t, s.SaveResetToken(ctx, "reset", "user", time.Minute))
 			id, err = s.ConsumeResetToken(ctx, "reset")
 			require.NoError(t, err)
-			assert.Equal(t, "acc", id)
+			assert.Equal(t, "user", id)
 
 			_, err = s.ConsumeResetToken(ctx, "reset")
 			require.ErrorIs(t, err, domain.ErrResetTokenInvalid)
@@ -114,8 +114,8 @@ func TestMemoryStoreExpiry(t *testing.T) {
 	s := repository.NewMemoryStore()
 	ctx := t.Context()
 
-	require.NoError(t, s.SaveRefreshToken(ctx, "r", "acc", -time.Second))
-	_, err := s.RefreshTokenAccount(ctx, "r")
+	require.NoError(t, s.SaveRefreshToken(ctx, "r", "user", -time.Second))
+	_, err := s.RefreshTokenUser(ctx, "r")
 	require.ErrorIs(t, err, domain.ErrRefreshTokenInvalid)
 
 	require.NoError(t, s.Put(ctx, "k", &domain.OTP{ExpiresAt: time.Now().Add(-time.Second)}))
@@ -134,7 +134,7 @@ func TestRedisStoreErrors(t *testing.T) {
 	s := repository.NewRedisStore(client)
 	ctx := t.Context()
 
-	_, err := s.RefreshTokenAccount(ctx, "x")
+	_, err := s.RefreshTokenUser(ctx, "x")
 	require.Error(t, err)
 	require.Error(t, s.RevokeRefreshToken(ctx, "x"))
 	require.Error(t, s.RevokeAllRefreshTokens(ctx, "x"))

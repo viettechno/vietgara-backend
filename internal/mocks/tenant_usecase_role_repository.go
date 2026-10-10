@@ -287,8 +287,8 @@ func (_c *MockRoleRepository_FindByID_Call) RunAndReturn(run func(ctx context.Co
 }
 
 // ListByOwner provides a mock function for the type MockRoleRepository
-func (_mock *MockRoleRepository) ListByOwner(ctx context.Context, ownerAccountID string) ([]*domain.Role, error) {
-	ret := _mock.Called(ctx, ownerAccountID)
+func (_mock *MockRoleRepository) ListByOwner(ctx context.Context, ownerUserID string) ([]*domain.Role, error) {
+	ret := _mock.Called(ctx, ownerUserID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ListByOwner")
@@ -297,17 +297,17 @@ func (_mock *MockRoleRepository) ListByOwner(ctx context.Context, ownerAccountID
 	var r0 []*domain.Role
 	var r1 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]*domain.Role, error)); ok {
-		return returnFunc(ctx, ownerAccountID)
+		return returnFunc(ctx, ownerUserID)
 	}
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []*domain.Role); ok {
-		r0 = returnFunc(ctx, ownerAccountID)
+		r0 = returnFunc(ctx, ownerUserID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*domain.Role)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, ownerAccountID)
+		r1 = returnFunc(ctx, ownerUserID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -321,12 +321,12 @@ type MockRoleRepository_ListByOwner_Call struct {
 
 // ListByOwner is a helper method to define mock.On call
 //   - ctx context.Context
-//   - ownerAccountID string
-func (_e *MockRoleRepository_Expecter) ListByOwner(ctx any, ownerAccountID any) *MockRoleRepository_ListByOwner_Call {
-	return &MockRoleRepository_ListByOwner_Call{Call: _e.mock.On("ListByOwner", ctx, ownerAccountID)}
+//   - ownerUserID string
+func (_e *MockRoleRepository_Expecter) ListByOwner(ctx any, ownerUserID any) *MockRoleRepository_ListByOwner_Call {
+	return &MockRoleRepository_ListByOwner_Call{Call: _e.mock.On("ListByOwner", ctx, ownerUserID)}
 }
 
-func (_c *MockRoleRepository_ListByOwner_Call) Run(run func(ctx context.Context, ownerAccountID string)) *MockRoleRepository_ListByOwner_Call {
+func (_c *MockRoleRepository_ListByOwner_Call) Run(run func(ctx context.Context, ownerUserID string)) *MockRoleRepository_ListByOwner_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -349,7 +349,7 @@ func (_c *MockRoleRepository_ListByOwner_Call) Return(roles []*domain.Role, err 
 	return _c
 }
 
-func (_c *MockRoleRepository_ListByOwner_Call) RunAndReturn(run func(ctx context.Context, ownerAccountID string) ([]*domain.Role, error)) *MockRoleRepository_ListByOwner_Call {
+func (_c *MockRoleRepository_ListByOwner_Call) RunAndReturn(run func(ctx context.Context, ownerUserID string) ([]*domain.Role, error)) *MockRoleRepository_ListByOwner_Call {
 	_c.Call.Return(run)
 	return _c
 }

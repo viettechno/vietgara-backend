@@ -65,24 +65,24 @@ func TestAccessCheck(t *testing.T) {
 
 	tests := []struct {
 		name string
-		acc  *access.Access
+		user *access.Access
 		rule access.Rule
 		want error
 	}{
-		{name: "owner may do anything, even when inactive", acc: owner, rule: access.Requires(access.StaffWrite)},
-		{name: "owner-only for owner", acc: owner, rule: access.OwnerOnly()},
-		{name: "member with permission", acc: member, rule: access.Requires(access.CustomerRead)},
-		{name: "member without permission", acc: member, rule: access.Requires(access.CustomerWrite), want: access.ErrRoleDenied},
-		{name: "member on owner-only", acc: member, rule: access.OwnerOnly(), want: access.ErrOwnerOnly},
-		{name: "any member", acc: member, rule: access.Member()},
-		{name: "inactive garage blocks members", acc: closed, rule: access.Member(), want: access.ErrGarageClosed},
-		{name: "inactive allowed explicitly", acc: closed, rule: access.Rule{Permission: access.CustomerRead, AllowInactive: true}},
+		{name: "owner may do anything, even when inactive", user: owner, rule: access.Requires(access.StaffWrite)},
+		{name: "owner-only for owner", user: owner, rule: access.OwnerOnly()},
+		{name: "member with permission", user: member, rule: access.Requires(access.CustomerRead)},
+		{name: "member without permission", user: member, rule: access.Requires(access.CustomerWrite), want: access.ErrRoleDenied},
+		{name: "member on owner-only", user: member, rule: access.OwnerOnly(), want: access.ErrOwnerOnly},
+		{name: "any member", user: member, rule: access.Member()},
+		{name: "inactive garage blocks members", user: closed, rule: access.Member(), want: access.ErrGarageClosed},
+		{name: "inactive allowed explicitly", user: closed, rule: access.Rule{Permission: access.CustomerRead, AllowInactive: true}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			assert.ErrorIs(t, tt.acc.Check(tt.rule), tt.want)
+			assert.ErrorIs(t, tt.user.Check(tt.rule), tt.want)
 		})
 	}
 

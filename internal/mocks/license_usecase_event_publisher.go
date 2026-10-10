@@ -38,8 +38,8 @@ func (_m *MockLicenseEventPublisher) EXPECT() *MockLicenseEventPublisher_Expecte
 }
 
 // Publish provides a mock function for the type MockLicenseEventPublisher
-func (_mock *MockLicenseEventPublisher) Publish(ctx context.Context, eventType string, garageID string, accountID string, payload any) error {
-	ret := _mock.Called(ctx, eventType, garageID, accountID, payload)
+func (_mock *MockLicenseEventPublisher) Publish(ctx context.Context, eventType string, garageID string, userID string, payload any) error {
+	ret := _mock.Called(ctx, eventType, garageID, userID, payload)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Publish")
@@ -47,7 +47,7 @@ func (_mock *MockLicenseEventPublisher) Publish(ctx context.Context, eventType s
 
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, any) error); ok {
-		r0 = returnFunc(ctx, eventType, garageID, accountID, payload)
+		r0 = returnFunc(ctx, eventType, garageID, userID, payload)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -63,13 +63,13 @@ type MockLicenseEventPublisher_Publish_Call struct {
 //   - ctx context.Context
 //   - eventType string
 //   - garageID string
-//   - accountID string
+//   - userID string
 //   - payload any
-func (_e *MockLicenseEventPublisher_Expecter) Publish(ctx any, eventType any, garageID any, accountID any, payload any) *MockLicenseEventPublisher_Publish_Call {
-	return &MockLicenseEventPublisher_Publish_Call{Call: _e.mock.On("Publish", ctx, eventType, garageID, accountID, payload)}
+func (_e *MockLicenseEventPublisher_Expecter) Publish(ctx any, eventType any, garageID any, userID any, payload any) *MockLicenseEventPublisher_Publish_Call {
+	return &MockLicenseEventPublisher_Publish_Call{Call: _e.mock.On("Publish", ctx, eventType, garageID, userID, payload)}
 }
 
-func (_c *MockLicenseEventPublisher_Publish_Call) Run(run func(ctx context.Context, eventType string, garageID string, accountID string, payload any)) *MockLicenseEventPublisher_Publish_Call {
+func (_c *MockLicenseEventPublisher_Publish_Call) Run(run func(ctx context.Context, eventType string, garageID string, userID string, payload any)) *MockLicenseEventPublisher_Publish_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -107,7 +107,7 @@ func (_c *MockLicenseEventPublisher_Publish_Call) Return(err error) *MockLicense
 	return _c
 }
 
-func (_c *MockLicenseEventPublisher_Publish_Call) RunAndReturn(run func(ctx context.Context, eventType string, garageID string, accountID string, payload any) error) *MockLicenseEventPublisher_Publish_Call {
+func (_c *MockLicenseEventPublisher_Publish_Call) RunAndReturn(run func(ctx context.Context, eventType string, garageID string, userID string, payload any) error) *MockLicenseEventPublisher_Publish_Call {
 	_c.Call.Return(run)
 	return _c
 }

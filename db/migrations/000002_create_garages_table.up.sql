@@ -1,8 +1,8 @@
 -- Tenant/Garage Management (Database Design 2.2): one garage = one tenant;
--- an owner account has many garages (FR-TEN-01/02/05).
+-- an owner user has many garages (FR-TEN-01/02/05).
 
 -- ---------------------------------------------------------------------------
--- Row-Level Security helpers: the tenant (garage) and caller (account) of
+-- Row-Level Security helpers: the tenant (garage) and caller (user) of
 -- the current transaction, set by the application with
 -- set_config(..., true). An unset or empty setting is NULL, which matches
 -- nothing.
@@ -10,8 +10,8 @@
 CREATE OR REPLACE FUNCTION app_current_garage_id() RETURNS UUID
 LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting('app.current_garage_id', true), '')::uuid $$;
 
-CREATE OR REPLACE FUNCTION app_current_account_id() RETURNS UUID
-LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting('app.current_account_id', true), '')::uuid $$;
+CREATE OR REPLACE FUNCTION app_current_user_id() RETURNS UUID
+LANGUAGE sql STABLE AS $$ SELECT NULLIF(current_setting('app.current_user_id', true), '')::uuid $$;
 
 CREATE TYPE garage_status AS ENUM ('active', 'inactive');
 
@@ -26,7 +26,7 @@ CREATE TYPE quote_approval_mode AS ENUM ('link', 'manual');
 -- The numbering templates use {YYYY}, {YY}, {MM}, {DD} and one {SEQ:n}.
 CREATE TABLE garages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     tax_code VARCHAR(20),
     address TEXT,
@@ -55,7 +55,7 @@ CREATE TABLE garages (
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_garages_account_id ON garages (account_id);
+CREATE INDEX idx_garages_user_id ON garages (user_id);
 CREATE INDEX idx_garages_status ON garages (status);
 
 CREATE OR REPLACE FUNCTION update_garages_updated_at()

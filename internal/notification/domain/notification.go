@@ -26,9 +26,9 @@ const (
 // processed_events already gives the triggering event exactly-once
 // delivery (Event Design Section 6).
 type Log struct {
-	ID        string
-	AccountID string
-	Channel   Channel
+	ID      string
+	UserID  string
+	Channel Channel
 	// Template names the rendered e-mail (mail.TemplateRegistrationConfirmation, etc.).
 	Template  string
 	Recipient string

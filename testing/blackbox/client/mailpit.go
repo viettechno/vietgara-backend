@@ -46,7 +46,7 @@ func (m *Message) OTP() (string, error) {
 var ErrNoMessage = errors.New("no e-mail arrived")
 
 // WaitForMessage returns the newest e-mail to address, polling until one
-// arrives or ctx ends. Every account the suite creates has a unique
+// arrives or ctx ends. Every user the suite creates has a unique
 // address, so the newest message is the one the step under test sent.
 func (m *Mailpit) WaitForMessage(ctx context.Context, address string) (*Message, error) {
 	ticker := time.NewTicker(250 * time.Millisecond)

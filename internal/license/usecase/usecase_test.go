@@ -35,16 +35,16 @@ func TestTrialAndPlanChange(t *testing.T) {
 	e := licensetest.NewEnv()
 	ctx := t.Context()
 
-	data, _ := json.Marshal(map[string]string{"account_id": "acc-1"})
-	require.NoError(t, e.Subscriptions.HandleAccountEmailVerified(ctx, outbox.Event{Data: data}))
-	require.NoError(t, e.Subscriptions.HandleAccountEmailVerified(ctx, outbox.Event{Data: data}), "idempotent")
-	require.NoError(t, e.Subscriptions.HandleAccountEmailVerified(ctx, outbox.Event{Data: []byte("{}")}))
+	data, _ := json.Marshal(map[string]string{"user_id": "user-1"})
+	require.NoError(t, e.Subscriptions.HandleUserEmailVerified(ctx, outbox.Event{Data: data}))
+	require.NoError(t, e.Subscriptions.HandleUserEmailVerified(ctx, outbox.Event{Data: data}), "idempotent")
+	require.NoError(t, e.Subscriptions.HandleUserEmailVerified(ctx, outbox.Event{Data: []byte("{}")}))
 
-	sub, usage, err := e.Subscriptions.GetMine(ctx, "acc-1")
+	sub, usage, err := e.Subscriptions.GetMine(ctx, "user-1")
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusTrial, sub.Status)
 	assert.Equal(t, usecase.Usage{}, usage)
-	assert.True(t, e.Store.Flags["acc-1"][domain.FeatureQuotes])
+	assert.True(t, e.Store.Flags["user-1"][domain.FeatureQuotes])
 	assert.Contains(t, e.Store.Events, usecase.EventEntitlementUpdated)
 
 	plans, err := e.Subscriptions.ListPlans(ctx)
@@ -52,15 +52,15 @@ func TestTrialAndPlanChange(t *testing.T) {
 	require.Len(t, plans, 2)
 	assert.Equal(t, "starter", plans[0].Code)
 
-	e.Store.Garages["acc-1"], e.Store.Staff["acc-1"] = 2, 3
-	_, _, err = e.Subscriptions.ChangeMyPlan(ctx, "acc-1", "p-starter")
+	e.Store.Garages["user-1"], e.Store.Staff["user-1"] = 2, 3
+	_, _, err = e.Subscriptions.ChangeMyPlan(ctx, "user-1", "p-starter")
 	requireReason(t, err, domain.ReasonPlanLimitReached)
 
-	e.Store.Garages["acc-1"], e.Store.Staff["acc-1"] = 1, 6
-	_, _, err = e.Subscriptions.ChangeMyPlan(ctx, "acc-1", "p-starter")
+	e.Store.Garages["user-1"], e.Store.Staff["user-1"] = 1, 6
+	_, _, err = e.Subscriptions.ChangeMyPlan(ctx, "user-1", "p-starter")
 	requireReason(t, err, domain.ReasonPlanLimitReached)
 
-	changed, usage, err := e.Subscriptions.ChangeMyPlan(ctx, "acc-1", "p-pro")
+	changed, usage, err := e.Subscriptions.ChangeMyPlan(ctx, "user-1", "p-pro")
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusActive, changed.Status)
 	assert.Equal(t, 6, usage.Staff)
@@ -68,13 +68,13 @@ func TestTrialAndPlanChange(t *testing.T) {
 	assert.Contains(t, e.Store.Events, usecase.EventSubscriptionStatusChanged)
 	assert.Contains(t, e.Store.Audits, "subscription.plan_changed")
 
-	_, _, err = e.Subscriptions.ChangeMyPlan(ctx, "acc-1", "p-legacy")
+	_, _, err = e.Subscriptions.ChangeMyPlan(ctx, "user-1", "p-legacy")
 	requireReason(t, err, domain.ReasonPlanNotAvailable)
-	_, _, err = e.Subscriptions.ChangeMyPlan(ctx, "acc-1", "missing")
+	_, _, err = e.Subscriptions.ChangeMyPlan(ctx, "user-1", "missing")
 	requireReason(t, err, apperror.ReasonNotFound)
 
 	// GetMine starts the trial of an owner without a subscription.
-	sub, _, err = e.Subscriptions.GetMine(ctx, "acc-new")
+	sub, _, err = e.Subscriptions.GetMine(ctx, "user-new")
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusTrial, sub.Status)
 }
@@ -195,7 +195,7 @@ func TestLicenseMode(t *testing.T) {
 	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "owner"))
 
 	// The authorized access in the context names the owner.
-	actx := access.WithAccess(ctx, &access.Access{GarageID: "g-2", OwnerAccountID: "owner"})
+	actx := access.WithAccess(ctx, &access.Access{GarageID: "g-2", OwnerUserID: "owner"})
 	mode, err = e.Entitlements.LicenseMode(actx, "g-2")
 	require.NoError(t, err)
 	assert.Equal(t, middleware.LicenseFull, mode)
@@ -300,8 +300,8 @@ func TestAdmin(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, all, 5)
 
-	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "acc-1"))
-	e.Store.Emails["acc-1"] = "owner@example.com"
+	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "user-1"))
+	e.Store.Emails["user-1"] = "owner@example.com"
 
 	page, err := e.Subscriptions.ListSubscriptions(ctx, usecase.SubscriptionFilter{Query: "owner", Page: 1, PageSize: 20})
 	require.NoError(t, err)

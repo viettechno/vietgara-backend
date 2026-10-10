@@ -17,8 +17,8 @@ import (
 const DefaultCacheTTL = 5 * time.Minute
 
 // CacheKey is the entitlement cache key of an owner (LLD Section 3.3).
-func CacheKey(accountID string) string {
-	return "license:entitlement:" + accountID
+func CacheKey(userID string) string {
+	return "license:entitlement:" + userID
 }
 
 // RedisEntitlementCache stores entitlements as JSON in Redis (Memorystore),
@@ -34,8 +34,8 @@ func NewRedisEntitlementCache(client redis.UniversalClient, ttl time.Duration) *
 }
 
 // Get returns the cached entitlements, or (nil, nil) on a miss.
-func (c *RedisEntitlementCache) Get(ctx context.Context, accountID string) (*domain.Entitlements, error) {
-	raw, err := c.client.Get(ctx, CacheKey(accountID)).Bytes()
+func (c *RedisEntitlementCache) Get(ctx context.Context, userID string) (*domain.Entitlements, error) {
+	raw, err := c.client.Get(ctx, CacheKey(userID)).Bytes()
 	if errors.Is(err, redis.Nil) {
 		return nil, nil //nolint:nilnil // cache miss
 	}
@@ -59,12 +59,12 @@ func (c *RedisEntitlementCache) Set(ctx context.Context, e *domain.Entitlements)
 		return err
 	}
 
-	return c.client.Set(ctx, CacheKey(e.AccountID), raw, c.ttl).Err()
+	return c.client.Set(ctx, CacheKey(e.UserID), raw, c.ttl).Err()
 }
 
 // Delete drops the owner's entry.
-func (c *RedisEntitlementCache) Delete(ctx context.Context, accountID string) error {
-	return c.client.Del(ctx, CacheKey(accountID)).Err()
+func (c *RedisEntitlementCache) Delete(ctx context.Context, userID string) error {
+	return c.client.Del(ctx, CacheKey(userID)).Err()
 }
 
 // MemoryEntitlementCache is a per-process cache for local development and
@@ -87,11 +87,11 @@ func NewMemoryEntitlementCache(ttl time.Duration) *MemoryEntitlementCache {
 }
 
 // Get returns a copy of the cached entitlements, or (nil, nil) on a miss.
-func (c *MemoryEntitlementCache) Get(_ context.Context, accountID string) (*domain.Entitlements, error) {
+func (c *MemoryEntitlementCache) Get(_ context.Context, userID string) (*domain.Entitlements, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	entry, ok := c.entries[accountID]
+	entry, ok := c.entries[userID]
 	if !ok || !c.now().Before(entry.expires) {
 		return nil, nil //nolint:nilnil // cache miss
 	}
@@ -106,17 +106,17 @@ func (c *MemoryEntitlementCache) Set(_ context.Context, e *domain.Entitlements) 
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.entries[e.AccountID] = memoryEntry{value: *e, expires: c.now().Add(c.ttl)}
+	c.entries[e.UserID] = memoryEntry{value: *e, expires: c.now().Add(c.ttl)}
 
 	return nil
 }
 
 // Delete drops the owner's entry.
-func (c *MemoryEntitlementCache) Delete(_ context.Context, accountID string) error {
+func (c *MemoryEntitlementCache) Delete(_ context.Context, userID string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	delete(c.entries, accountID)
+	delete(c.entries, userID)
 
 	return nil
 }

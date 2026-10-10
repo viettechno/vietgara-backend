@@ -13,7 +13,7 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-// Register creates an owner account (FR-IAM-01); answers 201.
+// Register creates an owner user (FR-IAM-01); answers 201.
 func (s *Server) Register(ctx context.Context, req *identityv1.RegisterRequest) (*identityv1.RegisterResponse, error) {
 	session, err := s.uc.Register(ctx, usecase.RegisterRequest{
 		Email:    req.GetEmail(),
@@ -62,7 +62,7 @@ func (s *Server) Logout(ctx context.Context, req *identityv1.LogoutRequest) (*id
 
 // SendEmailVerificationOtp e-mails a verification OTP.
 func (s *Server) SendEmailVerificationOtp(ctx context.Context, _ *identityv1.SendEmailVerificationOtpRequest) (*identityv1.SendEmailVerificationOtpResponse, error) {
-	challenge, err := s.uc.SendEmailVerificationOTP(ctx, middleware.AccountID(ctx))
+	challenge, err := s.uc.SendEmailVerificationOTP(ctx, middleware.UserID(ctx))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -72,7 +72,7 @@ func (s *Server) SendEmailVerificationOtp(ctx context.Context, _ *identityv1.Sen
 
 // VerifyEmail confirms the e-mail with the OTP.
 func (s *Server) VerifyEmail(ctx context.Context, req *identityv1.VerifyEmailRequest) (*identityv1.VerifyEmailResponse, error) {
-	session, err := s.uc.VerifyEmail(ctx, middleware.AccountID(ctx), req.GetOtpCode(), req.GetRefreshToken())
+	session, err := s.uc.VerifyEmail(ctx, middleware.UserID(ctx), req.GetOtpCode(), req.GetRefreshToken())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -109,20 +109,20 @@ func (s *Server) ResetPassword(ctx context.Context, req *identityv1.ResetPasswor
 	return &identityv1.ResetPasswordResponse{}, nil
 }
 
-// GetMe returns the signed-in account.
+// GetMe returns the signed-in user.
 func (s *Server) GetMe(ctx context.Context, _ *identityv1.GetMeRequest) (*identityv1.GetMeResponse, error) {
-	acc, err := s.uc.GetMe(ctx, middleware.AccountID(ctx))
+	user, err := s.uc.GetMe(ctx, middleware.UserID(ctx))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	return &identityv1.GetMeResponse{Account: accountToProto(acc)}, nil
+	return &identityv1.GetMeResponse{User: userToProto(user)}, nil
 }
 
 // UpdateMe changes the fields named by the update mask (all settable
 // fields when it is empty).
 func (s *Server) UpdateMe(ctx context.Context, req *identityv1.UpdateMeRequest) (*identityv1.UpdateMeResponse, error) {
-	in := req.GetAccount()
+	in := req.GetUser()
 	update := usecase.ProfileUpdate{}
 
 	for _, path := range maskPaths(req.GetUpdateMask().GetPaths(), "full_name", "phone", "locale") {
@@ -141,12 +141,12 @@ func (s *Server) UpdateMe(ctx context.Context, req *identityv1.UpdateMeRequest) 
 		}
 	}
 
-	acc, err := s.uc.UpdateMe(ctx, middleware.AccountID(ctx), update)
+	user, err := s.uc.UpdateMe(ctx, middleware.UserID(ctx), update)
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	return &identityv1.UpdateMeResponse{Account: accountToProto(acc)}, nil
+	return &identityv1.UpdateMeResponse{User: userToProto(user)}, nil
 }
 
 // maskPaths returns paths, or every settable field when the mask is empty.

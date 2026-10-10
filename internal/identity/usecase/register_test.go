@@ -17,11 +17,11 @@ func TestRegister(t *testing.T) {
 	e := newEnv(t)
 	session := e.register(t)
 
-	acc := session.Account
-	assert.Equal(t, "owner@example.com", acc.Email)
-	assert.False(t, acc.EmailVerified())
-	assert.Equal(t, domain.LocaleVI, acc.Locale)
-	assert.NotNil(t, acc.PasswordHash)
+	user := session.User
+	assert.Equal(t, "owner@example.com", user.Email)
+	assert.False(t, user.EmailVerified())
+	assert.Equal(t, domain.LocaleVI, user.Locale)
+	assert.NotNil(t, user.PasswordHash)
 	assert.NotEmpty(t, session.AccessToken)
 
 	claims, err := e.issuer.Verify(session.AccessToken)
@@ -71,26 +71,26 @@ func TestRegisterFailures(t *testing.T) {
 	req := usecase.RegisterRequest{Email: "a@b.vn", Password: "secret123", FullName: "A", Locale: domain.LocaleEN}
 
 	e := newEnv(t)
-	e.accounts.createErr = domain.ErrEmailAlreadyExists
+	e.users.createErr = domain.ErrEmailAlreadyExists
 	_, err := e.uc.Register(t.Context(), req)
 	requireReason(t, err, domain.ReasonEmailTaken)
 
-	e.accounts.createErr = domain.ErrPhoneAlreadyExists
+	e.users.createErr = domain.ErrPhoneAlreadyExists
 	_, err = e.uc.Register(t.Context(), req)
 	requireReason(t, err, domain.ReasonPhoneTaken)
 
-	e.accounts.createErr = errBoom
+	e.users.createErr = errBoom
 	_, err = e.uc.Register(t.Context(), req)
 	requireReason(t, err, apperror.ReasonInternal)
 
-	e.accounts.createErr, e.accounts.findErr = nil, errBoom
+	e.users.createErr, e.users.findErr = nil, errBoom
 	_, err = e.uc.Register(t.Context(), req)
 	requireReason(t, err, apperror.ReasonInternal)
 
 	req.Phone = new("0901112222")
-	e.accounts.findErr = nil
+	e.users.findErr = nil
 	e2 := newEnv(t)
-	e2.accounts.findErr = nil
+	e2.users.findErr = nil
 	_, err = e2.uc.Register(t.Context(), req)
 	require.NoError(t, err)
 
@@ -107,8 +107,8 @@ func TestGrantPlatformAdmins(t *testing.T) {
 	e := newEnv(t)
 	require.NoError(t, e.uc.GrantPlatformAdmins(t.Context(), nil))
 	require.NoError(t, e.uc.GrantPlatformAdmins(t.Context(), []string{" Admin@viettechno.com ", "bad"}))
-	assert.Equal(t, []string{"admin@viettechno.com"}, e.accounts.granted)
+	assert.Equal(t, []string{"admin@viettechno.com"}, e.users.granted)
 
-	e.accounts.findErr = errBoom
+	e.users.findErr = errBoom
 	require.Error(t, e.uc.GrantPlatformAdmins(t.Context(), []string{"a@b.vn"}))
 }

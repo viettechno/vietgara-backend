@@ -24,7 +24,7 @@ func NewPostgresStaffRepository(pool *platformdb.Pool) *PostgresStaffRepository 
 // staffSelect loads memberships with their groups and the union of their
 // groups' role permissions.
 const staffSelect = `
-	SELECT s.id, s.garage_id, s.account_id, s.status, s.account_id = g.account_id,
+	SELECT s.id, s.garage_id, s.user_id, s.status, s.user_id = g.user_id,
 		COALESCE(array_agg(DISTINCT m.group_id::text) FILTER (WHERE m.group_id IS NOT NULL), '{}'),
 		COALESCE(array_agg(DISTINCT rp.permission::text) FILTER (WHERE rp.permission IS NOT NULL), '{}'),
 		s.created_at, s.updated_at
@@ -34,7 +34,7 @@ const staffSelect = `
 	LEFT JOIN staff_groups sg ON sg.id = m.group_id
 	LEFT JOIN role_permissions rp ON rp.role_id = sg.role_id`
 
-const staffGroupBy = ` GROUP BY s.id, g.account_id`
+const staffGroupBy = ` GROUP BY s.id, g.user_id`
 
 func scanStaff(row pgx.Row) (*domain.Staff, error) {
 	var (
@@ -43,7 +43,7 @@ func scanStaff(row pgx.Row) (*domain.Staff, error) {
 		permissions []string
 	)
 
-	err := row.Scan(&s.ID, &s.GarageID, &s.AccountID, &status, &s.Owner, &s.GroupIDs, &permissions, &s.CreatedAt, &s.UpdatedAt)
+	err := row.Scan(&s.ID, &s.GarageID, &s.UserID, &status, &s.Owner, &s.GroupIDs, &permissions, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrStaffNotFound
@@ -74,18 +74,18 @@ func (r *PostgresStaffRepository) FindByID(ctx context.Context, garageID, staffI
 	return scanStaff(q.QueryRow(ctx, staffSelect+` WHERE s.garage_id = $1 AND s.id = $2`+staffGroupBy, garageID, staffID))
 }
 
-// FindByAccount returns the account's membership of the garage.
-func (r *PostgresStaffRepository) FindByAccount(ctx context.Context, garageID, accountID string) (*domain.Staff, error) {
+// FindByUser returns the user's membership of the garage.
+func (r *PostgresStaffRepository) FindByUser(ctx context.Context, garageID, userID string) (*domain.Staff, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
-	return scanStaff(q.QueryRow(ctx, staffSelect+` WHERE s.garage_id = $1 AND s.account_id = $2`+staffGroupBy, garageID, accountID))
+	return scanStaff(q.QueryRow(ctx, staffSelect+` WHERE s.garage_id = $1 AND s.user_id = $2`+staffGroupBy, garageID, userID))
 }
 
 // List returns the garage's members, owner first.
 func (r *PostgresStaffRepository) List(ctx context.Context, garageID string) ([]*domain.Staff, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
-	rows, err := q.Query(ctx, staffSelect+` WHERE s.garage_id = $1`+staffGroupBy+` ORDER BY s.account_id = g.account_id DESC, s.created_at`, garageID)
+	rows, err := q.Query(ctx, staffSelect+` WHERE s.garage_id = $1`+staffGroupBy+` ORDER BY s.user_id = g.user_id DESC, s.created_at`, garageID)
 	if err != nil {
 		return nil, err
 	}
@@ -93,15 +93,15 @@ func (r *PostgresStaffRepository) List(ctx context.Context, garageID string) ([]
 	return collect(rows, scanStaff)
 }
 
-// Create inserts a membership; a second membership of the same account
+// Create inserts a membership; a second membership of the same user
 // yields domain.ErrAlreadyMember.
 func (r *PostgresStaffRepository) Create(ctx context.Context, s *domain.Staff) error {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
 	err := q.QueryRow(ctx, `
-		INSERT INTO garage_staff (garage_id, account_id, status) VALUES ($1, $2, $3)
+		INSERT INTO garage_staff (garage_id, user_id, status) VALUES ($1, $2, $3)
 		RETURNING id, created_at, updated_at`,
-		s.GarageID, s.AccountID, string(s.Status),
+		s.GarageID, s.UserID, string(s.Status),
 	).Scan(&s.ID, &s.CreatedAt, &s.UpdatedAt)
 	if isUniqueViolation(err, "") {
 		return domain.ErrAlreadyMember

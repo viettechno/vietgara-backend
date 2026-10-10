@@ -17,16 +17,16 @@ func TestStaffRepository(t *testing.T) {
 	t.Parallel()
 
 	repo := repository.NewPostgresStaffRepository(nil)
-	member := &domain.Staff{GarageID: "g-1", AccountID: "acc-1", Status: domain.StaffStatusActive}
+	member := &domain.Staff{GarageID: "g-1", UserID: "user-1", Status: domain.StaffStatusActive}
 
 	tx := dbtest.New(t).
 		ExpectQueryRow("s.id = $2", dbtest.Row(staffRow()...)).
-		ExpectQueryRow("s.account_id = $2", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectQueryRow("s.user_id = $2", dbtest.ErrRow(pgx.ErrNoRows)).
 		ExpectQuery("WHERE s.garage_id = $1", dbtest.NewRows(staffRow()), nil).
 		ExpectQuery("WHERE s.garage_id = $1", nil, errBoom).
 		ExpectQuery("WHERE s.garage_id = $1", dbtest.NewRows([]any{"x"}), nil).
 		ExpectQueryRow("INSERT INTO garage_staff", dbtest.Row("s-2", now, now)).
-		ExpectQueryRow("INSERT INTO garage_staff", dbtest.ErrRow(dbtest.UniqueViolation("idx_garage_staff_garage_account_unique"))).
+		ExpectQueryRow("INSERT INTO garage_staff", dbtest.ErrRow(dbtest.UniqueViolation("idx_garage_staff_garage_user_unique"))).
 		ExpectQueryRow("UPDATE garage_staff", dbtest.Row(now)).
 		ExpectQueryRow("UPDATE garage_staff", dbtest.ErrRow(pgx.ErrNoRows)).
 		ExpectExec("DELETE FROM staff_group_members", dbtest.Tag(1), nil).
@@ -43,7 +43,7 @@ func TestStaffRepository(t *testing.T) {
 	assert.Equal(t, []access.Permission{access.CustomerRead, access.ReportRead}, s.Permissions)
 	assert.Equal(t, []string{"grp-1"}, s.GroupIDs)
 
-	_, err = repo.FindByAccount(ctx, "g-1", "acc-1")
+	_, err = repo.FindByUser(ctx, "g-1", "user-1")
 	require.ErrorIs(t, err, domain.ErrStaffNotFound)
 
 	list, err := repo.List(ctx, "g-1")
@@ -76,13 +76,13 @@ func TestRoleRepository(t *testing.T) {
 
 	repo := repository.NewPostgresRoleRepository(nil)
 	key := domain.DefaultAccountant
-	role := &domain.Role{OwnerAccountID: "owner", Name: "Kế toán", Permissions: []access.Permission{access.BillingRead}, DefaultKey: &key}
-	empty := &domain.Role{OwnerAccountID: "owner", Name: "Empty"}
+	role := &domain.Role{OwnerUserID: "owner", Name: "Kế toán", Permissions: []access.Permission{access.BillingRead}, DefaultKey: &key}
+	empty := &domain.Role{OwnerUserID: "owner", Name: "Empty"}
 
 	tx := dbtest.New(t).
-		ExpectQuery("r.owner_account_id = $1", dbtest.NewRows(roleRow()), nil).
-		ExpectQuery("r.owner_account_id = $1", nil, errBoom).
-		ExpectQuery("r.owner_account_id = $1", dbtest.NewRows([]any{1}), nil).
+		ExpectQuery("r.owner_user_id = $1", dbtest.NewRows(roleRow()), nil).
+		ExpectQuery("r.owner_user_id = $1", nil, errBoom).
+		ExpectQuery("r.owner_user_id = $1", dbtest.NewRows([]any{1}), nil).
 		ExpectQueryRow("r.id = $1", dbtest.ErrRow(pgx.ErrNoRows)).
 		ExpectQueryRow("INSERT INTO roles", dbtest.Row("r-2", now, now)).
 		ExpectExec("INSERT INTO role_permissions", dbtest.Tag(1), nil).
@@ -209,14 +209,14 @@ func TestInvitationRepository(t *testing.T) {
 	t.Parallel()
 
 	repo := repository.NewPostgresInvitationRepository(nil)
-	inv := &domain.Invitation{GarageID: "g-1", AccountID: "acc-1", Status: domain.InvitationPending, InvitedBy: "owner", ExpiresAt: now}
+	inv := &domain.Invitation{GarageID: "g-1", UserID: "user-1", Status: domain.InvitationPending, InvitedBy: "owner", ExpiresAt: now}
 
 	tx := dbtest.New(t).
 		ExpectQueryRow("WHERE i.id = $1", dbtest.Row(invitationRow()...)).
 		ExpectQueryRow("WHERE i.id = $1", dbtest.ErrRow(pgx.ErrNoRows)).
 		ExpectQuery("i.garage_id = $1", dbtest.NewRows(invitationRow()), nil).
-		ExpectQuery("i.account_id = $1", nil, errBoom).
-		ExpectQuery("i.account_id = $1", dbtest.NewRows([]any{1}), nil).
+		ExpectQuery("i.user_id = $1", nil, errBoom).
+		ExpectQuery("i.user_id = $1", dbtest.NewRows([]any{1}), nil).
 		ExpectQueryRow("INSERT INTO staff_invitations", dbtest.Row("i-2", now, now)).WithArgs(func(args []any) {
 		assert.Equal(t, []string{}, args[2])
 	}).
@@ -238,14 +238,14 @@ func TestInvitationRepository(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, list, 1)
 
-	_, err = repo.ListByAccount(ctx, "acc-1")
+	_, err = repo.ListByUser(ctx, "user-1")
 	require.ErrorIs(t, err, errBoom)
-	_, err = repo.ListByAccount(ctx, "acc-1")
+	_, err = repo.ListByUser(ctx, "user-1")
 	require.Error(t, err)
 
 	require.NoError(t, repo.Create(ctx, inv))
 	require.ErrorIs(t, repo.Create(ctx, inv), domain.ErrAlreadyInvited)
 	require.NoError(t, repo.Update(ctx, inv))
 	require.ErrorIs(t, repo.Update(ctx, inv), domain.ErrInvitationNotFound)
-	require.NoError(t, repo.ExpireStale(ctx, "g-1", "acc-1"))
+	require.NoError(t, repo.ExpireStale(ctx, "g-1", "user-1"))
 }

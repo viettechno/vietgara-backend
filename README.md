@@ -47,9 +47,9 @@ flowchart LR
 
 | Module | Package | Owns |
 | --- | --- | --- |
-| Identity | `internal/identity` | Accounts, sessions, e-mail verification and password-reset OTPs, Google sign-in, platform admins |
+| Identity | `internal/identity` | Users, sessions, e-mail verification and password-reset OTPs, Google sign-in, platform admins |
 | Tenant | `internal/tenant` | Garages, staff, invitations, roles and staff groups |
-| License | `internal/license` | Plans, per-account subscriptions, entitlements, plan limits |
+| License | `internal/license` | Plans, per-user subscriptions, entitlements, plan limits |
 | Customer | `internal/customer` | Customers, vehicles, partners |
 
 Shared infrastructure (db, access, mail, storage, kafka, outbox, audit,
@@ -136,13 +136,13 @@ local defaults.
 | `MAILJET_API_KEY`, `MAILJET_SECRET_KEY` | Mailjet provider |
 | `STORAGE_BACKEND`, `STORAGE_LOCAL_DIR`, `STORAGE_PUBLIC_BASE_URL`, `STORAGE_GCS_BUCKET` | Uploaded files. See [File storage](#file-storage) |
 
-**Test accounts (staging only)**
+**Test users (staging only)**
 
 | Variable | Purpose |
 | --- | --- |
-| `TEST_ACCOUNTS_EMAIL_DOMAIN` | E-mail domain of the blackbox suite's accounts, under `.test`, `.example`, `.invalid` or `.localhost`. Unset (the default, and always in production) disables everything below. See [Test accounts](#test-accounts) |
-| `TEST_ACCOUNTS_SMTP_HOST`, `TEST_ACCOUNTS_SMTP_PORT` | SMTP server (Mailpit) that receives the test accounts' e-mail. Required with the domain; port defaults to `1025` |
-| `TEST_ACCOUNTS_RETENTION` | How long a test account lives before it is purged with everything it owns. Defaults to `24h` |
+| `TEST_USERS_EMAIL_DOMAIN` | E-mail domain of the blackbox suite's users, under `.test`, `.example`, `.invalid` or `.localhost`. Unset (the default, and always in production) disables everything below. See [Test users](#test-users) |
+| `TEST_USERS_SMTP_HOST`, `TEST_USERS_SMTP_PORT` | SMTP server (Mailpit) that receives the test users' e-mail. Required with the domain; port defaults to `1025` |
+| `TEST_USERS_RETENTION` | How long a test user lives before it is purged with everything it owns. Defaults to `24h` |
 
 ## Platform admins
 
@@ -153,28 +153,28 @@ screen or API grants them.
 
 ### Granting admin rights
 
-1. The person signs up for a normal account, with e-mail/password or Google.
+1. The person signs up for a normal user, with e-mail/password or Google.
 2. Add their e-mail to `PLATFORM_ADMIN_EMAILS` for that environment:
 
    ```bash
    PLATFORM_ADMIN_EMAILS=admin@viettechno.com,ops@viettechno.com
    ```
 
-3. Restart the backend. On startup it adds every account whose e-mail is in
+3. Restart the backend. On startup it adds every user whose e-mail is in
    the list (matched case-insensitively) to the `platform_admins` table, then
    logs `platform admins granted` with the number of new grants.
 
 The `platform_admin` flag in the access token is read from the database each
 time a session is issued or refreshed. It therefore takes effect within
 `JWT_ACCESS_TTL` (20 minutes by default), or at once if the person signs out
-and back in. The platform admin app (`vietgara-admin-web`) accepts only accounts that
+and back in. The platform admin app (`vietgara-admin-web`) accepts only users that
 have the flag; others see an access-denied page. The garage web admin has no
 platform-admin pages.
 
 Things to know:
 
-- **The account must exist before the restart.** The server skips e-mails
-  that have no account. A skipped e-mail is not granted later when that person
+- **The user must exist before the restart.** The server skips e-mails
+  that have no user. A skipped e-mail is not granted later when that person
   signs up, so they must sign up first and the backend must restart after
   that.
 - **The list only adds admins.** Removing an e-mail from
@@ -183,7 +183,7 @@ Things to know:
 
   ```sql
   DELETE FROM platform_admins
-  WHERE account_id = (SELECT id FROM accounts WHERE lower(email) = 'ops@viettechno.com');
+  WHERE user_id = (SELECT id FROM users WHERE lower(email) = 'ops@viettechno.com');
   ```
 
   The change takes effect when that person's current access token expires.
@@ -212,19 +212,19 @@ How failures are handled:
   fails, the error is logged and the invitation still appears on the
   invitee's Invitations page.
 
-### Test accounts
+### Test users
 
-The blackbox suite (`testing/blackbox`) signs up its own accounts, including
+The blackbox suite (`testing/blackbox`) signs up its own users, including
 on staging, where real e-mail goes through Mailjet and the suite cannot read
-it. With `TEST_ACCOUNTS_EMAIL_DOMAIN` set:
+it. With `TEST_USERS_EMAIL_DOMAIN` set:
 
-- Every e-mail to an address on that domain goes to `TEST_ACCOUNTS_SMTP_HOST`
+- Every e-mail to an address on that domain goes to `TEST_USERS_SMTP_HOST`
   (a Mailpit the suite reads OTPs from) instead of the configured provider.
   All other e-mail is unchanged. Authentication itself is not changed:
-  these accounts get random OTPs, with the usual expiry and attempt limits.
+  these users get random OTPs, with the usual expiry and attempt limits.
 - The domain must be under a TLD reserved for testing, so no real person
   can own an address on it. The server refuses to start otherwise.
-- Every hour, accounts on the domain older than `TEST_ACCOUNTS_RETENTION`
+- Every hour, users on the domain older than `TEST_USERS_RETENTION`
   are deleted with everything they own. Garages and their data, staff
   memberships and subscriptions all go by foreign-key cascade.
 
@@ -232,7 +232,7 @@ Never set it in production.
 
 ### Setting up Mailjet
 
-1. Create a Mailjet account. Under **Account settings → Senders & domains**,
+1. Create a Mailjet user. Under **User settings → Senders & domains**,
    add the product's sending domain: `vietgara.viettechno.com` in production,
    `vietgara-staging.viettechno.com` in staging. A subdomain of its own keeps
    the product's sending reputation and bounces apart from the company's
@@ -240,7 +240,7 @@ Never set it in production.
 2. Publish the SPF and DKIM DNS records that Mailjet shows for the domain.
    Wait until both are validated: mail from an unvalidated sender is rejected
    or lands in spam.
-3. Under **Account settings → API key management**, create a key pair. Use a
+3. Under **User settings → API key management**, create a key pair. Use a
    separate pair for each environment.
 4. Configure the backend. Keep the secret in Secret Manager, never in the
    repository.

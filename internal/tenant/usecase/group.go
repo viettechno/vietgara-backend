@@ -138,7 +138,7 @@ func (uc *TenantUseCase) applyGroupFields(ctx context.Context, group *domain.Sta
 		}
 
 		role, err := uc.Roles.FindByID(ctx, *f.RoleID)
-		if err != nil || role.OwnerAccountID != garage.OwnerAccountID {
+		if err != nil || role.OwnerUserID != garage.OwnerUserID {
 			return apperror.Validation("roleId", apperror.IssueInvalid, "role not found")
 		}
 

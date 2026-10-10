@@ -4,7 +4,7 @@
 # third-party service replaced by a stub:
 #
 #   e-mail (Mailjet in staging)  -> Mailpit, read by the suite for OTPs
-#                                   (staging routes only test accounts there)
+#                                   (staging routes only test users there)
 #   Google sign-in               -> google-stub (stubs/google)
 #   file storage (GCS)           -> local disk
 #
@@ -119,13 +119,13 @@ services:
       SMTP_PORT: 1025
       STORAGE_BACKEND: local
       STORAGE_LOCAL_DIR: /app/data/uploads
-      # As on staging: the suite's accounts (on this domain) get their
-      # e-mail in Mailpit through the test-account route, and are purged
+      # As on staging: the suite's users (on this domain) get their
+      # e-mail in Mailpit through the test-user route, and are purged
       # after a day. The provider above is Mailpit too here, but the route
       # is what staging uses, so it is the path exercised.
-      TEST_ACCOUNTS_EMAIL_DOMAIN: blackbox.vietgara.test
-      TEST_ACCOUNTS_SMTP_HOST: vietgara-mailpit
-      TEST_ACCOUNTS_SMTP_PORT: 1025
+      TEST_USERS_EMAIL_DOMAIN: blackbox.vietgara.test
+      TEST_USERS_SMTP_HOST: vietgara-mailpit
+      TEST_USERS_SMTP_PORT: 1025
 
   vietgara-api-gateway:
     image: kong:3.9

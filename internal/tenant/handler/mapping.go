@@ -40,7 +40,7 @@ func garageToProto(g *usecase.GarageWithAccess) *tenantv1.Garage {
 
 	out := &tenantv1.Garage{
 		Id:             g.Garage.ID,
-		OwnerAccountId: g.Garage.OwnerAccountID,
+		OwnerUserId:    g.Garage.OwnerUserID,
 		Name:           g.Garage.Name,
 		TaxCode:        g.Garage.TaxCode,
 		Address:        g.Garage.Address,
@@ -106,7 +106,7 @@ func staffToProto(s *domain.Staff) *tenantv1.Staff {
 	return &tenantv1.Staff{
 		Id:          s.ID,
 		GarageId:    s.GarageID,
-		AccountId:   s.AccountID,
+		UserId:      s.UserID,
 		FullName:    s.FullName,
 		Email:       s.Email,
 		Phone:       s.Phone,
@@ -163,7 +163,7 @@ func invitationToProto(inv *domain.Invitation) *tenantv1.Invitation {
 		Id:            inv.ID,
 		GarageId:      inv.GarageID,
 		GarageName:    inv.GarageName,
-		AccountId:     inv.AccountID,
+		UserId:        inv.UserID,
 		FullName:      inv.FullName,
 		Email:         inv.Email,
 		GroupIds:      nonNil(inv.GroupIDs),

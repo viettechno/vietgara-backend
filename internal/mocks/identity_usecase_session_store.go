@@ -104,12 +104,12 @@ func (_c *MockSessionStore_ConsumeResetToken_Call) RunAndReturn(run func(ctx con
 	return _c
 }
 
-// RefreshTokenAccount provides a mock function for the type MockSessionStore
-func (_mock *MockSessionStore) RefreshTokenAccount(ctx context.Context, token string) (string, error) {
+// RefreshTokenUser provides a mock function for the type MockSessionStore
+func (_mock *MockSessionStore) RefreshTokenUser(ctx context.Context, token string) (string, error) {
 	ret := _mock.Called(ctx, token)
 
 	if len(ret) == 0 {
-		panic("no return value specified for RefreshTokenAccount")
+		panic("no return value specified for RefreshTokenUser")
 	}
 
 	var r0 string
@@ -130,19 +130,19 @@ func (_mock *MockSessionStore) RefreshTokenAccount(ctx context.Context, token st
 	return r0, r1
 }
 
-// MockSessionStore_RefreshTokenAccount_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RefreshTokenAccount'
-type MockSessionStore_RefreshTokenAccount_Call struct {
+// MockSessionStore_RefreshTokenUser_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RefreshTokenUser'
+type MockSessionStore_RefreshTokenUser_Call struct {
 	*mock.Call
 }
 
-// RefreshTokenAccount is a helper method to define mock.On call
+// RefreshTokenUser is a helper method to define mock.On call
 //   - ctx context.Context
 //   - token string
-func (_e *MockSessionStore_Expecter) RefreshTokenAccount(ctx any, token any) *MockSessionStore_RefreshTokenAccount_Call {
-	return &MockSessionStore_RefreshTokenAccount_Call{Call: _e.mock.On("RefreshTokenAccount", ctx, token)}
+func (_e *MockSessionStore_Expecter) RefreshTokenUser(ctx any, token any) *MockSessionStore_RefreshTokenUser_Call {
+	return &MockSessionStore_RefreshTokenUser_Call{Call: _e.mock.On("RefreshTokenUser", ctx, token)}
 }
 
-func (_c *MockSessionStore_RefreshTokenAccount_Call) Run(run func(ctx context.Context, token string)) *MockSessionStore_RefreshTokenAccount_Call {
+func (_c *MockSessionStore_RefreshTokenUser_Call) Run(run func(ctx context.Context, token string)) *MockSessionStore_RefreshTokenUser_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -160,19 +160,19 @@ func (_c *MockSessionStore_RefreshTokenAccount_Call) Run(run func(ctx context.Co
 	return _c
 }
 
-func (_c *MockSessionStore_RefreshTokenAccount_Call) Return(s string, err error) *MockSessionStore_RefreshTokenAccount_Call {
+func (_c *MockSessionStore_RefreshTokenUser_Call) Return(s string, err error) *MockSessionStore_RefreshTokenUser_Call {
 	_c.Call.Return(s, err)
 	return _c
 }
 
-func (_c *MockSessionStore_RefreshTokenAccount_Call) RunAndReturn(run func(ctx context.Context, token string) (string, error)) *MockSessionStore_RefreshTokenAccount_Call {
+func (_c *MockSessionStore_RefreshTokenUser_Call) RunAndReturn(run func(ctx context.Context, token string) (string, error)) *MockSessionStore_RefreshTokenUser_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // RevokeAllRefreshTokens provides a mock function for the type MockSessionStore
-func (_mock *MockSessionStore) RevokeAllRefreshTokens(ctx context.Context, accountID string) error {
-	ret := _mock.Called(ctx, accountID)
+func (_mock *MockSessionStore) RevokeAllRefreshTokens(ctx context.Context, userID string) error {
+	ret := _mock.Called(ctx, userID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for RevokeAllRefreshTokens")
@@ -180,7 +180,7 @@ func (_mock *MockSessionStore) RevokeAllRefreshTokens(ctx context.Context, accou
 
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) error); ok {
-		r0 = returnFunc(ctx, accountID)
+		r0 = returnFunc(ctx, userID)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -194,12 +194,12 @@ type MockSessionStore_RevokeAllRefreshTokens_Call struct {
 
 // RevokeAllRefreshTokens is a helper method to define mock.On call
 //   - ctx context.Context
-//   - accountID string
-func (_e *MockSessionStore_Expecter) RevokeAllRefreshTokens(ctx any, accountID any) *MockSessionStore_RevokeAllRefreshTokens_Call {
-	return &MockSessionStore_RevokeAllRefreshTokens_Call{Call: _e.mock.On("RevokeAllRefreshTokens", ctx, accountID)}
+//   - userID string
+func (_e *MockSessionStore_Expecter) RevokeAllRefreshTokens(ctx any, userID any) *MockSessionStore_RevokeAllRefreshTokens_Call {
+	return &MockSessionStore_RevokeAllRefreshTokens_Call{Call: _e.mock.On("RevokeAllRefreshTokens", ctx, userID)}
 }
 
-func (_c *MockSessionStore_RevokeAllRefreshTokens_Call) Run(run func(ctx context.Context, accountID string)) *MockSessionStore_RevokeAllRefreshTokens_Call {
+func (_c *MockSessionStore_RevokeAllRefreshTokens_Call) Run(run func(ctx context.Context, userID string)) *MockSessionStore_RevokeAllRefreshTokens_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -222,7 +222,7 @@ func (_c *MockSessionStore_RevokeAllRefreshTokens_Call) Return(err error) *MockS
 	return _c
 }
 
-func (_c *MockSessionStore_RevokeAllRefreshTokens_Call) RunAndReturn(run func(ctx context.Context, accountID string) error) *MockSessionStore_RevokeAllRefreshTokens_Call {
+func (_c *MockSessionStore_RevokeAllRefreshTokens_Call) RunAndReturn(run func(ctx context.Context, userID string) error) *MockSessionStore_RevokeAllRefreshTokens_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -285,8 +285,8 @@ func (_c *MockSessionStore_RevokeRefreshToken_Call) RunAndReturn(run func(ctx co
 }
 
 // SaveRefreshToken provides a mock function for the type MockSessionStore
-func (_mock *MockSessionStore) SaveRefreshToken(ctx context.Context, token string, accountID string, ttl time.Duration) error {
-	ret := _mock.Called(ctx, token, accountID, ttl)
+func (_mock *MockSessionStore) SaveRefreshToken(ctx context.Context, token string, userID string, ttl time.Duration) error {
+	ret := _mock.Called(ctx, token, userID, ttl)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SaveRefreshToken")
@@ -294,7 +294,7 @@ func (_mock *MockSessionStore) SaveRefreshToken(ctx context.Context, token strin
 
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, time.Duration) error); ok {
-		r0 = returnFunc(ctx, token, accountID, ttl)
+		r0 = returnFunc(ctx, token, userID, ttl)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -309,13 +309,13 @@ type MockSessionStore_SaveRefreshToken_Call struct {
 // SaveRefreshToken is a helper method to define mock.On call
 //   - ctx context.Context
 //   - token string
-//   - accountID string
+//   - userID string
 //   - ttl time.Duration
-func (_e *MockSessionStore_Expecter) SaveRefreshToken(ctx any, token any, accountID any, ttl any) *MockSessionStore_SaveRefreshToken_Call {
-	return &MockSessionStore_SaveRefreshToken_Call{Call: _e.mock.On("SaveRefreshToken", ctx, token, accountID, ttl)}
+func (_e *MockSessionStore_Expecter) SaveRefreshToken(ctx any, token any, userID any, ttl any) *MockSessionStore_SaveRefreshToken_Call {
+	return &MockSessionStore_SaveRefreshToken_Call{Call: _e.mock.On("SaveRefreshToken", ctx, token, userID, ttl)}
 }
 
-func (_c *MockSessionStore_SaveRefreshToken_Call) Run(run func(ctx context.Context, token string, accountID string, ttl time.Duration)) *MockSessionStore_SaveRefreshToken_Call {
+func (_c *MockSessionStore_SaveRefreshToken_Call) Run(run func(ctx context.Context, token string, userID string, ttl time.Duration)) *MockSessionStore_SaveRefreshToken_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -348,14 +348,14 @@ func (_c *MockSessionStore_SaveRefreshToken_Call) Return(err error) *MockSession
 	return _c
 }
 
-func (_c *MockSessionStore_SaveRefreshToken_Call) RunAndReturn(run func(ctx context.Context, token string, accountID string, ttl time.Duration) error) *MockSessionStore_SaveRefreshToken_Call {
+func (_c *MockSessionStore_SaveRefreshToken_Call) RunAndReturn(run func(ctx context.Context, token string, userID string, ttl time.Duration) error) *MockSessionStore_SaveRefreshToken_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // SaveResetToken provides a mock function for the type MockSessionStore
-func (_mock *MockSessionStore) SaveResetToken(ctx context.Context, token string, accountID string, ttl time.Duration) error {
-	ret := _mock.Called(ctx, token, accountID, ttl)
+func (_mock *MockSessionStore) SaveResetToken(ctx context.Context, token string, userID string, ttl time.Duration) error {
+	ret := _mock.Called(ctx, token, userID, ttl)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SaveResetToken")
@@ -363,7 +363,7 @@ func (_mock *MockSessionStore) SaveResetToken(ctx context.Context, token string,
 
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, time.Duration) error); ok {
-		r0 = returnFunc(ctx, token, accountID, ttl)
+		r0 = returnFunc(ctx, token, userID, ttl)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -378,13 +378,13 @@ type MockSessionStore_SaveResetToken_Call struct {
 // SaveResetToken is a helper method to define mock.On call
 //   - ctx context.Context
 //   - token string
-//   - accountID string
+//   - userID string
 //   - ttl time.Duration
-func (_e *MockSessionStore_Expecter) SaveResetToken(ctx any, token any, accountID any, ttl any) *MockSessionStore_SaveResetToken_Call {
-	return &MockSessionStore_SaveResetToken_Call{Call: _e.mock.On("SaveResetToken", ctx, token, accountID, ttl)}
+func (_e *MockSessionStore_Expecter) SaveResetToken(ctx any, token any, userID any, ttl any) *MockSessionStore_SaveResetToken_Call {
+	return &MockSessionStore_SaveResetToken_Call{Call: _e.mock.On("SaveResetToken", ctx, token, userID, ttl)}
 }
 
-func (_c *MockSessionStore_SaveResetToken_Call) Run(run func(ctx context.Context, token string, accountID string, ttl time.Duration)) *MockSessionStore_SaveResetToken_Call {
+func (_c *MockSessionStore_SaveResetToken_Call) Run(run func(ctx context.Context, token string, userID string, ttl time.Duration)) *MockSessionStore_SaveResetToken_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -417,7 +417,7 @@ func (_c *MockSessionStore_SaveResetToken_Call) Return(err error) *MockSessionSt
 	return _c
 }
 
-func (_c *MockSessionStore_SaveResetToken_Call) RunAndReturn(run func(ctx context.Context, token string, accountID string, ttl time.Duration) error) *MockSessionStore_SaveResetToken_Call {
+func (_c *MockSessionStore_SaveResetToken_Call) RunAndReturn(run func(ctx context.Context, token string, userID string, ttl time.Duration) error) *MockSessionStore_SaveResetToken_Call {
 	_c.Call.Return(run)
 	return _c
 }

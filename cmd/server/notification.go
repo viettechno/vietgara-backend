@@ -17,9 +17,9 @@ type notificationModule struct {
 	uc *notificationUsecase.NotificationUseCase
 }
 
-func buildNotification(pool *platformdb.Pool, mailer mail.Sender, accounts *identityRepo.PostgresAccountRepository) *notificationModule {
+func buildNotification(pool *platformdb.Pool, mailer mail.Sender, users *identityRepo.PostgresUserRepository) *notificationModule {
 	uc := notificationUsecase.NewNotificationUseCase(notificationUsecase.Deps{
-		Mailer: mailer, Accounts: notificationAccounts{accounts: accounts}, Log: notificationRepository.NewPostgresRepository(pool),
+		Mailer: mailer, Users: notificationUsers{users: users}, Log: notificationRepository.NewPostgresRepository(pool),
 	})
 
 	return &notificationModule{uc: uc}

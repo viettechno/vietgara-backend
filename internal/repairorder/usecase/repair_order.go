@@ -82,7 +82,7 @@ func (uc *RepairOrderUseCase) Create(ctx context.Context, req CreateRepairOrderR
 		return nil, toAppError("create repair order", err)
 	}
 
-	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerAccountID); err != nil {
+	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID); err != nil {
 		return nil, err
 	}
 

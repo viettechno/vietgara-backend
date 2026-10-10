@@ -39,8 +39,8 @@ func (_m *MockEntitlementCache) EXPECT() *MockEntitlementCache_Expecter {
 }
 
 // Delete provides a mock function for the type MockEntitlementCache
-func (_mock *MockEntitlementCache) Delete(ctx context.Context, accountID string) error {
-	ret := _mock.Called(ctx, accountID)
+func (_mock *MockEntitlementCache) Delete(ctx context.Context, userID string) error {
+	ret := _mock.Called(ctx, userID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Delete")
@@ -48,7 +48,7 @@ func (_mock *MockEntitlementCache) Delete(ctx context.Context, accountID string)
 
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) error); ok {
-		r0 = returnFunc(ctx, accountID)
+		r0 = returnFunc(ctx, userID)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -62,12 +62,12 @@ type MockEntitlementCache_Delete_Call struct {
 
 // Delete is a helper method to define mock.On call
 //   - ctx context.Context
-//   - accountID string
-func (_e *MockEntitlementCache_Expecter) Delete(ctx any, accountID any) *MockEntitlementCache_Delete_Call {
-	return &MockEntitlementCache_Delete_Call{Call: _e.mock.On("Delete", ctx, accountID)}
+//   - userID string
+func (_e *MockEntitlementCache_Expecter) Delete(ctx any, userID any) *MockEntitlementCache_Delete_Call {
+	return &MockEntitlementCache_Delete_Call{Call: _e.mock.On("Delete", ctx, userID)}
 }
 
-func (_c *MockEntitlementCache_Delete_Call) Run(run func(ctx context.Context, accountID string)) *MockEntitlementCache_Delete_Call {
+func (_c *MockEntitlementCache_Delete_Call) Run(run func(ctx context.Context, userID string)) *MockEntitlementCache_Delete_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -90,14 +90,14 @@ func (_c *MockEntitlementCache_Delete_Call) Return(err error) *MockEntitlementCa
 	return _c
 }
 
-func (_c *MockEntitlementCache_Delete_Call) RunAndReturn(run func(ctx context.Context, accountID string) error) *MockEntitlementCache_Delete_Call {
+func (_c *MockEntitlementCache_Delete_Call) RunAndReturn(run func(ctx context.Context, userID string) error) *MockEntitlementCache_Delete_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // Get provides a mock function for the type MockEntitlementCache
-func (_mock *MockEntitlementCache) Get(ctx context.Context, accountID string) (*domain.Entitlements, error) {
-	ret := _mock.Called(ctx, accountID)
+func (_mock *MockEntitlementCache) Get(ctx context.Context, userID string) (*domain.Entitlements, error) {
+	ret := _mock.Called(ctx, userID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Get")
@@ -106,17 +106,17 @@ func (_mock *MockEntitlementCache) Get(ctx context.Context, accountID string) (*
 	var r0 *domain.Entitlements
 	var r1 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (*domain.Entitlements, error)); ok {
-		return returnFunc(ctx, accountID)
+		return returnFunc(ctx, userID)
 	}
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) *domain.Entitlements); ok {
-		r0 = returnFunc(ctx, accountID)
+		r0 = returnFunc(ctx, userID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*domain.Entitlements)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, accountID)
+		r1 = returnFunc(ctx, userID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -130,12 +130,12 @@ type MockEntitlementCache_Get_Call struct {
 
 // Get is a helper method to define mock.On call
 //   - ctx context.Context
-//   - accountID string
-func (_e *MockEntitlementCache_Expecter) Get(ctx any, accountID any) *MockEntitlementCache_Get_Call {
-	return &MockEntitlementCache_Get_Call{Call: _e.mock.On("Get", ctx, accountID)}
+//   - userID string
+func (_e *MockEntitlementCache_Expecter) Get(ctx any, userID any) *MockEntitlementCache_Get_Call {
+	return &MockEntitlementCache_Get_Call{Call: _e.mock.On("Get", ctx, userID)}
 }
 
-func (_c *MockEntitlementCache_Get_Call) Run(run func(ctx context.Context, accountID string)) *MockEntitlementCache_Get_Call {
+func (_c *MockEntitlementCache_Get_Call) Run(run func(ctx context.Context, userID string)) *MockEntitlementCache_Get_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -158,7 +158,7 @@ func (_c *MockEntitlementCache_Get_Call) Return(entitlements *domain.Entitlement
 	return _c
 }
 
-func (_c *MockEntitlementCache_Get_Call) RunAndReturn(run func(ctx context.Context, accountID string) (*domain.Entitlements, error)) *MockEntitlementCache_Get_Call {
+func (_c *MockEntitlementCache_Get_Call) RunAndReturn(run func(ctx context.Context, userID string) (*domain.Entitlements, error)) *MockEntitlementCache_Get_Call {
 	_c.Call.Return(run)
 	return _c
 }

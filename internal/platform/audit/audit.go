@@ -13,7 +13,7 @@ import (
 
 // Entry is one audited change.
 type Entry struct {
-	// Actor is the account that made the change ("" for the system).
+	// Actor is the user that made the change ("" for the system).
 	Actor      string
 	GarageID   string
 	Action     string // e.g. "role.updated"
@@ -48,7 +48,7 @@ func (l *Logger) Record(ctx context.Context, e Entry) error {
 	}
 
 	_, err = platformdb.QuerierFromContext(ctx, l.pool).Exec(ctx, `
-		INSERT INTO audit_log (actor_account_id, garage_id, action, entity_type, entity_id, before, after, ip)
+		INSERT INTO audit_log (actor_user_id, garage_id, action, entity_type, entity_id, before, after, ip)
 		VALUES (NULLIF($1, '')::uuid, NULLIF($2, '')::uuid, $3, $4, $5, $6, $7, NULLIF($8, ''))`,
 		e.Actor, e.GarageID, e.Action, e.EntityType, e.EntityID, before, after, e.IP)
 

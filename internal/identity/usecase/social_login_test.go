@@ -20,19 +20,19 @@ func TestGoogleLogin(t *testing.T) {
 	session, err := e.uc.GoogleLogin(t.Context(), profile)
 	require.NoError(t, err)
 
-	acc := session.Account
-	assert.Equal(t, domain.AuthProviderGoogle, acc.AuthProvider)
-	assert.Equal(t, "new@gmail.com", acc.FullName, "e-mail stands in for a missing name")
-	assert.True(t, acc.EmailVerified())
-	assert.Equal(t, []string{usecase.EventAccountEmailVerified}, e.events.types)
+	user := session.User
+	assert.Equal(t, domain.AuthProviderGoogle, user.AuthProvider)
+	assert.Equal(t, "new@gmail.com", user.FullName, "e-mail stands in for a missing name")
+	assert.True(t, user.EmailVerified())
+	assert.Equal(t, []string{usecase.EventUserEmailVerified}, e.events.types)
 
 	again, err := e.uc.GoogleLogin(t.Context(), profile)
 	require.NoError(t, err)
-	assert.Equal(t, acc.ID, again.Account.ID)
+	assert.Equal(t, user.ID, again.User.ID)
 	assert.Len(t, e.events.types, 1, "verified once")
 }
 
-func TestGoogleLoginLinksEmailAccount(t *testing.T) {
+func TestGoogleLoginLinksEmailUser(t *testing.T) {
 	t.Parallel()
 
 	e := newEnv(t)
@@ -40,9 +40,9 @@ func TestGoogleLoginLinksEmailAccount(t *testing.T) {
 
 	session, err := e.uc.GoogleLogin(t.Context(), usecase.GoogleProfile{Subject: "g-2", Email: "owner@example.com", EmailVerified: true, FullName: "Minh"})
 	require.NoError(t, err)
-	assert.Equal(t, registered.Account.ID, session.Account.ID)
-	assert.Equal(t, "g-2", *e.accounts.get(registered.Account.ID).GoogleSubject)
-	assert.True(t, session.Account.EmailVerified(), "Google verified the address")
+	assert.Equal(t, registered.User.ID, session.User.ID)
+	assert.Equal(t, "g-2", *e.users.get(registered.User.ID).GoogleSubject)
+	assert.True(t, session.User.EmailVerified(), "Google verified the address")
 }
 
 func TestGoogleLoginFailures(t *testing.T) {
@@ -53,17 +53,17 @@ func TestGoogleLoginFailures(t *testing.T) {
 	_, err := e.uc.GoogleLogin(t.Context(), usecase.GoogleProfile{Subject: "g", Email: "a@b.vn"})
 	requireReason(t, err, domain.ReasonInvalidCredentials)
 
-	e.accounts.findErr = errBoom
+	e.users.findErr = errBoom
 	_, err = e.uc.GoogleLogin(t.Context(), usecase.GoogleProfile{Subject: "g", Email: "a@b.vn", EmailVerified: true, FullName: "A"})
 	requireReason(t, err, apperror.ReasonInternal)
 
-	e.accounts.findErr, e.accounts.createErr = nil, errBoom
+	e.users.findErr, e.users.createErr = nil, errBoom
 	_, err = e.uc.GoogleLogin(t.Context(), usecase.GoogleProfile{Subject: "g", Email: "a@b.vn", EmailVerified: true, FullName: "A"})
 	requireReason(t, err, apperror.ReasonInternal)
 
 	e2 := newEnv(t)
 	e2.register(t)
-	e2.accounts.updateErr = errBoom
+	e2.users.updateErr = errBoom
 	_, err = e2.uc.GoogleLogin(t.Context(), usecase.GoogleProfile{Subject: "g", Email: "owner@example.com", EmailVerified: true})
 	requireReason(t, err, apperror.ReasonInternal)
 

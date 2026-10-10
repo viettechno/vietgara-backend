@@ -2,7 +2,7 @@
 -- (FR-NOT-04: registration confirmation, license renewal reminders).
 -- Append-only audit of what was sent -- the Outbox Pattern's
 -- processed_events already gives exactly-once delivery per consumer, so
--- this table is for visibility/debugging, not deduplication. Account-level
+-- this table is for visibility/debugging, not deduplication. User-level
 -- like plans/subscriptions/entitlements (Database Design 6.3): no garage
 -- scope, no RLS.
 
@@ -11,7 +11,7 @@ CREATE TYPE notification_status AS ENUM ('sent', 'failed');
 
 CREATE TABLE notification_log (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    account_id UUID,
+    user_id UUID,
     channel notification_channel NOT NULL,
     template VARCHAR(100) NOT NULL,
     recipient VARCHAR(255) NOT NULL,
@@ -20,7 +20,7 @@ CREATE TABLE notification_log (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_notification_log_account ON notification_log (account_id, created_at DESC) WHERE account_id IS NOT NULL;
+CREATE INDEX idx_notification_log_user ON notification_log (user_id, created_at DESC) WHERE user_id IS NOT NULL;
 
 -- Append-only: the application role may only INSERT and SELECT, the same
 -- restriction audit_log already has (migration 000013).

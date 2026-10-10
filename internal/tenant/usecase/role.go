@@ -36,7 +36,7 @@ func (uc *TenantUseCase) GetRole(ctx context.Context, ownerID, roleID string) (*
 		return nil, toAppError("get role", err)
 	}
 
-	if role.OwnerAccountID != ownerID {
+	if role.OwnerUserID != ownerID {
 		return nil, toAppError("get role", domain.ErrRoleNotFound)
 	}
 
@@ -45,7 +45,7 @@ func (uc *TenantUseCase) GetRole(ctx context.Context, ownerID, roleID string) (*
 
 // CreateRole defines a new role for the owner's garages.
 func (uc *TenantUseCase) CreateRole(ctx context.Context, ownerID string, fields RoleFields) (*domain.Role, error) {
-	role := &domain.Role{OwnerAccountID: ownerID, Permissions: []access.Permission{}}
+	role := &domain.Role{OwnerUserID: ownerID, Permissions: []access.Permission{}}
 
 	if fields.Name == nil {
 		return nil, apperror.Validation("name", apperror.IssueRequired, "role name is required")
@@ -113,12 +113,12 @@ func (uc *TenantUseCase) DeleteRole(ctx context.Context, ownerID, roleID string)
 // unless they exist. Idempotent: called when the owner's e-mail is verified
 // and again before their first garage is created.
 func (uc *TenantUseCase) EnsureDefaultRoles(ctx context.Context, ownerID, locale string) error {
-	return uc.Tx.WithTransaction(ctx, platformdb.AccountScope(ownerID), func(ctx context.Context) error {
+	return uc.Tx.WithTransaction(ctx, platformdb.UserScope(ownerID), func(ctx context.Context) error {
 		for _, tmpl := range domain.DefaultRoleTemplates {
 			name, description := tmpl.Localized(locale)
 			key := tmpl.Key
 			role := &domain.Role{
-				OwnerAccountID: ownerID, Name: name, Description: description,
+				OwnerUserID: ownerID, Name: name, Description: description,
 				Permissions: tmpl.Permissions, DefaultKey: &key,
 			}
 
@@ -131,19 +131,19 @@ func (uc *TenantUseCase) EnsureDefaultRoles(ctx context.Context, ownerID, locale
 	})
 }
 
-// HandleAccountEmailVerified is the account.email_verified consumer: a
+// HandleUserEmailVerified is the user.email_verified consumer: a
 // newly verified owner gets the default roles (FR-IAM-03).
-func (uc *TenantUseCase) HandleAccountEmailVerified(ctx context.Context, event outbox.Event) error {
+func (uc *TenantUseCase) HandleUserEmailVerified(ctx context.Context, event outbox.Event) error {
 	var payload struct {
-		AccountID string `json:"account_id"`
-		Locale    string `json:"locale"`
+		UserID string `json:"user_id"`
+		Locale string `json:"locale"`
 	}
 
-	if err := json.Unmarshal(event.Data, &payload); err != nil || payload.AccountID == "" {
+	if err := json.Unmarshal(event.Data, &payload); err != nil || payload.UserID == "" {
 		return nil //nolint:nilerr // a malformed event cannot succeed on retry: drop it
 	}
 
-	return uc.EnsureDefaultRoles(ctx, payload.AccountID, payload.Locale)
+	return uc.EnsureDefaultRoles(ctx, payload.UserID, payload.Locale)
 }
 
 func applyRoleFields(role *domain.Role, f RoleFields) error {

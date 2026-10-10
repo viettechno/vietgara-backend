@@ -41,25 +41,25 @@ func (documentServer) ExportQuotePdf(context.Context, *documentv1.ExportQuotePdf
 	return &httpbody.HttpBody{ContentType: "application/pdf", Data: []byte("%PDF-fake")}, nil
 }
 
-type accountServer struct {
-	identityv1.UnimplementedAccountServiceServer
+type userServer struct {
+	identityv1.UnimplementedUserServiceServer
 
 	gotAuth, gotLang string
 }
 
-func (s *accountServer) GetMe(ctx context.Context, _ *identityv1.GetMeRequest) (*identityv1.GetMeResponse, error) {
+func (s *userServer) GetMe(ctx context.Context, _ *identityv1.GetMeRequest) (*identityv1.GetMeResponse, error) {
 	md, _ := metadata.FromIncomingContext(ctx)
 	s.gotAuth, s.gotLang = first(md, "authorization"), first(md, "accept-language")
 
-	return &identityv1.GetMeResponse{Account: &identityv1.Account{Id: "acc-1", FullName: "Minh"}}, nil
+	return &identityv1.GetMeResponse{User: &identityv1.User{Id: "user-1", FullName: "Minh"}}, nil
 }
 
-func (s *accountServer) UpdateMe(ctx context.Context, req *identityv1.UpdateMeRequest) (*identityv1.UpdateMeResponse, error) {
-	switch req.GetAccount().GetFullName() {
+func (s *userServer) UpdateMe(ctx context.Context, req *identityv1.UpdateMeRequest) (*identityv1.UpdateMeResponse, error) {
+	switch req.GetUser().GetFullName() {
 	case "created":
 		httpapi.Created(ctx)
 
-		return &identityv1.UpdateMeResponse{Account: req.GetAccount()}, nil
+		return &identityv1.UpdateMeResponse{User: req.GetUser()}, nil
 	case "invalid":
 		return nil, apperror.ToGRPCError(apperror.Validation("fullName", "required", "name is required"))
 	case "otp":
@@ -93,13 +93,13 @@ func first(md metadata.MD, key string) string {
 	return ""
 }
 
-func newGateway(t *testing.T) (http.Handler, *accountServer) {
+func newGateway(t *testing.T) (http.Handler, *userServer) {
 	t.Helper()
 
 	lis := bufconn.Listen(1 << 20)
 	srv := grpc.NewServer()
-	accounts := &accountServer{}
-	identityv1.RegisterAccountServiceServer(srv, accounts)
+	users := &userServer{}
+	identityv1.RegisterUserServiceServer(srv, users)
 	tenantv1.RegisterRoleServiceServer(srv, roleServer{})
 	documentv1.RegisterDocumentServiceServer(srv, documentServer{})
 
@@ -114,11 +114,11 @@ func newGateway(t *testing.T) (http.Handler, *accountServer) {
 	t.Cleanup(func() { _ = conn.Close() })
 
 	mux := httpapi.NewMux()
-	require.NoError(t, identityv1.RegisterAccountServiceHandler(t.Context(), mux, conn))
+	require.NoError(t, identityv1.RegisterUserServiceHandler(t.Context(), mux, conn))
 	require.NoError(t, tenantv1.RegisterRoleServiceHandler(t.Context(), mux, conn))
 	require.NoError(t, documentv1.RegisterDocumentServiceHandler(t.Context(), mux, conn))
 
-	return httpapi.NoContentForDelete(mux), accounts
+	return httpapi.NoContentForDelete(mux), users
 }
 
 func do(t *testing.T, h http.Handler, method, path, body string) (*httptest.ResponseRecorder, map[string]any) {
@@ -152,14 +152,14 @@ func errorOf(body map[string]any) (code, message string, details []any) {
 func TestGateway(t *testing.T) {
 	t.Parallel()
 
-	h, accounts := newGateway(t)
+	h, users := newGateway(t)
 
 	rec, body := do(t, h, http.MethodGet, "/api/v1/me", "")
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "acc-1", body["id"])
+	assert.Equal(t, "user-1", body["id"])
 	assert.Equal(t, false, body["emailVerified"], "zero values are emitted")
-	assert.Equal(t, "Bearer tok", accounts.gotAuth)
-	assert.Equal(t, "vi", accounts.gotLang)
+	assert.Equal(t, "Bearer tok", users.gotAuth)
+	assert.Equal(t, "vi", users.gotLang)
 
 	rec, _ = do(t, h, http.MethodPatch, "/api/v1/me", `{"fullName":"created"}`)
 	assert.Equal(t, http.StatusCreated, rec.Code)

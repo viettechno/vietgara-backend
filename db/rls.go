@@ -8,8 +8,8 @@ import (
 )
 
 const (
-	accountIDKey = "account_id"
-	statusKey    = "status"
+	userIDKey = "user_id"
+	statusKey = "status"
 )
 
 // RLSContext wraps a database connection with RLS context.
@@ -52,7 +52,7 @@ func (rc *RLSContext) GetGarage(ctx context.Context) (map[string]any, error) {
 
 	err := rc.WithRLSSession(ctx, func(ctx context.Context, db *sql.DB) error {
 		rows, err := db.QueryContext(ctx,
-			`SELECT id, account_id, name, timezone, currency, status 
+			`SELECT id, user_id, name, timezone, currency, status
 			 FROM garages`)
 		if err != nil {
 			return fmt.Errorf("query failed: %w", err)
@@ -60,18 +60,18 @@ func (rc *RLSContext) GetGarage(ctx context.Context) (map[string]any, error) {
 		defer func() { _ = rows.Close() }()
 
 		if rows.Next() {
-			var id, accountID, name, timezone, currency, status string
-			if err := rows.Scan(&id, &accountID, &name, &timezone, &currency, &status); err != nil {
+			var id, userID, name, timezone, currency, status string
+			if err := rows.Scan(&id, &userID, &name, &timezone, &currency, &status); err != nil {
 				return fmt.Errorf("scan failed: %w", err)
 			}
 
 			garage = map[string]any{
-				"id":         id,
-				accountIDKey: accountID,
-				"name":       name,
-				"timezone":   timezone,
-				"currency":   currency,
-				statusKey:    status,
+				"id":       id,
+				userIDKey:  userID,
+				"name":     name,
+				"timezone": timezone,
+				"currency": currency,
+				statusKey:  status,
 			}
 		}
 
@@ -98,7 +98,7 @@ func (rc *RLSContext) GetGarageStaff(ctx context.Context) ([]map[string]any, err
 
 	err := rc.WithRLSSession(ctx, func(ctx context.Context, db *sql.DB) error {
 		rows, err := db.QueryContext(ctx,
-			`SELECT id, garage_id, account_id, role, status, created_at 
+			`SELECT id, garage_id, user_id, role, status, created_at
 			 FROM garage_staff 
 			 ORDER BY created_at DESC`)
 		if err != nil {
@@ -107,15 +107,15 @@ func (rc *RLSContext) GetGarageStaff(ctx context.Context) ([]map[string]any, err
 		defer func() { _ = rows.Close() }()
 
 		for rows.Next() {
-			var id, garageID, accountID, role, status, createdAt string
-			if err := rows.Scan(&id, &garageID, &accountID, &role, &status, &createdAt); err != nil {
+			var id, garageID, userID, role, status, createdAt string
+			if err := rows.Scan(&id, &garageID, &userID, &role, &status, &createdAt); err != nil {
 				return fmt.Errorf("scan failed: %w", err)
 			}
 
 			staff = append(staff, map[string]any{
 				"id":         id,
 				"garage_id":  garageID,
-				accountIDKey: accountID,
+				userIDKey:    userID,
 				"role":       role,
 				statusKey:    status,
 				"created_at": createdAt,
@@ -163,15 +163,15 @@ func (rc *RLSContext) UpdateGarageStatus(ctx context.Context, newStatus string) 
 }
 
 // AssignStaffToGarage assigns a staff member to a garage (with RLS).
-func (rc *RLSContext) AssignStaffToGarage(ctx context.Context, accountID, role string) error {
+func (rc *RLSContext) AssignStaffToGarage(ctx context.Context, userID, role string) error {
 	return rc.WithRLSSession(ctx, func(ctx context.Context, db *sql.DB) error {
 		_, err := db.ExecContext(ctx,
-			`INSERT INTO garage_staff (id, garage_id, account_id, role, status) 
+			`INSERT INTO garage_staff (id, garage_id, user_id, role, status)
 			 VALUES (gen_random_uuid(), $1, $2, $3, 'active') 
-			 ON CONFLICT (garage_id, account_id) DO UPDATE 
+			 ON CONFLICT (garage_id, user_id) DO UPDATE
 			 SET role = $3, status = 'active'`,
 			rc.GarageID,
-			accountID,
+			userID,
 			role,
 		)
 		if err != nil {
@@ -183,14 +183,14 @@ func (rc *RLSContext) AssignStaffToGarage(ctx context.Context, accountID, role s
 }
 
 // RemoveStaffFromGarage removes a staff member from a garage (with RLS).
-func (rc *RLSContext) RemoveStaffFromGarage(ctx context.Context, accountID string) error {
+func (rc *RLSContext) RemoveStaffFromGarage(ctx context.Context, userID string) error {
 	return rc.WithRLSSession(ctx, func(ctx context.Context, db *sql.DB) error {
 		result, err := db.ExecContext(ctx,
 			`UPDATE garage_staff 
 			 SET status = 'inactive', updated_at = NOW() 
-			 WHERE garage_id = $1 AND account_id = $2`,
+			 WHERE garage_id = $1 AND user_id = $2`,
 			rc.GarageID,
-			accountID,
+			userID,
 		)
 		if err != nil {
 			return fmt.Errorf("update failed: %w", err)

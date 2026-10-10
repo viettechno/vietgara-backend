@@ -66,7 +66,7 @@ var candidateMemberships = map[string]tenantv1.CandidateMembership{
 	usecase.CandidateInvited: tenantv1.CandidateMembership_CANDIDATE_MEMBERSHIP_INVITED,
 }
 
-// LookupStaffCandidate finds an account to invite by e-mail or phone.
+// LookupStaffCandidate finds a user to invite by e-mail or phone.
 func (s *Server) LookupStaffCandidate(ctx context.Context, req *tenantv1.LookupStaffCandidateRequest) (*tenantv1.LookupStaffCandidateResponse, error) {
 	candidate, err := s.uc.LookupCandidate(ctx, req.GetGarageId(), req.GetQuery())
 	if err != nil {
@@ -74,17 +74,17 @@ func (s *Server) LookupStaffCandidate(ctx context.Context, req *tenantv1.LookupS
 	}
 
 	return &tenantv1.LookupStaffCandidateResponse{Candidate: &tenantv1.StaffCandidate{
-		AccountId:  candidate.Account.ID,
-		FullName:   candidate.Account.FullName,
-		Email:      candidate.Account.Email,
-		Phone:      candidate.Account.Phone,
+		UserId:     candidate.User.ID,
+		FullName:   candidate.User.FullName,
+		Email:      candidate.User.Email,
+		Phone:      candidate.User.Phone,
 		Membership: candidateMemberships[candidate.Membership],
 	}}, nil
 }
 
-// CreateInvitation invites an existing account; answers 201.
+// CreateInvitation invites an existing user; answers 201.
 func (s *Server) CreateInvitation(ctx context.Context, req *tenantv1.CreateInvitationRequest) (*tenantv1.CreateInvitationResponse, error) {
-	inv, err := s.uc.CreateInvitation(ctx, req.GetGarageId(), req.GetAccountId(), req.GetGroupIds())
+	inv, err := s.uc.CreateInvitation(ctx, req.GetGarageId(), req.GetUserId(), req.GetGroupIds())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -121,7 +121,7 @@ func (s *Server) RevokeInvitation(ctx context.Context, req *tenantv1.RevokeInvit
 
 // ListMyInvitations lists the caller's invitations.
 func (s *Server) ListMyInvitations(ctx context.Context, req *tenantv1.ListMyInvitationsRequest) (*tenantv1.ListMyInvitationsResponse, error) {
-	invitations, err := s.uc.ListMyInvitations(ctx, middleware.AccountID(ctx), invitationStatusFromProto(req.GetStatus()))
+	invitations, err := s.uc.ListMyInvitations(ctx, middleware.UserID(ctx), invitationStatusFromProto(req.GetStatus()))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -136,7 +136,7 @@ func (s *Server) ListMyInvitations(ctx context.Context, req *tenantv1.ListMyInvi
 
 // GetMyInvitation returns one of the caller's invitations.
 func (s *Server) GetMyInvitation(ctx context.Context, req *tenantv1.GetMyInvitationRequest) (*tenantv1.GetMyInvitationResponse, error) {
-	inv, err := s.uc.GetMyInvitation(ctx, middleware.AccountID(ctx), req.GetInvitationId())
+	inv, err := s.uc.GetMyInvitation(ctx, middleware.UserID(ctx), req.GetInvitationId())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -146,7 +146,7 @@ func (s *Server) GetMyInvitation(ctx context.Context, req *tenantv1.GetMyInvitat
 
 // AcceptInvitation joins the garage.
 func (s *Server) AcceptInvitation(ctx context.Context, req *tenantv1.AcceptInvitationRequest) (*tenantv1.AcceptInvitationResponse, error) {
-	inv, err := s.uc.AcceptInvitation(ctx, middleware.AccountID(ctx), req.GetInvitationId())
+	inv, err := s.uc.AcceptInvitation(ctx, middleware.UserID(ctx), req.GetInvitationId())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -156,7 +156,7 @@ func (s *Server) AcceptInvitation(ctx context.Context, req *tenantv1.AcceptInvit
 
 // DeclineInvitation turns an invitation down.
 func (s *Server) DeclineInvitation(ctx context.Context, req *tenantv1.DeclineInvitationRequest) (*tenantv1.DeclineInvitationResponse, error) {
-	inv, err := s.uc.DeclineInvitation(ctx, middleware.AccountID(ctx), req.GetInvitationId())
+	inv, err := s.uc.DeclineInvitation(ctx, middleware.UserID(ctx), req.GetInvitationId())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}

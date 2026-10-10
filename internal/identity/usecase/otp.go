@@ -20,11 +20,11 @@ type resendTooSoonError struct{ challenge Challenge }
 func (e *resendTooSoonError) Error() string { return domain.ErrOTPResendTooSoon.Error() }
 func (e *resendTooSoonError) Unwrap() error { return domain.ErrOTPResendTooSoon }
 
-// sendOTP issues a new OTP of purpose for acc and e-mails it in the
-// account's language. Within the resend cooldown it returns
+// sendOTP issues a new OTP of purpose for user and e-mails it in the
+// user's language. Within the resend cooldown it returns
 // *resendTooSoonError with the running challenge.
-func (uc *IdentityUseCase) sendOTP(ctx context.Context, purpose domain.OTPPurpose, acc *domain.Account) (Challenge, error) {
-	key := domain.OTPKey(purpose, acc.ID)
+func (uc *IdentityUseCase) sendOTP(ctx context.Context, purpose domain.OTPPurpose, user *domain.User) (Challenge, error) {
+	key := domain.OTPKey(purpose, user.ID)
 	now := uc.now().UTC()
 
 	existing, err := uc.otps.Get(ctx, key)
@@ -39,8 +39,8 @@ func (uc *IdentityUseCase) sendOTP(ctx context.Context, purpose domain.OTPPurpos
 	code := domain.NewOTPCode()
 	otp := domain.NewOTP(key, code, now)
 
-	msg, err := mail.Render(otpTemplates[purpose], string(acc.Locale.OrDefault()), acc.Email, acc.FullName, map[string]any{
-		"Name": acc.FullName, "Code": code, "Minutes": int(domain.OTPTTL.Minutes()),
+	msg, err := mail.Render(otpTemplates[purpose], string(user.Locale.OrDefault()), user.Email, user.FullName, map[string]any{
+		"Name": user.FullName, "Code": code, "Minutes": int(domain.OTPTTL.Minutes()),
 	})
 	if err != nil {
 		return Challenge{}, err
@@ -59,10 +59,10 @@ func (uc *IdentityUseCase) sendOTP(ctx context.Context, purpose domain.OTPPurpos
 	return Challenge{ExpiresAt: otp.ExpiresAt, ResendAvailableAt: otp.ResendAt}, nil
 }
 
-// checkOTP verifies code against the OTP of purpose for accountID and
+// checkOTP verifies code against the OTP of purpose for userID and
 // consumes it on success. Wrong codes count towards OTPMaxAttempts.
-func (uc *IdentityUseCase) checkOTP(ctx context.Context, purpose domain.OTPPurpose, accountID, code string) error {
-	key := domain.OTPKey(purpose, accountID)
+func (uc *IdentityUseCase) checkOTP(ctx context.Context, purpose domain.OTPPurpose, userID, code string) error {
+	key := domain.OTPKey(purpose, userID)
 
 	otp, err := uc.otps.Get(ctx, key)
 	if err != nil {

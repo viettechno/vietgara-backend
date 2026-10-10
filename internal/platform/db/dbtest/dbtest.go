@@ -3,7 +3,7 @@
 // query with the next expectation, checking the SQL it receives.
 //
 //	tx := dbtest.New(t).
-//		ExpectQueryRow("INSERT INTO accounts", dbtest.Row("id-1", now, now)).
+//		ExpectQueryRow("INSERT INTO users", dbtest.Row("id-1", now, now)).
 //		ExpectExec("DELETE FROM roles", dbtest.Tag(1), nil)
 //	ctx := tx.Context(t.Context())
 package dbtest

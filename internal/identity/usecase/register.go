@@ -22,11 +22,11 @@ type RegisterRequest struct {
 	Locale   domain.Locale
 }
 
-// Register creates an unverified owner account, e-mails the verification
-// OTP once the account is stored, and signs the new owner in: until the
+// Register creates an unverified owner user, e-mails the verification
+// OTP once the user is stored, and signs the new owner in: until the
 // e-mail is verified only the profile and verification APIs are usable.
 func (uc *IdentityUseCase) Register(ctx context.Context, req RegisterRequest) (*Session, error) {
-	acc, password, err := newAccount(req)
+	user, password, err := newUser(req)
 	if err != nil {
 		return nil, err
 	}
@@ -37,20 +37,20 @@ func (uc *IdentityUseCase) Register(ctx context.Context, req RegisterRequest) (*
 	}
 
 	passwordHash := string(hash)
-	acc.PasswordHash = &passwordHash
+	user.PasswordHash = &passwordHash
 
 	err = uc.tx.WithTransaction(ctx, platformdb.Scope{}, func(ctx context.Context) error {
-		if err := uc.ensureAvailable(ctx, acc.Email, acc.Phone); err != nil {
+		if err := uc.ensureAvailable(ctx, user.Email, user.Phone); err != nil {
 			return err
 		}
 
-		if err := uc.accounts.Create(ctx, acc); err != nil {
+		if err := uc.users.Create(ctx, user); err != nil {
 			return mapCreateError(err)
 		}
 
 		platformdb.AfterCommit(ctx, func() {
-			if _, err := uc.sendOTP(context.WithoutCancel(ctx), domain.OTPEmailVerification, acc); err != nil {
-				slog.Warn("identity: sending the verification e-mail after sign-up failed", "account_id", acc.ID, "error", err)
+			if _, err := uc.sendOTP(context.WithoutCancel(ctx), domain.OTPEmailVerification, user); err != nil {
+				slog.Warn("identity: sending the verification e-mail after sign-up failed", "user_id", user.ID, "error", err)
 			}
 		})
 
@@ -60,10 +60,10 @@ func (uc *IdentityUseCase) Register(ctx context.Context, req RegisterRequest) (*
 		return nil, err
 	}
 
-	return uc.issueSession(ctx, acc)
+	return uc.issueSession(ctx, user)
 }
 
-func newAccount(req RegisterRequest) (*domain.Account, string, error) {
+func newUser(req RegisterRequest) (*domain.User, string, error) {
 	email, ok := domain.NormalizeEmail(req.Email)
 	if !ok {
 		return nil, "", apperror.Validation("email", apperror.IssueInvalid, "email is invalid")
@@ -83,12 +83,12 @@ func newAccount(req RegisterRequest) (*domain.Account, string, error) {
 		return nil, "", err
 	}
 
-	return &domain.Account{
+	return &domain.User{
 		Email:        email,
 		Phone:        phone,
 		AuthProvider: domain.AuthProviderEmail,
 		FullName:     fullName,
-		Status:       domain.AccountStatusActive,
+		Status:       domain.UserStatusActive,
 		Locale:       req.Locale.OrDefault(),
 	}, req.Password, nil
 }
@@ -108,11 +108,11 @@ func normalizeOptionalPhone(raw *string) (*string, error) {
 }
 
 // ensureAvailable rejects an e-mail or phone that is already registered
-// (to another account than exceptID).
+// (to another user than exceptID).
 func (uc *IdentityUseCase) ensureAvailable(ctx context.Context, email string, phone *string, exceptID ...string) error {
 	if email != "" {
-		existing, err := uc.accounts.FindByEmail(ctx, email)
-		if err != nil && !errors.Is(err, domain.ErrAccountNotFound) {
+		existing, err := uc.users.FindByEmail(ctx, email)
+		if err != nil && !errors.Is(err, domain.ErrUserNotFound) {
 			return apperror.Internal("check existing email", err)
 		}
 
@@ -122,8 +122,8 @@ func (uc *IdentityUseCase) ensureAvailable(ctx context.Context, email string, ph
 	}
 
 	if phone != nil {
-		existing, err := uc.accounts.FindByPhone(ctx, *phone)
-		if err != nil && !errors.Is(err, domain.ErrAccountNotFound) {
+		existing, err := uc.users.FindByPhone(ctx, *phone)
+		if err != nil && !errors.Is(err, domain.ErrUserNotFound) {
 			return apperror.Internal("check existing phone", err)
 		}
 
@@ -157,6 +157,6 @@ func mapCreateError(err error) error {
 	case errors.Is(err, domain.ErrPhoneAlreadyExists):
 		return phoneTaken()
 	default:
-		return apperror.Internal("create account", err)
+		return apperror.Internal("create user", err)
 	}
 }

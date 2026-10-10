@@ -38,8 +38,8 @@ func (_m *MockTransactionLimiter) EXPECT() *MockTransactionLimiter_Expecter {
 }
 
 // ConsumeTransaction provides a mock function for the type MockTransactionLimiter
-func (_mock *MockTransactionLimiter) ConsumeTransaction(ctx context.Context, ownerAccountID string) error {
-	ret := _mock.Called(ctx, ownerAccountID)
+func (_mock *MockTransactionLimiter) ConsumeTransaction(ctx context.Context, ownerUserID string) error {
+	ret := _mock.Called(ctx, ownerUserID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ConsumeTransaction")
@@ -47,7 +47,7 @@ func (_mock *MockTransactionLimiter) ConsumeTransaction(ctx context.Context, own
 
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) error); ok {
-		r0 = returnFunc(ctx, ownerAccountID)
+		r0 = returnFunc(ctx, ownerUserID)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -61,12 +61,12 @@ type MockTransactionLimiter_ConsumeTransaction_Call struct {
 
 // ConsumeTransaction is a helper method to define mock.On call
 //   - ctx context.Context
-//   - ownerAccountID string
-func (_e *MockTransactionLimiter_Expecter) ConsumeTransaction(ctx any, ownerAccountID any) *MockTransactionLimiter_ConsumeTransaction_Call {
-	return &MockTransactionLimiter_ConsumeTransaction_Call{Call: _e.mock.On("ConsumeTransaction", ctx, ownerAccountID)}
+//   - ownerUserID string
+func (_e *MockTransactionLimiter_Expecter) ConsumeTransaction(ctx any, ownerUserID any) *MockTransactionLimiter_ConsumeTransaction_Call {
+	return &MockTransactionLimiter_ConsumeTransaction_Call{Call: _e.mock.On("ConsumeTransaction", ctx, ownerUserID)}
 }
 
-func (_c *MockTransactionLimiter_ConsumeTransaction_Call) Run(run func(ctx context.Context, ownerAccountID string)) *MockTransactionLimiter_ConsumeTransaction_Call {
+func (_c *MockTransactionLimiter_ConsumeTransaction_Call) Run(run func(ctx context.Context, ownerUserID string)) *MockTransactionLimiter_ConsumeTransaction_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -89,7 +89,7 @@ func (_c *MockTransactionLimiter_ConsumeTransaction_Call) Return(err error) *Moc
 	return _c
 }
 
-func (_c *MockTransactionLimiter_ConsumeTransaction_Call) RunAndReturn(run func(ctx context.Context, ownerAccountID string) error) *MockTransactionLimiter_ConsumeTransaction_Call {
+func (_c *MockTransactionLimiter_ConsumeTransaction_Call) RunAndReturn(run func(ctx context.Context, ownerUserID string) error) *MockTransactionLimiter_ConsumeTransaction_Call {
 	_c.Call.Return(run)
 	return _c
 }

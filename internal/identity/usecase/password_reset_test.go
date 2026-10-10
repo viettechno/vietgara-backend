@@ -41,8 +41,8 @@ func TestPasswordReset(t *testing.T) {
 
 	_, err = e.uc.Login(t.Context(), "owner@example.com", "brand-new-pass")
 	require.NoError(t, err)
-	assert.True(t, e.accounts.get(session.Account.ID).EmailVerified(), "the OTP proved the e-mail")
-	assert.Equal(t, []string{"account.email_verified"}, e.events.types)
+	assert.True(t, e.users.get(session.User.ID).EmailVerified(), "the OTP proved the e-mail")
+	assert.Equal(t, []string{"user.email_verified"}, e.events.types)
 }
 
 func TestPasswordResetWithoutEnumeration(t *testing.T) {
@@ -62,37 +62,37 @@ func TestPasswordResetWithoutEnumeration(t *testing.T) {
 	_, _, err = e.uc.VerifyPasswordResetOTP(t.Context(), "bad", "123456")
 	requireReason(t, err, domain.ReasonOTPInvalid)
 
-	e.accounts.get(session.Account.ID).Status = domain.AccountStatusSuspended
+	e.users.get(session.User.ID).Status = domain.UserStatusSuspended
 	sent := len(e.mailer.sent)
 	_, err = e.uc.RequestPasswordReset(t.Context(), "owner@example.com")
 	require.NoError(t, err)
-	assert.Len(t, e.mailer.sent, sent, "suspended accounts get nothing")
+	assert.Len(t, e.mailer.sent, sent, "suspended users get nothing")
 
-	e.accounts.get(session.Account.ID).Status = domain.AccountStatusActive
+	e.users.get(session.User.ID).Status = domain.UserStatusActive
 	e.mailer.err = errBoom
 	_, err = e.uc.RequestPasswordReset(t.Context(), "owner@example.com")
 	require.NoError(t, err, "delivery failures are logged, not revealed")
 
-	e.accounts.findErr = errBoom
+	e.users.findErr = errBoom
 	_, err = e.uc.RequestPasswordReset(t.Context(), "owner@example.com")
 	requireReason(t, err, apperror.ReasonInternal)
 	_, _, err = e.uc.VerifyPasswordResetOTP(t.Context(), "owner@example.com", "1")
 	requireReason(t, err, apperror.ReasonInternal)
 }
 
-func TestResetPasswordOnVerifiedAccount(t *testing.T) {
+func TestResetPasswordOnVerifiedUser(t *testing.T) {
 	t.Parallel()
 
 	e := newEnv(t)
 	session := e.register(t)
-	verified, err := e.uc.VerifyEmail(t.Context(), session.Account.ID, e.mailer.lastCode(t, "owner@example.com"), "")
+	verified, err := e.uc.VerifyEmail(t.Context(), session.User.ID, e.mailer.lastCode(t, "owner@example.com"), "")
 	require.NoError(t, err)
 
-	require.NoError(t, e.store.SaveResetToken(t.Context(), "tok", verified.Account.ID, domain.ResetTokenTTL))
+	require.NoError(t, e.store.SaveResetToken(t.Context(), "tok", verified.User.ID, domain.ResetTokenTTL))
 	require.NoError(t, e.uc.ResetPassword(t.Context(), "tok", "another-pass"))
 
-	require.NoError(t, e.store.SaveResetToken(t.Context(), "tok2", verified.Account.ID, domain.ResetTokenTTL))
-	e.accounts.updateErr = errBoom
+	require.NoError(t, e.store.SaveResetToken(t.Context(), "tok2", verified.User.ID, domain.ResetTokenTTL))
+	e.users.updateErr = errBoom
 	requireReason(t, e.uc.ResetPassword(t.Context(), "tok2", "another-pass"), apperror.ReasonInternal)
 
 	require.NoError(t, e.store.SaveResetToken(t.Context(), "tok3", "gone", domain.ResetTokenTTL))

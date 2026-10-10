@@ -34,28 +34,28 @@ func TestGoogleIDTokenSignIn(t *testing.T) {
 		return token
 	}
 
-	t.Run("a new Google user gets a verified account", func(t *testing.T) {
+	t.Run("a new Google user gets a verified user", func(t *testing.T) {
 		email := fixture.UniqueEmail(t, "google")
 		claims := idtoken.Claims{Subject: "google-" + email, Email: email, EmailVerified: true, Name: "Blackbox Google", Audience: audience}
 
 		first, err := api.SignInWithGoogleIDToken(ctx, mint(t, claims))
 		require.NoError(t, err)
-		assert.Equal(t, email, first.GetAccount().GetEmail())
-		assert.True(t, first.GetAccount().GetEmailVerified())
-		assert.Equal(t, identityv1.AuthProvider_AUTH_PROVIDER_GOOGLE, first.GetAccount().GetAuthProvider())
+		assert.Equal(t, email, first.GetUser().GetEmail())
+		assert.True(t, first.GetUser().GetEmailVerified())
+		assert.Equal(t, identityv1.AuthProvider_AUTH_PROVIDER_GOOGLE, first.GetUser().GetAuthProvider())
 
 		again, err := api.SignInWithGoogleIDToken(ctx, mint(t, claims))
 		require.NoError(t, err)
-		assert.Equal(t, first.GetAccount().GetId(), again.GetAccount().GetId(), "the same Google subject is the same account")
+		assert.Equal(t, first.GetUser().GetId(), again.GetUser().GetId(), "the same Google subject is the same user")
 	})
 
-	t.Run("links Google to an existing e-mail account", func(t *testing.T) {
+	t.Run("links Google to an existing e-mail user", func(t *testing.T) {
 		owner := fixture.NewVerifiedOwner(t, "link")
 		claims := idtoken.Claims{Subject: "google-" + owner.Email, Email: owner.Email, EmailVerified: true, Audience: audience}
 
 		session, err := api.SignInWithGoogleIDToken(ctx, mint(t, claims))
 		require.NoError(t, err)
-		assert.Equal(t, owner.Session.GetAccount().GetId(), session.GetAccount().GetId())
+		assert.Equal(t, owner.Session.GetUser().GetId(), session.GetUser().GetId())
 
 		_, err = api.Login(ctx, owner.Email, owner.Password)
 		require.NoError(t, err, "the password still works after linking")

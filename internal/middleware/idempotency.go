@@ -51,7 +51,7 @@ type IdempotencyStore interface {
 //     (IDEMPOTENCY_KEY_REUSED);
 //   - a request that fails stores nothing, so it can be retried as is.
 //
-// Keys are scoped to the garage and the calling account, and kept for
+// Keys are scoped to the garage and the calling user, and kept for
 // idempotency.Retention.
 func Idempotency(store IdempotencyStore) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
@@ -81,7 +81,7 @@ func Idempotency(store IdempotencyStore) grpc.UnaryServerInterceptor {
 			return nil, apperror.ToGRPCError(apperror.New(apperror.CodeInternal, "idempotent RPC is not garage-scoped"))
 		}
 
-		k := idempotency.Key{GarageID: scoped.GetGarageId(), AccountID: AccountID(ctx), Key: key}
+		k := idempotency.Key{GarageID: scoped.GetGarageId(), UserID: UserID(ctx), Key: key}
 
 		stored, err := store.Claim(ctx, k, info.FullMethod, hash)
 		if err != nil {

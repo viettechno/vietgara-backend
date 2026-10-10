@@ -14,7 +14,7 @@ import (
 const ReasonGoogleTokenInvalid = "GOOGLE_TOKEN_INVALID"
 
 // SignInWithGoogleIdToken signs in with a Google ID token obtained natively
-// by a mobile app (FR-IAM-01, FR-CAPP-01), with the same account rules as
+// by a mobile app (FR-IAM-01, FR-CAPP-01), with the same user rules as
 // the web's Google redirect sign-in (usecase.GoogleLogin).
 func (s *Server) SignInWithGoogleIdToken( //nolint:revive // named by the generated proto service
 	ctx context.Context, req *identityv1.SignInWithGoogleIdTokenRequest,

@@ -29,19 +29,19 @@ func TestStoreOnPostgres(t *testing.T) {
 	pg := pgtest.StartMigrated(t)
 	ctx := t.Context()
 
-	accountID, garageA, garageB := uuid.NewString(), uuid.NewString(), uuid.NewString()
-	_, err := pg.Admin.ExecContext(ctx, `INSERT INTO accounts (id, email, full_name) VALUES ($1, 'owner@example.com', 'Owner')`, accountID)
+	userID, garageA, garageB := uuid.NewString(), uuid.NewString(), uuid.NewString()
+	_, err := pg.Admin.ExecContext(ctx, `INSERT INTO users (id, email, full_name) VALUES ($1, 'owner@example.com', 'Owner')`, userID)
 	require.NoError(t, err)
-	_, err = pg.Admin.ExecContext(ctx, `INSERT INTO garages (id, account_id, name) VALUES ($1, $3, 'A'), ($2, $3, 'B')`, garageA, garageB, accountID)
+	_, err = pg.Admin.ExecContext(ctx, `INSERT INTO garages (id, user_id, name) VALUES ($1, $3, 'A'), ($2, $3, 'B')`, garageA, garageB, userID)
 	require.NoError(t, err)
 
 	pool := pg.AppPool(t)
 	store := idempotency.NewStore(pool)
 	txm := platformdb.NewTxManager(pool)
 	hash := []byte("hash-1")
-	keyA := idempotency.Key{GarageID: garageA, AccountID: accountID, Key: "key-1"}
+	keyA := idempotency.Key{GarageID: garageA, UserID: userID, Key: "key-1"}
 	scope := func(garageID string) platformdb.Scope {
-		return platformdb.Scope{GarageID: garageID, AccountID: accountID}
+		return platformdb.Scope{GarageID: garageID, UserID: userID}
 	}
 
 	t.Run("a new key is claimed and its response stored", func(t *testing.T) {
@@ -68,7 +68,7 @@ func TestStoreOnPostgres(t *testing.T) {
 	})
 
 	t.Run("a failed request leaves no key", func(t *testing.T) {
-		k := idempotency.Key{GarageID: garageA, AccountID: accountID, Key: "key-failed"}
+		k := idempotency.Key{GarageID: garageA, UserID: userID, Key: "key-failed"}
 
 		err := txm.WithTransaction(ctx, scope(garageA), func(ctx context.Context) error {
 			_, err := store.Claim(ctx, k, method, hash)
@@ -88,7 +88,7 @@ func TestStoreOnPostgres(t *testing.T) {
 	})
 
 	t.Run("a concurrent duplicate waits and replays", func(t *testing.T) {
-		k := idempotency.Key{GarageID: garageA, AccountID: accountID, Key: "key-concurrent"}
+		k := idempotency.Key{GarageID: garageA, UserID: userID, Key: "key-concurrent"}
 		claimed, release := make(chan struct{}), make(chan struct{})
 		firstDone := make(chan error, 1)
 
@@ -133,7 +133,7 @@ func TestStoreOnPostgres(t *testing.T) {
 	})
 
 	t.Run("keys are per garage and invisible across garages", func(t *testing.T) {
-		keyB := idempotency.Key{GarageID: garageB, AccountID: accountID, Key: "key-1"}
+		keyB := idempotency.Key{GarageID: garageB, UserID: userID, Key: "key-1"}
 
 		err := txm.WithTransaction(ctx, scope(garageB), func(ctx context.Context) error {
 			rec, err := store.Claim(ctx, keyB, method, hash)
@@ -156,8 +156,8 @@ func TestStoreOnPostgres(t *testing.T) {
 
 	t.Run("purge deletes expired keys only", func(t *testing.T) {
 		_, err := pg.Admin.ExecContext(ctx, `
-			INSERT INTO idempotency_keys (garage_id, account_id, idempotency_key, method, request_hash, created_at)
-			VALUES ($1, $2, 'old', $3, '\x00', now() - interval '2 days')`, garageA, accountID, method)
+			INSERT INTO idempotency_keys (garage_id, user_id, idempotency_key, method, request_hash, created_at)
+			VALUES ($1, $2, 'old', $3, '\x00', now() - interval '2 days')`, garageA, userID, method)
 		require.NoError(t, err)
 
 		deleted, err := store.Purge(ctx)

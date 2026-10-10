@@ -7,9 +7,9 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 )
 
-// Candidate is an existing account found to be invited.
+// Candidate is an existing user found to be invited.
 type Candidate struct {
-	Account    *AccountSummary
+	User       *UserSummary
 	Membership string // none, member, invited
 }
 
@@ -20,17 +20,17 @@ const (
 	CandidateInvited = "invited"
 )
 
-// LookupCandidate finds an existing account by exact e-mail or phone
-// (FR-TEN-04: only existing accounts can be added).
+// LookupCandidate finds an existing user by exact e-mail or phone
+// (FR-TEN-04: only existing users can be added).
 func (uc *TenantUseCase) LookupCandidate(ctx context.Context, garageID, query string) (*Candidate, error) {
-	account, err := uc.findAccountByContact(ctx, query)
+	user, err := uc.findUserByContact(ctx, query)
 	if err != nil {
 		return nil, err
 	}
 
-	candidate := &Candidate{Account: account, Membership: CandidateNone}
+	candidate := &Candidate{User: user, Membership: CandidateNone}
 
-	member, err := uc.Staff.FindByAccount(ctx, garageID, account.ID)
+	member, err := uc.Staff.FindByUser(ctx, garageID, user.ID)
 	switch {
 	case err == nil && member.Status == domain.StaffStatusActive:
 		candidate.Membership = CandidateMember
@@ -39,7 +39,7 @@ func (uc *TenantUseCase) LookupCandidate(ctx context.Context, garageID, query st
 	}
 
 	if candidate.Membership == CandidateNone {
-		invited, err := uc.hasPendingInvitation(ctx, garageID, account.ID)
+		invited, err := uc.hasPendingInvitation(ctx, garageID, user.ID)
 		if err != nil {
 			return nil, err
 		}
@@ -52,44 +52,44 @@ func (uc *TenantUseCase) LookupCandidate(ctx context.Context, garageID, query st
 	return candidate, nil
 }
 
-func (uc *TenantUseCase) findAccountByContact(ctx context.Context, query string) (*AccountSummary, error) {
+func (uc *TenantUseCase) findUserByContact(ctx context.Context, query string) (*UserSummary, error) {
 	var (
-		account *AccountSummary
-		err     error
+		user *UserSummary
+		err  error
 	)
 
 	if containsAt(query) {
-		account, err = uc.Accounts.FindByEmail(ctx, query)
+		user, err = uc.Users.FindByEmail(ctx, query)
 	} else {
-		account, err = uc.Accounts.FindByPhone(ctx, query)
+		user, err = uc.Users.FindByPhone(ctx, query)
 	}
 
 	if err != nil {
-		return nil, toAppError("lookup account", err)
+		return nil, toAppError("lookup user", err)
 	}
 
-	if !account.Active {
-		return nil, toAppError("lookup account", domain.ErrAccountInactive)
+	if !user.Active {
+		return nil, toAppError("lookup user", domain.ErrUserInactive)
 	}
 
-	return account, nil
+	return user, nil
 }
 
-// withAccounts loads the account details of members.
-func (uc *TenantUseCase) withAccounts(ctx context.Context, members ...*domain.Staff) error {
+// withUsers loads the user details of members.
+func (uc *TenantUseCase) withUsers(ctx context.Context, members ...*domain.Staff) error {
 	ids := make([]string, 0, len(members))
 	for _, m := range members {
-		ids = append(ids, m.AccountID)
+		ids = append(ids, m.UserID)
 	}
 
-	accounts, err := uc.Accounts.ListByIDs(ctx, ids)
+	users, err := uc.Users.ListByIDs(ctx, ids)
 	if err != nil {
-		return toAppError("load staff accounts", err)
+		return toAppError("load staff users", err)
 	}
 
 	for _, m := range members {
-		if acc, ok := accounts[m.AccountID]; ok {
-			m.FullName, m.Email, m.Phone = acc.FullName, acc.Email, acc.Phone
+		if user, ok := users[m.UserID]; ok {
+			m.FullName, m.Email, m.Phone = user.FullName, user.Email, user.Phone
 		}
 	}
 

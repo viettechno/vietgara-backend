@@ -34,7 +34,7 @@ $$ LANGUAGE plpgsql;
 -- marks the roles the platform generated, which keeps that step idempotent.
 CREATE TABLE roles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    owner_account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    owner_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(100) NOT NULL,
     description TEXT NOT NULL DEFAULT '',
     default_key default_role,
@@ -43,8 +43,8 @@ CREATE TABLE roles (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
 );
-CREATE UNIQUE INDEX idx_roles_owner_name_unique ON roles (owner_account_id, lower(name));
-CREATE UNIQUE INDEX idx_roles_owner_default_unique ON roles (owner_account_id, default_key) WHERE default_key IS NOT NULL;
+CREATE UNIQUE INDEX idx_roles_owner_name_unique ON roles (owner_user_id, lower(name));
+CREATE UNIQUE INDEX idx_roles_owner_default_unique ON roles (owner_user_id, default_key) WHERE default_key IS NOT NULL;
 CREATE TRIGGER trigger_roles_updated_at BEFORE UPDATE ON roles FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE TABLE role_permissions (

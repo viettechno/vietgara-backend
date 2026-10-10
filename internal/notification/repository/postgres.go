@@ -27,10 +27,10 @@ func (r *PostgresRepository) Create(ctx context.Context, log *domain.Log) error 
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
 	row := q.QueryRow(ctx, `
-		INSERT INTO notification_log (id, account_id, channel, template, recipient, status, error)
+		INSERT INTO notification_log (id, user_id, channel, template, recipient, status, error)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING created_at`,
-		log.ID, nullableString(log.AccountID), string(log.Channel), log.Template, log.Recipient, string(log.Status),
+		log.ID, nullableString(log.UserID), string(log.Channel), log.Template, log.Recipient, string(log.Status),
 		nullableString(log.Error),
 	)
 

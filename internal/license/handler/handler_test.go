@@ -29,11 +29,11 @@ func reason(err error) string {
 	return ""
 }
 
-func as(t *testing.T, accountID string) context.Context {
+func as(t *testing.T, userID string) context.Context {
 	t.Helper()
 
 	claims := &auth.Claims{}
-	claims.Subject = accountID
+	claims.Subject = userID
 
 	return middleware.WithClaims(t.Context(), claims)
 }
@@ -56,7 +56,7 @@ func TestPoliciesAndWiring(t *testing.T) {
 	_, e := newServer()
 	d := outbox.NewDispatcher()
 	handler.Subscribe(d, outbox.NewProcessor(nil, nil), e.Subscriptions)
-	assert.Len(t, d.Handlers("account.email_verified"), 1)
+	assert.Len(t, d.Handlers("user.email_verified"), 1)
 
 	e.Store.Owners["g-1"] = "owner"
 	mode, err := handler.NewEnforcement(e.Entitlements).LicenseMode(t.Context(), "g-1")
@@ -156,15 +156,15 @@ func TestLicenseAdminService(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, all.GetData(), 5)
 
-	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "acc-1"))
-	e.Store.Emails["acc-1"] = "owner@example.com"
+	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "user-1"))
+	e.Store.Emails["user-1"] = "owner@example.com"
 
 	list, err := srv.ListSubscriptions(ctx, &licensev1.ListSubscriptionsRequest{Query: "owner", PageSize: 500})
 	require.NoError(t, err)
 	require.Len(t, list.GetData(), 1)
 	assert.EqualValues(t, 100, list.GetPagination().GetPageSize())
 	assert.EqualValues(t, 1, list.GetPagination().GetPage())
-	assert.Equal(t, "owner@example.com", list.GetData()[0].GetAccountEmail())
+	assert.Equal(t, "owner@example.com", list.GetData()[0].GetUserEmail())
 
 	list, err = srv.ListSubscriptions(ctx, &licensev1.ListSubscriptionsRequest{Status: licensev1.SubscriptionStatus_SUBSCRIPTION_STATUS_SUSPENDED, Page: 2})
 	require.NoError(t, err)

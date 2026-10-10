@@ -39,8 +39,8 @@ func (_m *MockAccessReader) EXPECT() *MockAccessReader_Expecter {
 }
 
 // GarageAccess provides a mock function for the type MockAccessReader
-func (_mock *MockAccessReader) GarageAccess(ctx context.Context, garageID string, accountID string) (*access.Access, error) {
-	ret := _mock.Called(ctx, garageID, accountID)
+func (_mock *MockAccessReader) GarageAccess(ctx context.Context, garageID string, userID string) (*access.Access, error) {
+	ret := _mock.Called(ctx, garageID, userID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GarageAccess")
@@ -49,17 +49,17 @@ func (_mock *MockAccessReader) GarageAccess(ctx context.Context, garageID string
 	var r0 *access.Access
 	var r1 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (*access.Access, error)); ok {
-		return returnFunc(ctx, garageID, accountID)
+		return returnFunc(ctx, garageID, userID)
 	}
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) *access.Access); ok {
-		r0 = returnFunc(ctx, garageID, accountID)
+		r0 = returnFunc(ctx, garageID, userID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*access.Access)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
-		r1 = returnFunc(ctx, garageID, accountID)
+		r1 = returnFunc(ctx, garageID, userID)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -74,12 +74,12 @@ type MockAccessReader_GarageAccess_Call struct {
 // GarageAccess is a helper method to define mock.On call
 //   - ctx context.Context
 //   - garageID string
-//   - accountID string
-func (_e *MockAccessReader_Expecter) GarageAccess(ctx any, garageID any, accountID any) *MockAccessReader_GarageAccess_Call {
-	return &MockAccessReader_GarageAccess_Call{Call: _e.mock.On("GarageAccess", ctx, garageID, accountID)}
+//   - userID string
+func (_e *MockAccessReader_Expecter) GarageAccess(ctx any, garageID any, userID any) *MockAccessReader_GarageAccess_Call {
+	return &MockAccessReader_GarageAccess_Call{Call: _e.mock.On("GarageAccess", ctx, garageID, userID)}
 }
 
-func (_c *MockAccessReader_GarageAccess_Call) Run(run func(ctx context.Context, garageID string, accountID string)) *MockAccessReader_GarageAccess_Call {
+func (_c *MockAccessReader_GarageAccess_Call) Run(run func(ctx context.Context, garageID string, userID string)) *MockAccessReader_GarageAccess_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -107,7 +107,7 @@ func (_c *MockAccessReader_GarageAccess_Call) Return(access1 *access.Access, err
 	return _c
 }
 
-func (_c *MockAccessReader_GarageAccess_Call) RunAndReturn(run func(ctx context.Context, garageID string, accountID string) (*access.Access, error)) *MockAccessReader_GarageAccess_Call {
+func (_c *MockAccessReader_GarageAccess_Call) RunAndReturn(run func(ctx context.Context, garageID string, userID string) (*access.Access, error)) *MockAccessReader_GarageAccess_Call {
 	_c.Call.Return(run)
 	return _c
 }

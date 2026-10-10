@@ -138,12 +138,12 @@ func required(v string, missing error, n normalizer) (string, error) {
 }
 
 // actorRef returns nil for an unknown actor so audit columns stay NULL.
-func actorRef(accountID string) *string {
-	if accountID == "" {
+func actorRef(userID string) *string {
+	if userID == "" {
 		return nil
 	}
 
-	return &accountID
+	return &userID
 }
 
 var (

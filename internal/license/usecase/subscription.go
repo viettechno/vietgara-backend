@@ -58,13 +58,13 @@ func NewSubscriptionUseCase(deps SubscriptionDeps, opts ...Option) *Subscription
 // EnsureTrial starts the 14-day trial of an owner (FR-LIC-01) unless they
 // already have a subscription. Idempotent: called when the owner's e-mail
 // is verified and whenever a limit is checked for an owner without one.
-func (uc *SubscriptionUseCase) EnsureTrial(ctx context.Context, accountID string) error {
+func (uc *SubscriptionUseCase) EnsureTrial(ctx context.Context, userID string) error {
 	plan, err := uc.plans.FindByCode(ctx, domain.TrialPlanCode)
 	if err != nil {
 		return toAppError("find trial plan", err)
 	}
 
-	sub := domain.NewTrial(accountID, plan, uc.opts.now().UTC())
+	sub := domain.NewTrial(userID, plan, uc.opts.now().UTC())
 
 	inserted, err := uc.subscriptions.CreateIfAbsent(ctx, sub)
 	if err != nil {
@@ -82,18 +82,18 @@ func (uc *SubscriptionUseCase) EnsureTrial(ctx context.Context, accountID string
 	return nil
 }
 
-// HandleAccountEmailVerified is the account.email_verified consumer: every
+// HandleUserEmailVerified is the user.email_verified consumer: every
 // verified owner starts a trial.
-func (uc *SubscriptionUseCase) HandleAccountEmailVerified(ctx context.Context, event outbox.Event) error {
+func (uc *SubscriptionUseCase) HandleUserEmailVerified(ctx context.Context, event outbox.Event) error {
 	var payload struct {
-		AccountID string `json:"account_id"`
+		UserID string `json:"user_id"`
 	}
 
-	if err := json.Unmarshal(event.Data, &payload); err != nil || payload.AccountID == "" {
+	if err := json.Unmarshal(event.Data, &payload); err != nil || payload.UserID == "" {
 		return nil //nolint:nilerr // a malformed event cannot succeed on retry: drop it
 	}
 
-	return uc.EnsureTrial(ctx, payload.AccountID)
+	return uc.EnsureTrial(ctx, payload.UserID)
 }
 
 // ListPlans returns the plans owners may choose, cheapest first.
@@ -108,21 +108,21 @@ func (uc *SubscriptionUseCase) ListPlans(ctx context.Context) ([]*domain.Plan, e
 
 // GetMine returns the owner's subscription (starting the trial if needed)
 // and current usage.
-func (uc *SubscriptionUseCase) GetMine(ctx context.Context, accountID string) (*domain.Subscription, Usage, error) {
-	sub, err := uc.subscriptions.FindByAccountID(ctx, accountID)
+func (uc *SubscriptionUseCase) GetMine(ctx context.Context, userID string) (*domain.Subscription, Usage, error) {
+	sub, err := uc.subscriptions.FindByUserID(ctx, userID)
 	if errors.Is(err, domain.ErrSubscriptionNotFound) {
-		if err := uc.EnsureTrial(ctx, accountID); err != nil {
+		if err := uc.EnsureTrial(ctx, userID); err != nil {
 			return nil, Usage{}, err
 		}
 
-		sub, err = uc.subscriptions.FindByAccountID(ctx, accountID)
+		sub, err = uc.subscriptions.FindByUserID(ctx, userID)
 	}
 
 	if err != nil {
 		return nil, Usage{}, toAppError("get subscription", err)
 	}
 
-	usage, err := uc.Usage(ctx, accountID)
+	usage, err := uc.Usage(ctx, userID)
 	if err != nil {
 		return nil, Usage{}, err
 	}
@@ -131,13 +131,13 @@ func (uc *SubscriptionUseCase) GetMine(ctx context.Context, accountID string) (*
 }
 
 // Usage returns what the owner uses of the plan limits.
-func (uc *SubscriptionUseCase) Usage(ctx context.Context, accountID string) (Usage, error) {
-	garages, staff, err := uc.usage.OwnerUsage(ctx, accountID)
+func (uc *SubscriptionUseCase) Usage(ctx context.Context, userID string) (Usage, error) {
+	garages, staff, err := uc.usage.OwnerUsage(ctx, userID)
 	if err != nil {
 		return Usage{}, toAppError("read usage", err)
 	}
 
-	transactions, err := uc.counter.Get(ctx, accountID, uc.opts.today())
+	transactions, err := uc.counter.Get(ctx, userID, uc.opts.today())
 	if err != nil {
 		return Usage{}, toAppError("read transactions", err)
 	}
@@ -148,12 +148,12 @@ func (uc *SubscriptionUseCase) Usage(ctx context.Context, accountID string) (Usa
 // ChangeMyPlan switches the owner to another plan (FR-LIC-02); choosing the
 // current plan renews it, which is how a past-due or suspended owner
 // recovers. A downgrade below current usage is refused.
-func (uc *SubscriptionUseCase) ChangeMyPlan(ctx context.Context, accountID, planID string) (*domain.Subscription, Usage, error) {
-	if _, _, err := uc.GetMine(ctx, accountID); err != nil {
+func (uc *SubscriptionUseCase) ChangeMyPlan(ctx context.Context, userID, planID string) (*domain.Subscription, Usage, error) {
+	if _, _, err := uc.GetMine(ctx, userID); err != nil {
 		return nil, Usage{}, err
 	}
 
-	sub, err := uc.subscriptions.LockByAccountID(ctx, accountID)
+	sub, err := uc.subscriptions.LockByUserID(ctx, userID)
 	if err != nil {
 		return nil, Usage{}, toAppError("change plan", err)
 	}
@@ -167,7 +167,7 @@ func (uc *SubscriptionUseCase) ChangeMyPlan(ctx context.Context, accountID, plan
 		return nil, Usage{}, toAppError("change plan", domain.ErrPlanNotAvailable)
 	}
 
-	usage, err := uc.Usage(ctx, accountID)
+	usage, err := uc.Usage(ctx, userID)
 	if err != nil {
 		return nil, Usage{}, err
 	}
@@ -210,7 +210,7 @@ func (uc *SubscriptionUseCase) persistChange(ctx context.Context, sub *domain.Su
 	}
 
 	err := uc.audit.Record(ctx, audit.Entry{
-		Actor: middleware.AccountID(ctx), Action: action, EntityType: "subscription", EntityID: sub.ID,
+		Actor: middleware.UserID(ctx), Action: action, EntityType: "subscription", EntityID: sub.ID,
 		Before: subscriptionAudit(&before), After: subscriptionAudit(sub), IP: middleware.ClientIP(ctx),
 	})
 	if err != nil {
@@ -222,7 +222,7 @@ func (uc *SubscriptionUseCase) persistChange(ctx context.Context, sub *domain.Su
 
 func subscriptionAudit(s *domain.Subscription) map[string]any {
 	return map[string]any{
-		keyAccountID: s.AccountID, "plan_id": s.PlanID, "status": s.Status,
+		keyUserID: s.UserID, "plan_id": s.PlanID, "status": s.Status,
 		"current_period_start": s.CurrentPeriodStart, "current_period_end": s.CurrentPeriodEnd,
 	}
 }

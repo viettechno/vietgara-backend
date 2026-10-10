@@ -18,7 +18,7 @@ import (
 
 const (
 	garageID   = "garage-1"
-	actorID    = "acc-1"
+	actorID    = "user-1"
 	customerID = "11111111-1111-1111-1111-111111111111"
 )
 

@@ -20,7 +20,7 @@ import (
 
 // ---- Identity ------------------------------------------------------------
 
-// Register creates an e-mail/password account and e-mails the first
+// Register creates an e-mail/password user and e-mails the first
 // verification OTP.
 func (c *Client) Register(ctx context.Context, req *identityv1.RegisterRequest) (*identityv1.Session, error) {
 	return call[identityv1.Session](ctx, c, http.MethodPost, "/api/v1/auth/register", req)
@@ -52,14 +52,14 @@ func (c *Client) SignInWithGoogleIDToken(ctx context.Context, idToken string) (*
 		&identityv1.SignInWithGoogleIdTokenRequest{IdToken: idToken})
 }
 
-// Me returns the signed-in account.
-func (c *Client) Me(ctx context.Context) (*identityv1.Account, error) {
-	return call[identityv1.Account](ctx, c, http.MethodGet, "/api/v1/me", nil)
+// Me returns the signed-in user.
+func (c *Client) Me(ctx context.Context) (*identityv1.User, error) {
+	return call[identityv1.User](ctx, c, http.MethodGet, "/api/v1/me", nil)
 }
 
 // ---- Tenant ----------------------------------------------------------------
 
-// CreateGarage creates a garage owned by the signed-in account.
+// CreateGarage creates a garage owned by the signed-in user.
 func (c *Client) CreateGarage(ctx context.Context, garage *tenantv1.Garage) (*tenantv1.Garage, error) {
 	return call[tenantv1.Garage](ctx, c, http.MethodPost, "/api/v1/garages", garage)
 }
@@ -69,7 +69,7 @@ func (c *Client) GetGarage(ctx context.Context, garageID string) (*tenantv1.Gara
 	return call[tenantv1.Garage](ctx, c, http.MethodGet, "/api/v1/garages/"+url.PathEscape(garageID), nil)
 }
 
-// ListGarages returns the garages the account owns or works at.
+// ListGarages returns the garages the user owns or works at.
 func (c *Client) ListGarages(ctx context.Context) ([]*tenantv1.Garage, error) {
 	resp, err := call[tenantv1.ListGaragesResponse](ctx, c, http.MethodGet, "/api/v1/garages", nil)
 

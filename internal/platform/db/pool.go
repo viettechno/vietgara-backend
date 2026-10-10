@@ -76,7 +76,7 @@ type Querier interface {
 // QuerierFromContext returns the active transaction if one was started via
 // WithTransaction, or falls back to the plain pool otherwise (for simple
 // single-statement reads that don't need RLS tenant scoping, e.g. looking
-// up an account by email during login before any garage is known).
+// up a user by email during login before any garage is known).
 func QuerierFromContext(ctx context.Context, pool *Pool) Querier {
 	if tx, ok := ctx.Value(TxKey{}).(pgx.Tx); ok {
 		return tx

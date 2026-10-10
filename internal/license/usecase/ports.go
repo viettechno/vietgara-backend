@@ -18,14 +18,14 @@ import (
 
 // Event types produced and consumed by this module (Event Design Section 4).
 const (
-	EventAccountEmailVerified      = "account.email_verified"
+	EventUserEmailVerified         = "user.email_verified"
 	EventEntitlementUpdated        = "entitlement.updated"
 	EventSubscriptionExpiringSoon  = "subscription.expiring_soon"
 	EventSubscriptionStatusChanged = "subscription.status_changed"
 )
 
-// keyAccountID is the account key of event and audit payloads.
-const keyAccountID = "account_id"
+// keyUserID is the user key of event and audit payloads.
+const keyUserID = "user_id"
 
 // PlanRepository persists the plan catalogue. Finders return
 // domain.ErrPlanNotFound.
@@ -62,52 +62,52 @@ type SubscriptionFilter struct {
 	PageSize int
 }
 
-// SubscriptionRepository persists subscriptions (one per owner account).
+// SubscriptionRepository persists subscriptions (one per owner user).
 // Reads load the plan too; finders return domain.ErrSubscriptionNotFound.
 type SubscriptionRepository interface {
-	// CreateIfAbsent inserts s unless the account already has a
+	// CreateIfAbsent inserts s unless the user already has a
 	// subscription, and reports whether it inserted.
 	CreateIfAbsent(ctx context.Context, s *domain.Subscription) (bool, error)
-	FindByAccountID(ctx context.Context, accountID string) (*domain.Subscription, error)
-	// LockByAccountID is FindByAccountID holding a row lock until the
+	FindByUserID(ctx context.Context, userID string) (*domain.Subscription, error)
+	// LockByUserID is FindByUserID holding a row lock until the
 	// surrounding transaction ends.
-	LockByAccountID(ctx context.Context, accountID string) (*domain.Subscription, error)
+	LockByUserID(ctx context.Context, userID string) (*domain.Subscription, error)
 	// LockByID locks a subscription by its id.
 	LockByID(ctx context.Context, id string) (*domain.Subscription, error)
 	// Update persists the mutable fields of s.
 	Update(ctx context.Context, s *domain.Subscription) error
-	// ListAccountIDsDueBefore returns the accounts whose trial/active/past_due
+	// ListUserIDsDueBefore returns the users whose trial/active/past_due
 	// subscription period ends before t.
-	ListAccountIDsDueBefore(ctx context.Context, t time.Time) ([]string, error)
+	ListUserIDsDueBefore(ctx context.Context, t time.Time) ([]string, error)
 	// Search lists subscriptions for platform admins.
 	Search(ctx context.Context, filter SubscriptionFilter) (*SubscriptionPage, error)
 }
 
-// EntitlementRepository persists the per-account feature switches.
+// EntitlementRepository persists the per-user feature switches.
 type EntitlementRepository interface {
-	Replace(ctx context.Context, accountID string, flags map[domain.Feature]bool) error
+	Replace(ctx context.Context, userID string, flags map[domain.Feature]bool) error
 }
 
-// EntitlementCache stores entitlements by owner account (LLD Section 3.3).
+// EntitlementCache stores entitlements by owner user (LLD Section 3.3).
 // Implementations: Redis (Memorystore) and in-memory.
 type EntitlementCache interface {
 	// Get reports a cache miss with (nil, nil).
-	Get(ctx context.Context, accountID string) (*domain.Entitlements, error)
+	Get(ctx context.Context, userID string) (*domain.Entitlements, error)
 	Set(ctx context.Context, e *domain.Entitlements) error
-	Delete(ctx context.Context, accountID string) error
+	Delete(ctx context.Context, userID string) error
 }
 
 // TransactionCounter counts business documents created per owner and day.
 type TransactionCounter interface {
 	// Increment adds one to the count of day and returns the new count.
-	Increment(ctx context.Context, accountID, day string) (int, error)
-	Get(ctx context.Context, accountID, day string) (int, error)
+	Increment(ctx context.Context, userID, day string) (int, error)
+	Get(ctx context.Context, userID, day string) (int, error)
 }
 
 // UsageReader counts an owner's garages and staff across their garages
 // (implemented by the Tenant module).
 type UsageReader interface {
-	OwnerUsage(ctx context.Context, ownerAccountID string) (garages, staff int, err error)
+	OwnerUsage(ctx context.Context, ownerUserID string) (garages, staff int, err error)
 }
 
 // GarageOwnerReader resolves the owner of a garage (Tenant module).
@@ -118,7 +118,7 @@ type GarageOwnerReader interface {
 // EventPublisher writes domain events to the outbox in the caller's
 // transaction.
 type EventPublisher interface {
-	Publish(ctx context.Context, eventType, garageID, accountID string, payload any) error
+	Publish(ctx context.Context, eventType, garageID, userID string, payload any) error
 }
 
 // AuditLogger records audited changes in the caller's transaction.

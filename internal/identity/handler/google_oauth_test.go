@@ -38,7 +38,7 @@ func fakeGoogle(t *testing.T, tokenStatus int, userinfo string) *httptest.Server
 
 func config(google *httptest.Server) handler.GoogleOAuthConfig {
 	return handler.GoogleOAuthConfig{
-		ClientID: "cid", ClientSecret: "secret", AuthEndpoint: "https://accounts.example/auth",
+		ClientID: "cid", ClientSecret: "secret", AuthEndpoint: "https://users.example/auth",
 		TokenEndpoint: google.URL + "/token", UserInfoURL: google.URL + "/userinfo",
 		AppBaseURL: "http://localhost:8000",
 	}
@@ -100,12 +100,12 @@ func TestGoogleLoginFlow(t *testing.T) {
 
 	session, ok := popupMessage(t, rec)["session"].(map[string]any)
 	require.True(t, ok)
-	account, ok := session["account"].(map[string]any)
+	user, ok := session["user"].(map[string]any)
 	require.True(t, ok)
-	assert.Equal(t, "new@gmail.com", account["email"])
-	assert.Equal(t, true, account["emailVerified"])
-	assert.Equal(t, "LOCALE_EN", account["locale"])
-	assert.Equal(t, "AUTH_PROVIDER_GOOGLE", account["authProvider"])
+	assert.Equal(t, "new@gmail.com", user["email"])
+	assert.Equal(t, true, user["emailVerified"])
+	assert.Equal(t, "LOCALE_EN", user["locale"])
+	assert.Equal(t, "AUTH_PROVIDER_GOOGLE", user["authProvider"])
 }
 
 func TestGoogleCallbackErrors(t *testing.T) {

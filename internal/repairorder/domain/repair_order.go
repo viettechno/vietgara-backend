@@ -94,7 +94,7 @@ type Line struct {
 	UnitPrice int64
 	LineTotal int64
 	Status    LineStatus
-	// AssignedTechnicianIDs are the account ids assigned to this line
+	// AssignedTechnicianIDs are the user ids assigned to this line
 	// (FR-REP-02); a line may have more than one.
 	AssignedTechnicianIDs []string
 }

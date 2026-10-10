@@ -2,8 +2,8 @@
 -- 7, Security Architecture 4). They are created here, after every table
 -- they reference exists. Writes are limited to the transaction's garage
 -- (app_current_garage_id()) or to the caller's own roles; reads also admit
--- the caller's own memberships and invitations (app_current_account_id()),
--- so an account can list its garages without a tenant context.
+-- the caller's own memberships and invitations (app_current_user_id()),
+-- so a user can list its garages without a tenant context.
 -- customers, vehicles and partners carry their policies in 000005-000007.
 
 -- ---------------------------------------------------------------------------
@@ -11,11 +11,11 @@
 -- ---------------------------------------------------------------------------
 CREATE POLICY garages_select ON garages FOR SELECT USING (
     id = app_current_garage_id()
-    OR account_id = app_current_account_id()
-    OR EXISTS (SELECT 1 FROM garage_staff s WHERE s.garage_id = garages.id AND s.account_id = app_current_account_id())
-    OR EXISTS (SELECT 1 FROM staff_invitations i WHERE i.garage_id = garages.id AND i.account_id = app_current_account_id())
+    OR user_id = app_current_user_id()
+    OR EXISTS (SELECT 1 FROM garage_staff s WHERE s.garage_id = garages.id AND s.user_id = app_current_user_id())
+    OR EXISTS (SELECT 1 FROM staff_invitations i WHERE i.garage_id = garages.id AND i.user_id = app_current_user_id())
 );
-CREATE POLICY garages_insert ON garages FOR INSERT WITH CHECK (id = app_current_garage_id() AND account_id = app_current_account_id());
+CREATE POLICY garages_insert ON garages FOR INSERT WITH CHECK (id = app_current_garage_id() AND user_id = app_current_user_id());
 CREATE POLICY garages_update ON garages FOR UPDATE USING (id = app_current_garage_id()) WITH CHECK (id = app_current_garage_id());
 CREATE POLICY garages_delete ON garages FOR DELETE USING (id = app_current_garage_id());
 
@@ -23,7 +23,7 @@ CREATE POLICY garages_delete ON garages FOR DELETE USING (id = app_current_garag
 -- garage_staff
 -- ---------------------------------------------------------------------------
 CREATE POLICY garage_staff_select ON garage_staff FOR SELECT USING (
-    garage_id = app_current_garage_id() OR account_id = app_current_account_id()
+    garage_id = app_current_garage_id() OR user_id = app_current_user_id()
 );
 CREATE POLICY garage_staff_insert ON garage_staff FOR INSERT WITH CHECK (garage_id = app_current_garage_id());
 CREATE POLICY garage_staff_update ON garage_staff FOR UPDATE USING (garage_id = app_current_garage_id()) WITH CHECK (garage_id = app_current_garage_id());
@@ -34,49 +34,49 @@ CREATE POLICY garage_staff_delete ON garage_staff FOR DELETE USING (garage_id = 
 -- ---------------------------------------------------------------------------
 CREATE POLICY staff_group_members_select ON staff_group_members FOR SELECT USING (
     garage_id = app_current_garage_id()
-    OR EXISTS (SELECT 1 FROM garage_staff s WHERE s.id = staff_group_members.staff_id AND s.account_id = app_current_account_id())
+    OR EXISTS (SELECT 1 FROM garage_staff s WHERE s.id = staff_group_members.staff_id AND s.user_id = app_current_user_id())
 );
 CREATE POLICY staff_group_members_write ON staff_group_members FOR ALL
     USING (garage_id = app_current_garage_id()) WITH CHECK (garage_id = app_current_garage_id());
 
 CREATE POLICY staff_groups_select ON staff_groups FOR SELECT USING (
     garage_id = app_current_garage_id()
-    OR EXISTS (SELECT 1 FROM garages g WHERE g.id = staff_groups.garage_id AND g.account_id = app_current_account_id())
+    OR EXISTS (SELECT 1 FROM garages g WHERE g.id = staff_groups.garage_id AND g.user_id = app_current_user_id())
     OR EXISTS (SELECT 1 FROM staff_group_members m WHERE m.group_id = staff_groups.id)
 );
 CREATE POLICY staff_groups_write ON staff_groups FOR ALL
     USING (garage_id = app_current_garage_id()) WITH CHECK (garage_id = app_current_garage_id());
 
 -- ---------------------------------------------------------------------------
--- roles, role_permissions: owned by an account; visible to the members of
+-- roles, role_permissions: owned by a user; visible to the members of
 -- the owner's garages through their groups.
 -- ---------------------------------------------------------------------------
 CREATE POLICY roles_select ON roles FOR SELECT USING (
-    owner_account_id = app_current_account_id()
-    OR owner_account_id = (SELECT g.account_id FROM garages g WHERE g.id = app_current_garage_id())
+    owner_user_id = app_current_user_id()
+    OR owner_user_id = (SELECT g.user_id FROM garages g WHERE g.id = app_current_garage_id())
     OR EXISTS (SELECT 1 FROM staff_groups sg WHERE sg.role_id = roles.id)
 );
 CREATE POLICY roles_write ON roles FOR ALL
-    USING (owner_account_id = app_current_account_id()) WITH CHECK (owner_account_id = app_current_account_id());
+    USING (owner_user_id = app_current_user_id()) WITH CHECK (owner_user_id = app_current_user_id());
 
 CREATE POLICY role_permissions_select ON role_permissions FOR SELECT USING (
     EXISTS (SELECT 1 FROM roles r WHERE r.id = role_permissions.role_id)
 );
 CREATE POLICY role_permissions_write ON role_permissions FOR ALL
-    USING (EXISTS (SELECT 1 FROM roles r WHERE r.id = role_permissions.role_id AND r.owner_account_id = app_current_account_id()))
-    WITH CHECK (EXISTS (SELECT 1 FROM roles r WHERE r.id = role_permissions.role_id AND r.owner_account_id = app_current_account_id()));
+    USING (EXISTS (SELECT 1 FROM roles r WHERE r.id = role_permissions.role_id AND r.owner_user_id = app_current_user_id()))
+    WITH CHECK (EXISTS (SELECT 1 FROM roles r WHERE r.id = role_permissions.role_id AND r.owner_user_id = app_current_user_id()));
 
 -- ---------------------------------------------------------------------------
 -- staff_invitations: the garage side creates and revokes; the invitee
 -- accepts or declines.
 -- ---------------------------------------------------------------------------
 CREATE POLICY staff_invitations_select ON staff_invitations FOR SELECT USING (
-    garage_id = app_current_garage_id() OR account_id = app_current_account_id()
+    garage_id = app_current_garage_id() OR user_id = app_current_user_id()
 );
 CREATE POLICY staff_invitations_insert ON staff_invitations FOR INSERT WITH CHECK (garage_id = app_current_garage_id());
 CREATE POLICY staff_invitations_update ON staff_invitations FOR UPDATE
-    USING (garage_id = app_current_garage_id() OR account_id = app_current_account_id())
-    WITH CHECK (garage_id = app_current_garage_id() OR account_id = app_current_account_id());
+    USING (garage_id = app_current_garage_id() OR user_id = app_current_user_id())
+    WITH CHECK (garage_id = app_current_garage_id() OR user_id = app_current_user_id());
 CREATE POLICY staff_invitations_delete ON staff_invitations FOR DELETE USING (garage_id = app_current_garage_id());
 
 -- ---------------------------------------------------------------------------
@@ -84,20 +84,20 @@ CREATE POLICY staff_invitations_delete ON staff_invitations FOR DELETE USING (ga
 -- all their garages. A manager inviting staff cannot see the owner's other
 -- garages through RLS, so this aggregate-only function runs with its
 -- owner's rights (SECURITY DEFINER) and returns counts only. Staff are
--- distinct non-owner accounts with an active membership or a live pending
+-- distinct non-owner users with an active membership or a live pending
 -- invitation; garages count while active.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION owner_usage(owner UUID)
 RETURNS TABLE (garages INTEGER, staff INTEGER)
 LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
     SELECT
-        (SELECT count(*) FROM garages g WHERE g.account_id = owner AND g.status = 'active')::integer,
-        (SELECT count(DISTINCT m.account_id) FROM (
-            SELECT s.account_id FROM garage_staff s JOIN garages g ON g.id = s.garage_id
-            WHERE g.account_id = owner AND s.account_id <> owner AND s.status = 'active'
+        (SELECT count(*) FROM garages g WHERE g.user_id = owner AND g.status = 'active')::integer,
+        (SELECT count(DISTINCT m.user_id) FROM (
+            SELECT s.user_id FROM garage_staff s JOIN garages g ON g.id = s.garage_id
+            WHERE g.user_id = owner AND s.user_id <> owner AND s.status = 'active'
             UNION
-            SELECT i.account_id FROM staff_invitations i JOIN garages g ON g.id = i.garage_id
-            WHERE g.account_id = owner AND i.status = 'pending' AND i.expires_at > now()
+            SELECT i.user_id FROM staff_invitations i JOIN garages g ON g.id = i.garage_id
+            WHERE g.user_id = owner AND i.status = 'pending' AND i.expires_at > now()
         ) m)::integer
 $$;
 

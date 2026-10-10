@@ -19,10 +19,10 @@ type GoogleProfile struct {
 	Locale        domain.Locale
 }
 
-// GoogleLogin signs an account in with Google (FR-IAM-01/02). The account
+// GoogleLogin signs a user in with Google (FR-IAM-01/02). The user
 // is found by its Google subject, else by its (Google-verified) e-mail --
-// which links Google to an existing e-mail account -- else created. Google
-// verified the e-mail, so the account is marked verified.
+// which links Google to an existing e-mail user -- else created. Google
+// verified the e-mail, so the user is marked verified.
 func (uc *IdentityUseCase) GoogleLogin(ctx context.Context, profile GoogleProfile) (*Session, error) {
 	email, ok := domain.NormalizeEmail(profile.Email)
 	if profile.Subject == "" || !ok || !profile.EmailVerified {
@@ -30,76 +30,76 @@ func (uc *IdentityUseCase) GoogleLogin(ctx context.Context, profile GoogleProfil
 			WithReason(domain.ReasonInvalidCredentials)
 	}
 
-	acc, err := uc.findGoogleAccount(ctx, profile.Subject, email)
+	user, err := uc.findGoogleUser(ctx, profile.Subject, email)
 	if err != nil {
 		return nil, err
 	}
 
-	if acc == nil {
-		acc, err = uc.createGoogleAccount(ctx, profile, email)
+	if user == nil {
+		user, err = uc.createGoogleUser(ctx, profile, email)
 		if err != nil {
 			return nil, err
 		}
-	} else if acc.GoogleSubject == nil {
+	} else if user.GoogleSubject == nil {
 		subject := profile.Subject
-		acc.GoogleSubject = &subject
+		user.GoogleSubject = &subject
 
-		if err := uc.accounts.Update(ctx, acc); err != nil {
-			return nil, apperror.Internal("link google account", err)
+		if err := uc.users.Update(ctx, user); err != nil {
+			return nil, apperror.Internal("link google user", err)
 		}
 	}
 
-	if err := uc.markVerified(ctx, acc); err != nil {
-		return nil, apperror.Internal("verify google account", err)
+	if err := uc.markVerified(ctx, user); err != nil {
+		return nil, apperror.Internal("verify google user", err)
 	}
 
-	return uc.issueSession(ctx, acc)
+	return uc.issueSession(ctx, user)
 }
 
-func (uc *IdentityUseCase) findGoogleAccount(ctx context.Context, subject, email string) (*domain.Account, error) {
-	acc, err := uc.accounts.FindByGoogleSubject(ctx, subject)
+func (uc *IdentityUseCase) findGoogleUser(ctx context.Context, subject, email string) (*domain.User, error) {
+	user, err := uc.users.FindByGoogleSubject(ctx, subject)
 	if err == nil {
-		return acc, nil
+		return user, nil
 	}
 
-	if !errors.Is(err, domain.ErrAccountNotFound) {
-		return nil, apperror.Internal("find account by google subject", err)
+	if !errors.Is(err, domain.ErrUserNotFound) {
+		return nil, apperror.Internal("find user by google subject", err)
 	}
 
-	acc, err = uc.accounts.FindByEmail(ctx, email)
+	user, err = uc.users.FindByEmail(ctx, email)
 	if err == nil {
-		return acc, nil
+		return user, nil
 	}
 
-	if !errors.Is(err, domain.ErrAccountNotFound) {
-		return nil, apperror.Internal("find account by email", err)
+	if !errors.Is(err, domain.ErrUserNotFound) {
+		return nil, apperror.Internal("find user by email", err)
 	}
 
-	return nil, nil //nolint:nilnil // no account yet
+	return nil, nil //nolint:nilnil // no user yet
 }
 
-func (uc *IdentityUseCase) createGoogleAccount(ctx context.Context, profile GoogleProfile, email string) (*domain.Account, error) {
+func (uc *IdentityUseCase) createGoogleUser(ctx context.Context, profile GoogleProfile, email string) (*domain.User, error) {
 	fullName, ok := domain.NormalizeFullName(profile.FullName)
 	if !ok {
 		fullName = email
 	}
 
 	subject := profile.Subject
-	acc := &domain.Account{
+	user := &domain.User{
 		Email:         email,
 		GoogleSubject: &subject,
 		AuthProvider:  domain.AuthProviderGoogle,
 		FullName:      fullName,
-		Status:        domain.AccountStatusActive,
+		Status:        domain.UserStatusActive,
 		Locale:        profile.Locale.OrDefault(),
 	}
 
 	err := uc.tx.WithTransaction(ctx, platformdb.Scope{}, func(ctx context.Context) error {
-		return uc.accounts.Create(ctx, acc)
+		return uc.users.Create(ctx, user)
 	})
 	if err != nil {
 		return nil, mapCreateError(err)
 	}
 
-	return acc, nil
+	return user, nil
 }

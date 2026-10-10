@@ -52,7 +52,7 @@ func newEnv(t *testing.T) *env {
 }
 
 func defaultGarage() usecase.GarageInfo {
-	return usecase.GarageInfo{OwnerAccountID: ownerID, Timezone: "Asia/Ho_Chi_Minh", RepairOrderNumberTemplate: "LSC-{SEQ:4}"}
+	return usecase.GarageInfo{OwnerUserID: ownerID, Timezone: "Asia/Ho_Chi_Minh", RepairOrderNumberTemplate: "LSC-{SEQ:4}"}
 }
 
 func signedIn(t *testing.T) context.Context {

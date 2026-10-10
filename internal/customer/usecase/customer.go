@@ -11,7 +11,7 @@ import (
 // CreateCustomerRequest is the input for CustomerUseCase.Create.
 type CreateCustomerRequest struct {
 	GarageID string
-	// ActorID is the account performing the change, kept for auditing.
+	// ActorID is the user performing the change, kept for auditing.
 	ActorID             string
 	FullName            string
 	Phone               *string

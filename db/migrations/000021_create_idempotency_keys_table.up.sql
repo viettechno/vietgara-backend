@@ -11,7 +11,7 @@
 CREATE TABLE idempotency_keys (
     garage_id UUID NOT NULL REFERENCES garages(id) ON DELETE CASCADE,
     -- Keys are per caller: two staff members can never collide.
-    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     idempotency_key VARCHAR(255) NOT NULL,
     -- The full gRPC method and a SHA-256 of the request message: the same
     -- key reused for another method or a different request is refused.
@@ -23,7 +23,7 @@ CREATE TABLE idempotency_keys (
     response BYTEA,
     http_status INTEGER,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (garage_id, account_id, idempotency_key)
+    PRIMARY KEY (garage_id, user_id, idempotency_key)
 );
 
 -- purge_idempotency_keys() scans by age.

@@ -15,15 +15,15 @@ exists, schema changes must become new, forward-only migrations.)
 
 | Version | Module | Creates |
 | --- | --- | --- |
-| 000001 | Identity | `accounts` with enums `account_status` (`active`, `suspended`), `account_auth_provider` (`email`, `google`), `account_locale` (`vi` default, `en`); required e-mail unique case-insensitively; `email_verified_at` |
-| 000002 | Tenant | RLS helpers `app_current_garage_id()` / `app_current_account_id()`; `garages` with `garage_status` (`active`, `inactive`), `Asia/Ho_Chi_Minh` time zone, contact details, operating hours, numbering templates |
+| 000001 | Identity | `users` with enums `user_status` (`active`, `suspended`), `user_auth_provider` (`email`, `google`), `user_locale` (`vi` default, `en`); required e-mail unique case-insensitively; `email_verified_at` |
+| 000002 | Tenant | RLS helpers `app_current_garage_id()` / `app_current_user_id()`; `garages` with `garage_status` (`active`, `inactive`), `Asia/Ho_Chi_Minh` time zone, contact details, operating hours, numbering templates |
 | 000003 | Tenant | `garage_staff` with `staff_status` (`active`, `inactive`); permissions come from staff groups |
-| 000004 | Platform | `outbox_events` (`outbox_status`, garage or account, relay bookkeeping) |
+| 000004 | Platform | `outbox_events` (`outbox_status`, garage or user, relay bookkeeping) |
 | 000005–000007 | Customer | `customers` (consent log, trigram search), `vehicles` (normalized plate key), `partners`, each with its tenant RLS policy |
-| 000008 | License | `plans` (limits on garages, staff and transactions per day; `plan_feature[]`; seeded catalogue), `subscriptions` (one per owner account), `entitlements` (per account and feature) |
+| 000008 | License | `plans` (limits on garages, staff and transactions per day; `plan_feature[]`; seeded catalogue), `subscriptions` (one per owner user), `entitlements` (per user and feature) |
 | 000009 | Identity | `platform_admins` |
 | 000010 | Tenant | `permission` and `default_role` enums, `roles`, `role_permissions`, `staff_groups`, `staff_group_members`, the shared `set_updated_at()` trigger |
-| 000011 | Tenant | `staff_invitations` (`invitation_status`, one pending invitation per garage and account) |
+| 000011 | Tenant | `staff_invitations` (`invitation_status`, one pending invitation per garage and user) |
 | 000012 | Platform | `processed_events` (idempotent consumers), `audit_log` (append-only) |
 | 000013 | Platform | RLS policies of the tenant/access tables, `owner_usage()`, the `vietgara_app` role and its grants |
 | 000014 | Platform | `document_sequences`: the per-garage, per-document-type, per-period counter behind numbering templates (FR-TEN-05) |
@@ -68,13 +68,13 @@ application sets the scope per transaction (`db.TxManager.WithTransaction`,
 
 ```sql
 SELECT set_config('app.current_garage_id', $1, true),
-       set_config('app.current_account_id', $2, true);
+       set_config('app.current_user_id', $2, true);
 ```
 
 `true` makes both settings transaction-local, so a pooled connection never
 leaks a tenant to the next request. The `Garage` interceptor opens the
-transaction for garage-scoped RPCs; account-scoped work (listing one's
-garages, invitations, roles) runs with only the account set.
+transaction for garage-scoped RPCs; user-scoped work (listing one's
+garages, invitations, roles) runs with only the user set.
 
 | Table | Read | Write |
 | --- | --- | --- |
@@ -86,7 +86,7 @@ garages, invitations, roles) runs with only the account set.
 | `customers`, `vehicles`, `partners` | Current garage | Current garage |
 | `document_sequences`, `quotes`, `quote_lines`, `repair_orders`, `repair_order_lines` | Current garage | Current garage |
 
-Platform tables (`accounts`, `plans`, `subscriptions`, `entitlements`,
+Platform tables (`users`, `plans`, `subscriptions`, `entitlements`,
 `outbox_events`, `processed_events`, `audit_log`, `platform_admins`) have no
 RLS; access to them is enforced by the owning module's service layer.
 
@@ -122,10 +122,10 @@ up, down and up again against a Postgres container.
 
 ```mermaid
 erDiagram
-  accounts ||--o{ garages : owns
-  accounts ||--o{ garage_staff : "works as"
-  accounts ||--o| subscriptions : has
-  accounts ||--o{ roles : defines
+  users ||--o{ garages : owns
+  users ||--o{ garage_staff : "works as"
+  users ||--o| subscriptions : has
+  users ||--o{ roles : defines
   garages ||--o{ garage_staff : employs
   garages ||--o{ staff_groups : has
   garages ||--o{ staff_invitations : sends
@@ -134,7 +134,7 @@ erDiagram
   staff_groups ||--o{ staff_group_members : contains
   garage_staff ||--o{ staff_group_members : "belongs to"
   plans ||--o{ subscriptions : "chosen by"
-  accounts ||--o{ entitlements : "entitled to"
+  users ||--o{ entitlements : "entitled to"
   garages ||--o{ customers : serves
   customers ||--o{ vehicles : owns
   garages ||--o{ partners : "works with"
@@ -143,7 +143,7 @@ erDiagram
 ## Troubleshooting
 
 - **Every query returns no rows**: the scope is not set; run the query inside
-  `WithTransaction` with a garage and/or account scope.
+  `WithTransaction` with a garage and/or user scope.
 - **`permission denied for table schema_migrations`**: the application user
   is running migrations; set `MIGRATION_DATABASE_URL` to the schema owner.
 - **A data migration updates 0 rows**: the migration role is subject to

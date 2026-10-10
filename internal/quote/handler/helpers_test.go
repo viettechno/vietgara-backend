@@ -67,7 +67,7 @@ func (passTx) WithTransaction(ctx context.Context, _ platformdb.Scope, fn func(c
 
 func garageInfoWithRepairOrderTemplate() usecase.GarageInfo {
 	return usecase.GarageInfo{
-		OwnerAccountID: ownerID, Timezone: "Asia/Ho_Chi_Minh", QuoteNumberTemplate: "BG-{SEQ:4}",
+		OwnerUserID: ownerID, Timezone: "Asia/Ho_Chi_Minh", QuoteNumberTemplate: "BG-{SEQ:4}",
 		RepairOrderNumberTemplate: "LSC-{SEQ:4}", DefaultQuoteApprovalMode: "link",
 	}
 }

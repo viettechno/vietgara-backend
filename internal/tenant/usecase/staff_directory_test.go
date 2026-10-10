@@ -37,19 +37,19 @@ func newEnv(t *testing.T, lim limits) *env {
 	return &env{tenanttest.NewEnv(lim)}
 }
 
-// as signs in accountID and authorizes it for garageID.
-func (e *env) as(t *testing.T, accountID, garageID string) context.Context {
+// as signs in userID and authorizes it for garageID.
+func (e *env) as(t *testing.T, userID, garageID string) context.Context {
 	t.Helper()
 
 	claims := &auth.Claims{}
-	claims.Subject = accountID
+	claims.Subject = userID
 	ctx := middleware.WithClaims(t.Context(), claims)
 
 	if garageID != "" {
-		acc, err := e.Store.GarageAccess(ctx, garageID, accountID)
+		user, err := e.Store.GarageAccess(ctx, garageID, userID)
 		require.NoError(t, err)
 
-		ctx = access.WithAccess(ctx, acc)
+		ctx = access.WithAccess(ctx, user)
 	}
 
 	return ctx

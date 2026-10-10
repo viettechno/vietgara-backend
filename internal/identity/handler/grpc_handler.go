@@ -1,5 +1,5 @@
 // Package handler exposes the Identity module: the AuthService and
-// AccountService gRPC services (REST through grpc-gateway) and the Google
+// UserService gRPC services (REST through grpc-gateway) and the Google
 // OAuth redirect routes.
 package handler
 
@@ -15,11 +15,11 @@ import (
 )
 
 // Server implements identityv1.AuthServiceServer and
-// identityv1.AccountServiceServer. Embedding the Unimplemented servers
+// identityv1.UserServiceServer. Embedding the Unimplemented servers
 // keeps it forward-compatible with new RPCs.
 type Server struct {
 	identityv1.UnimplementedAuthServiceServer
-	identityv1.UnimplementedAccountServiceServer
+	identityv1.UnimplementedUserServiceServer
 
 	uc          *usecase.IdentityUseCase
 	accessTTL   int64
@@ -61,7 +61,7 @@ func Policies() middleware.Policies {
 		identityv1.AuthService_ResetPassword_FullMethodName:            middleware.PublicMethod(),
 		identityv1.AuthService_SendEmailVerificationOtp_FullMethodName: middleware.UnverifiedMethod(),
 		identityv1.AuthService_VerifyEmail_FullMethodName:              middleware.UnverifiedMethod(),
-		identityv1.AccountService_GetMe_FullMethodName:                 middleware.UnverifiedMethod(),
-		identityv1.AccountService_UpdateMe_FullMethodName:              middleware.UnverifiedMethod(),
+		identityv1.UserService_GetMe_FullMethodName:                    middleware.UnverifiedMethod(),
+		identityv1.UserService_UpdateMe_FullMethodName:                 middleware.UnverifiedMethod(),
 	}
 }

@@ -60,9 +60,9 @@ packages:
           structname: "MockOutboxTransactor"
   github.com/viettechno/vietgara-backend/internal/identity/usecase:
     interfaces:
-      AccountRepository:
+      UserRepository:
         config:
-          filename: "identity_usecase_account.go"
+          filename: "identity_usecase_user.go"
           dir: "./internal/mocks"
       SessionStore:
         config:
@@ -117,9 +117,9 @@ packages:
         config:
           filename: "tenant_usecase_limit_checker.go"
           dir: "./internal/mocks"
-      AccountDirectory:
+      UserDirectory:
         config:
-          filename: "tenant_usecase_account_directory.go"
+          filename: "tenant_usecase_user_directory.go"
           dir: "./internal/mocks"
       LogoStore:
         config:
@@ -368,11 +368,11 @@ packages:
           filename: "notification_usecase_mailer.go"
           dir: "./internal/mocks"
           structname: "MockNotificationMailer"
-      AccountReader:
+      UserReader:
         config:
-          filename: "notification_usecase_account_reader.go"
+          filename: "notification_usecase_user_reader.go"
           dir: "./internal/mocks"
-          structname: "MockNotificationAccountReader"
+          structname: "MockNotificationUserReader"
       Repository:
         config:
           filename: "notification_usecase_repository.go"

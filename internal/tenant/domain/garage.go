@@ -76,12 +76,12 @@ func DefaultOperatingHours() []DailyHours {
 }
 
 // Garage is one tenant: an independent operating/data-isolation unit.
-// An account may own many garages (one account -- many garages); "branch"
+// A user may own many garages (one user -- many garages); "branch"
 // is used synonymously with "garage" throughout VietGara.
 // See: Database Design Section 2.2, ADR-005.
 type Garage struct {
 	ID                        string
-	OwnerAccountID            string
+	OwnerUserID               string
 	Name                      string
 	TaxCode                   *string
 	Address                   *string

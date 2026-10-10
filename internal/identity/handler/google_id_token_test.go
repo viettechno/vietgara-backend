@@ -32,7 +32,7 @@ func (f *fakeVerifier) Verify(_ context.Context, idToken string) (googleid.Claim
 	return f.claims, f.err
 }
 
-func TestSignInWithGoogleIdToken_CreatesAVerifiedAccount(t *testing.T) {
+func TestSignInWithGoogleIdToken_CreatesAVerifiedUser(t *testing.T) {
 	t.Parallel()
 
 	verifier := &fakeVerifier{configured: true, claims: googleid.Claims{
@@ -48,17 +48,17 @@ func TestSignInWithGoogleIdToken_CreatesAVerifiedAccount(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "the-id-token", verifier.got)
 
-	account := resp.GetSession().GetAccount()
-	assert.Equal(t, "binh@gmail.com", account.GetEmail())
-	assert.True(t, account.GetEmailVerified())
-	assert.Equal(t, identityv1.Locale_LOCALE_EN, account.GetLocale())
-	assert.Equal(t, identityv1.AuthProvider_AUTH_PROVIDER_GOOGLE, account.GetAuthProvider())
+	user := resp.GetSession().GetUser()
+	assert.Equal(t, "binh@gmail.com", user.GetEmail())
+	assert.True(t, user.GetEmailVerified())
+	assert.Equal(t, identityv1.Locale_LOCALE_EN, user.GetLocale())
+	assert.Equal(t, identityv1.AuthProvider_AUTH_PROVIDER_GOOGLE, user.GetAuthProvider())
 	assert.NotEmpty(t, resp.GetSession().GetRefreshToken())
 
-	// Signing in again finds the same account by its Google subject.
+	// Signing in again finds the same user by its Google subject.
 	again, err := e.srv.SignInWithGoogleIdToken(context.Background(), &identityv1.SignInWithGoogleIdTokenRequest{IdToken: "t2"})
 	require.NoError(t, err)
-	assert.Equal(t, account.GetId(), again.GetSession().GetAccount().GetId())
+	assert.Equal(t, user.GetId(), again.GetSession().GetUser().GetId())
 }
 
 func TestSignInWithGoogleIdToken_Errors(t *testing.T) {

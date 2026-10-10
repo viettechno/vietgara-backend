@@ -1,6 +1,6 @@
 -- Customer Portal (Customer BFF, Release 2.4): the Customer App's
--- signed-in person -- a VietGara account created by Google sign-in
--- (FR-CAPP-01) -- is matched to garages' customer records by the account's
+-- signed-in person -- a VietGara user created by Google sign-in
+-- (FR-CAPP-01) -- is matched to garages' customer records by the user's
 -- verified e-mail. That person is not a member of any of those garages, so
 -- the usual garage-scoped RLS cannot find their records yet; the same
 -- problem find_quote_by_public_token() (000015) solves for the public

@@ -24,18 +24,18 @@ func NewRedisStore(client redis.UniversalClient) *RedisStore {
 	return &RedisStore{client: client}
 }
 
-func refreshKey(token string) string             { return "identity:refresh:" + token }
-func accountSessionsKey(accountID string) string { return "identity:sessions:" + accountID }
-func resetKey(token string) string               { return "identity:reset:" + token }
-func otpKey(key string) string                   { return "identity:otp:" + key }
+func refreshKey(token string) string       { return "identity:refresh:" + token }
+func userSessionsKey(userID string) string { return "identity:sessions:" + userID }
+func resetKey(token string) string         { return "identity:reset:" + token }
+func otpKey(key string) string             { return "identity:otp:" + key }
 
-// SaveRefreshToken stores token for accountID and indexes it by account so
+// SaveRefreshToken stores token for userID and indexes it by user so
 // every session can be revoked.
-func (s *RedisStore) SaveRefreshToken(ctx context.Context, token, accountID string, ttl time.Duration) error {
+func (s *RedisStore) SaveRefreshToken(ctx context.Context, token, userID string, ttl time.Duration) error {
 	_, err := s.client.TxPipelined(ctx, func(p redis.Pipeliner) error {
-		p.Set(ctx, refreshKey(token), accountID, ttl)
-		p.SAdd(ctx, accountSessionsKey(accountID), token)
-		p.Expire(ctx, accountSessionsKey(accountID), ttl)
+		p.Set(ctx, refreshKey(token), userID, ttl)
+		p.SAdd(ctx, userSessionsKey(userID), token)
+		p.Expire(ctx, userSessionsKey(userID), ttl)
 
 		return nil
 	})
@@ -43,19 +43,19 @@ func (s *RedisStore) SaveRefreshToken(ctx context.Context, token, accountID stri
 	return err
 }
 
-// RefreshTokenAccount returns the account of token.
-func (s *RedisStore) RefreshTokenAccount(ctx context.Context, token string) (string, error) {
-	accountID, err := s.client.Get(ctx, refreshKey(token)).Result()
+// RefreshTokenUser returns the user of token.
+func (s *RedisStore) RefreshTokenUser(ctx context.Context, token string) (string, error) {
+	userID, err := s.client.Get(ctx, refreshKey(token)).Result()
 	if errors.Is(err, redis.Nil) {
 		return "", domain.ErrRefreshTokenInvalid
 	}
 
-	return accountID, err
+	return userID, err
 }
 
 // RevokeRefreshToken deletes token.
 func (s *RedisStore) RevokeRefreshToken(ctx context.Context, token string) error {
-	accountID, err := s.client.GetDel(ctx, refreshKey(token)).Result()
+	userID, err := s.client.GetDel(ctx, refreshKey(token)).Result()
 	if errors.Is(err, redis.Nil) {
 		return nil
 	}
@@ -64,12 +64,12 @@ func (s *RedisStore) RevokeRefreshToken(ctx context.Context, token string) error
 		return err
 	}
 
-	return s.client.SRem(ctx, accountSessionsKey(accountID), token).Err()
+	return s.client.SRem(ctx, userSessionsKey(userID), token).Err()
 }
 
-// RevokeAllRefreshTokens deletes every refresh token of accountID.
-func (s *RedisStore) RevokeAllRefreshTokens(ctx context.Context, accountID string) error {
-	tokens, err := s.client.SMembers(ctx, accountSessionsKey(accountID)).Result()
+// RevokeAllRefreshTokens deletes every refresh token of userID.
+func (s *RedisStore) RevokeAllRefreshTokens(ctx context.Context, userID string) error {
+	tokens, err := s.client.SMembers(ctx, userSessionsKey(userID)).Result()
 	if err != nil {
 		return err
 	}
@@ -79,24 +79,24 @@ func (s *RedisStore) RevokeAllRefreshTokens(ctx context.Context, accountID strin
 		keys = append(keys, refreshKey(token))
 	}
 
-	keys = append(keys, accountSessionsKey(accountID))
+	keys = append(keys, userSessionsKey(userID))
 
 	return s.client.Del(ctx, keys...).Err()
 }
 
 // SaveResetToken stores a password-reset token.
-func (s *RedisStore) SaveResetToken(ctx context.Context, token, accountID string, ttl time.Duration) error {
-	return s.client.Set(ctx, resetKey(token), accountID, ttl).Err()
+func (s *RedisStore) SaveResetToken(ctx context.Context, token, userID string, ttl time.Duration) error {
+	return s.client.Set(ctx, resetKey(token), userID, ttl).Err()
 }
 
 // ConsumeResetToken returns and deletes a password-reset token.
 func (s *RedisStore) ConsumeResetToken(ctx context.Context, token string) (string, error) {
-	accountID, err := s.client.GetDel(ctx, resetKey(token)).Result()
+	userID, err := s.client.GetDel(ctx, resetKey(token)).Result()
 	if errors.Is(err, redis.Nil) {
 		return "", domain.ErrResetTokenInvalid
 	}
 
-	return accountID, err
+	return userID, err
 }
 
 // Get returns the OTP stored under key.
@@ -186,28 +186,28 @@ func (m *MemoryStore) live(e entry, ok bool) (string, bool) {
 }
 
 // SaveRefreshToken stores token.
-func (m *MemoryStore) SaveRefreshToken(_ context.Context, token, accountID string, ttl time.Duration) error {
+func (m *MemoryStore) SaveRefreshToken(_ context.Context, token, userID string, ttl time.Duration) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.refresh[token] = entry{value: accountID, expires: m.now().Add(ttl)}
-	if m.sessions[accountID] == nil {
-		m.sessions[accountID] = map[string]bool{}
+	m.refresh[token] = entry{value: userID, expires: m.now().Add(ttl)}
+	if m.sessions[userID] == nil {
+		m.sessions[userID] = map[string]bool{}
 	}
 
-	m.sessions[accountID][token] = true
+	m.sessions[userID][token] = true
 
 	return nil
 }
 
-// RefreshTokenAccount returns the account of token.
-func (m *MemoryStore) RefreshTokenAccount(_ context.Context, token string) (string, error) {
+// RefreshTokenUser returns the user of token.
+func (m *MemoryStore) RefreshTokenUser(_ context.Context, token string) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	e, ok := m.refresh[token]
-	if accountID, live := m.live(e, ok); live {
-		return accountID, nil
+	if userID, live := m.live(e, ok); live {
+		return userID, nil
 	}
 
 	return "", domain.ErrRefreshTokenInvalid
@@ -226,26 +226,26 @@ func (m *MemoryStore) RevokeRefreshToken(_ context.Context, token string) error 
 	return nil
 }
 
-// RevokeAllRefreshTokens deletes every refresh token of accountID.
-func (m *MemoryStore) RevokeAllRefreshTokens(_ context.Context, accountID string) error {
+// RevokeAllRefreshTokens deletes every refresh token of userID.
+func (m *MemoryStore) RevokeAllRefreshTokens(_ context.Context, userID string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	for token := range m.sessions[accountID] {
+	for token := range m.sessions[userID] {
 		delete(m.refresh, token)
 	}
 
-	delete(m.sessions, accountID)
+	delete(m.sessions, userID)
 
 	return nil
 }
 
 // SaveResetToken stores a password-reset token.
-func (m *MemoryStore) SaveResetToken(_ context.Context, token, accountID string, ttl time.Duration) error {
+func (m *MemoryStore) SaveResetToken(_ context.Context, token, userID string, ttl time.Duration) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	m.resets[token] = entry{value: accountID, expires: m.now().Add(ttl)}
+	m.resets[token] = entry{value: userID, expires: m.now().Add(ttl)}
 
 	return nil
 }
@@ -258,8 +258,8 @@ func (m *MemoryStore) ConsumeResetToken(_ context.Context, token string) (string
 	e, ok := m.resets[token]
 	delete(m.resets, token)
 
-	if accountID, live := m.live(e, ok); live {
-		return accountID, nil
+	if userID, live := m.live(e, ok); live {
+		return userID, nil
 	}
 
 	return "", domain.ErrResetTokenInvalid

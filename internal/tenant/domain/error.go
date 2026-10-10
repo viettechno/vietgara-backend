@@ -7,10 +7,10 @@ var (
 	ErrGarageNotFound       = errors.New("garage not found")
 	ErrStaffNotFound        = errors.New("staff membership not found")
 	ErrOwnerMembership      = errors.New("the garage owner cannot be deactivated, removed or grouped")
-	ErrAccountNotFound      = errors.New("no account found with that email or phone number")
-	ErrAccountInactive      = errors.New("this account is not active")
-	ErrAlreadyMember        = errors.New("this account is already a member of the garage")
-	ErrAlreadyInvited       = errors.New("this account already has a pending invitation")
+	ErrUserNotFound         = errors.New("no user found with that email or phone number")
+	ErrUserInactive         = errors.New("this user is not active")
+	ErrAlreadyMember        = errors.New("this user is already a member of the garage")
+	ErrAlreadyInvited       = errors.New("this user already has a pending invitation")
 	ErrInvitationNotFound   = errors.New("invitation not found")
 	ErrInvitationNotPending = errors.New("the invitation was already answered or revoked")
 	ErrInvitationExpired    = errors.New("the invitation has expired")
@@ -24,8 +24,8 @@ var (
 
 // Client-facing reasons of the errors above.
 const (
-	ReasonAccountNotFound      = "ACCOUNT_NOT_FOUND"
-	ReasonAccountInactive      = "ACCOUNT_INACTIVE"
+	ReasonUserNotFound         = "USER_NOT_FOUND"
+	ReasonUserInactive         = "USER_INACTIVE"
 	ReasonAlreadyMember        = "ALREADY_MEMBER"
 	ReasonAlreadyInvited       = "ALREADY_INVITED"
 	ReasonOwnerMembership      = "OWNER_MEMBERSHIP"

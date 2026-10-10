@@ -16,7 +16,7 @@ func TestProfile(t *testing.T) {
 
 	e := newEnv(t)
 	session := e.register(t)
-	id := session.Account.ID
+	id := session.User.ID
 
 	me, err := e.uc.GetMe(t.Context(), id)
 	require.NoError(t, err)
@@ -43,13 +43,13 @@ func TestProfile(t *testing.T) {
 	_, err = e.uc.UpdateMe(t.Context(), id, usecase.ProfileUpdate{Phone: new("0903334444")})
 	requireReason(t, err, domain.ReasonPhoneTaken)
 
-	_, err = e.uc.UpdateMe(t.Context(), other.Account.ID, usecase.ProfileUpdate{Phone: new("0903334444")})
+	_, err = e.uc.UpdateMe(t.Context(), other.User.ID, usecase.ProfileUpdate{Phone: new("0903334444")})
 	require.NoError(t, err, "keeping one's own phone")
 
 	_, err = e.uc.UpdateMe(t.Context(), "missing", usecase.ProfileUpdate{})
 	requireReason(t, err, apperror.ReasonUnauthenticated)
 
-	e.accounts.updateErr = domain.ErrPhoneAlreadyExists
+	e.users.updateErr = domain.ErrPhoneAlreadyExists
 	_, err = e.uc.UpdateMe(t.Context(), id, usecase.ProfileUpdate{})
 	requireReason(t, err, domain.ReasonPhoneTaken)
 }

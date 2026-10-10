@@ -22,11 +22,11 @@ import (
 type Store struct {
 	mu       sync.Mutex
 	plans    map[string]*domain.Plan
-	subs     map[string]*domain.Subscription // by account
+	subs     map[string]*domain.Subscription // by user
 	Flags    map[string]map[domain.Feature]bool
-	Emails   map[string]string // account -> e-mail for Search
+	Emails   map[string]string // user -> e-mail for Search
 	Fail     map[string]error
-	Garages  map[string]int // account -> garages in use
+	Garages  map[string]int // user -> garages in use
 	Staff    map[string]int
 	Owners   map[string]string // garage -> owner
 	Events   []string
@@ -171,19 +171,19 @@ func (s *Store) CreateIfAbsent(_ context.Context, sub *domain.Subscription) (boo
 		return false, err
 	}
 
-	if _, ok := s.subs[sub.AccountID]; ok {
+	if _, ok := s.subs[sub.UserID]; ok {
 		return false, nil
 	}
 
 	sub.ID = uuid.NewString()
 	copied := *sub
-	s.subs[sub.AccountID] = &copied
+	s.subs[sub.UserID] = &copied
 
 	return true, nil
 }
 
-// FindByAccountID implements usecase.SubscriptionRepository.
-func (s *Store) FindByAccountID(_ context.Context, accountID string) (*domain.Subscription, error) {
+// FindByUserID implements usecase.SubscriptionRepository.
+func (s *Store) FindByUserID(_ context.Context, userID string) (*domain.Subscription, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -191,7 +191,7 @@ func (s *Store) FindByAccountID(_ context.Context, accountID string) (*domain.Su
 		return nil, err
 	}
 
-	sub, ok := s.subs[accountID]
+	sub, ok := s.subs[userID]
 	if !ok {
 		return nil, domain.ErrSubscriptionNotFound
 	}
@@ -203,34 +203,34 @@ func (s *Store) FindByAccountID(_ context.Context, accountID string) (*domain.Su
 	return &copied, nil
 }
 
-// LockByAccountID implements usecase.SubscriptionRepository.
-func (s *Store) LockByAccountID(ctx context.Context, accountID string) (*domain.Subscription, error) {
+// LockByUserID implements usecase.SubscriptionRepository.
+func (s *Store) LockByUserID(ctx context.Context, userID string) (*domain.Subscription, error) {
 	if err := s.fail("subs.lock"); err != nil {
 		return nil, err
 	}
 
-	return s.FindByAccountID(ctx, accountID)
+	return s.FindByUserID(ctx, userID)
 }
 
 // LockByID implements usecase.SubscriptionRepository.
 func (s *Store) LockByID(ctx context.Context, id string) (*domain.Subscription, error) {
 	s.mu.Lock()
 
-	var accountID string
+	var userID string
 
-	for acc, sub := range s.subs {
+	for user, sub := range s.subs {
 		if sub.ID == id {
-			accountID = acc
+			userID = user
 		}
 	}
 
 	s.mu.Unlock()
 
-	if accountID == "" {
+	if userID == "" {
 		return nil, domain.ErrSubscriptionNotFound
 	}
 
-	return s.FindByAccountID(ctx, accountID)
+	return s.FindByUserID(ctx, userID)
 }
 
 // Update implements usecase.SubscriptionRepository.
@@ -243,13 +243,13 @@ func (s *Store) Update(_ context.Context, sub *domain.Subscription) error {
 	}
 
 	copied := *sub
-	s.subs[sub.AccountID] = &copied
+	s.subs[sub.UserID] = &copied
 
 	return nil
 }
 
-// ListAccountIDsDueBefore implements usecase.SubscriptionRepository.
-func (s *Store) ListAccountIDsDueBefore(_ context.Context, t time.Time) ([]string, error) {
+// ListUserIDsDueBefore implements usecase.SubscriptionRepository.
+func (s *Store) ListUserIDsDueBefore(_ context.Context, t time.Time) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -259,10 +259,10 @@ func (s *Store) ListAccountIDsDueBefore(_ context.Context, t time.Time) ([]strin
 
 	var ids []string
 
-	for acc, sub := range s.subs {
+	for user, sub := range s.subs {
 		live := sub.Status == domain.StatusTrial || sub.Status == domain.StatusActive || sub.Status == domain.StatusPastDue
 		if live && sub.CurrentPeriodEnd.Before(t) {
-			ids = append(ids, acc)
+			ids = append(ids, user)
 		}
 	}
 
@@ -282,12 +282,12 @@ func (s *Store) Search(_ context.Context, f usecase.SubscriptionFilter) (*usecas
 
 	page := &usecase.SubscriptionPage{}
 
-	for acc, sub := range s.subs {
-		if (f.Query == "" || strings.Contains(s.Emails[acc], f.Query)) && (f.Status == "" || sub.Status == f.Status) {
+	for user, sub := range s.subs {
+		if (f.Query == "" || strings.Contains(s.Emails[user], f.Query)) && (f.Status == "" || sub.Status == f.Status) {
 			copied := *sub
 			plan := *s.plans[sub.PlanID]
 			copied.Plan = &plan
-			page.Items = append(page.Items, usecase.SubscriptionSummary{Subscription: &copied, Email: s.Emails[acc]})
+			page.Items = append(page.Items, usecase.SubscriptionSummary{Subscription: &copied, Email: s.Emails[user]})
 		}
 	}
 
@@ -297,7 +297,7 @@ func (s *Store) Search(_ context.Context, f usecase.SubscriptionFilter) (*usecas
 }
 
 // Replace implements usecase.EntitlementRepository.
-func (s *Store) Replace(_ context.Context, accountID string, flags map[domain.Feature]bool) error {
+func (s *Store) Replace(_ context.Context, userID string, flags map[domain.Feature]bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -305,7 +305,7 @@ func (s *Store) Replace(_ context.Context, accountID string, flags map[domain.Fe
 		return err
 	}
 
-	s.Flags[accountID] = flags
+	s.Flags[userID] = flags
 
 	return nil
 }

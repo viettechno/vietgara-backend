@@ -34,7 +34,7 @@ type Transactor interface {
 }
 
 // Garage runs every authenticated RPC in one Postgres transaction scoped to
-// the caller (app.current_account_id) and, for garage-scoped RPCs, to the
+// the caller (app.current_user_id) and, for garage-scoped RPCs, to the
 // request's garage (app.current_garage_id) so Row-Level Security applies.
 // Inside it, garage-scoped RPCs are authorized against the policy's rule
 // (owner or active member holding the permission, Security Architecture
@@ -47,7 +47,7 @@ func Garage(tx Transactor, reader access.Reader, license LicenseChecker) grpc.Un
 			return handler(ctx, req)
 		}
 
-		scope := platformdb.AccountScope(AccountID(ctx))
+		scope := platformdb.UserScope(UserID(ctx))
 
 		if policy.Garage != nil {
 			scoped, ok := req.(GarageScoped)
@@ -87,7 +87,7 @@ func Garage(tx Transactor, reader access.Reader, license LicenseChecker) grpc.Un
 func authorizeGarage(
 	ctx context.Context, reader access.Reader, license LicenseChecker, scope platformdb.Scope, policy Policy, method string,
 ) (context.Context, error) {
-	acc, err := reader.GarageAccess(ctx, scope.GarageID, scope.AccountID)
+	user, err := reader.GarageAccess(ctx, scope.GarageID, scope.UserID)
 	if err != nil {
 		if errors.Is(err, access.ErrNoMembership) {
 			return nil, apperror.Wrap(apperror.CodePermissionDenied, access.ErrNoMembership.Error(), err).WithReason(ReasonGarageAccessDenied)
@@ -96,7 +96,7 @@ func authorizeGarage(
 		return nil, apperror.Internal("load garage access", err)
 	}
 
-	if err := acc.Check(*policy.Garage); err != nil {
+	if err := user.Check(*policy.Garage); err != nil {
 		switch {
 		case errors.Is(err, access.ErrGarageClosed):
 			return nil, apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err).WithReason(ReasonGarageInactive)
@@ -107,7 +107,7 @@ func authorizeGarage(
 		}
 	}
 
-	ctx = access.WithAccess(ctx, acc)
+	ctx = access.WithAccess(ctx, user)
 
 	if policy.SkipLicense || license == nil {
 		return ctx, nil

@@ -25,7 +25,7 @@ type integrationEnv struct {
 	customers *repository.PostgresCustomerRepository
 	vehicles  *repository.PostgresVehicleRepository
 	partners  *repository.PostgresPartnerRepository
-	accountID string
+	userID    string
 	garageA   string
 	garageB   string
 }
@@ -34,13 +34,13 @@ func startIntegrationEnv(t *testing.T) *integrationEnv {
 	t.Helper()
 
 	pg := pgtest.StartMigrated(t)
-	env := &integrationEnv{accountID: uuid.NewString(), garageA: uuid.NewString(), garageB: uuid.NewString()}
+	env := &integrationEnv{userID: uuid.NewString(), garageA: uuid.NewString(), garageB: uuid.NewString()}
 
-	_, err := pg.Admin.ExecContext(t.Context(), `INSERT INTO accounts (id, email, full_name) VALUES ($1, 'owner@example.com', 'Owner')`, env.accountID)
+	_, err := pg.Admin.ExecContext(t.Context(), `INSERT INTO users (id, email, full_name) VALUES ($1, 'owner@example.com', 'Owner')`, env.userID)
 	require.NoError(t, err)
 
-	_, err = pg.Admin.ExecContext(t.Context(), `INSERT INTO garages (id, account_id, name) VALUES ($1, $3, 'A'), ($2, $3, 'B')`,
-		env.garageA, env.garageB, env.accountID)
+	_, err = pg.Admin.ExecContext(t.Context(), `INSERT INTO garages (id, user_id, name) VALUES ($1, $3, 'A'), ($2, $3, 'B')`,
+		env.garageA, env.garageB, env.userID)
 	require.NoError(t, err)
 
 	pool := pg.AppPool(t)
@@ -180,8 +180,8 @@ func TestCustomerAndVehicleRepositories(t *testing.T) {
 
 	t.Run("soft delete hides the rows and frees the phone number", func(t *testing.T) {
 		env.inGarage(t, env.garageA, func(ctx context.Context) {
-			require.NoError(t, env.customers.SoftDelete(ctx, env.garageA, alice.ID, env.accountID))
-			require.NoError(t, env.vehicles.SoftDeleteByCustomer(ctx, env.garageA, alice.ID, env.accountID))
+			require.NoError(t, env.customers.SoftDelete(ctx, env.garageA, alice.ID, env.userID))
+			require.NoError(t, env.vehicles.SoftDeleteByCustomer(ctx, env.garageA, alice.ID, env.userID))
 
 			_, err := env.customers.FindByID(ctx, env.garageA, alice.ID)
 			require.ErrorIs(t, err, domain.ErrCustomerNotFound)
@@ -274,7 +274,7 @@ func TestPartnerRepository(t *testing.T) {
 	require.ErrorIs(t, err, domain.ErrPartnerNameTaken)
 
 	env.inGarage(t, env.garageA, func(ctx context.Context) {
-		require.NoError(t, env.partners.SoftDelete(ctx, env.garageA, supplier.ID, env.accountID))
+		require.NoError(t, env.partners.SoftDelete(ctx, env.garageA, supplier.ID, env.userID))
 		_, err := env.partners.FindByID(ctx, env.garageA, supplier.ID)
 		require.ErrorIs(t, err, domain.ErrPartnerNotFound)
 	})
@@ -311,11 +311,11 @@ func TestFindByEmailAcrossGarages(t *testing.T) {
 	env.inGarage(t, env.garageB, func(ctx context.Context) {
 		require.NoError(t, env.customers.Create(ctx, inB))
 		require.NoError(t, env.customers.Create(ctx, removed))
-		require.NoError(t, env.customers.SoftDelete(ctx, env.garageB, removed.ID, env.accountID))
+		require.NoError(t, env.customers.SoftDelete(ctx, env.garageB, removed.ID, env.userID))
 	})
 
 	// No garage scope at all: only the SECURITY DEFINER function sees rows.
-	err := env.txm.WithTransaction(t.Context(), dbpkg.AccountScope(uuid.NewString()), func(ctx context.Context) error {
+	err := env.txm.WithTransaction(t.Context(), dbpkg.UserScope(uuid.NewString()), func(ctx context.Context) error {
 		refs, err := env.customers.FindByEmailAcrossGarages(ctx, "BINH@example.com")
 		require.NoError(t, err)
 		assert.ElementsMatch(t, []repository.CustomerRef{

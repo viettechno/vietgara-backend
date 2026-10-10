@@ -22,7 +22,7 @@ func NewPostgresRoleRepository(pool *platformdb.Pool) *PostgresRoleRepository {
 }
 
 const roleSelect = `
-	SELECT r.id, r.owner_account_id, r.name, r.description, r.default_key::text,
+	SELECT r.id, r.owner_user_id, r.name, r.description, r.default_key::text,
 		COALESCE(array_agg(rp.permission::text) FILTER (WHERE rp.permission IS NOT NULL), '{}'),
 		(SELECT count(*) FROM staff_groups sg WHERE sg.role_id = r.id)::int,
 		r.created_at, r.updated_at
@@ -36,7 +36,7 @@ func scanRole(row pgx.Row) (*domain.Role, error) {
 		permissions []string
 	)
 
-	err := row.Scan(&role.ID, &role.OwnerAccountID, &role.Name, &role.Description, &defaultKey, &permissions,
+	err := row.Scan(&role.ID, &role.OwnerUserID, &role.Name, &role.Description, &defaultKey, &permissions,
 		&role.GroupCount, &role.CreatedAt, &role.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -57,11 +57,11 @@ func scanRole(row pgx.Row) (*domain.Role, error) {
 }
 
 // ListByOwner returns the owner's roles, default roles first.
-func (r *PostgresRoleRepository) ListByOwner(ctx context.Context, ownerAccountID string) ([]*domain.Role, error) {
+func (r *PostgresRoleRepository) ListByOwner(ctx context.Context, ownerUserID string) ([]*domain.Role, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
-	rows, err := q.Query(ctx, roleSelect+` WHERE r.owner_account_id = $1 GROUP BY r.id
-		ORDER BY r.default_key IS NULL, r.default_key, lower(r.name)`, ownerAccountID)
+	rows, err := q.Query(ctx, roleSelect+` WHERE r.owner_user_id = $1 GROUP BY r.id
+		ORDER BY r.default_key IS NULL, r.default_key, lower(r.name)`, ownerUserID)
 	if err != nil {
 		return nil, err
 	}
@@ -81,9 +81,9 @@ func (r *PostgresRoleRepository) Create(ctx context.Context, role *domain.Role) 
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
 	err := q.QueryRow(ctx, `
-		INSERT INTO roles (owner_account_id, name, description) VALUES ($1, $2, $3)
+		INSERT INTO roles (owner_user_id, name, description) VALUES ($1, $2, $3)
 		RETURNING id, created_at, updated_at`,
-		role.OwnerAccountID, role.Name, role.Description,
+		role.OwnerUserID, role.Name, role.Description,
 	).Scan(&role.ID, &role.CreatedAt, &role.UpdatedAt)
 	if isUniqueViolation(err, "") {
 		return domain.ErrRoleNameTaken
@@ -102,10 +102,10 @@ func (r *PostgresRoleRepository) CreateDefault(ctx context.Context, role *domain
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
 	err := q.QueryRow(ctx, `
-		INSERT INTO roles (owner_account_id, name, description, default_key) VALUES ($1, $2, $3, $4)
+		INSERT INTO roles (owner_user_id, name, description, default_key) VALUES ($1, $2, $3, $4)
 		ON CONFLICT DO NOTHING
 		RETURNING id, created_at, updated_at`,
-		role.OwnerAccountID, role.Name, role.Description, string(*role.DefaultKey),
+		role.OwnerUserID, role.Name, role.Description, string(*role.DefaultKey),
 	).Scan(&role.ID, &role.CreatedAt, &role.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil

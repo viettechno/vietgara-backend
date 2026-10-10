@@ -163,47 +163,47 @@ func (_c *MockGarageRepository_FindByID_Call) RunAndReturn(run func(ctx context.
 	return _c
 }
 
-// ListForAccount provides a mock function for the type MockGarageRepository
-func (_mock *MockGarageRepository) ListForAccount(ctx context.Context, accountID string) ([]*domain.Garage, error) {
-	ret := _mock.Called(ctx, accountID)
+// ListForUser provides a mock function for the type MockGarageRepository
+func (_mock *MockGarageRepository) ListForUser(ctx context.Context, userID string) ([]*domain.Garage, error) {
+	ret := _mock.Called(ctx, userID)
 
 	if len(ret) == 0 {
-		panic("no return value specified for ListForAccount")
+		panic("no return value specified for ListForUser")
 	}
 
 	var r0 []*domain.Garage
 	var r1 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]*domain.Garage, error)); ok {
-		return returnFunc(ctx, accountID)
+		return returnFunc(ctx, userID)
 	}
 	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []*domain.Garage); ok {
-		r0 = returnFunc(ctx, accountID)
+		r0 = returnFunc(ctx, userID)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*domain.Garage)
 		}
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, accountID)
+		r1 = returnFunc(ctx, userID)
 	} else {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
 }
 
-// MockGarageRepository_ListForAccount_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListForAccount'
-type MockGarageRepository_ListForAccount_Call struct {
+// MockGarageRepository_ListForUser_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListForUser'
+type MockGarageRepository_ListForUser_Call struct {
 	*mock.Call
 }
 
-// ListForAccount is a helper method to define mock.On call
+// ListForUser is a helper method to define mock.On call
 //   - ctx context.Context
-//   - accountID string
-func (_e *MockGarageRepository_Expecter) ListForAccount(ctx any, accountID any) *MockGarageRepository_ListForAccount_Call {
-	return &MockGarageRepository_ListForAccount_Call{Call: _e.mock.On("ListForAccount", ctx, accountID)}
+//   - userID string
+func (_e *MockGarageRepository_Expecter) ListForUser(ctx any, userID any) *MockGarageRepository_ListForUser_Call {
+	return &MockGarageRepository_ListForUser_Call{Call: _e.mock.On("ListForUser", ctx, userID)}
 }
 
-func (_c *MockGarageRepository_ListForAccount_Call) Run(run func(ctx context.Context, accountID string)) *MockGarageRepository_ListForAccount_Call {
+func (_c *MockGarageRepository_ListForUser_Call) Run(run func(ctx context.Context, userID string)) *MockGarageRepository_ListForUser_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -221,12 +221,12 @@ func (_c *MockGarageRepository_ListForAccount_Call) Run(run func(ctx context.Con
 	return _c
 }
 
-func (_c *MockGarageRepository_ListForAccount_Call) Return(garages []*domain.Garage, err error) *MockGarageRepository_ListForAccount_Call {
+func (_c *MockGarageRepository_ListForUser_Call) Return(garages []*domain.Garage, err error) *MockGarageRepository_ListForUser_Call {
 	_c.Call.Return(garages, err)
 	return _c
 }
 
-func (_c *MockGarageRepository_ListForAccount_Call) RunAndReturn(run func(ctx context.Context, accountID string) ([]*domain.Garage, error)) *MockGarageRepository_ListForAccount_Call {
+func (_c *MockGarageRepository_ListForUser_Call) RunAndReturn(run func(ctx context.Context, userID string) ([]*domain.Garage, error)) *MockGarageRepository_ListForUser_Call {
 	_c.Call.Return(run)
 	return _c
 }

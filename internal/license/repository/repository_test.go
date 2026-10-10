@@ -27,7 +27,7 @@ func planRow() []any {
 }
 
 func subRow() []any {
-	return append([]any{"s-1", "acc-1", "p-1", "trial", now, now, now, nil, true, nil, now, now}, planRow()...)
+	return append([]any{"s-1", "user-1", "p-1", "trial", now, now, now, nil, true, nil, now, now}, planRow()...)
 }
 
 func TestPlanRepository(t *testing.T) {
@@ -76,17 +76,17 @@ func TestSubscriptionRepository(t *testing.T) {
 	t.Parallel()
 
 	repo := repository.NewPostgresRepository(nil)
-	sub := &domain.Subscription{AccountID: "acc-1", PlanID: "p-1", Status: domain.StatusTrial}
+	sub := &domain.Subscription{UserID: "user-1", PlanID: "p-1", Status: domain.StatusTrial}
 
 	tx := dbtest.New(t).
-		ExpectQueryRow("ON CONFLICT (account_id) DO NOTHING", dbtest.Row("s-1", now, now)).
-		ExpectQueryRow("ON CONFLICT (account_id) DO NOTHING", dbtest.ErrRow(pgx.ErrNoRows)).
-		ExpectQueryRow("ON CONFLICT (account_id) DO NOTHING", dbtest.ErrRow(errBoom)).
-		ExpectQueryRow("s.account_id = $1", dbtest.Row(subRow()...)).
+		ExpectQueryRow("ON CONFLICT (user_id) DO NOTHING", dbtest.Row("s-1", now, now)).
+		ExpectQueryRow("ON CONFLICT (user_id) DO NOTHING", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectQueryRow("ON CONFLICT (user_id) DO NOTHING", dbtest.ErrRow(errBoom)).
+		ExpectQueryRow("s.user_id = $1", dbtest.Row(subRow()...)).
 		ExpectQueryRow("FOR UPDATE OF s", dbtest.ErrRow(pgx.ErrNoRows)).
 		ExpectQueryRow("s.id = $1 FOR UPDATE", dbtest.ErrRow(errBoom)).
 		ExpectQueryRow("UPDATE subscriptions", dbtest.Row(now)).
-		ExpectQuery("current_period_end < $1", dbtest.NewRows([]any{"acc-1"}), nil).
+		ExpectQuery("current_period_end < $1", dbtest.NewRows([]any{"user-1"}), nil).
 		ExpectQuery("current_period_end < $1", nil, errBoom).
 		ExpectQuery("current_period_end < $1", dbtest.NewRows([]any{"a", "b"}), nil).
 		ExpectExec("INSERT INTO entitlements", dbtest.Tag(7), nil)
@@ -102,28 +102,28 @@ func TestSubscriptionRepository(t *testing.T) {
 	_, err = repo.CreateIfAbsent(ctx, sub)
 	require.ErrorIs(t, err, errBoom)
 
-	got, err := repo.FindByAccountID(ctx, "acc-1")
+	got, err := repo.FindByUserID(ctx, "user-1")
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusTrial, got.Status)
 	assert.Equal(t, "pro", got.Plan.Code)
 
-	_, err = repo.LockByAccountID(ctx, "acc-1")
+	_, err = repo.LockByUserID(ctx, "user-1")
 	require.ErrorIs(t, err, domain.ErrSubscriptionNotFound)
 	_, err = repo.LockByID(ctx, "s-1")
 	require.ErrorIs(t, err, errBoom)
 
 	require.NoError(t, repo.Update(ctx, got))
 
-	ids, err := repo.ListAccountIDsDueBefore(ctx, now)
+	ids, err := repo.ListUserIDsDueBefore(ctx, now)
 	require.NoError(t, err)
-	assert.Equal(t, []string{"acc-1"}, ids)
+	assert.Equal(t, []string{"user-1"}, ids)
 
-	_, err = repo.ListAccountIDsDueBefore(ctx, now)
+	_, err = repo.ListUserIDsDueBefore(ctx, now)
 	require.ErrorIs(t, err, errBoom)
-	_, err = repo.ListAccountIDsDueBefore(ctx, now)
+	_, err = repo.ListUserIDsDueBefore(ctx, now)
 	require.Error(t, err)
 
-	require.NoError(t, repo.Replace(ctx, "acc-1", map[domain.Feature]bool{domain.FeatureQuotes: true}))
+	require.NoError(t, repo.Replace(ctx, "user-1", map[domain.Feature]bool{domain.FeatureQuotes: true}))
 }
 
 func TestSearch(t *testing.T) {
@@ -168,7 +168,7 @@ func TestCachesAndCounters(t *testing.T) {
 	t.Cleanup(func() { _ = client.Close() })
 
 	ctx := t.Context()
-	e := &domain.Entitlements{AccountID: "acc-1", Status: domain.StatusActive, PlanCode: "pro", Features: []domain.Feature{domain.FeatureQuotes}}
+	e := &domain.Entitlements{UserID: "user-1", Status: domain.StatusActive, PlanCode: "pro", Features: []domain.Feature{domain.FeatureQuotes}}
 
 	redisCache := repository.NewRedisEntitlementCache(client, time.Minute)
 	memoryCache := repository.NewMemoryEntitlementCache(time.Minute)
@@ -181,17 +181,17 @@ func TestCachesAndCounters(t *testing.T) {
 		{func(id string) (*domain.Entitlements, error) { return redisCache.Get(ctx, id) }, func(e *domain.Entitlements) error { return redisCache.Set(ctx, e) }, func(id string) error { return redisCache.Delete(ctx, id) }},
 		{func(id string) (*domain.Entitlements, error) { return memoryCache.Get(ctx, id) }, func(e *domain.Entitlements) error { return memoryCache.Set(ctx, e) }, func(id string) error { return memoryCache.Delete(ctx, id) }},
 	} {
-		got, err := c.get("acc-1")
+		got, err := c.get("user-1")
 		require.NoError(t, err)
 		assert.Nil(t, got)
 
 		require.NoError(t, c.set(e))
-		got, err = c.get("acc-1")
+		got, err = c.get("user-1")
 		require.NoError(t, err)
 		assert.Equal(t, e.Features, got.Features)
 
-		require.NoError(t, c.del("acc-1"))
-		got, err = c.get("acc-1")
+		require.NoError(t, c.del("user-1"))
+		got, err = c.get("user-1")
 		require.NoError(t, err)
 		assert.Nil(t, got)
 	}
@@ -214,8 +214,8 @@ func TestCachesAndCounters(t *testing.T) {
 		inc func() (int, error)
 		get func() (int, error)
 	}{
-		{func() (int, error) { return redisCounter.Increment(ctx, "acc", "20260925") }, func() (int, error) { return redisCounter.Get(ctx, "acc", "20260925") }},
-		{func() (int, error) { return memoryCounter.Increment(ctx, "acc", "20260925") }, func() (int, error) { return memoryCounter.Get(ctx, "acc", "20260925") }},
+		{func() (int, error) { return redisCounter.Increment(ctx, "user", "20260925") }, func() (int, error) { return redisCounter.Get(ctx, "user", "20260925") }},
+		{func() (int, error) { return memoryCounter.Increment(ctx, "user", "20260925") }, func() (int, error) { return memoryCounter.Get(ctx, "user", "20260925") }},
 	} {
 		n, err := c.get()
 		require.NoError(t, err)

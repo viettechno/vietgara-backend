@@ -1,8 +1,8 @@
 // Package env selects the deployment the blackbox suite runs against and
 // reads its endpoints from the environment. The scenarios are the same on
-// every target. Scenarios that sign up accounts need the target's test
+// every target. Scenarios that sign up users need the target's test
 // inbox (a Mailpit receiving the e-mail of EmailDomain, see the backend's
-// TEST_ACCOUNTS_*) and skip without one; the ones that need a stub only
+// TEST_USERS_*) and skip without one; the ones that need a stub only
 // the stubbed stack has (Google) use RequireStubbed.
 package env
 
@@ -24,7 +24,7 @@ const (
 	// Google sign-in).
 	Stubbed Target = "stubbed"
 	// Staging is the shared staging deployment, with real third parties;
-	// only its test accounts' e-mail goes to a Mailpit.
+	// only its test users' e-mail goes to a Mailpit.
 	Staging Target = "staging"
 )
 
@@ -34,9 +34,9 @@ type Config struct {
 	// APIURL is the public entry point (Kong); the API is under /api/v1.
 	APIURL string
 
-	// EmailDomain is the domain of every account the suite signs up: the
-	// target's TEST_ACCOUNTS_EMAIL_DOMAIN, whose e-mail lands in MailpitURL
-	// and whose accounts are purged after a day.
+	// EmailDomain is the domain of every user the suite signs up: the
+	// target's TEST_USERS_EMAIL_DOMAIN, whose e-mail lands in MailpitURL
+	// and whose users are purged after a day.
 	EmailDomain string
 	// MailpitURL is the test inbox's API; credentials, if any, go in the
 	// URL (https://user:pass@host). Empty: scenarios that sign up skip.
@@ -48,7 +48,7 @@ type Config struct {
 	GoogleClientID string
 
 	// OwnerEmail and OwnerPassword sign in a pre-provisioned, verified
-	// account for the read-only checks when there is no test inbox.
+	// user for the read-only checks when there is no test inbox.
 	OwnerEmail    string
 	OwnerPassword string
 }

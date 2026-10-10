@@ -91,6 +91,15 @@ scenarios that sign up are skipped, and the read-only checks use a
 pre-provisioned owner (`BLACKBOX_OWNER_EMAIL`/`BLACKBOX_OWNER_PASSWORD`)
 if one is set.
 
+## Roadmap: Phase 4, Quality Foundation
+
+Per the [Release Plan](https://github.com/viettechno/vietgara-docs/blob/master/docs/01-Product/Release_Plan/Release_Plan_Phase4.md) in `vietgara-docs`:
+
+- **Today:** 6 tests (billing 1, IAM 2, smoke 2, tenant 1) against fixtures that create a unique user per run.
+- **Release 4.0:** the scenarios also use a shared dataset from the private `vietgara-testdata` repository (YAML plus a Go loader, pinned by tag) with short names (`owner1`, `gara1-1`, `advisor1-1`). The baseline is seeded through the public API and read-mostly; scenarios that need fresh users (sign-up, password reset) and destructive scenarios keep creating their own data with unique suffixes and delete it in teardown. A test-only purge removes the test users, their garages, files and Mailpit messages; it is disabled in production by configuration and only touches the test domain. Staging uses a shared password from a CI secret, never from the repository.
+- **Release 4.1:** every P1 and most P2 scenario of the stable modules (IAM, tenant with cross-tenant isolation, license limits, customers, quotes, repair orders, inventory, settlements, reporting, PDFs and Excel, the mobile BFFs, e-mails), at least 80% of API operations (reported against the OpenAPI document), and the 90% unit coverage gate on the money path.
+- **From then on** each release adds its blackbox scenarios in its own Definition of Done.
+
 ## Layout
 
 ```

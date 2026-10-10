@@ -64,10 +64,11 @@ The plan is in `vietgara-docs` (Release Plan, Phases 3-17). What changes in this
 | --- | --- |
 | Phase 3 | `account` becomes `user` in the database, proto, events, tokens and configuration (the backend part is merged in #20; proto and the clients follow); migrations are edited in place |
 | Phase 4 | The blackbox suite reads a shared dataset from `vietgara-testdata` and grows to every P1 scenario and at least 80% of API operations; a test-only purge of the test users (see `testing/blackbox/README.md`) |
-| Release 5.0 | Insurance code is removed (insurer split, insurer partner type); `partners` becomes the Supplier module (`suppliers`, `supplier.*`); delete-or-deactivate rule; legal profile; payment vouchers; file registry; `stock_transactions.quantity` becomes numeric |
-| Release 5.1 | Customers without a user, user links, tax profiles |
-| Releases 6.0, 6.1 | Units, part categories and images, Excel exports; MFA |
-| Phase 7 | Goods receipt documents with a supplier on each line, average cost, stock count, write-off and returns, barcodes, import; job catalogue and stock reservation (Release 7.3) |
+| Release 5.0 | Audit columns on every business table by trigger; edited user names kept (`full_name_source`); insurance code is removed (insurer split, insurer partner type); `partners` becomes the Supplier module (`suppliers`, `supplier.*`); delete-or-deactivate rule; legal profile; payment vouchers; file registry; `stock_transactions.quantity` becomes numeric |
+| Release 5.1 | Customers without a user, user links, tax profiles by kind with an invoice-requested check, vehicle identity fields locked while live documents use them (`customer.correct` to correct) |
+| Release 5.2 | Plan changes (upgrade and downgrade) take effect at the end of the billing period: pending change, applied by the daily job |
+| Releases 6.0, 6.1 | Units, selling price per part, part categories and images, Excel exports; MFA |
+| Phase 7 | A draft stock issue (phiếu xuất kho) created with each repair order, posted on close; goods receipt documents with a supplier on each line, average cost, stock count, write-off and returns, barcodes, import; job catalogue and stock reservation (Release 7.3) |
 | Phase 8 | Kong rate limiting and security headers; platform roles and groups; read-only support access |
 | Phase 9 | Load test, metrics and alerts, off-site backups, Terraform (the gate for an open launch) |
 | Phases 10-15 | Print templates and e-mail; push and mobile sync; booking; receivables, payables and purchase orders; thermal printing and the template designer; service split (Repair Order, Inventory, Quote first), silos, CQRS |

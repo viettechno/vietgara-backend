@@ -32,7 +32,8 @@ blackbox-staging: ## Run the blackbox suite against staging (BLACKBOX_API_URL, o
 
 blackbox-test: ## Run the blackbox suite against a running target (BLACKBOX_TARGET, default stubbed)
 	@printf "$(CYAN)▶ Running blackbox tests against $${BLACKBOX_TARGET:-stubbed}...$(RESET)\n"
-	@cd $(BLACKBOX_DIR) && go test -count=1 -v ./...
+	@data_dir="$$(cd "$(TESTDATA_DIR)/data" && pwd)"; \
+	cd $(BLACKBOX_DIR) && BLACKBOX_TESTDATA_DIR="$$data_dir" go test -count=1 -v ./...
 
 blackbox-lint: ## Lint the blackbox module with the repository's golangci-lint config
 	@printf "$(CYAN)▶ Running golangci-lint on $(BLACKBOX_DIR)...$(RESET)\n"

@@ -15,10 +15,29 @@ import (
 
 	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/env"
+	testdata "github.com/viettechno/vietgara-testdata/go"
 )
 
 // Password is the password of every user the suite registers.
 const Password = "Blackbox#2026"
+
+// Dataset loads the pinned shared test dataset for scenarios that use its
+// baseline actors and records.
+func Dataset(tb testing.TB) *testdata.Dataset {
+	tb.Helper()
+
+	dir := env.Get(tb).TestdataDir
+	if dir == "" {
+		tb.Fatal("BLACKBOX_TESTDATA_DIR is not set; run tests with make blackbox-test")
+	}
+
+	dataset, err := testdata.Load(dir)
+	if err != nil {
+		tb.Fatalf("load shared test dataset: %v", err)
+	}
+
+	return dataset
+}
 
 // Actor is a signed-in user.
 type Actor struct {

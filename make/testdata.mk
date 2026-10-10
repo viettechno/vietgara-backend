@@ -2,6 +2,8 @@ TESTDATA_REPOSITORY := https://github.com/viettechno/vietgara-testdata.git
 TESTDATA_VERSION_FILE ?= testing/blackbox/testdata.version
 TESTDATA_DIR ?= .data/vietgara-testdata
 
+blackbox-test: testdata
+
 .PHONY: testdata
 
 testdata: ## Fetch the pinned shared test dataset into .data/vietgara-testdata

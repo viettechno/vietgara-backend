@@ -71,6 +71,7 @@ The plan is in `vietgara-docs` (Release Plan, Phases 3-17). What changes in this
 | Phase 7 | A draft stock issue (phiếu xuất kho) created with each repair order, posted on close; goods receipt documents with a supplier on each line, average cost, stock count, write-off and returns, barcodes, import; job catalogue and stock reservation (Release 7.3) |
 | Phase 8 | Kong rate limiting and security headers; platform roles and groups; read-only support access |
 | Phase 9 | Load test, metrics and alerts, off-site backups, Terraform (the gate for an open launch) |
+| Release 10.2 | Public contact request: `POST /api/v1/public/contact-requests` (server to server from the website's function; strict rate-limit profile), the `contact_requests` table and the support e-mail through Notification |
 | Phases 10-15 | Print templates and e-mail; push and mobile sync; booking; receivables, payables and purchase orders; thermal printing and the template designer; service split (Repair Order, Inventory, Quote first), silos, CQRS |
 | Phases 16-17 | Payment gateway, e-invoices, SMS/Zalo; insurers directory, claims, supplier portal |
 

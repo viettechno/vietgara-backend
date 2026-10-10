@@ -103,11 +103,11 @@ Per the [Release Plan](https://github.com/viettechno/vietgara-docs/blob/master/d
 ## Fetching the shared dataset
 
 The backend pins the public dataset tag in
-[`testdata.version`](./testdata.version). Run `make testdata` from the
-repository root to fetch that exact tag into `.data/vietgara-testdata`.
-CI runs the same target before the blackbox suite. No deploy key or other
-credential is needed. The fetched checkout is ignored by Git and is not
-modified by the test suite.
+[`testdata.version`](./testdata.version). `make blackbox-test` fetches that
+exact tag into `.data/vietgara-testdata` and loads its YAML through the
+shared Go loader. Run `make testdata` from the repository root to fetch it
+without running tests. No deploy key or other credential is needed. The
+fetched checkout is ignored by Git and is not modified by the test suite.
 
 ## Layout
 

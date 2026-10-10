@@ -88,9 +88,6 @@ jobs:
           go-version-file: testing/blackbox/go.mod
           cache-dependency-path: testing/blackbox/go.sum
 
-      - name: Fetch pinned shared test dataset
-        run: make testdata
-
       - name: Blackbox tests
         run: make blackbox-stubbed
 

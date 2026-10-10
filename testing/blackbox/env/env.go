@@ -46,6 +46,8 @@ type Config struct {
 	// GoogleClientID is the audience the stubbed backend accepts mobile
 	// Google ID tokens for (GOOGLE_MOBILE_CLIENT_IDS).
 	GoogleClientID string
+	// TestdataDir contains the YAML files from the pinned shared dataset.
+	TestdataDir string
 
 	// OwnerEmail and OwnerPassword sign in a pre-provisioned, verified
 	// user for the read-only checks when there is no test inbox.
@@ -80,6 +82,7 @@ func load() (Config, error) {
 		MailpitURL:     getenv("BLACKBOX_MAILPIT_URL", "http://localhost:18025"),
 		GoogleStubURL:  getenv("BLACKBOX_GOOGLE_STUB_URL", "http://localhost:18090"),
 		GoogleClientID: getenv("BLACKBOX_GOOGLE_CLIENT_ID", "blackbox-mobile.apps.googleusercontent.com"),
+		TestdataDir:    os.Getenv("BLACKBOX_TESTDATA_DIR"),
 		OwnerEmail:     os.Getenv("BLACKBOX_OWNER_EMAIL"),
 		OwnerPassword:  os.Getenv("BLACKBOX_OWNER_PASSWORD"),
 	}

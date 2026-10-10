@@ -11,7 +11,7 @@
 | **Depends on** | `vietgara-proto` (API contracts), Postgres, Redis, Kafka |
 | **Related** | `vietgara-infra` (how it is run), `vietgara-gitops-config` (target deployment), `vietgara-docs` (architecture) |
 
-The Go modular monolith behind the VietGara front ends: the garage web admin
+The Go modular monolith behind the VietGara front ends: the owner web
 (`vietgara-owner-web`), the platform admin (`vietgara-admin-web`) and the
 mobile apps (Release 1.0–1.5). One
 process serves:
@@ -25,8 +25,8 @@ process serves:
 
 ```mermaid
 flowchart LR
-  W[Web admin] -->|/api| K[Kong]
-  P[Platform admin] -->|/api| K
+  W[Owner Web] -->|/api| K[Kong]
+  P[Admin Web] -->|/api| K
   K --> H["HTTP :8080<br/>grpc-gateway"]
   H -->|in-process| I["Interceptors<br/>Auth → EmailVerified →<br/>PlatformAdmin → Garage"]
   G["gRPC :50051"] --> I
@@ -79,8 +79,8 @@ Start the full stack with Docker Compose:
 
 ```bash
 cp .env_example .env
-docker compose up --build        # Postgres, Redis, Kafka, Mailpit, backend, web admin, platform admin, Kong
-open http://localhost:8000       # garage web admin through Kong
+docker compose up --build        # Postgres, Redis, Kafka, Mailpit, backend, owner web, admin web, Kong
+open http://localhost:8000       # owner web through Kong
 open http://admin.localhost:8000 # platform admin through Kong (plans, subscriptions)
 open http://localhost:8025       # Mailpit: every e-mail sent locally
 ```
@@ -134,7 +134,7 @@ local defaults.
 | `GOOGLE_MOBILE_CLIENT_IDS` | Google sign-in from the mobile apps (`POST /api/v1/auth/google/id-token`): comma-separated OAuth client IDs the apps' ID tokens are issued to (the Android "web/server" client and the iOS client). Empty disables it |
 | `GOOGLE_AUTH_ENDPOINT`, `GOOGLE_TOKEN_ENDPOINT`, `GOOGLE_USERINFO_URL`, `GOOGLE_CERTS_URL` | Google's OAuth endpoints and the JWKS that mobile ID tokens are verified against. Default to Google's own; override them only to point the backend at a Google stub (the blackbox tests) |
 | `PLATFORM_ADMIN_EMAILS` | Comma-separated e-mails granted platform admin. See [Platform admins](#platform-admins) |
-| `APP_BASE_URL` | Public URL of the deployment, such as `https://vietgara.viettechno.com`. The web admin origin for the Google popup, the Google callback host, and the base of e-mailed links. Defaults to `http://localhost:8000` |
+| `APP_BASE_URL` | Public URL of the deployment, such as `https://vietgara.viettechno.com`. The owner web origin for the Google popup, the Google callback host, and the base of e-mailed links. Defaults to `http://localhost:8000` |
 
 **Cache, licensing and events**
 
@@ -184,8 +184,8 @@ screen or API grants them.
 The `platform_admin` flag in the access token is read from the database each
 time a session is issued or refreshed. It therefore takes effect within
 `JWT_ACCESS_TTL` (20 minutes by default), or at once if the person signs out
-and back in. The platform admin app (`vietgara-admin-web`) accepts only users that
-have the flag; others see an access-denied page. The garage web admin has no
+and back in. The admin web (`vietgara-admin-web`) accepts only users that
+have the flag; others see an access-denied page. The owner web has no
 platform-admin pages.
 
 Things to know:

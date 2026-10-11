@@ -15,6 +15,8 @@ import (
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
+// Scenario: E2E-TEN-022 (partial): invitations, roles and groups are
+// later batches.
 func TestOwnersCannotReachEachOthersGarages(t *testing.T) {
 	t.Parallel()
 

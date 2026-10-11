@@ -141,6 +141,44 @@ configuration. File cleanup happens before database deletion; if cleanup
 fails, the command stops and leaves the test users in place so it can be
 retried safely.
 
+## Traceability and API coverage
+
+Every scenario test names the documented scenario it covers in a comment:
+
+```go
+// Scenario: E2E-IAM-001.
+func TestEmailSignUp(t *testing.T) {
+```
+
+A test that covers a scenario only in part says so, and names what is
+still missing:
+
+```go
+// Scenario: E2E-TEN-022 (partial): invitations, roles and groups are
+// later batches.
+```
+
+Guard-only tests (the smoke package) carry no scenario tag. Run the check
+from the repository root:
+
+```bash
+make blackbox-traceability
+```
+
+It reports three things against `scenarios/documented-ids.txt` (a snapshot
+of the documented IDs with priorities, regenerated from vietgara-docs with
+`check_traceability.py --regen`) and the OpenAPI document in
+`vietgara-proto`: tests naming an unknown ID (**fails the build**),
+documented scenarios without a test, and the share of API operations the
+suite calls (path templates resolved from the typed client; only methods
+invoked from `scenarios/` or `fixture/` count, `seed/` does not).
+
+Baseline (Release 4.0): 114 documented scenarios, 5 partial, 109 missing;
+20/124 operations (16%). Missing scenarios and coverage below the 80% gate
+report as warnings; each Release 4.1 batch shrinks them, and the
+`--fail-on-missing` / `--fail-on-coverage` flags turn them into gates once
+the P1 coverage lands.
+
 ## Layout
 
 ```

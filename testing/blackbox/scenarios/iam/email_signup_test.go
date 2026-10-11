@@ -18,6 +18,9 @@ import (
 // TestEmailSignUp walks a new owner from registration to a working session:
 // the user is locked out of garage APIs until the e-mailed OTP is
 // confirmed, then signs in again with its password and rotates its session.
+//
+// Scenario: E2E-IAM-001 (partial): trial-plan, subscription, role and
+// language assertions are later batches.
 func TestEmailSignUp(t *testing.T) {
 	t.Parallel()
 

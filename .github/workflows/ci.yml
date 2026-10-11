@@ -91,6 +91,26 @@ jobs:
       - name: Blackbox tests
         run: make blackbox-stubbed
 
+  # Scenario traceability and API coverage need no running stack: the check
+  # reads the scenario sources, the checked-in ID snapshot and the OpenAPI
+  # document. Unknown scenario IDs fail the job; missing scenarios and
+  # coverage below the gate report as warnings until the 4.1 batches land.
+  traceability:
+    name: Scenario traceability and API coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: testing/blackbox/go.mod
+          cache-dependency-path: testing/blackbox/go.sum
+
+      - name: Traceability and API coverage
+        run: make blackbox-traceability
+
   # Builds the image on every run; on pushes to master and v* tags it is also
   # pushed to ghcr.io/<owner>/<repo>, tagged like `make image-push`
   # (git describe: v1.1.0 on a tag, v1.1.0-3-gabc1234 or abc1234 otherwise).

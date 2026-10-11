@@ -67,7 +67,7 @@ func scanSettlement(row pgx.Row) (*domain.Settlement, error) {
 }
 
 const paymentColumns = `id, amount, method, note, voucher_number, payer_name, payer_address, reason, collector_name, issuer,
-	created_by, created_at`
+	void_reason, voided_at, created_by, created_at`
 
 func scanPayment(row pgx.Row) (domain.Payment, error) {
 	var (
@@ -75,17 +75,22 @@ func scanPayment(row pgx.Row) (domain.Payment, error) {
 		method       string
 		note         *string
 		payerAddress *string
+		voidReason   *string
 		issuer       []byte
 	)
 
 	err := row.Scan(&p.ID, &p.Amount, &method, &note, &p.VoucherNumber, &p.PayerName, &payerAddress, &p.Reason,
-		&p.CollectorName, &issuer, &p.CreatedBy, &p.CreatedAt)
+		&p.CollectorName, &issuer, &voidReason, &p.VoidedAt, &p.CreatedBy, &p.CreatedAt)
 	if err != nil {
 		return domain.Payment{}, err
 	}
 
 	if payerAddress != nil {
 		p.PayerAddress = *payerAddress
+	}
+
+	if voidReason != nil {
+		p.VoidReason = *voidReason
 	}
 
 	if len(issuer) > 0 {
@@ -287,6 +292,52 @@ func (r *PostgresRepository) RecordPayment(
 	}
 
 	return s, nil
+}
+
+// VoidPayment marks the payment void and takes its amount off the
+// settlement's paid total, returning the settlement's fresh amounts (its
+// Payments field is left empty).
+func (r *PostgresRepository) VoidPayment(
+	ctx context.Context, garageID, settlementID, paymentID, reason string,
+) (*domain.Settlement, error) {
+	q := platformdb.QuerierFromContext(ctx, r.pool)
+
+	var amount int64
+
+	err := q.QueryRow(ctx, `
+		UPDATE settlement_payments SET voided_at = NOW(), void_reason = $4
+		WHERE garage_id = $1 AND settlement_id = $2 AND id = $3 AND voided_at IS NULL
+		RETURNING amount`, garageID, settlementID, paymentID, reason).Scan(&amount)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, r.whyNotVoided(ctx, q, garageID, settlementID, paymentID)
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return scanSettlement(q.QueryRow(ctx, `
+		UPDATE settlements SET paid_amount = paid_amount - $3
+		WHERE garage_id = $1 AND id = $2
+		RETURNING `+settlementColumns, garageID, settlementID, amount))
+}
+
+// whyNotVoided tells a payment that does not exist from one already void.
+func (r *PostgresRepository) whyNotVoided(ctx context.Context, q platformdb.Querier, garageID, settlementID, paymentID string) error {
+	var exists bool
+
+	err := q.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM settlement_payments WHERE garage_id = $1 AND settlement_id = $2 AND id = $3)`,
+		garageID, settlementID, paymentID).Scan(&exists)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		return domain.ErrPaymentNotFound
+	}
+
+	return domain.ErrPaymentAlreadyVoided
 }
 
 // RevenueBucket is one period's total settlement value.

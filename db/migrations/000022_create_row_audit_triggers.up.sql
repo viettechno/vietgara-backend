@@ -63,6 +63,7 @@ CREATE TRIGGER trigger_repair_order_lines_row_audit BEFORE INSERT OR UPDATE ON r
 CREATE TRIGGER trigger_items_row_audit BEFORE INSERT OR UPDATE ON items FOR EACH ROW EXECUTE FUNCTION set_row_audit();
 CREATE TRIGGER trigger_stock_balance_row_audit BEFORE INSERT OR UPDATE ON stock_balance FOR EACH ROW EXECUTE FUNCTION set_row_audit();
 CREATE TRIGGER trigger_settlements_row_audit BEFORE INSERT OR UPDATE ON settlements FOR EACH ROW EXECUTE FUNCTION set_row_audit();
+CREATE TRIGGER trigger_settlement_payments_row_audit BEFORE INSERT OR UPDATE ON settlement_payments FOR EACH ROW EXECUTE FUNCTION set_row_audit();
 CREATE TRIGGER trigger_document_sequences_row_audit BEFORE INSERT OR UPDATE ON document_sequences FOR EACH ROW EXECUTE FUNCTION set_row_audit();
 
 -- Append-only tables (and link tables whose rows are only added or removed).
@@ -72,5 +73,4 @@ CREATE TRIGGER trigger_staff_group_members_created_audit BEFORE INSERT ON staff_
 CREATE TRIGGER trigger_outbox_events_created_audit BEFORE INSERT ON outbox_events FOR EACH ROW EXECUTE FUNCTION set_created_audit();
 CREATE TRIGGER trigger_audit_log_created_audit BEFORE INSERT ON audit_log FOR EACH ROW EXECUTE FUNCTION set_created_audit();
 CREATE TRIGGER trigger_stock_transactions_created_audit BEFORE INSERT ON stock_transactions FOR EACH ROW EXECUTE FUNCTION set_created_audit();
-CREATE TRIGGER trigger_settlement_payments_created_audit BEFORE INSERT ON settlement_payments FOR EACH ROW EXECUTE FUNCTION set_created_audit();
 CREATE TRIGGER trigger_notification_log_created_audit BEFORE INSERT ON notification_log FOR EACH ROW EXECUTE FUNCTION set_created_audit();

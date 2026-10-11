@@ -16,6 +16,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/document/usecase"
 	"github.com/viettechno/vietgara-backend/internal/mocks"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 const (
@@ -60,7 +61,7 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 4)
+	assert.Len(t, p, 5)
 	assert.NotNil(t, p[documentv1.DocumentService_ExportQuotePdf_FullMethodName].Garage)
 }
 
@@ -146,4 +147,51 @@ func TestExportStockMovementsExcel(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", resp.GetContentType())
 	assert.NotEmpty(t, resp.GetData())
+}
+
+func TestExportPaymentVoucherPdf(t *testing.T) {
+	t.Parallel()
+
+	req := &documentv1.ExportPaymentVoucherPdfRequest{GarageId: garageID, SettlementId: settlementID, PaymentId: "p-1"}
+
+	t.Run("renders the voucher from its own issuer snapshot", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+		e.settlements.EXPECT().Get(anyArg, garageID, settlementID).Return(usecase.SettlementInfo{
+			Number: "QT-0001",
+			Vouchers: []usecase.VoucherInfo{{
+				ID: "p-1", Number: "PT-0001", Date: "12/10/2026", PayerName: "Nguyễn An", Amount: 1_000_000,
+				Issuer: issuer.Issuer{Name: "Công ty An Phát"},
+			}},
+		}, nil).Once()
+
+		resp, err := e.srv.ExportPaymentVoucherPdf(t.Context(), req)
+		require.NoError(t, err)
+		assert.Equal(t, "application/pdf", resp.GetContentType())
+		assert.NotEmpty(t, resp.GetData())
+	})
+
+	t.Run("unknown payment", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+		e.settlements.EXPECT().Get(anyArg, garageID, settlementID).Return(usecase.SettlementInfo{}, nil).Once()
+
+		_, err := e.srv.ExportPaymentVoucherPdf(t.Context(), req)
+		require.Error(t, err)
+		assert.Equal(t, codes.NotFound, status.Code(err))
+	})
+
+	t.Run("unknown settlement", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+		notFound := apperror.Wrap(apperror.CodeNotFound, "settlement not found", errDocumentTestBoom)
+		e.settlements.EXPECT().Get(anyArg, garageID, settlementID).Return(usecase.SettlementInfo{}, notFound).Once()
+
+		_, err := e.srv.ExportPaymentVoucherPdf(t.Context(), req)
+		require.Error(t, err)
+		assert.Equal(t, codes.NotFound, status.Code(err))
+	})
 }

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"math"
+	"time"
 
 	billingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/billing/v1"
 	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
@@ -9,6 +10,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/billing/domain"
 	"github.com/viettechno/vietgara-backend/internal/billing/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/converter"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 func settlementToProto(s *domain.Settlement) *billingv1.Settlement {
@@ -32,8 +34,16 @@ func paymentToProto(p domain.Payment) *billingv1.SettlementPayment {
 		Id: p.ID, Amount: p.Amount, Method: methodToProto(p.Method),
 		Note: p.Note, CreatedAt: converter.TimeToProto(p.CreatedAt),
 		VoucherNumber: p.VoucherNumber, PayerName: p.PayerName, PayerAddress: p.PayerAddress, Reason: p.Reason,
-		CollectorName: p.CollectorName,
+		CollectorName: p.CollectorName, Voided: p.Voided(), VoidReason: p.VoidReason, VoidedAt: timeToProtoPtr(p.VoidedAt),
 	}
+}
+
+func timeToProtoPtr(t *time.Time) *timestamppb.Timestamp {
+	if t == nil {
+		return nil
+	}
+
+	return converter.TimeToProto(*t)
 }
 
 func statusToProto(s domain.SettlementStatus) billingv1.SettlementStatus {

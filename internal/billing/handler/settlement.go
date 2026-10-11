@@ -85,3 +85,21 @@ func (s *Server) RecordSettlementPayment(
 		return &billingv1.RecordSettlementPaymentResponse{Settlement: settlementToProto(settlement)}, nil
 	})
 }
+
+// VoidSettlementPayment voids a payment voucher recorded by mistake
+// (FR-BIL-06).
+func (s *Server) VoidSettlementPayment(
+	ctx context.Context, req *billingv1.VoidSettlementPaymentRequest,
+) (*billingv1.VoidSettlementPaymentResponse, error) {
+	return run(ctx, func(actorID string) (*billingv1.VoidSettlementPaymentResponse, error) {
+		settlement, err := s.uc.VoidPayment(ctx, usecase.VoidPaymentRequest{
+			GarageID: req.GetGarageId(), SettlementID: req.GetSettlementId(), PaymentID: req.GetPaymentId(),
+			ActorID: actorID, Reason: req.GetReason(),
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		return &billingv1.VoidSettlementPaymentResponse{Settlement: settlementToProto(settlement)}, nil
+	})
+}

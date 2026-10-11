@@ -101,4 +101,48 @@ func TestPaymentVoucherPersistence(t *testing.T) {
 
 		return err
 	}))
+	// Voiding takes the amount off the paid total once, keeps the voucher
+	// on file with its reason, and stamps who changed it.
+	var first string
+
+	require.NoError(t, inGarage(garageID, func(ctx context.Context) error {
+		s, err := repo.FindByID(ctx, garageID, settlementID)
+		require.NoError(t, err)
+
+		first = s.Payments[0].ID
+
+		after, err := repo.VoidPayment(ctx, garageID, settlementID, first, "nhập nhầm")
+		require.NoError(t, err)
+		assert.Equal(t, int64(0), after.PaidAmount)
+
+		s, err = repo.FindByID(ctx, garageID, settlementID)
+		require.NoError(t, err)
+		require.Len(t, s.Payments, 1)
+		assert.True(t, s.Payments[0].Voided())
+		assert.Equal(t, "nhập nhầm", s.Payments[0].VoidReason)
+		assert.Equal(t, "PT-202610-0001", s.Payments[0].VoucherNumber)
+
+		return nil
+	}))
+
+	err = inGarage(garageID, func(ctx context.Context) error {
+		_, err := repo.VoidPayment(ctx, garageID, settlementID, first, "again")
+
+		return err
+	})
+	require.ErrorIs(t, err, billingDomain.ErrPaymentAlreadyVoided)
+
+	err = inGarage(garageID, func(ctx context.Context) error {
+		_, err := repo.VoidPayment(ctx, garageID, settlementID, uuid.NewString(), "x")
+
+		return err
+	})
+	require.ErrorIs(t, err, billingDomain.ErrPaymentNotFound)
+
+	var updatedBy *string
+
+	require.NoError(t, pg.Admin.QueryRowContext(t.Context(),
+		`SELECT updated_by::text FROM settlement_payments WHERE id = $1`, first).Scan(&updatedBy))
+	require.NotNil(t, updatedBy)
+	assert.Equal(t, userID, *updatedBy)
 }

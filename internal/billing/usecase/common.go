@@ -48,9 +48,9 @@ type Page[T any] struct {
 }
 
 var (
-	notFoundErrors     = []error{domain.ErrSettlementNotFound}
-	conflictErrors     = []error{domain.ErrAlreadySettled}
-	invalidErrors      = []error{domain.ErrInvalidPaymentMethod, domain.ErrInvalidPaymentAmount, domain.ErrInvalidVoucher}
+	notFoundErrors     = []error{domain.ErrSettlementNotFound, domain.ErrPaymentNotFound}
+	conflictErrors     = []error{domain.ErrAlreadySettled, domain.ErrPaymentAlreadyVoided}
+	invalidErrors      = []error{domain.ErrInvalidPaymentMethod, domain.ErrInvalidPaymentAmount, domain.ErrInvalidVoucher, domain.ErrInvalidVoidReason}
 	preconditionErrors = []error{domain.ErrRepairOrderNotClosed}
 )
 
@@ -98,6 +98,7 @@ func actorRef(userID string) *string {
 const (
 	ActionSettlementCreated = "settlement.created"
 	ActionPaymentRecorded   = "settlement.payment_recorded"
+	ActionPaymentVoided     = "settlement.payment_voided"
 
 	entitySettlement = "settlement"
 	entityPayment    = "settlement_payment"

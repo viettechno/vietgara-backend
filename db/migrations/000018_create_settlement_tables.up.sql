@@ -58,8 +58,8 @@ COMMENT ON POLICY settlements_rls_policy ON settlements IS
 'Restricts access to the transaction''s garage (app.current_garage_id, see app_current_garage_id()).';
 
 -- ---------------------------------------------------------------------------
--- settlement_payments: append-only record of money actually collected
--- (FR-BIL-03). A settlement may receive several until the total is fully
+-- settlement_payments: record of money actually collected, never deleted
+-- (FR-BIL-03); a mistaken one is voided. A settlement may receive several until the total is fully
 -- collected.
 -- ---------------------------------------------------------------------------
 CREATE TABLE settlement_payments (
@@ -80,8 +80,15 @@ CREATE TABLE settlement_payments (
     reason TEXT NOT NULL,
     collector_name VARCHAR(255) NOT NULL,
     issuer JSONB NOT NULL DEFAULT '{}'::jsonb,
+    -- A voided voucher (FR-BIL-06) stays on file with its number and the
+    -- reason, and no longer counts towards the settlement's paid_amount.
+    void_reason TEXT,
+    voided_at TIMESTAMP WITH TIME ZONE,
     created_by UUID,
+    updated_by UUID,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    CONSTRAINT settlement_payments_void_check CHECK ((voided_at IS NULL) = (void_reason IS NULL)),
     CONSTRAINT settlement_payments_garage_settlement_fkey FOREIGN KEY (garage_id, settlement_id)
         REFERENCES settlements (garage_id, id) ON DELETE CASCADE,
     CONSTRAINT settlement_payments_garage_voucher_unique UNIQUE (garage_id, voucher_number)

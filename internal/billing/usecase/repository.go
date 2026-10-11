@@ -47,6 +47,12 @@ type Repository interface {
 	// settlement's fresh amounts (not its payments list) so the caller
 	// can derive and persist the new status.
 	RecordPayment(ctx context.Context, garageID, settlementID string, payment *domain.Payment) (*domain.Settlement, error)
+	// VoidPayment marks the payment void with its reason, takes its amount
+	// off the settlement's paid total and returns the settlement's fresh
+	// amounts (not its payments list). domain.ErrPaymentNotFound when the
+	// settlement has no such payment, domain.ErrPaymentAlreadyVoided when
+	// it is already void.
+	VoidPayment(ctx context.Context, garageID, settlementID, paymentID, reason string) (*domain.Settlement, error)
 	// SaveStatus persists a settlement's status alone, after RecordPayment.
 	SaveStatus(ctx context.Context, garageID, settlementID string, status domain.SettlementStatus) error
 }

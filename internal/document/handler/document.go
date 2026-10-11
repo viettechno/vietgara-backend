@@ -44,6 +44,19 @@ func (s *Server) ExportSettlementReceiptPdf(
 	return pdfBody(data), nil
 }
 
+// ExportPaymentVoucherPdf renders one payment voucher in the 01-TT layout
+// (FR-BIL-05).
+func (s *Server) ExportPaymentVoucherPdf(
+	ctx context.Context, req *documentv1.ExportPaymentVoucherPdfRequest,
+) (*httpbody.HttpBody, error) {
+	data, err := s.uc.PaymentVoucherPDF(ctx, req.GetGarageId(), req.GetSettlementId(), req.GetPaymentId())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return pdfBody(data), nil
+}
+
 // ExportStockMovementsExcel renders the stock movement report as an
 // Excel workbook (FR-DOC-02).
 func (s *Server) ExportStockMovementsExcel(

@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
+	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/middleware"
@@ -369,4 +370,56 @@ func TestRoleAndGroupRPCs(t *testing.T) {
 	e.Store.Fail["group.list"] = assert.AnError
 	_, err = e.srv.ListStaffGroups(gctx, &tenantv1.ListStaffGroupsRequest{GarageId: gid})
 	require.Error(t, err)
+}
+
+// TestLegalProfileRPCs covers FR-TEN-06 through the API: create with the
+// legal identity, change it by mask, and the voucher numbering template.
+func TestLegalProfileRPCs(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv()
+	ownerCtx := e.as(t, tenanttest.Owner, "")
+
+	created, err := e.srv.CreateGarage(ownerCtx, &tenantv1.CreateGarageRequest{Garage: &tenantv1.Garage{
+		Name: "Gara", LegalName: new("Cong ty TNHH Gara"), LegalAddress: new("12 Nguyen Hue"), Representative: new("An"),
+		Bank:      &commonv1.BankDetails{BankName: new("VCB"), AccountNumber: new("001")},
+		Numbering: &tenantv1.NumberingTemplates{PaymentVoucher: "PT-{SEQ:3}"},
+	}})
+	require.NoError(t, err)
+
+	g := created.GetGarage()
+	assert.Equal(t, "Cong ty TNHH Gara", g.GetLegalName())
+	assert.Equal(t, "An", g.GetRepresentative())
+	assert.Equal(t, "VCB", g.GetBank().GetBankName())
+	assert.Equal(t, "PT-{SEQ:3}", g.GetNumbering().GetPaymentVoucher())
+
+	gctx := e.as(t, tenanttest.Owner, g.GetId())
+
+	updated, err := e.srv.UpdateGarage(gctx, &tenantv1.UpdateGarageRequest{
+		GarageId: g.GetId(),
+		Garage: &tenantv1.Garage{
+			LegalName: new("Gara Moi"), Bank: &commonv1.BankDetails{AccountHolder: new("An")},
+			Numbering: &tenantv1.NumberingTemplates{PaymentVoucher: "PV-{YY}{SEQ:4}"},
+		},
+		UpdateMask: mask("legal_name", "bank", "numbering.payment_voucher"),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Gara Moi", updated.GetGarage().GetLegalName())
+	assert.Equal(t, "An", updated.GetGarage().GetRepresentative(), "unnamed fields are kept")
+	assert.Empty(t, updated.GetGarage().GetBank().GetBankName(), "the bank block is replaced")
+	assert.Equal(t, "An", updated.GetGarage().GetBank().GetAccountHolder())
+	assert.Equal(t, "PV-{YY}{SEQ:4}", updated.GetGarage().GetNumbering().GetPaymentVoucher())
+
+	cleared, err := e.srv.UpdateGarage(gctx, &tenantv1.UpdateGarageRequest{
+		GarageId: g.GetId(), Garage: &tenantv1.Garage{}, UpdateMask: mask("legal_address", "bank"),
+	})
+	require.NoError(t, err)
+	assert.Nil(t, cleared.GetGarage().LegalAddress)
+	assert.Empty(t, cleared.GetGarage().GetBank().GetAccountHolder(), "an absent bank block clears the account")
+
+	_, err = e.srv.UpdateGarage(gctx, &tenantv1.UpdateGarageRequest{
+		GarageId: g.GetId(), Garage: &tenantv1.Garage{Numbering: &tenantv1.NumberingTemplates{PaymentVoucher: "no sequence"}},
+		UpdateMask: mask("numbering.payment_voucher"),
+	})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err))
 }

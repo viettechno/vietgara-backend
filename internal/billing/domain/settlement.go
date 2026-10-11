@@ -54,17 +54,49 @@ func (m PaymentMethod) IsValid() bool {
 	}
 }
 
+// Issuer is the garage's legal identity (FR-TEN-06) as it was when a
+// document was issued: a later change of the garage's profile never
+// rewrites it. Persisted as the settlement_payments.issuer JSON document.
+type Issuer struct {
+	Name           string `json:"name"`
+	Address        string `json:"address,omitempty"`
+	TaxCode        string `json:"tax_code,omitempty"`
+	Representative string `json:"representative,omitempty"`
+	BankName       string `json:"bank_name,omitempty"`
+	AccountNumber  string `json:"account_number,omitempty"`
+	AccountHolder  string `json:"account_holder,omitempty"`
+	// LogoKey is the object key of the logo at that time.
+	LogoKey string `json:"logo_key,omitempty"`
+}
+
 // Payment is one amount recorded as collected against a settlement
 // (FR-BIL-03); a settlement may receive several. The customer is the only
-// payer.
+// payer. Every payment is a payment voucher (phiếu thu, FR-BIL-05).
 type Payment struct {
-	ID        string
-	Amount    int64
-	Method    PaymentMethod
-	Note      string
-	CreatedBy *string
-	CreatedAt time.Time
+	ID     string
+	Amount int64
+	Method PaymentMethod
+	Note   string
+	// VoucherNumber comes from the garage's voucher numbering template.
+	VoucherNumber string
+	// PayerName and PayerAddress default to the customer's; Reason to a
+	// standard text naming the settlement.
+	PayerName    string
+	PayerAddress string
+	Reason       string
+	// CollectorName is the staff member who collected the money.
+	CollectorName string
+	Issuer        Issuer
+	CreatedBy     *string
+	CreatedAt     time.Time
 }
+
+// Field limits of a voucher, matching the settlement_payments columns.
+const (
+	MaxPayerNameLength    = 255
+	MaxPayerAddressLength = 500
+	MaxReasonLength       = 500
+)
 
 // Settlement is the final bill of a closed repair order (FR-BIL-01),
 // paid by the customer. See: Database Design Section 6.1.
@@ -119,6 +151,9 @@ var (
 	// repair order is not yet closed (FR-BIL-01).
 	ErrRepairOrderNotClosed = errors.New("the repair order must be closed before it can be settled")
 	ErrInvalidPaymentMethod = errors.New("payment method is invalid")
+	// ErrInvalidVoucher is returned when a voucher's payer, address or
+	// reason is too long.
+	ErrInvalidVoucher = errors.New("the payer name, address or reason is too long")
 	// ErrInvalidPaymentAmount is returned when a payment is not positive,
 	// or would collect more than the amount still due.
 	ErrInvalidPaymentAmount = errors.New("payment amount must be positive and not exceed the amount still due")

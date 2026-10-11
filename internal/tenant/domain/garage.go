@@ -45,14 +45,18 @@ func (m QuoteApprovalMode) IsValid() bool {
 
 // Defaults of a new garage (Database Design 2.2).
 const (
-	DefaultTimezone                  = "Asia/Ho_Chi_Minh"
-	DefaultCurrency                  = "VND"
-	DefaultQuoteNumberTemplate       = "BG-{YYYY}{MM}-{SEQ:4}"
-	DefaultRepairOrderNumberTemplate = "LSC-{YYYY}{MM}-{SEQ:4}"
-	DefaultSettlementNumberTemplate  = "QT-{YYYY}{MM}-{SEQ:4}"
-	MaxGarageNameLength              = 255
-	MaxTaxCodeLength                 = 20
-	MaxTemplateLength                = 50
+	DefaultTimezone                     = "Asia/Ho_Chi_Minh"
+	DefaultCurrency                     = "VND"
+	DefaultQuoteNumberTemplate          = "BG-{YYYY}{MM}-{SEQ:4}"
+	DefaultRepairOrderNumberTemplate    = "LSC-{YYYY}{MM}-{SEQ:4}"
+	DefaultSettlementNumberTemplate     = "QT-{YYYY}{MM}-{SEQ:4}"
+	DefaultPaymentVoucherNumberTemplate = "PT-{YYYY}{MM}-{SEQ:4}"
+	MaxGarageNameLength                 = 255
+	MaxTaxCodeLength                    = 20
+	MaxTemplateLength                   = 50
+	MaxLegalNameLength                  = 255
+	MaxLegalAddressLength               = 500
+	MaxBankFieldLength                  = 100
 )
 
 // DailyHours is the opening time of one weekday (1 = Monday ... 7 =
@@ -75,6 +79,14 @@ func DefaultOperatingHours() []DailyHours {
 	return append(hours, DailyHours{Day: 6, Open: "08:00", Close: "12:00"}, DailyHours{Day: 7, Closed: true})
 }
 
+// BankDetails is the garage's bank account, printed on documents it issues
+// (FR-TEN-06); persisted as the garages.bank_details JSON document.
+type BankDetails struct {
+	BankName      *string `json:"bank_name,omitempty"`
+	AccountNumber *string `json:"account_number,omitempty"`
+	AccountHolder *string `json:"account_holder,omitempty"`
+}
+
 // Garage is one tenant: an independent operating/data-isolation unit.
 // A user may own many garages (one user -- many garages); "branch"
 // is used synonymously with "garage" throughout VietGara.
@@ -87,6 +99,13 @@ type Garage struct {
 	Address     *string
 	Phone       *string
 	Email       *string
+	// LegalName, LegalAddress, Representative and Bank are the legal identity
+	// of the garage (FR-TEN-06), printed with TaxCode and the logo in the
+	// header of every document. Documents keep a snapshot when issued.
+	LegalName      *string
+	LegalAddress   *string
+	Representative *string
+	Bank           BankDetails
 	// LogoKey is the object key of the logo in the file registry; the URL
 	// is derived from it when the garage is returned.
 	LogoKey                   *string
@@ -97,11 +116,13 @@ type Garage struct {
 	QuoteNumberTemplate       string
 	RepairOrderNumberTemplate string
 	SettlementNumberTemplate  string
-	DefaultQuoteApprovalMode  QuoteApprovalMode
-	CreatedBy                 *string
-	UpdatedBy                 *string
-	CreatedAt                 time.Time
-	UpdatedAt                 time.Time
+	// PaymentVoucherNumberTemplate numbers payment vouchers (FR-BIL-05).
+	PaymentVoucherNumberTemplate string
+	DefaultQuoteApprovalMode     QuoteApprovalMode
+	CreatedBy                    *string
+	UpdatedBy                    *string
+	CreatedAt                    time.Time
+	UpdatedAt                    time.Time
 }
 
 // ValidName reports whether name is a usable garage name.

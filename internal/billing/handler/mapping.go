@@ -31,6 +31,8 @@ func paymentToProto(p domain.Payment) *billingv1.SettlementPayment {
 	return &billingv1.SettlementPayment{
 		Id: p.ID, Amount: p.Amount, Method: methodToProto(p.Method),
 		Note: p.Note, CreatedAt: converter.TimeToProto(p.CreatedAt),
+		VoucherNumber: p.VoucherNumber, PayerName: p.PayerName, PayerAddress: p.PayerAddress, Reason: p.Reason,
+		CollectorName: p.CollectorName,
 	}
 }
 

@@ -11,16 +11,27 @@ package render
 import (
 	"bytes"
 	"fmt"
+	"net/http"
 	"strconv"
 
 	"github.com/go-pdf/fpdf"
 )
 
-// GarageHeader is the letterhead shown at the top of every PDF.
+// GarageHeader is the letterhead shown at the top of every PDF: the
+// garage's legal identity (FR-TEN-06), with its logo when it has one.
 type GarageHeader struct {
-	Name    string
+	// Name is the legal name, or the trading name when none is set.
+	Name string
+	// Address is the legal address, or the trading address.
 	Address string
 	Phone   string
+	// TaxCode, Representative and Bank are printed when set; Bank is one
+	// line such as "Vietcombank - 0011 2233 - Cong ty An Phat".
+	TaxCode        string
+	Representative string
+	Bank           string
+	// Logo is the image content (PNG or JPEG); empty prints no logo.
+	Logo []byte
 }
 
 // DocumentLine is one line item row (a quote line, a repair order line).
@@ -40,17 +51,58 @@ func newPDF() *fpdf.Fpdf {
 	return pdf
 }
 
+// logoHeight is the height of the logo in the header, in mm.
+const logoHeight = 18
+
+// drawLogo puts the logo at the top right of the page. An image the PDF
+// library cannot read (a WebP, a corrupt file) is left out: a document
+// without a logo is better than no document.
+func drawLogo(pdf *fpdf.Fpdf, logo []byte) {
+	var imageType string
+
+	switch http.DetectContentType(logo) {
+	case "image/png":
+		imageType = "PNG"
+	case "image/jpeg":
+		imageType = "JPG"
+	default:
+		return
+	}
+
+	pdf.RegisterImageOptionsReader("logo", fpdf.ImageOptions{ImageType: imageType, ReadDpi: false}, bytes.NewReader(logo))
+
+	if pdf.Error() != nil {
+		pdf.ClearError()
+
+		return
+	}
+
+	info := pdf.GetImageInfo("logo")
+	if info == nil {
+		return
+	}
+
+	width := logoHeight * info.Width() / info.Height()
+	pageWidth, _ := pdf.GetPageSize()
+	pdf.ImageOptions("logo", pageWidth-18-width, 18, width, logoHeight, false, fpdf.ImageOptions{ImageType: imageType}, 0, "")
+}
+
 func writeHeader(pdf *fpdf.Fpdf, garage GarageHeader, title, number string) {
+	if len(garage.Logo) > 0 {
+		drawLogo(pdf, garage.Logo)
+	}
+
 	pdf.SetFont("Helvetica", "B", 16)
 	pdf.CellFormat(0, 8, garage.Name, "", 1, "L", false, 0, "")
 	pdf.SetFont("Helvetica", "", 10)
 
-	if garage.Address != "" {
-		pdf.CellFormat(0, 5, garage.Address, "", 1, "L", false, 0, "")
-	}
-
-	if garage.Phone != "" {
-		pdf.CellFormat(0, 5, garage.Phone, "", 1, "L", false, 0, "")
+	for _, line := range []string{
+		garage.Address, labelled("Tax code", garage.TaxCode), garage.Phone,
+		labelled("Representative", garage.Representative), labelled("Bank", garage.Bank),
+	} {
+		if line != "" {
+			pdf.CellFormat(0, 5, line, "", 1, "L", false, 0, "")
+		}
 	}
 
 	pdf.Ln(4)
@@ -59,6 +111,15 @@ func writeHeader(pdf *fpdf.Fpdf, garage GarageHeader, title, number string) {
 	pdf.SetFont("Helvetica", "", 10)
 	pdf.CellFormat(0, 6, "No. "+number, "", 1, "L", false, 0, "")
 	pdf.Ln(4)
+}
+
+// labelled returns "label: value", or "" for an empty value.
+func labelled(label, value string) string {
+	if value == "" {
+		return ""
+	}
+
+	return label + ": " + value
 }
 
 func writeKeyValue(pdf *fpdf.Fpdf, label, value string) {

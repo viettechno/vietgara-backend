@@ -68,7 +68,14 @@ type StockMovementReader interface {
 // GarageHeaderInfo is the Tenant module's view of a garage that every
 // document's letterhead needs.
 type GarageHeaderInfo struct {
+	// Name and Address are the legal name and address, or the trading ones
+	// when the garage has no legal profile (FR-TEN-06).
 	Name, Address, Phone string
+	TaxCode              string
+	Representative       string
+	Bank                 string
+	// Logo is the logo's image content, empty when the garage has none.
+	Logo []byte
 }
 
 // GarageReader reads a garage's letterhead; implemented by an adapter
@@ -193,7 +200,10 @@ func (uc *DocumentUseCase) garageHeader(ctx context.Context, garageID string) (r
 		return render.GarageHeader{}, apperror.Internal("read garage", err)
 	}
 
-	return render.GarageHeader{Name: g.Name, Address: g.Address, Phone: g.Phone}, nil
+	return render.GarageHeader{
+		Name: g.Name, Address: g.Address, Phone: g.Phone, TaxCode: g.TaxCode, Representative: g.Representative,
+		Bank: g.Bank, Logo: g.Logo,
+	}, nil
 }
 
 // toAppError passes an already-classified error (from a reader adapter)

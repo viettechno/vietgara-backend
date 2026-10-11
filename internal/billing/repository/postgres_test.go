@@ -41,7 +41,10 @@ func settlementRow() []any {
 }
 
 func paymentRow() []any {
-	return []any{"p-1", int64(300_000), "cash", nil, nil, now}
+	return []any{
+		"p-1", int64(300_000), "cash", nil, "PT-202609-0001", "An Nguyen", new("5 Le Loi"), "Thanh toán quyết toán QT-1",
+		"Le Thu Ngan", []byte(`{"name":"Cong ty An Phat","tax_code":"0301234567"}`), nil, now,
+	}
 }
 
 func TestPostgresRepository_Create(t *testing.T) {
@@ -102,6 +105,10 @@ func TestPostgresRepository_FindByID(t *testing.T) {
 		require.Equal(t, domain.StatusPending, s.Status)
 		require.Len(t, s.Payments, 1)
 		require.Equal(t, domain.MethodCash, s.Payments[0].Method)
+		require.Equal(t, "PT-202609-0001", s.Payments[0].VoucherNumber)
+		require.Equal(t, "5 Le Loi", s.Payments[0].PayerAddress)
+		require.Equal(t, "Le Thu Ngan", s.Payments[0].CollectorName)
+		require.Equal(t, "Cong ty An Phat", s.Payments[0].Issuer.Name)
 	})
 
 	t.Run("not found", func(t *testing.T) {
@@ -264,10 +271,20 @@ func TestPostgresRepository_RecordPayment(t *testing.T) {
 		t.Parallel()
 
 		repo := repository.NewPostgresRepository(nil)
-		payment := &domain.Payment{ID: "p-1", Amount: 300_000, Method: domain.MethodCash}
+		payment := &domain.Payment{
+			ID: "p-1", Amount: 300_000, Method: domain.MethodCash, VoucherNumber: "PT-1", PayerName: "An", Reason: "r",
+			CollectorName: "Ngan", Issuer: domain.Issuer{Name: "Gara", LogoKey: "k"},
+		}
 
 		tx := dbtest.New(t).
 			ExpectQueryRow("INSERT INTO settlement_payments", dbtest.Row(now)).
+			WithArgs(func(args []any) {
+				require.Equal(t, "PT-1", args[6])
+				require.Equal(t, (*string)(nil), args[8], "no address stores NULL")
+				issuer, ok := args[11].([]byte)
+				require.True(t, ok)
+				require.JSONEq(t, `{"name":"Gara","logo_key":"k"}`, string(issuer))
+			}).
 			ExpectQueryRow("UPDATE settlements SET paid_amount", dbtest.Row(settlementRow()...))
 		ctx := tx.Context(t.Context())
 

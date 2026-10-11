@@ -75,12 +75,23 @@ type GarageInfo struct {
 	OwnerUserID              string
 	Timezone                 string
 	SettlementNumberTemplate string
+	// VoucherNumberTemplate numbers payment vouchers (FR-BIL-05).
+	VoucherNumberTemplate string
+	// Issuer is the legal identity a voucher snapshots when issued.
+	Issuer domain.Issuer
 }
 
 // GarageReader reads a garage's numbering and owner configuration;
 // implemented by an adapter over the Tenant module in cmd/server.
 type GarageReader interface {
 	Get(ctx context.Context, garageID string) (GarageInfo, error)
+}
+
+// CollectorReader names the staff member who collects a payment, for the
+// voucher; implemented by an adapter over the Identity module in cmd/server.
+type CollectorReader interface {
+	// FullName returns the user's display name.
+	FullName(ctx context.Context, userID string) (string, error)
 }
 
 // TransactionLimiter enforces the plan's daily transaction limit

@@ -34,6 +34,7 @@ type deps struct {
 	Settlements  *mocks.MockBillingRepository
 	RepairOrders *mocks.MockBillingRepairOrderReader
 	Garages      *mocks.MockBillingGarageReader
+	Collectors   *mocks.MockBillingCollectorReader
 	Limits       *mocks.MockBillingTransactionLimiter
 	Sequences    *mocks.MockBillingSequencer
 	Events       *mocks.MockBillingEventPublisher
@@ -45,13 +46,14 @@ func newUseCase(t *testing.T) (*usecase.SettlementUseCase, *deps) {
 
 	d := &deps{
 		Settlements: mocks.NewMockBillingRepository(t), RepairOrders: mocks.NewMockBillingRepairOrderReader(t),
-		Garages: mocks.NewMockBillingGarageReader(t),
-		Limits:  mocks.NewMockBillingTransactionLimiter(t), Sequences: mocks.NewMockBillingSequencer(t),
+		Garages:    mocks.NewMockBillingGarageReader(t),
+		Collectors: mocks.NewMockBillingCollectorReader(t),
+		Limits:     mocks.NewMockBillingTransactionLimiter(t), Sequences: mocks.NewMockBillingSequencer(t),
 		Events: mocks.NewMockBillingEventPublisher(t), Audit: mocks.NewMockBillingAuditLogger(t),
 	}
 
 	uc := usecase.NewSettlementUseCase(usecase.Deps{
-		Settlements: d.Settlements, RepairOrders: d.RepairOrders, Garages: d.Garages,
+		Settlements: d.Settlements, RepairOrders: d.RepairOrders, Garages: d.Garages, Collectors: d.Collectors,
 		Limits: d.Limits, Sequences: d.Sequences, Events: d.Events, Audit: d.Audit, Now: func() time.Time { return now },
 	})
 
@@ -71,7 +73,17 @@ func expectAudit(d *deps) *audit.Entry {
 func defaultGarage() usecase.GarageInfo {
 	return usecase.GarageInfo{
 		OwnerUserID: ownerID, Timezone: "Asia/Ho_Chi_Minh", SettlementNumberTemplate: "QT-{YYYY}{MM}-{SEQ:4}",
+		VoucherNumberTemplate: "PT-{YYYY}{MM}-{SEQ:4}",
+		Issuer:                domain.Issuer{Name: "Cong ty TNHH An Phat", TaxCode: "0301234567", LogoKey: "garages/g/logo/g/l.png"},
 	}
+}
+
+// expectVoucher expects what issuing a payment voucher reads: the garage's
+// numbering and identity, the next voucher number and the collector's name.
+func expectVoucher(d *deps) {
+	d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+	d.Sequences.EXPECT().Next(mock.Anything, garageID, "payment_voucher", "PT-202609-{SEQ:4}").Return(7, nil).Once()
+	d.Collectors.EXPECT().FullName(mock.Anything, mock.Anything).Return("Le Thu Ngan", nil).Once()
 }
 
 func closedRepairOrder() usecase.RepairOrderInfo {

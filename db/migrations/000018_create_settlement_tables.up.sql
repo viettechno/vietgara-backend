@@ -66,10 +66,22 @@ CREATE TABLE settlement_payments (
     amount BIGINT NOT NULL,
     method payment_method NOT NULL,
     note TEXT,
+    -- Every payment is a payment voucher (phiếu thu, FR-BIL-05): numbered
+    -- from the garage's voucher template, with who paid, why, and who
+    -- collected. issuer is the garage's legal identity (FR-TEN-06) when the
+    -- voucher was issued, so a later change of the profile never rewrites
+    -- it.
+    voucher_number VARCHAR(50) NOT NULL,
+    payer_name VARCHAR(255) NOT NULL,
+    payer_address TEXT,
+    reason TEXT NOT NULL,
+    collector_name VARCHAR(255) NOT NULL,
+    issuer JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_by UUID,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     CONSTRAINT settlement_payments_garage_settlement_fkey FOREIGN KEY (garage_id, settlement_id)
-        REFERENCES settlements (garage_id, id) ON DELETE CASCADE
+        REFERENCES settlements (garage_id, id) ON DELETE CASCADE,
+    CONSTRAINT settlement_payments_garage_voucher_unique UNIQUE (garage_id, voucher_number)
 );
 
 CREATE INDEX idx_settlement_payments_settlement_id ON settlement_payments (garage_id, settlement_id, created_at);

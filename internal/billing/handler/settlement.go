@@ -76,6 +76,7 @@ func (s *Server) RecordSettlementPayment(
 			GarageID: req.GetGarageId(), SettlementID: req.GetSettlementId(), ActorID: actorID,
 			Amount: req.GetAmount(),
 			Method: methodFromProto(req.GetMethod()), Note: req.GetNote(),
+			PayerName: req.GetPayerName(), PayerAddress: req.GetPayerAddress(), Reason: req.GetReason(),
 		})
 		if err != nil {
 			return nil, err

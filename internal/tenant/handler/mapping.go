@@ -53,7 +53,13 @@ func garageToProto(uc *usecase.TenantUseCase, g *usecase.GarageWithAccess) *tena
 		OperatingHours: hours,
 		Numbering: &tenantv1.NumberingTemplates{
 			Quote: g.Garage.QuoteNumberTemplate, RepairOrder: g.Garage.RepairOrderNumberTemplate,
-			Settlement: g.Garage.SettlementNumberTemplate,
+			Settlement: g.Garage.SettlementNumberTemplate, PaymentVoucher: g.Garage.PaymentVoucherNumberTemplate,
+		},
+		LegalName:      g.Garage.LegalName,
+		LegalAddress:   g.Garage.LegalAddress,
+		Representative: g.Garage.Representative,
+		Bank: &commonv1.BankDetails{
+			BankName: g.Garage.Bank.BankName, AccountNumber: g.Garage.Bank.AccountNumber, AccountHolder: g.Garage.Bank.AccountHolder,
 		},
 		DefaultQuoteApprovalMode: quoteApprovalModeToProto(g.Garage.DefaultQuoteApprovalMode),
 		CreatedAt:                converter.TimeToProto(g.Garage.CreatedAt),

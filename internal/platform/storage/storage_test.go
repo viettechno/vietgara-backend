@@ -3,6 +3,8 @@ package storage_test
 import (
 	"encoding/json"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -141,6 +143,30 @@ func TestLocalStoreDeletePrefix(t *testing.T) {
 	}
 }
 
+// mediaOf returns the object content of an upload request: the second part
+// of a multipart upload, or the body of a media upload.
+func mediaOf(r *http.Request) []byte {
+	mediaType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	if err != nil || !strings.HasPrefix(mediaType, "multipart/") {
+		body, _ := io.ReadAll(r.Body)
+
+		return body
+	}
+
+	reader := multipart.NewReader(r.Body, params["boundary"])
+
+	var content []byte
+
+	for {
+		part, err := reader.NextPart()
+		if err != nil {
+			return content
+		}
+
+		content, _ = io.ReadAll(part) // the last part is the media
+	}
+}
+
 // fakeGCS implements the Cloud Storage JSON API calls the store makes.
 type fakeGCS struct {
 	mu sync.Mutex
@@ -185,7 +211,7 @@ func (f *fakeGCS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/upload/storage/v1/b/"+bucket+"/o"):
-		body, _ := io.ReadAll(r.Body)
+		body := mediaOf(r)
 
 		name := r.URL.Query().Get("name")
 		if name == "" {
@@ -196,6 +222,15 @@ func (f *fakeGCS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"bucket":"`+bucket+`","name":"`+name+`"}`) //nolint:gosec // fake storage API in a test
+	case r.Method == http.MethodGet && bucket == "" && strings.HasPrefix(r.URL.Path, "/logos/"):
+		body, ok := f.objects[strings.TrimPrefix(r.URL.Path, "/logos/")]
+		if !ok {
+			http.Error(w, "no such object", http.StatusNotFound)
+
+			return
+		}
+
+		_, _ = w.Write(body)
 	case r.Method == http.MethodGet && r.URL.Path == "/storage/v1/b/"+bucket+"/o":
 		prefix := r.URL.Query().Get("prefix")
 
@@ -476,4 +511,52 @@ func TestGCSStorePrivateObjects(t *testing.T) {
 
 		assert.Equal(t, "https://storage.googleapis.com/logos/garages/g1/logo/g1/a.png", store.PublicURL("garages/g1/logo/g1/a.png"))
 	})
+
+	t.Run("reads a public object", func(t *testing.T) {
+		store, err := storage.NewGCS(t.Context(), "logos", "")
+		require.NoError(t, err)
+
+		_, err = store.Put(t.Context(), "garages/g1/logo/g1/b.png", "image/png", png)
+		require.NoError(t, err)
+
+		got, err := store.Get(t.Context(), "garages/g1/logo/g1/b.png")
+		require.NoError(t, err)
+		assert.Equal(t, png, got)
+
+		_, err = store.Get(t.Context(), "garages/g1/missing.png")
+		require.Error(t, err)
+
+		_, err = store.Get(t.Context(), "../x")
+		require.ErrorIs(t, err, storage.ErrInvalidKey)
+	})
+}
+
+func TestLocalStoreGet(t *testing.T) {
+	t.Parallel()
+
+	store, err := storage.NewLocal(t.TempDir(), "", nil)
+	require.NoError(t, err)
+
+	_, err = store.Put(t.Context(), "garages/g1/logo/g1/a.png", "image/png", png)
+	require.NoError(t, err)
+	require.NoError(t, store.PutPrivate(t.Context(), "garages/g1/export/e1/a.csv", "text/csv", []byte("a")))
+
+	got, err := store.Get(t.Context(), "garages/g1/logo/g1/a.png")
+	require.NoError(t, err)
+	assert.Equal(t, png, got)
+
+	_, err = store.Get(t.Context(), "garages/g1/export/e1/a.csv")
+	require.Error(t, err, "private objects are not public")
+
+	_, err = store.Get(t.Context(), "garages/g1/missing.png")
+	require.Error(t, err)
+
+	_, err = store.Get(t.Context(), "../x")
+	require.ErrorIs(t, err, storage.ErrInvalidKey)
+
+	_, err = store.Put(t.Context(), "garages/g1/big.png", "image/png", make([]byte, storage.MaxGetBytes+1))
+	require.NoError(t, err)
+
+	_, err = store.Get(t.Context(), "garages/g1/big.png")
+	require.ErrorIs(t, err, storage.ErrTooLarge)
 }

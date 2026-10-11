@@ -4,9 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
+	"strings"
 	"time"
 
+	billingDomain "github.com/viettechno/vietgara-backend/internal/billing/domain"
 	billingRepository "github.com/viettechno/vietgara-backend/internal/billing/repository"
 	billingUsecase "github.com/viettechno/vietgara-backend/internal/billing/usecase"
 	customerDomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
@@ -430,10 +433,42 @@ func (g billingGarages) Get(ctx context.Context, garageID string) (billingUsecas
 		return billingUsecase.GarageInfo{}, err
 	}
 
+	issuer := billingDomain.Issuer{
+		Name:           firstNonEmpty(deref(garage.LegalName), garage.Name),
+		Address:        firstNonEmpty(deref(garage.LegalAddress), deref(garage.Address)),
+		TaxCode:        deref(garage.TaxCode),
+		Representative: deref(garage.Representative),
+		BankName:       deref(garage.Bank.BankName),
+		AccountNumber:  deref(garage.Bank.AccountNumber),
+		AccountHolder:  deref(garage.Bank.AccountHolder),
+		LogoKey:        deref(garage.LogoKey),
+	}
+
 	return billingUsecase.GarageInfo{
 		OwnerUserID: garage.OwnerUserID, Timezone: garage.Timezone,
 		SettlementNumberTemplate: garage.SettlementNumberTemplate,
+		VoucherNumberTemplate:    garage.PaymentVoucherNumberTemplate,
+		Issuer:                   issuer,
 	}, nil
+}
+
+// billingCollectors lets the Billing & Settlement module name the staff
+// member who collects a payment on its voucher without importing Identity.
+type billingCollectors struct {
+	users *identityRepo.PostgresUserRepository
+}
+
+func (c billingCollectors) FullName(ctx context.Context, userID string) (string, error) {
+	if userID == "" {
+		return "", nil
+	}
+
+	user, err := c.users.FindByID(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+
+	return user.FullName, nil
 }
 
 // documentQuotes lets the Document/Print module render a quote PDF
@@ -571,9 +606,11 @@ func (s documentStockMovements) List(ctx context.Context, garageID, itemID strin
 }
 
 // documentGarages lets the Document/Print module read a garage's
-// letterhead (name, address, phone) without importing Tenant.
+// letterhead -- the legal identity (FR-TEN-06) and the logo -- without
+// importing Tenant or the file store.
 type documentGarages struct {
 	garages *tenantRepo.PostgresGarageRepository
+	store   storage.Store
 }
 
 func (g documentGarages) Get(ctx context.Context, garageID string) (documentUsecase.GarageHeaderInfo, error) {
@@ -582,16 +619,49 @@ func (g documentGarages) Get(ctx context.Context, garageID string) (documentUsec
 		return documentUsecase.GarageHeaderInfo{}, err
 	}
 
-	info := documentUsecase.GarageHeaderInfo{Name: garage.Name}
-	if garage.Address != nil {
-		info.Address = *garage.Address
+	info := documentUsecase.GarageHeaderInfo{
+		Name:           firstNonEmpty(deref(garage.LegalName), garage.Name),
+		Address:        firstNonEmpty(deref(garage.LegalAddress), deref(garage.Address)),
+		Phone:          deref(garage.Phone),
+		TaxCode:        deref(garage.TaxCode),
+		Representative: deref(garage.Representative),
+		Bank: strings.Join(nonEmpty(
+			deref(garage.Bank.BankName), deref(garage.Bank.AccountNumber), deref(garage.Bank.AccountHolder)), " - "),
 	}
 
-	if garage.Phone != nil {
-		info.Phone = *garage.Phone
+	if garage.LogoKey != nil {
+		// A logo that cannot be read leaves the letterhead without it.
+		logo, err := g.store.Get(ctx, *garage.LogoKey)
+		if err != nil {
+			slog.Warn("document: reading the logo failed", "garage_id", garageID, "error", err)
+		} else {
+			info.Logo = logo
+		}
 	}
 
 	return info, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+
+	return ""
+}
+
+func nonEmpty(values ...string) []string {
+	out := make([]string, 0, len(values))
+
+	for _, v := range values {
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+
+	return out
 }
 
 // reportingSettlements lets the Reporting module read a garage's revenue

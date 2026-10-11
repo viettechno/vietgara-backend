@@ -28,6 +28,7 @@ type env struct {
 	settlements  *mocks.MockBillingRepository
 	repairOrders *mocks.MockBillingRepairOrderReader
 	garages      *mocks.MockBillingGarageReader
+	collectors   *mocks.MockBillingCollectorReader
 	limits       *mocks.MockBillingTransactionLimiter
 	sequences    *mocks.MockBillingSequencer
 	events       *mocks.MockBillingEventPublisher
@@ -38,8 +39,8 @@ func newEnv(t *testing.T) *env {
 
 	e := &env{
 		settlements: mocks.NewMockBillingRepository(t), repairOrders: mocks.NewMockBillingRepairOrderReader(t),
-		garages: mocks.NewMockBillingGarageReader(t),
-		limits:  mocks.NewMockBillingTransactionLimiter(t), sequences: mocks.NewMockBillingSequencer(t),
+		garages: mocks.NewMockBillingGarageReader(t), collectors: mocks.NewMockBillingCollectorReader(t),
+		limits: mocks.NewMockBillingTransactionLimiter(t), sequences: mocks.NewMockBillingSequencer(t),
 		events: mocks.NewMockBillingEventPublisher(t),
 	}
 
@@ -48,7 +49,7 @@ func newEnv(t *testing.T) *env {
 	auditLog.EXPECT().Record(mock.Anything, mock.Anything).Return(nil).Maybe()
 
 	uc := usecase.NewSettlementUseCase(usecase.Deps{
-		Settlements: e.settlements, RepairOrders: e.repairOrders, Garages: e.garages,
+		Settlements: e.settlements, RepairOrders: e.repairOrders, Garages: e.garages, Collectors: e.collectors,
 		Limits: e.limits, Sequences: e.sequences, Events: e.events, Audit: auditLog,
 	})
 	e.srv = handler.NewServer(uc)
@@ -57,7 +58,7 @@ func newEnv(t *testing.T) *env {
 }
 
 func defaultGarage() usecase.GarageInfo {
-	return usecase.GarageInfo{OwnerUserID: ownerID, Timezone: "Asia/Ho_Chi_Minh", SettlementNumberTemplate: "QT-{SEQ:4}"}
+	return usecase.GarageInfo{OwnerUserID: ownerID, Timezone: "Asia/Ho_Chi_Minh", SettlementNumberTemplate: "QT-{SEQ:4}", VoucherNumberTemplate: "PT-{SEQ:4}"}
 }
 
 func signedIn(t *testing.T) context.Context {

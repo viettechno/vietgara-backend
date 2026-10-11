@@ -18,12 +18,15 @@ func TestGarageRepository(t *testing.T) {
 
 	repo := repository.NewPostgresGarageRepository(nil)
 	bad := garageRow()
-	bad[11] = []byte("not json")
+	bad[15] = []byte("not json")
+	badBank := garageRow()
+	badBank[7] = []byte("[")
 
 	tx := dbtest.New(t).
 		ExpectQueryRow("WHERE g.id = $1", dbtest.Row(garageRow()...)).
 		ExpectQueryRow("WHERE g.id = $1", dbtest.ErrRow(pgx.ErrNoRows)).
 		ExpectQueryRow("WHERE g.id = $1", dbtest.Row(bad...)).
+		ExpectQueryRow("WHERE g.id = $1", dbtest.Row(badBank...)).
 		ExpectQuery("g.user_id = $1", dbtest.NewRows(garageRow()), nil).
 		ExpectQuery("g.user_id = $1", nil, errBoom).
 		ExpectQuery("g.user_id = $1", dbtest.NewRows(bad), nil).
@@ -38,11 +41,18 @@ func TestGarageRepository(t *testing.T) {
 	assert.Equal(t, domain.GarageStatusActive, g.Status)
 	assert.Len(t, g.OperatingHours, 1)
 	assert.Equal(t, "a@b.vn", *g.Email)
+	assert.Equal(t, "Gara Co., Ltd", *g.LegalName)
+	assert.Equal(t, "VCB", *g.Bank.BankName)
+	assert.Equal(t, "001", *g.Bank.AccountNumber)
+	assert.Nil(t, g.Bank.AccountHolder)
+	assert.Equal(t, "PT-{SEQ:4}", g.PaymentVoucherNumberTemplate)
 
 	_, err = repo.FindByID(ctx, "x")
 	require.ErrorIs(t, err, domain.ErrGarageNotFound)
 	_, err = repo.FindByID(ctx, "x")
 	require.Error(t, err)
+	_, err = repo.FindByID(ctx, "x")
+	require.Error(t, err, "corrupt bank details")
 
 	list, err := repo.ListForUser(ctx, "owner")
 	require.NoError(t, err)

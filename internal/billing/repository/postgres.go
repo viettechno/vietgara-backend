@@ -7,6 +7,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -58,18 +59,32 @@ func scanSettlement(row pgx.Row) (*domain.Settlement, error) {
 	return &s, nil
 }
 
-const paymentColumns = `id, amount, method, note, created_by, created_at`
+const paymentColumns = `id, amount, method, note, voucher_number, payer_name, payer_address, reason, collector_name, issuer,
+	created_by, created_at`
 
 func scanPayment(row pgx.Row) (domain.Payment, error) {
 	var (
-		p      domain.Payment
-		method string
-		note   *string
+		p            domain.Payment
+		method       string
+		note         *string
+		payerAddress *string
+		issuer       []byte
 	)
 
-	err := row.Scan(&p.ID, &p.Amount, &method, &note, &p.CreatedBy, &p.CreatedAt)
+	err := row.Scan(&p.ID, &p.Amount, &method, &note, &p.VoucherNumber, &p.PayerName, &payerAddress, &p.Reason,
+		&p.CollectorName, &issuer, &p.CreatedBy, &p.CreatedAt)
 	if err != nil {
 		return domain.Payment{}, err
+	}
+
+	if payerAddress != nil {
+		p.PayerAddress = *payerAddress
+	}
+
+	if len(issuer) > 0 {
+		if err := json.Unmarshal(issuer, &p.Issuer); err != nil {
+			return domain.Payment{}, err
+		}
 	}
 
 	p.Method = domain.PaymentMethod(method)
@@ -231,12 +246,19 @@ func (r *PostgresRepository) RecordPayment(
 ) (*domain.Settlement, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
+	issuer, err := json.Marshal(payment.Issuer)
+	if err != nil {
+		return nil, err
+	}
+
 	row := q.QueryRow(ctx, `
-		INSERT INTO settlement_payments (id, garage_id, settlement_id, amount, method, note, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO settlement_payments (id, garage_id, settlement_id, amount, method, note, voucher_number, payer_name,
+			payer_address, reason, collector_name, issuer, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING created_at`,
-		payment.ID, garageID, settlementID, payment.Amount, string(payment.Method),
-		nullableString(payment.Note), payment.CreatedBy,
+		payment.ID, garageID, settlementID, payment.Amount, string(payment.Method), nullableString(payment.Note),
+		payment.VoucherNumber, payment.PayerName, nullableString(payment.PayerAddress), payment.Reason, payment.CollectorName,
+		issuer, payment.CreatedBy,
 	)
 	if err := row.Scan(&payment.CreatedAt); err != nil {
 		return nil, err

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -28,7 +29,15 @@ type GarageFields struct {
 	QuoteNumberTemplate       *string
 	RepairOrderNumberTemplate *string
 	SettlementNumberTemplate  *string
-	DefaultQuoteApprovalMode  *domain.QuoteApprovalMode
+	// PaymentVoucherNumberTemplate numbers payment vouchers (FR-BIL-05).
+	PaymentVoucherNumberTemplate *string
+	DefaultQuoteApprovalMode     *domain.QuoteApprovalMode
+	// Legal profile (FR-TEN-06): a blank value clears it, and a non-nil Bank
+	// replaces the whole account.
+	LegalName      *string
+	LegalAddress   *string
+	Representative *string
+	Bank           *domain.BankDetails
 }
 
 // GarageWithAccess is a garage and what the caller may do in it.
@@ -64,18 +73,19 @@ func (uc *TenantUseCase) ListGarages(ctx context.Context, userID string) ([]Gara
 // default role, and publishes garage.created.
 func (uc *TenantUseCase) CreateGarage(ctx context.Context, ownerID string, fields GarageFields) (*GarageWithAccess, error) {
 	g := &domain.Garage{
-		ID:                        uuid.NewString(),
-		OwnerUserID:               ownerID,
-		Timezone:                  domain.DefaultTimezone,
-		Currency:                  domain.DefaultCurrency,
-		Status:                    domain.GarageStatusActive,
-		OperatingHours:            domain.DefaultOperatingHours(),
-		QuoteNumberTemplate:       domain.DefaultQuoteNumberTemplate,
-		RepairOrderNumberTemplate: domain.DefaultRepairOrderNumberTemplate,
-		SettlementNumberTemplate:  domain.DefaultSettlementNumberTemplate,
-		DefaultQuoteApprovalMode:  domain.QuoteApprovalModeLink,
-		CreatedBy:                 &ownerID,
-		UpdatedBy:                 &ownerID,
+		ID:                           uuid.NewString(),
+		OwnerUserID:                  ownerID,
+		Timezone:                     domain.DefaultTimezone,
+		Currency:                     domain.DefaultCurrency,
+		Status:                       domain.GarageStatusActive,
+		OperatingHours:               domain.DefaultOperatingHours(),
+		QuoteNumberTemplate:          domain.DefaultQuoteNumberTemplate,
+		RepairOrderNumberTemplate:    domain.DefaultRepairOrderNumberTemplate,
+		SettlementNumberTemplate:     domain.DefaultSettlementNumberTemplate,
+		PaymentVoucherNumberTemplate: domain.DefaultPaymentVoucherNumberTemplate,
+		DefaultQuoteApprovalMode:     domain.QuoteApprovalModeLink,
+		CreatedBy:                    &ownerID,
+		UpdatedBy:                    &ownerID,
 	}
 
 	fields.Status = nil
@@ -293,7 +303,67 @@ func applyGarageFields(g *domain.Garage, f GarageFields) error {
 		return err
 	}
 
+	if err := applyLegalProfile(g, f); err != nil {
+		return err
+	}
+
 	return applyConfiguration(g, f)
+}
+
+// applyLegalProfile sets the garage's legal identity (FR-TEN-06).
+func applyLegalProfile(g *domain.Garage, f GarageFields) error {
+	for _, field := range []struct {
+		name  string
+		value *string
+		dst   **string
+		max   int
+	}{
+		{"legalName", f.LegalName, &g.LegalName, domain.MaxLegalNameLength},
+		{"legalAddress", f.LegalAddress, &g.LegalAddress, domain.MaxLegalAddressLength},
+		{"representative", f.Representative, &g.Representative, domain.MaxLegalNameLength},
+	} {
+		if field.value == nil {
+			continue
+		}
+
+		value := optional(*field.value)
+		if value != nil && utf8.RuneCountInString(*value) > field.max {
+			return apperror.Validation(field.name, apperror.IssueTooLong, field.name+" is too long")
+		}
+
+		*field.dst = value
+	}
+
+	if f.Bank == nil {
+		return nil
+	}
+
+	bank := domain.BankDetails{}
+
+	for _, field := range []struct {
+		name string
+		in   *string
+		out  **string
+	}{
+		{"bank.bankName", f.Bank.BankName, &bank.BankName},
+		{"bank.accountNumber", f.Bank.AccountNumber, &bank.AccountNumber},
+		{"bank.accountHolder", f.Bank.AccountHolder, &bank.AccountHolder},
+	} {
+		if field.in == nil {
+			continue
+		}
+
+		value := optional(*field.in)
+		if value != nil && utf8.RuneCountInString(*value) > domain.MaxBankFieldLength {
+			return apperror.Validation(field.name, apperror.IssueTooLong, field.name+" is too long")
+		}
+
+		*field.out = value
+	}
+
+	g.Bank = bank
+
+	return nil
 }
 
 func applyContact(g *domain.Garage, f GarageFields) error {
@@ -382,6 +452,14 @@ func applyDocumentConfiguration(g *domain.Garage, f GarageFields) error {
 		}
 
 		g.SettlementNumberTemplate = *f.SettlementNumberTemplate
+	}
+
+	if f.PaymentVoucherNumberTemplate != nil {
+		if !domain.ValidNumberingTemplate(*f.PaymentVoucherNumberTemplate) {
+			return apperror.Validation("numbering.paymentVoucher", apperror.IssueInvalid, "numbering template is invalid")
+		}
+
+		g.PaymentVoucherNumberTemplate = *f.PaymentVoucherNumberTemplate
 	}
 
 	if f.DefaultQuoteApprovalMode != nil {

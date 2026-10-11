@@ -149,13 +149,14 @@ func actorRef(userID string) *string {
 }
 
 var (
-	notFoundErrors     = []error{domain.ErrCustomerNotFound, domain.ErrVehicleNotFound, domain.ErrLinkNotFound}
+	notFoundErrors     = []error{domain.ErrCustomerNotFound, domain.ErrVehicleNotFound, domain.ErrLinkNotFound, domain.ErrTaxProfileNotFound}
 	conflictErrors     = []error{domain.ErrPhoneTaken, domain.ErrLicensePlateTaken, domain.ErrAlreadyLinked}
 	preconditionErrors = []error{domain.ErrNoMatchingUser, domain.ErrNoPendingRequest, domain.ErrLinkNotOpen}
 	invalidErrors      = []error{
 		domain.ErrFullNameRequired, domain.ErrLicensePlateRequired, domain.ErrCustomerRequired,
 		phone.ErrInvalid, email.ErrInvalid, domain.ErrInvalidLicensePlate, domain.ErrInvalidYear,
-		domain.ErrFieldTooLong,
+		domain.ErrFieldTooLong, domain.ErrLegalNameRequired, domain.ErrInvalidTaxProfile, domain.ErrInvalidTaxID,
+		domain.ErrPersonalProfileTaken,
 	}
 )
 

@@ -244,8 +244,8 @@ func (uc *TenantUseCase) setLogo(ctx context.Context, garageID string, key *stri
 	}
 
 	if old != nil {
-		if err := uc.Logos.RemoveByKey(ctx, garageID, actor, *old); err != nil {
-			slog.Warn("tenant: removing the old logo failed", "key", *old, "error", err)
+		if err := uc.Logos.Retire(ctx, garageID, actor, *old); err != nil {
+			slog.Warn("tenant: retiring the old logo failed", "key", *old, "error", err)
 		}
 	}
 

@@ -134,12 +134,12 @@ func (_c *MockLogoFiles_PublicURL_Call) RunAndReturn(run func(key string) string
 	return _c
 }
 
-// RemoveByKey provides a mock function for the type MockLogoFiles
-func (_mock *MockLogoFiles) RemoveByKey(ctx context.Context, garageID string, actorID string, key string) error {
+// Retire provides a mock function for the type MockLogoFiles
+func (_mock *MockLogoFiles) Retire(ctx context.Context, garageID string, actorID string, key string) error {
 	ret := _mock.Called(ctx, garageID, actorID, key)
 
 	if len(ret) == 0 {
-		panic("no return value specified for RemoveByKey")
+		panic("no return value specified for Retire")
 	}
 
 	var r0 error
@@ -151,21 +151,21 @@ func (_mock *MockLogoFiles) RemoveByKey(ctx context.Context, garageID string, ac
 	return r0
 }
 
-// MockLogoFiles_RemoveByKey_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RemoveByKey'
-type MockLogoFiles_RemoveByKey_Call struct {
+// MockLogoFiles_Retire_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Retire'
+type MockLogoFiles_Retire_Call struct {
 	*mock.Call
 }
 
-// RemoveByKey is a helper method to define mock.On call
+// Retire is a helper method to define mock.On call
 //   - ctx context.Context
 //   - garageID string
 //   - actorID string
 //   - key string
-func (_e *MockLogoFiles_Expecter) RemoveByKey(ctx any, garageID any, actorID any, key any) *MockLogoFiles_RemoveByKey_Call {
-	return &MockLogoFiles_RemoveByKey_Call{Call: _e.mock.On("RemoveByKey", ctx, garageID, actorID, key)}
+func (_e *MockLogoFiles_Expecter) Retire(ctx any, garageID any, actorID any, key any) *MockLogoFiles_Retire_Call {
+	return &MockLogoFiles_Retire_Call{Call: _e.mock.On("Retire", ctx, garageID, actorID, key)}
 }
 
-func (_c *MockLogoFiles_RemoveByKey_Call) Run(run func(ctx context.Context, garageID string, actorID string, key string)) *MockLogoFiles_RemoveByKey_Call {
+func (_c *MockLogoFiles_Retire_Call) Run(run func(ctx context.Context, garageID string, actorID string, key string)) *MockLogoFiles_Retire_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -193,12 +193,12 @@ func (_c *MockLogoFiles_RemoveByKey_Call) Run(run func(ctx context.Context, gara
 	return _c
 }
 
-func (_c *MockLogoFiles_RemoveByKey_Call) Return(err error) *MockLogoFiles_RemoveByKey_Call {
+func (_c *MockLogoFiles_Retire_Call) Return(err error) *MockLogoFiles_Retire_Call {
 	_c.Call.Return(err)
 	return _c
 }
 
-func (_c *MockLogoFiles_RemoveByKey_Call) RunAndReturn(run func(ctx context.Context, garageID string, actorID string, key string) error) *MockLogoFiles_RemoveByKey_Call {
+func (_c *MockLogoFiles_Retire_Call) RunAndReturn(run func(ctx context.Context, garageID string, actorID string, key string) error) *MockLogoFiles_Retire_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -115,6 +115,7 @@ func TestRepairOrderUseCase_CreateFromQuote(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.RepairOrders.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
 
 		ro, err := uc.CreateFromQuote(t.Context(), usecase.CreateFromQuoteRequest{
@@ -125,6 +126,7 @@ func TestRepairOrderUseCase_CreateFromQuote(t *testing.T) {
 		require.Equal(t, domain.StatusOpen, ro.Status)
 		require.Equal(t, int64(730_000), ro.TotalAmount)
 		require.Equal(t, quoteID, *ro.QuoteID)
+		require.Equal(t, "Cong ty TNHH An Phat", ro.Issuer.Name, "the garage's identity is snapshotted")
 		require.Len(t, ro.Lines, 2)
 		require.NotEmpty(t, ro.ID)
 		require.NotEmpty(t, ro.Lines[0].ID)
@@ -135,6 +137,7 @@ func TestRepairOrderUseCase_CreateFromQuote(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.RepairOrders.EXPECT().Create(mock.Anything, mock.Anything).Return(domain.ErrAlreadyConverted).Once()
 
 		_, err := uc.CreateFromQuote(t.Context(), usecase.CreateFromQuoteRequest{

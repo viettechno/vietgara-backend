@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/jackc/pgx/v5"
@@ -15,13 +16,18 @@ import (
 func (r *PostgresRepository) Create(ctx context.Context, q *domain.Quote) error {
 	q0 := platformdb.QuerierFromContext(ctx, r.pool)
 
-	err := q0.QueryRow(ctx, `
+	issuer, err := json.Marshal(q.Issuer)
+	if err != nil {
+		return err
+	}
+
+	err = q0.QueryRow(ctx, `
 		INSERT INTO quotes (id, garage_id, customer_id, vehicle_id, customer_name, vehicle_license_plate, number, status,
-			approval_mode, notes, total_amount, created_by, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+			approval_mode, notes, total_amount, issuer, created_by, updated_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		RETURNING created_at, updated_at`,
 		q.ID, q.GarageID, q.CustomerID, q.VehicleID, q.CustomerName, q.VehicleLicensePlate, q.Number, string(q.Status),
-		string(q.ApprovalMode), q.Notes, q.TotalAmount, q.CreatedBy, q.UpdatedBy,
+		string(q.ApprovalMode), q.Notes, q.TotalAmount, issuer, q.CreatedBy, q.UpdatedBy,
 	).Scan(&q.CreatedAt, &q.UpdatedAt)
 	if err != nil {
 		return err
@@ -131,15 +137,21 @@ func (r *PostgresRepository) Save(ctx context.Context, q *domain.Quote) error {
 func (r *PostgresRepository) saveScalars(ctx context.Context, q *domain.Quote) error {
 	querier := platformdb.QuerierFromContext(ctx, r.pool)
 
+	issuer, err := json.Marshal(q.Issuer)
+	if err != nil {
+		return err
+	}
+
 	row := querier.QueryRow(ctx, `
 		UPDATE quotes SET customer_id = $3, vehicle_id = $4, customer_name = $5, vehicle_license_plate = $6,
 			status = $7, approval_mode = $8, notes = $9, total_amount = $10, public_token_hash = $11,
-			public_token_expires_at = $12, sent_at = $13, decided_at = $14, converted_at = $15, updated_by = $16
+			public_token_expires_at = $12, sent_at = $13, decided_at = $14, converted_at = $15, updated_by = $16,
+			issuer = $17
 		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL
 		RETURNING updated_at`,
 		q.GarageID, q.ID, q.CustomerID, q.VehicleID, q.CustomerName, q.VehicleLicensePlate, string(q.Status),
 		string(q.ApprovalMode), q.Notes, q.TotalAmount, q.PublicTokenHash, q.PublicTokenExpiresAt, q.SentAt,
-		q.DecidedAt, q.ConvertedAt, q.UpdatedBy,
+		q.DecidedAt, q.ConvertedAt, q.UpdatedBy, issuer,
 	)
 
 	return scanWrite(row, domain.ErrQuoteNotFound, &q.UpdatedAt)

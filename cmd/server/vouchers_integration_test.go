@@ -14,6 +14,7 @@ import (
 	billingRepository "github.com/viettechno/vietgara-backend/internal/billing/repository"
 	dbpkg "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/platform/db/pgtest"
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 // TestPaymentVoucherPersistence runs a payment voucher through the real
@@ -42,8 +43,8 @@ func TestPaymentVoucherPersistence(t *testing.T) {
 		exec(`INSERT INTO vehicles (id, garage_id, customer_id, license_plate) VALUES ($1, $2, $1, '51F-111.11')`, roID, g[0])
 		exec(`INSERT INTO repair_orders (id, garage_id, vehicle_id, customer_name, vehicle_license_plate, number)
 			VALUES ($1, $2, $1, 'An', '51F-111.11', 'LSC-1')`, roID, g[0])
-		exec(`INSERT INTO settlements (id, garage_id, repair_order_id, customer_name, vehicle_license_plate, number, total_amount)
-			VALUES ($1, $2, $3, 'An', '51F-111.11', $4, 1000000)`, g[1], g[0], roID, g[2])
+		exec(`INSERT INTO settlements (id, garage_id, repair_order_id, customer_name, vehicle_license_plate, number, total_amount, issuer)
+			VALUES ($1, $2, $3, 'An', '51F-111.11', $4, 1000000, '{"name":"Cong ty TNHH An Phat"}')`, g[1], g[0], roID, g[2])
 	}
 
 	pool := pg.AppPool(t)
@@ -59,7 +60,7 @@ func TestPaymentVoucherPersistence(t *testing.T) {
 			ID: uuid.NewString(), Amount: 300_000, Method: billingDomain.MethodCash, VoucherNumber: number,
 			PayerName: "Cong ty Van Tai A", PayerAddress: "5 Le Loi", Reason: "Thanh toán quyết toán QT-1",
 			CollectorName: "Le Thu Ngan", CreatedBy: &userID,
-			Issuer: billingDomain.Issuer{Name: "Cong ty TNHH An Phat", TaxCode: "0301234567", BankName: "VCB", LogoKey: "k.png"},
+			Issuer: issuer.Issuer{Name: "Cong ty TNHH An Phat", TaxCode: "0301234567", BankName: "VCB", LogoKey: "k.png"},
 		}
 	}
 
@@ -81,6 +82,7 @@ func TestPaymentVoucherPersistence(t *testing.T) {
 		assert.Equal(t, "0301234567", p.Issuer.TaxCode)
 		assert.Equal(t, "k.png", p.Issuer.LogoKey)
 		assert.Equal(t, int64(300_000), s.PaidAmount)
+		assert.Equal(t, "Cong ty TNHH An Phat", s.Issuer.Name, "the settlement keeps the identity it was created with")
 
 		return nil
 	}))

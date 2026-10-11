@@ -5,6 +5,8 @@ package domain
 import (
 	"errors"
 	"time"
+
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 // SettlementStatus is a settlement's collection status, derived from the
@@ -54,21 +56,6 @@ func (m PaymentMethod) IsValid() bool {
 	}
 }
 
-// Issuer is the garage's legal identity (FR-TEN-06) as it was when a
-// document was issued: a later change of the garage's profile never
-// rewrites it. Persisted as the settlement_payments.issuer JSON document.
-type Issuer struct {
-	Name           string `json:"name"`
-	Address        string `json:"address,omitempty"`
-	TaxCode        string `json:"tax_code,omitempty"`
-	Representative string `json:"representative,omitempty"`
-	BankName       string `json:"bank_name,omitempty"`
-	AccountNumber  string `json:"account_number,omitempty"`
-	AccountHolder  string `json:"account_holder,omitempty"`
-	// LogoKey is the object key of the logo at that time.
-	LogoKey string `json:"logo_key,omitempty"`
-}
-
 // Payment is one amount recorded as collected against a settlement
 // (FR-BIL-03); a settlement may receive several. The customer is the only
 // payer. Every payment is a payment voucher (phiếu thu, FR-BIL-05).
@@ -86,7 +73,7 @@ type Payment struct {
 	Reason       string
 	// CollectorName is the staff member who collected the money.
 	CollectorName string
-	Issuer        Issuer
+	Issuer        issuer.Issuer
 	CreatedBy     *string
 	CreatedAt     time.Time
 }
@@ -112,6 +99,9 @@ type Settlement struct {
 	Number              string
 	// TotalAmount is copied from the repair order's total at creation.
 	TotalAmount int64
+	// Issuer is the garage's legal identity when the settlement was created
+	// (FR-TEN-06); the receipt prints it.
+	Issuer issuer.Issuer
 	// PaidAmount is the running total of Payments.
 	PaidAmount int64
 	Status     SettlementStatus

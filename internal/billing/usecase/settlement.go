@@ -94,7 +94,7 @@ func (uc *SettlementUseCase) Create(ctx context.Context, req CreateSettlementReq
 	s := &domain.Settlement{
 		ID: uuid.NewString(), GarageID: req.GarageID, RepairOrderID: req.RepairOrderID,
 		VehicleLicensePlate: ro.VehicleLicensePlate, CustomerName: ro.CustomerName, Number: number,
-		TotalAmount: ro.TotalAmount, Status: domain.StatusPending,
+		TotalAmount: ro.TotalAmount, Status: domain.StatusPending, Issuer: garage.Issuer,
 		CreatedBy: actorRef(req.ActorID), UpdatedBy: actorRef(req.ActorID),
 	}
 	s.DeriveStatus()

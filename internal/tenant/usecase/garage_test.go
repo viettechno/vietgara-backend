@@ -173,13 +173,13 @@ func TestLogo(t *testing.T) {
 	g, err = e.UC.UploadGarageLogo(ctx, id, png, "image/png")
 	require.NoError(t, err)
 	assert.NotEqual(t, first, *g.Garage.LogoKey)
-	assert.Equal(t, []string{first}, e.Logos.Removed, "old logo removed")
+	assert.Equal(t, []string{first}, e.Logos.Retired, "old logo retired")
 
 	g, err = e.UC.DeleteGarageLogo(ctx, id)
 	require.NoError(t, err)
 	assert.Nil(t, g.Garage.LogoKey)
 	assert.Nil(t, e.UC.LogoURL(g.Garage.LogoKey))
-	assert.Len(t, e.Logos.Removed, 2)
+	assert.Len(t, e.Logos.Retired, 2)
 
 	for _, tc := range []struct {
 		content []byte

@@ -7,6 +7,7 @@ import (
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 	"github.com/viettechno/vietgara-backend/internal/quote/domain"
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 // ListFilter selects one page of a garage's quotes.
@@ -80,6 +81,8 @@ type GarageInfo struct {
 	DefaultQuoteApprovalMode  domain.ApprovalMode
 	// Name is the garage's display name, shown on the public quote page.
 	Name string
+	// Issuer is the legal identity a quote snapshots (FR-TEN-06).
+	Issuer issuer.Issuer
 }
 
 // GarageReader reads a garage's numbering configuration; implemented by an

@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	billingDomain "github.com/viettechno/vietgara-backend/internal/billing/domain"
 	billingRepository "github.com/viettechno/vietgara-backend/internal/billing/repository"
 	billingUsecase "github.com/viettechno/vietgara-backend/internal/billing/usecase"
 	customerDomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
@@ -38,6 +37,7 @@ import (
 	tenantUsecase "github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 	emailpkg "github.com/viettechno/vietgara-backend/pkg/email"
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 	"github.com/viettechno/vietgara-backend/pkg/lifecycle"
 	phonepkg "github.com/viettechno/vietgara-backend/pkg/phone"
 )
@@ -194,7 +194,7 @@ func (g quoteGarages) Get(ctx context.Context, garageID string) (quoteUsecase.Ga
 	return quoteUsecase.GarageInfo{
 		OwnerUserID: garage.OwnerUserID, Timezone: garage.Timezone, Name: garage.Name,
 		QuoteNumberTemplate: garage.QuoteNumberTemplate, RepairOrderNumberTemplate: garage.RepairOrderNumberTemplate,
-		DefaultQuoteApprovalMode: mode,
+		DefaultQuoteApprovalMode: mode, Issuer: issuerOf(garage),
 	}, nil
 }
 
@@ -265,8 +265,24 @@ func (g repairOrderGarages) Get(ctx context.Context, garageID string) (repairord
 
 	return repairorderUsecase.GarageInfo{
 		OwnerUserID: garage.OwnerUserID, Timezone: garage.Timezone,
-		RepairOrderNumberTemplate: garage.RepairOrderNumberTemplate,
+		RepairOrderNumberTemplate: garage.RepairOrderNumberTemplate, Issuer: issuerOf(garage),
 	}, nil
+}
+
+// issuerOf is the garage's legal identity (FR-TEN-06) for a document to
+// snapshot: the legal name and address, falling back to the trading ones.
+func issuerOf(garage *tenantDomain.Garage) issuer.Issuer {
+	return issuer.Issuer{
+		Name:           firstNonEmpty(deref(garage.LegalName), garage.Name),
+		Address:        firstNonEmpty(deref(garage.LegalAddress), deref(garage.Address)),
+		Phone:          deref(garage.Phone),
+		TaxCode:        deref(garage.TaxCode),
+		Representative: deref(garage.Representative),
+		BankName:       deref(garage.Bank.BankName),
+		AccountNumber:  deref(garage.Bank.AccountNumber),
+		AccountHolder:  deref(garage.Bank.AccountHolder),
+		LogoKey:        deref(garage.LogoKey),
+	}
 }
 
 // vehicleHistory gives the Customer module a read-only view of a
@@ -362,8 +378,8 @@ func (l tenantLogos) StoreLogo(ctx context.Context, garageID, actorID string, co
 // Discard removes the object of an upload whose registration rolled back.
 func (l tenantLogos) Discard(ctx context.Context, key string) { _ = l.store.Delete(ctx, key) }
 
-func (l tenantLogos) RemoveByKey(ctx context.Context, garageID, actorID, key string) error {
-	return l.files.RemoveByKey(ctx, garageID, actorID, key)
+func (l tenantLogos) Retire(ctx context.Context, garageID, actorID, key string) error {
+	return l.files.RetireByKey(ctx, garageID, actorID, key)
 }
 
 func (l tenantLogos) PublicURL(key string) string { return l.files.PublicURL(key) }
@@ -433,22 +449,11 @@ func (g billingGarages) Get(ctx context.Context, garageID string) (billingUsecas
 		return billingUsecase.GarageInfo{}, err
 	}
 
-	issuer := billingDomain.Issuer{
-		Name:           firstNonEmpty(deref(garage.LegalName), garage.Name),
-		Address:        firstNonEmpty(deref(garage.LegalAddress), deref(garage.Address)),
-		TaxCode:        deref(garage.TaxCode),
-		Representative: deref(garage.Representative),
-		BankName:       deref(garage.Bank.BankName),
-		AccountNumber:  deref(garage.Bank.AccountNumber),
-		AccountHolder:  deref(garage.Bank.AccountHolder),
-		LogoKey:        deref(garage.LogoKey),
-	}
-
 	return billingUsecase.GarageInfo{
 		OwnerUserID: garage.OwnerUserID, Timezone: garage.Timezone,
 		SettlementNumberTemplate: garage.SettlementNumberTemplate,
 		VoucherNumberTemplate:    garage.PaymentVoucherNumberTemplate,
-		Issuer:                   issuer,
+		Issuer:                   issuerOf(garage),
 	}, nil
 }
 
@@ -499,6 +504,7 @@ func (q documentQuotes) Get(ctx context.Context, garageID, quoteID string) (docu
 	return documentUsecase.QuoteInfo{
 		Number: quote.Number, Status: string(quote.Status), CustomerName: quote.CustomerName,
 		VehiclePlate: quote.VehicleLicensePlate, Notes: quote.Notes, Lines: lines, TotalAmount: quote.TotalAmount,
+		Issuer: quote.Issuer,
 	}, nil
 }
 
@@ -527,7 +533,7 @@ func (r documentRepairOrders) Get(ctx context.Context, garageID, repairOrderID s
 
 	return documentUsecase.RepairOrderInfo{
 		Number: ro.Number, Status: string(ro.Status), CustomerName: ro.CustomerName, VehiclePlate: ro.VehicleLicensePlate,
-		Lines: lines, TotalAmount: ro.TotalAmount,
+		Lines: lines, TotalAmount: ro.TotalAmount, Issuer: ro.Issuer,
 	}, nil
 }
 
@@ -554,7 +560,7 @@ func (s documentSettlements) Get(ctx context.Context, garageID, settlementID str
 	return documentUsecase.SettlementInfo{
 		Number: settlement.Number, Status: string(settlement.Status), CustomerName: settlement.CustomerName,
 		VehiclePlate: settlement.VehicleLicensePlate, TotalAmount: settlement.TotalAmount,
-		PaidAmount: settlement.PaidAmount, Payments: payments,
+		PaidAmount: settlement.PaidAmount, Payments: payments, Issuer: settlement.Issuer,
 	}, nil
 }
 
@@ -640,6 +646,12 @@ func (g documentGarages) Get(ctx context.Context, garageID string) (documentUsec
 	}
 
 	return info, nil
+}
+
+// Logo reads a logo by its object key; the garage's own current logo or the
+// one a document snapshotted.
+func (g documentGarages) Logo(ctx context.Context, key string) ([]byte, error) {
+	return g.store.Get(ctx, key)
 }
 
 func firstNonEmpty(values ...string) string {

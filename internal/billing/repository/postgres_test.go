@@ -12,6 +12,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/billing/repository"
 	"github.com/viettechno/vietgara-backend/internal/billing/usecase"
 	"github.com/viettechno/vietgara-backend/internal/platform/db/dbtest"
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 var (
@@ -36,7 +37,7 @@ func newSettlement() *domain.Settlement {
 func settlementRow() []any {
 	return []any{
 		settlementID, garageID, repairOrderID, "51F-123.45", "An Nguyen", "QT-202609-0001", int64(1_000_000),
-		int64(0), "pending", nil, nil, now, now,
+		int64(0), []byte(`{"name":"Cong ty An Phat","tax_code":"0301234567"}`), "pending", nil, nil, now, now,
 	}
 }
 
@@ -273,7 +274,7 @@ func TestPostgresRepository_RecordPayment(t *testing.T) {
 		repo := repository.NewPostgresRepository(nil)
 		payment := &domain.Payment{
 			ID: "p-1", Amount: 300_000, Method: domain.MethodCash, VoucherNumber: "PT-1", PayerName: "An", Reason: "r",
-			CollectorName: "Ngan", Issuer: domain.Issuer{Name: "Gara", LogoKey: "k"},
+			CollectorName: "Ngan", Issuer: issuer.Issuer{Name: "Gara", LogoKey: "k"},
 		}
 
 		tx := dbtest.New(t).

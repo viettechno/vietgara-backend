@@ -36,16 +36,17 @@ func NewPostgresRepository(pool *platformdb.Pool) *PostgresRepository {
 }
 
 const settlementColumns = `id, garage_id, repair_order_id, vehicle_license_plate, customer_name, number, total_amount,
-	paid_amount, status, created_by, updated_by, created_at, updated_at`
+	paid_amount, issuer, status, created_by, updated_by, created_at, updated_at`
 
 func scanSettlement(row pgx.Row) (*domain.Settlement, error) {
 	var (
 		s      domain.Settlement
 		status string
+		issuer []byte
 	)
 
 	err := row.Scan(&s.ID, &s.GarageID, &s.RepairOrderID, &s.VehicleLicensePlate, &s.CustomerName, &s.Number,
-		&s.TotalAmount, &s.PaidAmount, &status, &s.CreatedBy, &s.UpdatedBy, &s.CreatedAt, &s.UpdatedAt)
+		&s.TotalAmount, &s.PaidAmount, &issuer, &status, &s.CreatedBy, &s.UpdatedBy, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrSettlementNotFound
@@ -55,6 +56,12 @@ func scanSettlement(row pgx.Row) (*domain.Settlement, error) {
 	}
 
 	s.Status = domain.SettlementStatus(status)
+
+	if len(issuer) > 0 {
+		if err := json.Unmarshal(issuer, &s.Issuer); err != nil {
+			return nil, err
+		}
+	}
 
 	return &s, nil
 }
@@ -100,16 +107,21 @@ func scanPayment(row pgx.Row) (domain.Payment, error) {
 func (r *PostgresRepository) Create(ctx context.Context, s *domain.Settlement) error {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
+	issuer, err := json.Marshal(s.Issuer)
+	if err != nil {
+		return err
+	}
+
 	row := q.QueryRow(ctx, `
 		INSERT INTO settlements (id, garage_id, repair_order_id, vehicle_license_plate, customer_name, number,
-			total_amount, status, created_by, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			total_amount, issuer, status, created_by, updated_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING created_at, updated_at`,
 		s.ID, s.GarageID, s.RepairOrderID, s.VehicleLicensePlate, s.CustomerName, s.Number, s.TotalAmount,
-		string(s.Status), s.CreatedBy, s.UpdatedBy,
+		issuer, string(s.Status), s.CreatedBy, s.UpdatedBy,
 	)
 
-	err := row.Scan(&s.CreatedAt, &s.UpdatedAt)
+	err = row.Scan(&s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		if isUniqueViolation(err, "settlements_repair_order_id_unique") {
 			return domain.ErrAlreadySettled

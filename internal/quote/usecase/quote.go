@@ -112,7 +112,7 @@ func (uc *QuoteUseCase) Create(ctx context.Context, req CreateQuoteRequest) (*do
 	q := &domain.Quote{
 		ID: uuid.NewString(), GarageID: req.GarageID, CustomerID: req.CustomerID, CustomerName: customerName,
 		VehicleID: req.VehicleID, VehicleLicensePlate: plate, Number: number, Status: domain.StatusDraft,
-		ApprovalMode: mode, Lines: lines, Notes: strings.TrimSpace(req.Notes),
+		ApprovalMode: mode, Lines: lines, Notes: strings.TrimSpace(req.Notes), Issuer: garage.Issuer,
 		CreatedBy: actorRef(req.ActorID), UpdatedBy: actorRef(req.ActorID),
 	}
 	q.Recalculate()

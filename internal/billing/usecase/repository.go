@@ -13,6 +13,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/billing/domain"
 
 	"github.com/viettechno/vietgara-backend/internal/platform/audit"
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 // ListFilter selects one page of a garage's settlements.
@@ -78,7 +79,7 @@ type GarageInfo struct {
 	// VoucherNumberTemplate numbers payment vouchers (FR-BIL-05).
 	VoucherNumberTemplate string
 	// Issuer is the legal identity a voucher snapshots when issued.
-	Issuer domain.Issuer
+	Issuer issuer.Issuer
 }
 
 // GarageReader reads a garage's numbering and owner configuration;

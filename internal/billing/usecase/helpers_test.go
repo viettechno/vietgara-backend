@@ -14,6 +14,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/mocks"
 	"github.com/viettechno/vietgara-backend/internal/platform/audit"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 const (
@@ -74,7 +75,7 @@ func defaultGarage() usecase.GarageInfo {
 	return usecase.GarageInfo{
 		OwnerUserID: ownerID, Timezone: "Asia/Ho_Chi_Minh", SettlementNumberTemplate: "QT-{YYYY}{MM}-{SEQ:4}",
 		VoucherNumberTemplate: "PT-{YYYY}{MM}-{SEQ:4}",
-		Issuer:                domain.Issuer{Name: "Cong ty TNHH An Phat", TaxCode: "0301234567", LogoKey: "garages/g/logo/g/l.png"},
+		Issuer:                issuer.Issuer{Name: "Cong ty TNHH An Phat", TaxCode: "0301234567", LogoKey: "garages/g/logo/g/l.png"},
 	}
 }
 

@@ -27,6 +27,9 @@ CREATE TABLE settlements (
     total_amount BIGINT NOT NULL DEFAULT 0,
     -- Running total from settlement_payments (FR-BIL-03).
     paid_amount BIGINT NOT NULL DEFAULT 0,
+    -- The garage's legal identity (FR-TEN-06) when the settlement was
+    -- created: the receipt prints it.
+    issuer JSONB NOT NULL DEFAULT '{}'::jsonb,
     status settlement_status NOT NULL DEFAULT 'pending',
     created_by UUID,
     updated_by UUID,

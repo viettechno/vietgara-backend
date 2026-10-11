@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 // Field length limits shared by the module's use cases.
@@ -117,11 +119,14 @@ type RepairOrder struct {
 	Status              RepairOrderStatus
 	TotalAmount         int64
 	Lines               []Line
-	ClosedAt            *time.Time
-	CreatedBy           *string
-	UpdatedBy           *string
-	CreatedAt           time.Time
-	UpdatedAt           time.Time
+	// Issuer is the garage's legal identity when the repair order was
+	// created (FR-TEN-06); its PDF prints it.
+	Issuer    issuer.Issuer
+	ClosedAt  *time.Time
+	CreatedBy *string
+	UpdatedBy *string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // Recalculate sums ro.Lines into ro.TotalAmount.

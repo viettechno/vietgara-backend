@@ -349,6 +349,16 @@ func (u customerUsage) VehicleInUse(ctx context.Context, garageID, vehicleID str
 	return u.CustomerInUse(ctx, garageID, "", []string{vehicleID})
 }
 
+// taxProfileUsage tells the Customer module whether a document was billed to
+// a tax profile (FR-CAT-07). Nothing refers to profiles until billing
+// parties arrive on quotes and settlements, so a profile is always deleted
+// for now; that check is added here.
+type taxProfileUsage struct{}
+
+func (taxProfileUsage) TaxProfileInUse(context.Context, string, string) (bool, error) {
+	return false, nil
+}
+
 // supplierUsage tells the Supplier module whether documents refer to a
 // supplier. Nothing does until goods receipts arrive (Phase 7), so a
 // supplier is always deleted for now; the goods receipt check is added here.

@@ -3,8 +3,9 @@
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
 -- Create customers table
--- phone is stored normalized (digits only, "+84" folded to "0") by the
--- application so the per-garage uniqueness check below is meaningful.
+-- phone is stored normalized to E.164 ("+84901234567", pkg/phone) by the
+-- application so the per-garage uniqueness check below is meaningful and
+-- a customer's phone matches a user's verified phone (FR-CUS-06).
 -- consent_log is an append-only JSON array of personal-data consent
 -- decisions (Decree 13/2023/ND-CP): [{"granted", "recorded_at", "recorded_by"}].
 -- Rows are soft-deleted (deleted_at) because quotes/repair orders keep

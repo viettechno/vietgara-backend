@@ -45,7 +45,7 @@ func TestSupplierRepository(t *testing.T) {
 		}))
 	}
 
-	person, phone, bank := "Ms. Lan", "0281234567", "Vietcombank"
+	person, phone, bank := "Ms. Lan", "+84281234567", "Vietcombank"
 	supplier := &domain.Supplier{
 		ID: uuid.NewString(), GarageID: garageA, Name: "Phu Tung Sai Gon",
 		Contact: domain.Contact{ContactPerson: &person, Phone: &phone},
@@ -66,7 +66,7 @@ func TestSupplierRepository(t *testing.T) {
 		require.Equal(t, 2, total)
 		assert.Equal(t, "Bao Duong Xe", list[0].Name, "ordered by name")
 
-		for _, query := range []string{"lan", "028 123", "sai gon"} {
+		for _, query := range []string{"lan", "028 123", "+84 28 123", "sai gon"} {
 			_, total, err := repo.List(ctx, garageA, usecase.ListFilter{Query: query, Limit: 10})
 			require.NoError(t, err)
 			assert.Equal(t, 1, total, query)

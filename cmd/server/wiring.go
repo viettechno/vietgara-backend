@@ -31,6 +31,8 @@ import (
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 	tenantUsecase "github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	emailpkg "github.com/viettechno/vietgara-backend/pkg/email"
+	phonepkg "github.com/viettechno/vietgara-backend/pkg/phone"
 )
 
 // The adapters below connect modules through narrow interfaces owned by the
@@ -44,8 +46,8 @@ type userDirectory struct {
 }
 
 func (a userDirectory) FindByEmail(ctx context.Context, email string) (*tenantUsecase.UserSummary, error) {
-	normalized, ok := identityDomain.NormalizeEmail(email)
-	if !ok {
+	normalized, err := emailpkg.Normalize(email)
+	if err != nil {
 		return nil, tenantDomain.ErrUserNotFound
 	}
 
@@ -53,8 +55,8 @@ func (a userDirectory) FindByEmail(ctx context.Context, email string) (*tenantUs
 }
 
 func (a userDirectory) FindByPhone(ctx context.Context, phone string) (*tenantUsecase.UserSummary, error) {
-	normalized, ok := identityDomain.NormalizePhone(phone)
-	if !ok {
+	normalized, err := phonepkg.Normalize(phone)
+	if err != nil {
 		return nil, tenantDomain.ErrUserNotFound
 	}
 

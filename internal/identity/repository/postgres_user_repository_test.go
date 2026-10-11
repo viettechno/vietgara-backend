@@ -20,7 +20,7 @@ var (
 )
 
 func userRow() []any {
-	return []any{"user-1", "owner@example.com", "0901234567", "google", "g-sub", "Minh", nil, "active", now, "en", true, now, now}
+	return []any{"user-1", "owner@example.com", "+84901234567", "google", "g-sub", "Minh", nil, "active", now, "en", true, now, now}
 }
 
 func TestFinders(t *testing.T) {
@@ -31,8 +31,8 @@ func TestFinders(t *testing.T) {
 	tx := dbtest.New(t).
 		ExpectQueryRow("a.id = $1", dbtest.Row(userRow()...)).
 		ExpectQueryRow("lower(a.email) = lower($1)", dbtest.ErrRow(pgx.ErrNoRows)).
-		ExpectQueryRow("a.phone = ANY($1)", dbtest.ErrRow(errBoom)).WithArgs(func(args []any) {
-		assert.Equal(t, []string{"0901234567", "+84901234567"}, args[0])
+		ExpectQueryRow("a.phone = $1", dbtest.ErrRow(errBoom)).WithArgs(func(args []any) {
+		assert.Equal(t, []any{"+84901234567"}, args)
 	}).
 		ExpectQueryRow("a.identity_platform_uid = $1", dbtest.Row(userRow()...))
 	ctx := tx.Context(t.Context())
@@ -49,7 +49,7 @@ func TestFinders(t *testing.T) {
 	_, err = repo.FindByEmail(ctx, " owner@example.com ")
 	require.ErrorIs(t, err, domain.ErrUserNotFound)
 
-	_, err = repo.FindByPhone(ctx, "0901234567")
+	_, err = repo.FindByPhone(ctx, "+84901234567")
 	require.ErrorIs(t, err, errBoom)
 
 	_, err = repo.FindByGoogleSubject(ctx, "g-sub")

@@ -99,7 +99,7 @@ func TestUseCase_Create(t *testing.T) {
 			assert.Equal(t, "Phu Tung Sai Gon", s.Name)
 			assert.Equal(t, "01-001 ABC", *s.TaxCode)
 			assert.Equal(t, "Mr. Minh", *s.Contact.ContactPerson)
-			assert.Equal(t, "02812345678", *s.Contact.Phone)
+			assert.Equal(t, "+842812345678", *s.Contact.Phone)
 			assert.Equal(t, "sales@phutung.vn", *s.Contact.Email)
 			assert.Nil(t, s.Contact.Address)
 			assert.Equal(t, "Vietcombank", *s.Bank.BankName)
@@ -161,7 +161,7 @@ func TestUseCase_Update(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Nil(t, s.Contact.ContactPerson, "a new contact replaces the old one")
-			assert.Equal(t, "0909123456", *s.Contact.Phone)
+			assert.Equal(t, "+84909123456", *s.Contact.Phone)
 			assert.Nil(t, s.Bank.BankName, "a new bank block replaces the old one")
 			assert.Equal(t, "123", *s.Bank.AccountNumber)
 			assert.Equal(t, "VIP", *s.Note)

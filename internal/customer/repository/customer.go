@@ -17,14 +17,16 @@ const (
 		(SELECT count(*) FROM vehicles v WHERE v.customer_id = c.id AND v.deleted_at IS NULL)::int`
 
 	// customerSearch filters live customers of garage $1. $2 is an ILIKE
-	// pattern over name/email and $3 a compact pattern over phone and the
-	// plates of the customer's vehicles; "" disables either filter.
+	// pattern over name/email, $3 a compact pattern over the plates of the
+	// customer's vehicles and $4 the digits to look for in the phone (stored
+	// as E.164, see pkg/phone); "" disables either filter.
 	customerSearch = ` FROM customers c
 		WHERE c.garage_id = $1 AND c.deleted_at IS NULL
 		AND ($2::text = '' OR c.full_name ILIKE $2 OR c.email ILIKE $2
-			OR ($3::text <> '' AND (c.phone LIKE $3 OR EXISTS (
+			OR ($4::text <> '' AND c.phone LIKE $4)
+			OR ($3::text <> '' AND EXISTS (
 				SELECT 1 FROM vehicles v
-				WHERE v.customer_id = c.id AND v.deleted_at IS NULL AND v.license_plate_key LIKE $3))))`
+				WHERE v.customer_id = c.id AND v.deleted_at IS NULL AND v.license_plate_key LIKE $3)))`
 )
 
 var customerUniqueIndexes = map[string]error{
@@ -154,11 +156,11 @@ func (r *PostgresCustomerRepository) Update(ctx context.Context, c *domain.Custo
 
 // List returns one page of live customers, newest first.
 func (r *PostgresCustomerRepository) List(ctx context.Context, garageID string, filter usecase.ListFilter) ([]*domain.Customer, int, error) {
-	args := []any{garageID, containsPattern(filter.Query), compactPattern(filter.Query)}
+	args := []any{garageID, containsPattern(filter.Query), compactPattern(filter.Query), phonePattern(filter.Query)}
 
 	return listPage(ctx, platformdb.QuerierFromContext(ctx, r.pool), scanCustomer,
 		`SELECT count(*)`+customerSearch,
-		`SELECT `+customerColumns+customerSearch+` ORDER BY c.created_at DESC, c.id LIMIT $4 OFFSET $5`,
+		`SELECT `+customerColumns+customerSearch+` ORDER BY c.created_at DESC, c.id LIMIT $5 OFFSET $6`,
 		args, filter.Limit, filter.Offset)
 }
 

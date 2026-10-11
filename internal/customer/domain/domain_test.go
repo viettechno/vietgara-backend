@@ -1,7 +1,6 @@
 package domain_test
 
 import (
-	"strings"
 	"testing"
 	"time"
 
@@ -10,74 +9,6 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/customer/domain"
 )
-
-func TestNormalizePhone(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		in      string
-		want    string
-		wantErr error
-	}{
-		{name: "plain local number", in: "0912345678", want: "0912345678"},
-		{name: "strips formatting", in: " (091) 234-56.78 ", want: "0912345678"},
-		{name: "folds +84 to 0", in: "+84 912 345 678", want: "0912345678"},
-		{name: "keeps other country codes", in: "+6591234567", want: "+6591234567"},
-		{name: "too short", in: "0912", wantErr: domain.ErrInvalidPhone},
-		{name: "too long", in: "0123456789012345", wantErr: domain.ErrInvalidPhone},
-		{name: "letters", in: "09123abc78", wantErr: domain.ErrInvalidPhone},
-		{name: "plus in the middle", in: "0912+345678", wantErr: domain.ErrInvalidPhone},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got, err := domain.NormalizePhone(tt.in)
-			if tt.wantErr != nil {
-				require.ErrorIs(t, err, tt.wantErr)
-
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-func TestNormalizeEmail(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		name    string
-		in      string
-		want    string
-		wantErr bool
-	}{
-		{name: "lower-cases and trims", in: "  Binh@Example.COM ", want: "binh@example.com"},
-		{name: "rejects display names", in: "Binh <binh@example.com>", wantErr: true},
-		{name: "rejects garbage", in: "not-an-email", wantErr: true},
-		{name: "rejects overly long addresses", in: strings.Repeat("a", 250) + "@example.com", wantErr: true},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got, err := domain.NormalizeEmail(tt.in)
-			if tt.wantErr {
-				require.ErrorIs(t, err, domain.ErrInvalidEmail)
-
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
 
 func TestNormalizeLicensePlate(t *testing.T) {
 	t.Parallel()

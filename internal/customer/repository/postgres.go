@@ -16,6 +16,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/customer/domain"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
+	"github.com/viettechno/vietgara-backend/pkg/phone"
 )
 
 // Postgres error codes the repositories translate into domain errors.
@@ -40,6 +41,12 @@ func containsPattern(query string) string {
 // only, for columns stored without separators (plate keys, phone numbers).
 func compactPattern(query string) string {
 	return containsPattern(domain.LicensePlateKey(query))
+}
+
+// phonePattern is containsPattern over the digits to look for inside stored
+// E.164 numbers, so "0912 345" finds "+84912345678".
+func phonePattern(query string) string {
+	return containsPattern(phone.SearchKey(query))
 }
 
 // isUUID reports whether id can be compared with a uuid column; anything

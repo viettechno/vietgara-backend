@@ -67,7 +67,7 @@ func TestCustomerUseCase_Create(t *testing.T) {
 			check: func(t *testing.T, c *domain.Customer) {
 				t.Helper()
 				assert.Equal(t, "Tran Binh", c.FullName)
-				assert.Equal(t, "0912345678", *c.Phone)
+				assert.Equal(t, "+84912345678", *c.Phone)
 				assert.Equal(t, "binh@example.com", *c.Email)
 				assert.Nil(t, c.Address, "blank optional fields are stored as NULL")
 				assert.Equal(t, actorID, *c.CreatedBy)

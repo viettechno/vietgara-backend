@@ -6,6 +6,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/viettechno/vietgara-backend/internal/supplier/domain"
+	"github.com/viettechno/vietgara-backend/pkg/email"
+	"github.com/viettechno/vietgara-backend/pkg/phone"
 )
 
 // ContactInput is the contact document of a supplier as entered; blank
@@ -27,11 +29,11 @@ func (in ContactInput) normalize() (domain.Contact, error) {
 		return out, err
 	}
 
-	if out.Phone, err = optional(in.Phone, domain.NormalizePhone); err != nil {
+	if out.Phone, err = optional(in.Phone, phone.Normalize); err != nil {
 		return out, err
 	}
 
-	if out.Email, err = optional(in.Email, domain.NormalizeEmail); err != nil {
+	if out.Email, err = optional(in.Email, email.Normalize); err != nil {
 		return out, err
 	}
 

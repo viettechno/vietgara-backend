@@ -11,6 +11,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/identity/domain"
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/email"
 )
 
 // RequestPasswordReset e-mails a password-reset OTP valid for 2 minutes
@@ -20,12 +21,12 @@ func (uc *IdentityUseCase) RequestPasswordReset(ctx context.Context, rawEmail st
 	now := uc.now().UTC()
 	generic := Challenge{ExpiresAt: now.Add(domain.OTPTTL), ResendAvailableAt: now.Add(domain.OTPResendCooldown)}
 
-	email, ok := domain.NormalizeEmail(rawEmail)
-	if !ok {
+	addr, err := email.Normalize(rawEmail)
+	if err != nil {
 		return Challenge{}, apperror.Validation("email", apperror.IssueInvalid, "email is invalid")
 	}
 
-	user, err := uc.users.FindByEmail(ctx, email)
+	user, err := uc.users.FindByEmail(ctx, addr)
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
 			return generic, nil
@@ -55,12 +56,12 @@ func (uc *IdentityUseCase) RequestPasswordReset(ctx context.Context, rawEmail st
 // VerifyPasswordResetOTP checks the reset OTP and returns a single-use
 // reset token valid for 10 minutes.
 func (uc *IdentityUseCase) VerifyPasswordResetOTP(ctx context.Context, rawEmail, code string) (string, time.Time, error) {
-	email, ok := domain.NormalizeEmail(rawEmail)
-	if !ok {
+	addr, err := email.Normalize(rawEmail)
+	if err != nil {
 		return "", time.Time{}, otpError(domain.ErrOTPInvalid)
 	}
 
-	user, err := uc.users.FindByEmail(ctx, email)
+	user, err := uc.users.FindByEmail(ctx, addr)
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
 			return "", time.Time{}, otpError(domain.ErrOTPExpired)

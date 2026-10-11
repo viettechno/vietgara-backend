@@ -36,48 +36,6 @@ func TestEmailVerification(t *testing.T) {
 	assert.Equal(t, now, *user.EmailVerifiedAt)
 }
 
-func TestNormalizeEmail(t *testing.T) {
-	t.Parallel()
-
-	tests := map[string]string{
-		" Owner@Example.COM ":               "owner@example.com",
-		"a.b+tag@mail.vn":                   "a.b+tag@mail.vn",
-		"":                                  "",
-		"not-an-email":                      "",
-		"Name <a@b.com>":                    "",
-		"a@localhost":                       "",
-		strings.Repeat("a", 250) + "@x.com": "",
-	}
-
-	for in, want := range tests {
-		got, ok := domain.NormalizeEmail(in)
-		assert.Equal(t, want, got, in)
-		assert.Equal(t, want != "", ok, in)
-	}
-}
-
-func TestNormalizePhone(t *testing.T) {
-	t.Parallel()
-
-	tests := map[string]string{
-		"0901234567":      "0901234567",
-		"+84 90 123 4567": "0901234567",
-		"84901234567":     "0901234567",
-		"(090) 123-4567":  "0901234567",
-		"090.123.45678":   "09012345678",
-		"12345":           "",
-		"0901234abc":      "",
-		"1901234567":      "",
-		"090123456789":    "",
-	}
-
-	for in, want := range tests {
-		got, ok := domain.NormalizePhone(in)
-		assert.Equal(t, want, got, in)
-		assert.Equal(t, want != "", ok, in)
-	}
-}
-
 func TestNamesAndPasswords(t *testing.T) {
 	t.Parallel()
 

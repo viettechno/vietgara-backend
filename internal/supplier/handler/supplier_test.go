@@ -118,7 +118,7 @@ func TestSupplierRPCs(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "B", updated.GetSupplier().GetName())
-	assert.Equal(t, "0909123456", updated.GetSupplier().GetContact().GetPhone())
+	assert.Equal(t, "+84909123456", updated.GetSupplier().GetContact().GetPhone())
 	assert.Empty(t, updated.GetSupplier().GetContact().GetContactPerson(), "the contact block is replaced")
 	assert.Empty(t, updated.GetSupplier().GetBank().GetBankName(), "the bank block is replaced")
 	assert.Equal(t, "CTY B", updated.GetSupplier().GetBank().GetAccountHolder())

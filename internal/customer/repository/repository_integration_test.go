@@ -76,8 +76,8 @@ func newVehicle(c *domain.Customer, plate string) *domain.Vehicle {
 //nolint:funlen // one walk-through of the repositories against a shared, seeded database
 func TestCustomerAndVehicleRepositories(t *testing.T) {
 	env := startIntegrationEnv(t)
-	alice := newCustomer(env.garageA, "Nguyễn Thị Alice", "0912345678")
-	bob := newCustomer(env.garageA, "Tran Bob", "0987654321")
+	alice := newCustomer(env.garageA, "Nguyễn Thị Alice", "+84912345678")
+	bob := newCustomer(env.garageA, "Tran Bob", "+84987654321")
 
 	env.inGarage(t, env.garageA, func(ctx context.Context) {
 		require.NoError(t, env.customers.Create(ctx, alice))
@@ -102,7 +102,7 @@ func TestCustomerAndVehicleRepositories(t *testing.T) {
 
 	t.Run("duplicates are rejected with domain errors", func(t *testing.T) {
 		err := env.txm.WithTransaction(t.Context(), dbpkg.GarageScope(env.garageA), func(ctx context.Context) error {
-			return env.customers.Create(ctx, newCustomer(env.garageA, "Copy", "0912345678"))
+			return env.customers.Create(ctx, newCustomer(env.garageA, "Copy", "+84912345678"))
 		})
 		require.ErrorIs(t, err, domain.ErrPhoneTaken)
 
@@ -117,6 +117,8 @@ func TestCustomerAndVehicleRepositories(t *testing.T) {
 			for query, want := range map[string]string{
 				"alice":        alice.ID,
 				"0912 345":     alice.ID,
+				"+84 912 345":  alice.ID,
+				"912345":       alice.ID,
 				"51F12":        alice.ID,
 				"bob":          bob.ID,
 				"100%_literal": "",
@@ -189,7 +191,7 @@ func TestCustomerAndVehicleRepositories(t *testing.T) {
 			require.NoError(t, err)
 			assert.Zero(t, total)
 
-			require.NoError(t, env.customers.Create(ctx, newCustomer(env.garageA, "New owner of the number", "0912345678")))
+			require.NoError(t, env.customers.Create(ctx, newCustomer(env.garageA, "New owner of the number", "+84912345678")))
 			require.NoError(t, env.vehicles.Create(ctx, newVehicle(bob, "51F-123.45")))
 		})
 	})

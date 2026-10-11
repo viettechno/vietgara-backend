@@ -4,8 +4,6 @@ package domain
 
 import (
 	"fmt"
-	"net/mail"
-	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -14,15 +12,11 @@ import (
 // column sizes in db/migrations.
 const (
 	MaxNameLen    = 255
-	MaxEmailLen   = 255
 	MaxAddressLen = 500
 	MaxNoteLen    = 2000
 	MaxTaxCodeLen = 20
 	MaxMakeLen    = 100
 	MaxCodeLen    = 50
-
-	minPhoneDigits = 8
-	maxPhoneDigits = 15
 )
 
 // ConsentRecord is one personal-data consent decision of a customer
@@ -68,41 +62,6 @@ func (c *Customer) RecordConsent(granted bool, at time.Time, by string) {
 	}
 
 	c.ConsentLog = append(c.ConsentLog, ConsentRecord{Granted: granted, RecordedAt: at, RecordedBy: by})
-}
-
-var phoneFormatting = strings.NewReplacer(" ", "", "-", "", ".", "", "(", "", ")", "")
-
-// NormalizePhone strips formatting characters and folds the Vietnamese
-// "+84" prefix to "0", so "+84 912-345-678" and "0912345678" are the same
-// number. It rejects anything that is not 8 to 15 digits.
-func NormalizePhone(phone string) (string, error) {
-	p := phoneFormatting.Replace(strings.TrimSpace(phone))
-	if rest, ok := strings.CutPrefix(p, "+84"); ok {
-		p = "0" + rest
-	}
-
-	digits := strings.TrimPrefix(p, "+")
-	if len(digits) < minPhoneDigits || len(digits) > maxPhoneDigits || strings.Trim(digits, "0123456789") != "" {
-		return "", ErrInvalidPhone
-	}
-
-	return p, nil
-}
-
-// NormalizeEmail trims and lower-cases an email address and checks it is a
-// bare address (no display name).
-func NormalizeEmail(email string) (string, error) {
-	e := strings.ToLower(strings.TrimSpace(email))
-	if len(e) > MaxEmailLen {
-		return "", ErrInvalidEmail
-	}
-
-	parsed, err := mail.ParseAddress(e)
-	if err != nil || parsed.Address != e {
-		return "", ErrInvalidEmail
-	}
-
-	return e, nil
 }
 
 // FieldTooLongError reports a value longer than its column allows. It

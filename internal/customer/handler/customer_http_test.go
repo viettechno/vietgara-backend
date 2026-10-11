@@ -44,7 +44,7 @@ func TestCustomerRPCs(t *testing.T) {
 	phone := "0901 234 567"
 	created, err := e.srv.CreateCustomer(ctx, &customerv1.CreateCustomerRequest{GarageId: garageID, Customer: &customerv1.Customer{FullName: "Khách", Phone: &phone, PersonalDataConsent: true}})
 	require.NoError(t, err)
-	assert.Equal(t, "0901234567", created.GetCustomer().GetPhone())
+	assert.Equal(t, "+84901234567", created.GetCustomer().GetPhone())
 	assert.True(t, created.GetCustomer().GetPersonalDataConsent())
 
 	_, err = e.srv.CreateCustomer(ctx, &customerv1.CreateCustomerRequest{GarageId: garageID, Customer: &customerv1.Customer{}})

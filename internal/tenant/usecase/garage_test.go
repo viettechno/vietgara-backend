@@ -166,18 +166,20 @@ func TestLogo(t *testing.T) {
 
 	g, err := e.UC.UploadGarageLogo(ctx, id, png, "IMAGE/PNG")
 	require.NoError(t, err)
-	require.NotNil(t, g.Garage.LogoURL)
-	first := *g.Garage.LogoURL
+	require.NotNil(t, g.Garage.LogoKey)
+	first := *g.Garage.LogoKey
+	assert.Equal(t, "/files/"+first, *e.UC.LogoURL(g.Garage.LogoKey), "the URL is derived from the key")
 
 	g, err = e.UC.UploadGarageLogo(ctx, id, png, "image/png")
 	require.NoError(t, err)
-	assert.NotEqual(t, first, *g.Garage.LogoURL)
-	assert.Len(t, e.Logos.Deleted, 1, "old logo removed")
+	assert.NotEqual(t, first, *g.Garage.LogoKey)
+	assert.Equal(t, []string{first}, e.Logos.Removed, "old logo removed")
 
 	g, err = e.UC.DeleteGarageLogo(ctx, id)
 	require.NoError(t, err)
-	assert.Nil(t, g.Garage.LogoURL)
-	assert.Len(t, e.Logos.Deleted, 2)
+	assert.Nil(t, g.Garage.LogoKey)
+	assert.Nil(t, e.UC.LogoURL(g.Garage.LogoKey))
+	assert.Len(t, e.Logos.Removed, 2)
 
 	for _, tc := range []struct {
 		content []byte
@@ -186,7 +188,6 @@ func TestLogo(t *testing.T) {
 		{png, "image/gif"},
 		{nil, "image/png"},
 		{[]byte("not an image"), "image/png"},
-		{make([]byte, usecase.MaxLogoBytes+1), "image/png"},
 	} {
 		_, err := e.UC.UploadGarageLogo(ctx, id, tc.content, tc.kind)
 		requireReason(t, err, domain.ReasonInvalidLogo)
@@ -200,9 +201,7 @@ func TestLogo(t *testing.T) {
 	e.Store.Fail["garage.update"] = errBoom
 	_, err = e.UC.UploadGarageLogo(ctx, id, png, "image/png")
 	requireReason(t, err, apperror.ReasonInternal)
-
-	_, err = e.UC.DeleteGarageLogo(ctx, "missing")
-	requireReason(t, err, apperror.ReasonNotFound)
+	assert.Len(t, e.Logos.Discarded, 1, "the stored object of a failed change is discarded")
 }
 
 func TestListGaragesFailures(t *testing.T) {

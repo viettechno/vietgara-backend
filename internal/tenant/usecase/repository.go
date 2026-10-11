@@ -121,11 +121,22 @@ type UserDirectory interface {
 	ListByIDs(ctx context.Context, ids []string) (map[string]*UserSummary, error)
 }
 
-// LogoStore keeps garage logos (internal/platform/storage).
-type LogoStore interface {
-	Put(ctx context.Context, key, contentType string, data []byte) (string, error)
-	Delete(ctx context.Context, key string) error
-	KeyFromURL(url string) (string, bool)
+// LogoFiles keeps garage logos in the file registry (internal/file),
+// implemented by an adapter in cmd/server so this module imports none of
+// it.
+type LogoFiles interface {
+	// StoreLogo registers and stores a logo for the garage and returns its
+	// object key. Content that is not an acceptable logo yields
+	// domain.ErrInvalidLogo.
+	StoreLogo(ctx context.Context, garageID, actorID string, content []byte, contentType string) (key string, err error)
+	// Discard removes an object stored by StoreLogo whose registration was
+	// rolled back.
+	Discard(ctx context.Context, key string)
+	// RemoveByKey removes a replaced or deleted logo once the surrounding
+	// change commits.
+	RemoveByKey(ctx context.Context, garageID, actorID, key string) error
+	// PublicURL returns the URL of a logo key.
+	PublicURL(key string) string
 }
 
 // Mailer delivers e-mails (internal/platform/mail).

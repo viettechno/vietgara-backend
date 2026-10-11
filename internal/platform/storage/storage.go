@@ -1,11 +1,18 @@
 // Package storage keeps uploaded files such as garage logos (FR-TEN-01).
 //
+// Objects are public (garage logos; served by URL) or private (every later
+// kind: repair photos, customer and claim documents, exports; served only
+// through short-lived signed URLs, FR-CAT-07's file registry).
+//
 // Backends:
 //   - local: the server's disk, for local development and staging (staging
-//     must run a single replica or mount a shared volume). Files are served
-//     by Handler under /api/v1/files/.
-//   - gcs: a Google Cloud Storage bucket, for production. Objects are
-//     public-read through the bucket's public URL (or a CDN in front).
+//     must run a single replica or mount a shared volume). Public files are
+//     served by Handler under /api/v1/files/; private ones live under a
+//     reserved directory and are served only for an HMAC-signed, expiring
+//     URL, which is how the local backend checks authorization itself.
+//   - gcs: Google Cloud Storage. Public objects sit in a public-read bucket
+//     (or behind a CDN); private ones in a second bucket without public
+//     access and are served through V4 signed URLs.
 package storage
 
 import (
@@ -14,6 +21,7 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"time"
 )
 
 // Store saves and removes objects addressed by key ("garages/<id>/logo-x.png").
@@ -26,10 +34,25 @@ type Store interface {
 	DeletePrefix(ctx context.Context, prefix string) (int64, error)
 	// KeyFromURL returns the key of a URL this store produced.
 	KeyFromURL(url string) (string, bool)
+	// PublicURL returns the URL of a public object's key.
+	PublicURL(key string) string
+	// PutPrivate stores data under key without making it public.
+	PutPrivate(ctx context.Context, key, contentType string, data []byte) error
+	// SignedURL returns a URL that serves the private object for ttl, and
+	// when it stops working.
+	SignedURL(ctx context.Context, key string, ttl time.Duration) (string, time.Time, error)
 }
 
 // ErrInvalidKey is returned for keys that could escape the store.
 var ErrInvalidKey = errors.New("storage: invalid object key")
+
+// ErrPrivateNotConfigured is returned when private objects are used but no
+// private bucket (gcs) is configured.
+var ErrPrivateNotConfigured = errors.New("storage: private storage is not configured")
+
+// privateRoot is reserved by the local backend for private objects, so a
+// public key may never name it.
+const privateRoot = "_private"
 
 var (
 	errLocalStorageDirRequired = errors.New("storage: STORAGE_LOCAL_DIR is required")
@@ -45,6 +68,21 @@ func cleanKey(key string) (string, error) {
 
 	cleaned := path.Clean(key)
 	if cleaned != key || cleaned == "." || strings.HasPrefix(cleaned, "../") || cleaned == ".." {
+		return "", ErrInvalidKey
+	}
+
+	return cleaned, nil
+}
+
+// cleanPublicKey is cleanKey for public objects, which may not use the
+// directory the local backend reserves for private ones.
+func cleanPublicKey(key string) (string, error) {
+	cleaned, err := cleanKey(key)
+	if err != nil {
+		return "", err
+	}
+
+	if cleaned == privateRoot || strings.HasPrefix(cleaned, privateRoot+"/") {
 		return "", ErrInvalidKey
 	}
 
@@ -75,8 +113,16 @@ type Config struct {
 	// "/api/v1/files" (local) or "https://storage.googleapis.com/<bucket>".
 	PublicBaseURL string
 
-	// Bucket is the Cloud Storage bucket (gcs).
+	// SigningKey signs the URLs of private objects (local); an empty key
+	// makes the backend generate one per process, so URLs stop working at a
+	// restart.
+	SigningKey []byte
+
+	// Bucket is the public Cloud Storage bucket (gcs).
 	Bucket string
+	// PrivateBucket is the bucket for private objects (gcs); it must not
+	// be public. Optional until the first private kind exists.
+	PrivateBucket string
 }
 
 // New returns the backend selected by cfg. The gcs backend uses
@@ -88,13 +134,13 @@ func New(ctx context.Context, cfg Config) (Store, error) {
 			return nil, errLocalStorageDirRequired
 		}
 
-		return NewLocal(cfg.LocalDir, cfg.PublicBaseURL)
+		return NewLocal(cfg.LocalDir, cfg.PublicBaseURL, cfg.SigningKey)
 	case "gcs":
 		if cfg.Bucket == "" {
 			return nil, errGCSBucketRequired
 		}
 
-		return NewGCS(ctx, cfg.Bucket, cfg.PublicBaseURL)
+		return NewGCSWithPrivate(ctx, cfg.Bucket, cfg.PrivateBucket, cfg.PublicBaseURL)
 	default:
 		return nil, fmt.Errorf("%w %q (want local or gcs)", errUnknownStorageBackend, cfg.Backend)
 	}

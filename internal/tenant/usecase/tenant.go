@@ -23,7 +23,7 @@ type Deps struct {
 	Usage       UsageReader
 	Limits      LimitChecker
 	Users       UserDirectory
-	Logos       LogoStore
+	Logos       LogoFiles
 	Mailer      Mailer
 	Events      EventPublisher
 	Audit       AuditLogger

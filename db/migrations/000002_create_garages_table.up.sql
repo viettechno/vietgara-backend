@@ -32,7 +32,9 @@ CREATE TABLE garages (
     address TEXT,
     phone VARCHAR(20),
     email VARCHAR(255),
-    logo_url VARCHAR(500),
+    -- Object key of the logo in the file registry (000023), never a URL, so
+    -- a CDN or bucket change breaks nothing.
+    logo_key VARCHAR(500),
     timezone VARCHAR(64) NOT NULL DEFAULT 'Asia/Ho_Chi_Minh',
     currency VARCHAR(3) NOT NULL DEFAULT 'VND',
     status garage_status NOT NULL DEFAULT 'active',

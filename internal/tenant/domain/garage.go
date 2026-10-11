@@ -80,14 +80,16 @@ func DefaultOperatingHours() []DailyHours {
 // is used synonymously with "garage" throughout VietGara.
 // See: Database Design Section 2.2, ADR-005.
 type Garage struct {
-	ID                        string
-	OwnerUserID               string
-	Name                      string
-	TaxCode                   *string
-	Address                   *string
-	Phone                     *string
-	Email                     *string
-	LogoURL                   *string
+	ID          string
+	OwnerUserID string
+	Name        string
+	TaxCode     *string
+	Address     *string
+	Phone       *string
+	Email       *string
+	// LogoKey is the object key of the logo in the file registry; the URL
+	// is derived from it when the garage is returned.
+	LogoKey                   *string
 	Timezone                  string
 	Currency                  string
 	Status                    GarageStatus

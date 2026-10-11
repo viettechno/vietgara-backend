@@ -137,6 +137,7 @@ func newFileStore(ctx context.Context, lookupEnv func(string) (string, bool)) (s
 		LocalDir:      envOr(lookupEnv, "STORAGE_LOCAL_DIR", "./.data/uploads"),
 		PublicBaseURL: envOr(lookupEnv, "STORAGE_PUBLIC_BASE_URL", ""),
 		Bucket:        envOr(lookupEnv, "STORAGE_GCS_BUCKET", ""),
+		PrivateBucket: envOr(lookupEnv, "STORAGE_GCS_PRIVATE_BUCKET", ""),
 	})
 }
 

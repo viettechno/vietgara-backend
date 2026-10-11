@@ -14,6 +14,8 @@ import (
 	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
 	"github.com/viettechno/vietgara-backend/internal/document/render"
 	documentUsecase "github.com/viettechno/vietgara-backend/internal/document/usecase"
+	fileDomain "github.com/viettechno/vietgara-backend/internal/file/domain"
+	fileUsecase "github.com/viettechno/vietgara-backend/internal/file/usecase"
 	identityDomain "github.com/viettechno/vietgara-backend/internal/identity/domain"
 	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
 	inventoryDomain "github.com/viettechno/vietgara-backend/internal/inventory/domain"
@@ -21,6 +23,7 @@ import (
 	licenseDomain "github.com/viettechno/vietgara-backend/internal/license/domain"
 	licenseUsecase "github.com/viettechno/vietgara-backend/internal/license/usecase"
 	notificationUsecase "github.com/viettechno/vietgara-backend/internal/notification/usecase"
+	"github.com/viettechno/vietgara-backend/internal/platform/storage"
 	quoteDomain "github.com/viettechno/vietgara-backend/internal/quote/domain"
 	quoteRepository "github.com/viettechno/vietgara-backend/internal/quote/repository"
 	quoteUsecase "github.com/viettechno/vietgara-backend/internal/quote/usecase"
@@ -332,6 +335,50 @@ func (u customerUsage) VehicleInUse(ctx context.Context, garageID, vehicleID str
 type supplierUsage struct{}
 
 func (supplierUsage) SupplierInUse(context.Context, string, string) (bool, error) { return false, nil }
+
+// tenantLogos lets the Tenant module keep garage logos in the file registry
+// without importing the File module.
+type tenantLogos struct {
+	files *fileUsecase.UseCase
+	store storage.Store
+}
+
+func (l tenantLogos) StoreLogo(ctx context.Context, garageID, actorID string, content []byte, contentType string) (string, error) {
+	key, err := l.files.StoreLogo(ctx, garageID, actorID, content, contentType)
+	if err != nil {
+		if errors.Is(err, fileDomain.ErrInvalidFile) {
+			return "", tenantDomain.ErrInvalidLogo
+		}
+
+		return "", err
+	}
+
+	return key, nil
+}
+
+// Discard removes the object of an upload whose registration rolled back.
+func (l tenantLogos) Discard(ctx context.Context, key string) { _ = l.store.Delete(ctx, key) }
+
+func (l tenantLogos) RemoveByKey(ctx context.Context, garageID, actorID, key string) error {
+	return l.files.RemoveByKey(ctx, garageID, actorID, key)
+}
+
+func (l tenantLogos) PublicURL(key string) string { return l.files.PublicURL(key) }
+
+// fileUsage tells the File module whether a business row still refers to a
+// file (the delete-or-deactivate rule, FR-CAT-07): today the garage's logo.
+type fileUsage struct {
+	garages *tenantRepo.PostgresGarageRepository
+}
+
+func (u fileUsage) FileInUse(ctx context.Context, garageID string, f *fileDomain.File) (bool, error) {
+	g, err := u.garages.FindByID(ctx, garageID)
+	if err != nil {
+		return false, err
+	}
+
+	return g.LogoKey != nil && *g.LogoKey == f.Key, nil
+}
 
 // maxHistoryEntries bounds the vehicle history read (FR-CUS-03 shows the
 // "complete" history, but a single vehicle realistically never approaches

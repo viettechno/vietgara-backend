@@ -334,3 +334,29 @@ func TestPostgresRepository_ExistsForVehicles(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, exists, "no vehicle, no query")
 }
+
+func TestPostgresRepository_LiveVehicleIDs(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+
+	ids, err := repo.LiveVehicleIDs(t.Context(), garageID, nil)
+	require.NoError(t, err)
+	require.Empty(t, ids)
+
+	tx := dbtest.New(t).
+		ExpectQuery("FROM repair_orders", dbtest.NewRows([]any{vehicleID}), nil).
+		ExpectQuery("FROM repair_orders", nil, errBoom).
+		ExpectQuery("FROM repair_orders", dbtest.NewRows([]any{errBoom}), nil)
+	ctx := tx.Context(t.Context())
+
+	ids, err = repo.LiveVehicleIDs(ctx, garageID, []string{vehicleID})
+	require.NoError(t, err)
+	require.Equal(t, []string{vehicleID}, ids)
+
+	_, err = repo.LiveVehicleIDs(ctx, garageID, []string{vehicleID})
+	require.ErrorIs(t, err, errBoom)
+
+	_, err = repo.LiveVehicleIDs(ctx, garageID, []string{vehicleID})
+	require.Error(t, err)
+}

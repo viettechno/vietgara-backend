@@ -24,11 +24,14 @@ type Permission string
 // The permission catalog. Owners hold every permission; every active member
 // may read the garage profile.
 const (
-	GarageWrite       Permission = "garage.write"
-	StaffRead         Permission = "staff.read"
-	StaffWrite        Permission = "staff.write"
-	CustomerRead      Permission = "customer.read"
-	CustomerWrite     Permission = "customer.write"
+	GarageWrite   Permission = "garage.write"
+	StaffRead     Permission = "staff.read"
+	StaffWrite    Permission = "staff.write"
+	CustomerRead  Permission = "customer.read"
+	CustomerWrite Permission = "customer.write"
+	// CustomerCorrect corrects a locked identity field of a vehicle, or
+	// moves it to another customer (FR-CUS-09).
+	CustomerCorrect   Permission = "customer.correct"
 	SupplierRead      Permission = "supplier.read"
 	SupplierWrite     Permission = "supplier.write"
 	SubscriptionRead  Permission = "subscription.read"
@@ -51,6 +54,7 @@ var Catalog = []CatalogEntry{
 	{StaffWrite, "staff"},
 	{CustomerRead, "customer"},
 	{CustomerWrite, "customer"},
+	{CustomerCorrect, "customer"},
 	{SupplierRead, "supplier"},
 	{SupplierWrite, "supplier"},
 	{SubscriptionRead, "subscription"},
@@ -71,7 +75,7 @@ type CatalogEntry struct {
 	Module     string
 }
 
-// Action returns "read" or "write".
+// Action returns the part after the module: "read", "write" or "correct".
 func (p Permission) Action() string {
 	_, action, _ := strings.Cut(string(p), ".")
 
@@ -114,7 +118,7 @@ func Normalize(perms []Permission) []Permission {
 	for _, p := range perms {
 		add(p)
 
-		if module, action, _ := strings.Cut(string(p), "."); action == "write" {
+		if module, action, _ := strings.Cut(string(p), "."); action == "write" || action == "correct" {
 			add(Permission(module + ".read"))
 		}
 	}

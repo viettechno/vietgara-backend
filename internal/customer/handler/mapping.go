@@ -55,8 +55,13 @@ func vehicleToProto(v *domain.Vehicle) *customerv1.Vehicle {
 		Vin:          v.VIN,
 		EngineNumber: v.EngineNumber,
 		IsActive:     v.IsActive,
+		Editable:     v.Editable,
 		CreatedAt:    converter.TimeToProto(v.CreatedAt),
 		UpdatedAt:    converter.TimeToProto(v.UpdatedAt),
+	}
+
+	for _, f := range v.LockedFields() {
+		out.LockedFields = append(out.LockedFields, identityFieldToProto(f))
 	}
 
 	if v.Year != nil {
@@ -116,4 +121,44 @@ func toInt32(n int) int32 {
 	}
 
 	return int32(n)
+}
+
+func identityFieldToProto(f domain.IdentityField) customerv1.VehicleIdentityField {
+	switch f {
+	case domain.FieldLicensePlate:
+		return customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_LICENSE_PLATE
+	case domain.FieldVIN:
+		return customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_VIN
+	case domain.FieldEngineNumber:
+		return customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_ENGINE_NUMBER
+	case domain.FieldMake:
+		return customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_MAKE
+	case domain.FieldModel:
+		return customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_MODEL
+	case domain.FieldYear:
+		return customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_YEAR
+	default:
+		return customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_UNSPECIFIED
+	}
+}
+
+func identityFieldFromProto(f customerv1.VehicleIdentityField) domain.IdentityField {
+	switch f {
+	case customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_LICENSE_PLATE:
+		return domain.FieldLicensePlate
+	case customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_VIN:
+		return domain.FieldVIN
+	case customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_ENGINE_NUMBER:
+		return domain.FieldEngineNumber
+	case customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_MAKE:
+		return domain.FieldMake
+	case customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_MODEL:
+		return domain.FieldModel
+	case customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_YEAR:
+		return domain.FieldYear
+	case customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_UNSPECIFIED:
+		return ""
+	default:
+		return ""
+	}
 }

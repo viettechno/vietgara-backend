@@ -77,4 +77,7 @@ type UsageChecker interface {
 	CustomerInUse(ctx context.Context, garageID, customerID string, vehicleIDs []string) (bool, error)
 	// VehicleInUse reports a live document of the vehicle.
 	VehicleInUse(ctx context.Context, garageID, vehicleID string) (bool, error)
+	// VehiclesInUse answers VehicleInUse for several vehicles at once: the
+	// ids among vehicleIDs that a live document refers to.
+	VehiclesInUse(ctx context.Context, garageID string, vehicleIDs []string) (map[string]bool, error)
 }

@@ -42,6 +42,7 @@ func TestVehicleRPCs(t *testing.T) {
 	assert.Equal(t, "Toyota", got.GetVehicle().GetMake())
 
 	e.vehicles.EXPECT().Update(anyArg, anyArg).Return(nil)
+	e.usage.EXPECT().VehicleInUse(anyArg, garageID, "v-1").Return(false, nil).Once()
 
 	model, vin, engine := "Vios", "VIN123", "E1"
 	updated, err := e.srv.UpdateVehicle(ctx, &customerv1.UpdateVehicleRequest{
@@ -94,4 +95,56 @@ func TestVehicleRPCs(t *testing.T) {
 	assert.Equal(t, "NOT_FOUND", reason(err))
 	_, err = e.srv.UpdateVehicle(ctx, &customerv1.UpdateVehicleRequest{GarageId: garageID, VehicleId: "v-3", Vehicle: &customerv1.Vehicle{}, UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"make"}}})
 	assert.Equal(t, "NOT_FOUND", reason(err))
+}
+
+func TestCorrectVehicleAndChangeOwner(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t)
+	ctx := signedIn(t)
+
+	e.vehicles.EXPECT().FindByID(anyArg, garageID, "v-1").Return(existingVehicle(), nil).Twice()
+	e.vehicles.EXPECT().Update(anyArg, anyArg).Return(nil).Twice()
+
+	corrected, err := e.srv.CorrectVehicle(ctx, &customerv1.CorrectVehicleRequest{
+		GarageId: garageID, VehicleId: "v-1", Field: customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_VIN,
+		Value: "abc123", Reason: "typo",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "ABC123", corrected.GetVehicle().GetVin())
+	assert.True(t, corrected.GetVehicle().GetEditable())
+	assert.Empty(t, corrected.GetVehicle().GetLockedFields())
+
+	_, err = e.srv.CorrectVehicle(ctx, &customerv1.CorrectVehicleRequest{GarageId: garageID, VehicleId: "v-1", Value: "x", Reason: "r"})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err), "a field is required")
+
+	e.customers.EXPECT().FindByID(anyArg, garageID, "c-2").Return(&domain.Customer{ID: "c-2", FullName: "Le Hoa"}, nil).Once()
+
+	moved, err := e.srv.ChangeVehicleOwner(ctx, &customerv1.ChangeVehicleOwnerRequest{
+		GarageId: garageID, VehicleId: "v-1", CustomerId: "c-2", Reason: "sold",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "c-2", moved.GetVehicle().GetCustomerId())
+	assert.Equal(t, "Le Hoa", moved.GetVehicle().GetCustomerName())
+}
+
+func TestLockedVehicleIsMappedToItsFields(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t)
+	e.usage.ExpectedCalls = nil
+	e.usage.EXPECT().VehiclesInUse(anyArg, garageID, []string{"v-1"}).Return(map[string]bool{"v-1": true}, nil).Once()
+	e.vehicles.EXPECT().FindByID(anyArg, garageID, "v-1").Return(existingVehicle(), nil).Once()
+
+	got, err := e.srv.GetVehicle(signedIn(t), &customerv1.GetVehicleRequest{GarageId: garageID, VehicleId: "v-1"})
+	require.NoError(t, err)
+	assert.False(t, got.GetVehicle().GetEditable())
+	assert.ElementsMatch(t, []customerv1.VehicleIdentityField{
+		customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_LICENSE_PLATE,
+		customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_VIN,
+		customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_ENGINE_NUMBER,
+		customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_MAKE,
+		customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_MODEL,
+		customerv1.VehicleIdentityField_VEHICLE_IDENTITY_FIELD_YEAR,
+	}, got.GetVehicle().GetLockedFields())
 }

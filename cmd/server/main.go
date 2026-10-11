@@ -307,7 +307,10 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	supplierSrv := supplierHandler.NewServer(supplierUC)
 
 	usage := customerUsage{quotes: quote.quotes, repairOrders: repairOrder.uc}
-	vehicleUC := customerUsecase.NewVehicleUseCase(vehicleRepo, customerRepo, vehicleHistory{quotes: quote.quotes, repairOrders: repairOrder.uc}, usage)
+	vehicleUC := customerUsecase.NewVehicleUseCase(
+		vehicleRepo, customerRepo, vehicleHistory{quotes: quote.quotes, repairOrders: repairOrder.uc}, usage,
+		customerUsecase.WithAuditor(auditLog),
+	)
 	customerSrv := customerHandler.NewServer(
 		customerUsecase.NewCustomerUseCase(customerRepo, vehicleRepo, usage),
 		vehicleUC,

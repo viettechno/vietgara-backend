@@ -36,16 +36,33 @@ func newVehicleUseCase(t *testing.T) (*usecase.VehicleUseCase, *mocks.MockVehicl
 	return uc, vehicles, customers
 }
 
+// newVehicleUseCaseWithUsage is newVehicleUseCase with the usage checker
+// exposed; no vehicle is locked unless a test says so with
+// newLockableVehicleUseCase.
 func newVehicleUseCaseWithUsage(
 	t *testing.T,
 ) (*usecase.VehicleUseCase, *mocks.MockVehicleRepository, *mocks.MockCustomerRepository, *mocks.MockCustomerUsageChecker) {
 	t.Helper()
 
+	uc, vehicles, customers, usage, _ := newLockableVehicleUseCase(t)
+	usage.EXPECT().VehiclesInUse(mock.Anything, mock.Anything, mock.Anything).Return(map[string]bool{}, nil).Maybe()
+
+	return uc, vehicles, customers, usage
+}
+
+// newLockableVehicleUseCase wires the use case with an audit recorder and no
+// default answer of which vehicles are locked.
+func newLockableVehicleUseCase(
+	t *testing.T,
+) (*usecase.VehicleUseCase, *mocks.MockVehicleRepository, *mocks.MockCustomerRepository, *mocks.MockCustomerUsageChecker, *auditor) {
+	t.Helper()
+
 	vehicles := mocks.NewMockVehicleRepository(t)
 	customers := mocks.NewMockCustomerRepository(t)
 	usage := mocks.NewMockCustomerUsageChecker(t)
+	rec := &auditor{}
 
-	return usecase.NewVehicleUseCase(vehicles, customers, nil, usage, clock()), vehicles, customers, usage
+	return usecase.NewVehicleUseCase(vehicles, customers, nil, usage, clock(), usecase.WithAuditor(rec)), vehicles, customers, usage, rec
 }
 
 func TestVehicleUseCase_Create(t *testing.T) {
@@ -137,17 +154,21 @@ func TestVehicleUseCase_Update(t *testing.T) {
 			},
 		},
 		{
-			name: "transfers the vehicle",
-			req:  usecase.UpdateVehicleRequest{CustomerID: new(newCustomerID), LicensePlate: new("30a 99999")},
+			name: "edits the identity of a vehicle no document refers to",
+			req:  usecase.UpdateVehicleRequest{LicensePlate: new("30a 99999")},
 			check: func(t *testing.T, v *domain.Vehicle) {
 				t.Helper()
-				assert.Equal(t, newCustomerID, v.CustomerID)
+				assert.Equal(t, customerID, v.CustomerID)
 				assert.Equal(t, "30A 99999", v.LicensePlate)
 			},
 		},
+		{
+			name:     "the owner is changed by a change of owner, not an update",
+			req:      usecase.UpdateVehicleRequest{CustomerID: new(newCustomerID)},
+			wantCode: apperror.CodeInvalidArgument,
+		},
 		{name: "unknown vehicle", findErr: domain.ErrVehicleNotFound, wantCode: apperror.CodeNotFound},
 		{name: "invalid plate", req: usecase.UpdateVehicleRequest{LicensePlate: new("")}, wantCode: apperror.CodeInvalidArgument},
-		{name: "unknown new owner", req: usecase.UpdateVehicleRequest{CustomerID: new(newCustomerID)}, ownerErr: domain.ErrCustomerNotFound, wantCode: apperror.CodeNotFound},
 		{name: "storage failure", updateErr: errBoom, wantCode: apperror.CodeInternal},
 	}
 
@@ -155,22 +176,14 @@ func TestVehicleUseCase_Update(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			uc, vehicles, customers := newVehicleUseCase(t)
+			uc, vehicles, _, usage := newVehicleUseCaseWithUsage(t)
+			usage.EXPECT().VehicleInUse(mock.Anything, garageID, vehicleID).Return(false, nil).Maybe()
 			tt.req.GarageID, tt.req.VehicleID, tt.req.ActorID = garageID, vehicleID, actorID
 
 			if tt.findErr != nil {
 				vehicles.EXPECT().FindByID(mock.Anything, garageID, vehicleID).Return(nil, tt.findErr).Once()
 			} else {
 				vehicles.EXPECT().FindByID(mock.Anything, garageID, vehicleID).Return(existingVehicle(), nil).Once()
-			}
-
-			if tt.req.CustomerID != nil && *tt.req.CustomerID == newCustomerID {
-				owner := &domain.Customer{ID: newCustomerID, FullName: "Le Chi"}
-				if tt.ownerErr != nil {
-					owner = nil
-				}
-
-				customers.EXPECT().FindByID(mock.Anything, garageID, newCustomerID).Return(owner, tt.ownerErr).Once()
 			}
 
 			if tt.check != nil || tt.updateErr != nil {

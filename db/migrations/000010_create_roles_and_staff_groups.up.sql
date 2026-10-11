@@ -4,13 +4,13 @@
 -- groups are created by the application when the owner verifies their
 -- e-mail and when a garage is created.
 
--- Permissions are "<module>.<action>", action read or write; a write
--- permission includes its module's read permission (enforced by the
--- application when a role is saved or loaded).
+-- Permissions are "<module>.<action>", action read, write or (customer
+-- only) correct; a write or correct permission includes its module's read
+-- permission (enforced by the application when a role is saved or loaded).
 CREATE TYPE permission AS ENUM (
     'garage.write',
     'staff.read', 'staff.write',
-    'customer.read', 'customer.write',
+    'customer.read', 'customer.write', 'customer.correct',
     'supplier.read', 'supplier.write',
     'subscription.read',
     'quote.read', 'quote.write',

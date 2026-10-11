@@ -15,7 +15,7 @@ func TestCatalog(t *testing.T) {
 	t.Parallel()
 
 	all := access.All()
-	require.Len(t, all, 17)
+	require.Len(t, all, 18)
 	assert.Equal(t, access.GarageWrite, all[0])
 	assert.True(t, access.CustomerRead.IsValid())
 	assert.False(t, access.Permission("customer.delete").IsValid())
@@ -87,7 +87,7 @@ func TestAccessCheck(t *testing.T) {
 	}
 
 	assert.True(t, owner.Has(access.BillingWrite))
-	assert.Len(t, owner.Effective(), 17)
+	assert.Len(t, owner.Effective(), 18)
 	assert.Equal(t, []access.Permission{access.CustomerRead}, member.Effective())
 }
 
@@ -101,4 +101,18 @@ func TestContext(t *testing.T) {
 	got, ok := access.FromContext(access.WithAccess(t.Context(), a))
 	require.True(t, ok)
 	assert.Same(t, a, got)
+}
+
+func TestCustomerCorrectIncludesRead(t *testing.T) {
+	t.Parallel()
+
+	assert.True(t, access.CustomerCorrect.IsValid())
+	assert.Equal(t, "correct", access.CustomerCorrect.Action())
+	assert.Equal(t, []access.Permission{access.CustomerRead, access.CustomerCorrect},
+		access.Normalize([]access.Permission{access.CustomerCorrect}))
+	assert.Equal(t, tenantv1.Permission_PERMISSION_CUSTOMER_CORRECT, access.ToProto(access.CustomerCorrect))
+
+	back, ok := access.FromProto(tenantv1.Permission_PERMISSION_CUSTOMER_CORRECT)
+	assert.True(t, ok)
+	assert.Equal(t, access.CustomerCorrect, back)
 }

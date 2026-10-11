@@ -33,6 +33,7 @@ func NewServer(customers *usecase.CustomerUseCase, vehicles *usecase.VehicleUseC
 // Policies declares the permission every RPC requires in its garage.
 func Policies() middleware.Policies {
 	read, write := access.Requires(access.CustomerRead), access.Requires(access.CustomerWrite)
+	correct := access.Requires(access.CustomerCorrect)
 
 	return middleware.Policies{
 		customerv1.CustomerService_ListCustomers_FullMethodName:    middleware.GarageMethod(read),
@@ -42,13 +43,15 @@ func Policies() middleware.Policies {
 		customerv1.CustomerService_DeleteCustomer_FullMethodName:   middleware.GarageMethod(write),
 		customerv1.CustomerService_ActivateCustomer_FullMethodName: middleware.GarageMethod(write),
 
-		customerv1.VehicleService_ListVehicles_FullMethodName:      middleware.GarageMethod(read),
-		customerv1.VehicleService_GetVehicle_FullMethodName:        middleware.GarageMethod(read),
-		customerv1.VehicleService_CreateVehicle_FullMethodName:     middleware.GarageMethod(write),
-		customerv1.VehicleService_UpdateVehicle_FullMethodName:     middleware.GarageMethod(write),
-		customerv1.VehicleService_DeleteVehicle_FullMethodName:     middleware.GarageMethod(write),
-		customerv1.VehicleService_ActivateVehicle_FullMethodName:   middleware.GarageMethod(write),
-		customerv1.VehicleService_GetVehicleHistory_FullMethodName: middleware.GarageMethod(read),
+		customerv1.VehicleService_ListVehicles_FullMethodName:       middleware.GarageMethod(read),
+		customerv1.VehicleService_GetVehicle_FullMethodName:         middleware.GarageMethod(read),
+		customerv1.VehicleService_CreateVehicle_FullMethodName:      middleware.GarageMethod(write),
+		customerv1.VehicleService_UpdateVehicle_FullMethodName:      middleware.GarageMethod(write),
+		customerv1.VehicleService_DeleteVehicle_FullMethodName:      middleware.GarageMethod(write),
+		customerv1.VehicleService_ActivateVehicle_FullMethodName:    middleware.GarageMethod(write),
+		customerv1.VehicleService_GetVehicleHistory_FullMethodName:  middleware.GarageMethod(read),
+		customerv1.VehicleService_CorrectVehicle_FullMethodName:     middleware.GarageMethod(correct),
+		customerv1.VehicleService_ChangeVehicleOwner_FullMethodName: middleware.GarageMethod(correct),
 	}
 }
 

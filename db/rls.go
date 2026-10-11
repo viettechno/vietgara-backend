@@ -12,6 +12,12 @@ const (
 	statusKey = "status"
 )
 
+var (
+	errGarageNotFound              = errors.New("garage not found")
+	errNoGarageUpdated             = errors.New("no garage updated (RLS may have blocked access)")
+	errStaffMemberNotFoundInGarage = errors.New("staff member not found in garage (RLS may have blocked access)")
+)
+
 // RLSContext wraps a database connection with RLS context.
 type RLSContext struct {
 	DB       *sql.DB
@@ -86,7 +92,7 @@ func (rc *RLSContext) GetGarage(ctx context.Context) (map[string]any, error) {
 	}
 
 	if garage == nil {
-		return nil, errors.New("garage not found")
+		return nil, errGarageNotFound
 	}
 
 	return garage, nil
@@ -155,7 +161,7 @@ func (rc *RLSContext) UpdateGarageStatus(ctx context.Context, newStatus string) 
 		}
 
 		if rowsAffected == 0 {
-			return errors.New("no garage updated (RLS may have blocked access)")
+			return errNoGarageUpdated
 		}
 
 		return nil
@@ -202,7 +208,7 @@ func (rc *RLSContext) RemoveStaffFromGarage(ctx context.Context, userID string) 
 		}
 
 		if rowsAffected == 0 {
-			return errors.New("staff member not found in garage (RLS may have blocked access)")
+			return errStaffMemberNotFoundInGarage
 		}
 
 		return nil

@@ -3,7 +3,6 @@ package mail_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/smtp"
@@ -96,7 +95,7 @@ func TestSMTPSender(t *testing.T) {
 		sender.SetSMTPSendFunc(func(_ string, a smtp.Auth, _ string, _ []string, _ []byte) error {
 			assert.NotNil(t, a)
 
-			return errors.New("421 try later")
+			return errMailTestTemporary
 		})
 
 		msg := validMessage()

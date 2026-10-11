@@ -17,6 +17,15 @@ import (
 	"time"
 )
 
+var (
+	errInvalidMailpitURL          = errors.New("mailpit URL must be an HTTP(S) origin without credentials, path, query, or fragment")
+	errMailpitCredentialsMismatch = errors.New("mailpit username and password must both be set or both be empty")
+	errInvalidMailpitRecipient    = errors.New("invalid Mailpit recipient")
+	errMailpitMessageMissingID    = errors.New("mailpit search returned a message without an ID")
+	errMailpitSearchStatus        = errors.New("search request returned")
+	errMailpitDeleteStatus        = errors.New("delete request returned")
+)
+
 const pageSize = 100
 
 type messageSummary struct {
@@ -42,11 +51,11 @@ func NewClient(rawURL, username, password string) (*Client, error) {
 	if (parsed.Scheme != "http" && parsed.Scheme != "https") ||
 		parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
 		(parsed.Path != "" && parsed.Path != "/") {
-		return nil, errors.New("mailpit URL must be an HTTP(S) origin without credentials, path, query, or fragment")
+		return nil, errInvalidMailpitURL
 	}
 
 	if (username == "") != (password == "") {
-		return nil, errors.New("mailpit username and password must both be set or both be empty")
+		return nil, errMailpitCredentialsMismatch
 	}
 
 	return &Client{
@@ -65,7 +74,7 @@ func (c *Client) DeleteMessagesForRecipients(ctx context.Context, recipients []s
 	for _, recipient := range recipients {
 		address, err := mail.ParseAddress(recipient)
 		if err != nil || address.Address != recipient {
-			return 0, fmt.Errorf("invalid Mailpit recipient %q", recipient)
+			return 0, fmt.Errorf("%w %q", errInvalidMailpitRecipient, recipient)
 		}
 
 		for start := 0; ; start += pageSize {
@@ -76,7 +85,7 @@ func (c *Client) DeleteMessagesForRecipients(ctx context.Context, recipients []s
 
 			for _, message := range page {
 				if message.ID == "" {
-					return 0, errors.New("mailpit search returned a message without an ID")
+					return 0, errMailpitMessageMissingID
 				}
 
 				ids[message.ID] = struct{}{}
@@ -126,7 +135,7 @@ func (c *Client) searchRecipient(ctx context.Context, recipient string, start in
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("search request returned %s", resp.Status)
+		return nil, fmt.Errorf("%w %s", errMailpitSearchStatus, resp.Status)
 	}
 
 	var result struct {
@@ -168,10 +177,10 @@ func (c *Client) deleteMessages(ctx context.Context, ids []string) error {
 	if resp.StatusCode != http.StatusOK {
 		detail, readErr := io.ReadAll(io.LimitReader(resp.Body, 4096))
 		if readErr != nil {
-			return fmt.Errorf("delete request returned %s (read response: %w)", resp.Status, readErr)
+			return fmt.Errorf("%w %s (read response: %w)", errMailpitDeleteStatus, resp.Status, readErr)
 		}
 
-		return fmt.Errorf("delete request returned %s: %s", resp.Status, strings.TrimSpace(string(detail)))
+		return fmt.Errorf("%w %s: %s", errMailpitDeleteStatus, resp.Status, strings.TrimSpace(string(detail)))
 	}
 
 	return nil

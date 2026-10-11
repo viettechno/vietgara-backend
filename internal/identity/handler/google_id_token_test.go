@@ -2,7 +2,6 @@ package handler_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -75,7 +74,7 @@ func TestSignInWithGoogleIdToken_Errors(t *testing.T) {
 		},
 		"no verifier": {verifier: nil, code: codes.FailedPrecondition, reason: "GOOGLE_NOT_CONFIGURED"},
 		"invalid token": {
-			verifier: &fakeVerifier{configured: true, err: errors.New("bad signature")},
+			verifier: &fakeVerifier{configured: true, err: errBadGoogleSignature},
 			code:     codes.Unauthenticated, reason: handler.ReasonGoogleTokenInvalid,
 		},
 		"unverified e-mail": {

@@ -22,6 +22,8 @@ import (
 
 const pgUniqueViolation = "23505"
 
+var errInvalidRevenuePeriodUnit = errors.New("billing: invalid period unit")
+
 // PostgresRepository implements usecase.Repository over the shared pgx
 // pool.
 type PostgresRepository struct {
@@ -306,7 +308,7 @@ var truncUnits = map[string]bool{"day": true, "month": true, "quarter": true, "y
 // use case. from is inclusive, to is exclusive.
 func (r *PostgresRepository) RevenueByPeriod(ctx context.Context, garageID, unit string, from, to time.Time) ([]RevenueBucket, error) {
 	if !truncUnits[unit] {
-		return nil, fmt.Errorf("billing: invalid period unit %q", unit)
+		return nil, fmt.Errorf("%w %q", errInvalidRevenuePeriodUnit, unit)
 	}
 
 	q := platformdb.QuerierFromContext(ctx, r.pool)

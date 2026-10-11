@@ -15,6 +15,13 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/identity/usecase"
 )
 
+var (
+	errGoogleProfileMissingFields   = errors.New("google profile is missing required fields")
+	errGoogleInvalidTokenResponse   = errors.New("invalid token response")
+	errGoogleTokenEndpointStatus    = errors.New("token endpoint returned")
+	errGoogleUserInfoEndpointStatus = errors.New("userinfo endpoint returned")
+)
+
 var googleHTTPClient = &http.Client{Timeout: 10 * time.Second}
 
 type googleTokenResponse struct {
@@ -42,7 +49,7 @@ func exchangeGoogleCode(ctx context.Context, config GoogleOAuthConfig, code stri
 	}
 
 	if info.Sub == "" || info.Email == "" {
-		return usecase.GoogleProfile{}, errors.New("google profile is missing required fields")
+		return usecase.GoogleProfile{}, errGoogleProfileMissingFields
 	}
 
 	locale := domain.LocaleVI
@@ -75,12 +82,12 @@ func fetchGoogleToken(ctx context.Context, config GoogleOAuthConfig, code string
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return googleTokenResponse{}, fmt.Errorf("token endpoint returned %s", resp.Status)
+		return googleTokenResponse{}, fmt.Errorf("%w %s", errGoogleTokenEndpointStatus, resp.Status)
 	}
 
 	var token googleTokenResponse
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&token); err != nil || token.AccessToken == "" {
-		return googleTokenResponse{}, errors.New("invalid token response")
+		return googleTokenResponse{}, errGoogleInvalidTokenResponse
 	}
 
 	return token, nil
@@ -101,7 +108,7 @@ func fetchGoogleUserInfo(ctx context.Context, config GoogleOAuthConfig, accessTo
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
-		return googleUserInfo{}, fmt.Errorf("userinfo endpoint returned %s", resp.Status)
+		return googleUserInfo{}, fmt.Errorf("%w %s", errGoogleUserInfoEndpointStatus, resp.Status)
 	}
 
 	var info googleUserInfo

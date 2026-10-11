@@ -2,7 +2,6 @@ package usecase_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -124,7 +123,7 @@ func TestListMyWork_EmptyWithoutAssignedLines(t *testing.T) {
 }
 
 func TestListMyWork_Errors(t *testing.T) {
-	boom := errors.New("boom")
+	boom := errTechnicianWorkBoom
 
 	_, err := usecase.NewTechnicianUseCase(usecase.Deps{
 		Memberships: memberships{err: boom}, RepairOrders: &repairOrders{}, Tx: scopedTx{},

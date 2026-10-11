@@ -23,7 +23,7 @@ type users struct{ err error }
 
 func (a users) Email(_ context.Context, userID string) (string, error) {
 	if userID != me {
-		return "", errors.New("unexpected user")
+		return "", errUnexpectedUser
 	}
 
 	return "binh@example.com", a.err
@@ -52,7 +52,7 @@ func (w *world) FindByEmail(_ context.Context, email string) ([]usecase.Customer
 
 func (w *world) check(garageID string) error {
 	if w.scope.GarageID != garageID {
-		return errors.New("read outside its garage scope")
+		return errReadOutsideGarageScope
 	}
 
 	return w.readErr

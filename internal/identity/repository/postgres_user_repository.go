@@ -18,6 +18,11 @@ import (
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 )
 
+var (
+	errDeleteTestUsersEmptyEmailDomain = errors.New("delete test users: empty e-mail domain")
+	errListTestUserEmailsEmptyDomain   = errors.New("list test user e-mails: empty e-mail domain")
+)
+
 // PostgresUserRepository implements usecase.UserRepository. The
 // users table has no garage_id and no RLS policy (it sits above the
 // tenant level), so queries here never need a tenant context.
@@ -185,7 +190,7 @@ func mapUniqueViolation(err error) error {
 // cascade) does not keep the others; its error is returned with the rest.
 func (r *PostgresUserRepository) DeleteTestUsers(ctx context.Context, emailDomain string, createdBefore time.Time) (int64, error) {
 	if emailDomain == "" {
-		return 0, errors.New("delete test users: empty e-mail domain")
+		return 0, errDeleteTestUsersEmptyEmailDomain
 	}
 
 	q := platformdb.QuerierFromContext(ctx, r.pool)
@@ -225,7 +230,7 @@ func (r *PostgresUserRepository) DeleteTestUsers(ctx context.Context, emailDomai
 // ListTestUserEmails returns the recipients of test users eligible for purge.
 func (r *PostgresUserRepository) ListTestUserEmails(ctx context.Context, emailDomain string, createdBefore time.Time) ([]string, error) {
 	if emailDomain == "" {
-		return nil, errors.New("list test user e-mails: empty e-mail domain")
+		return nil, errListTestUserEmailsEmptyDomain
 	}
 
 	q := platformdb.QuerierFromContext(ctx, r.pool)

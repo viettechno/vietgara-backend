@@ -27,6 +27,14 @@ type mailpitMessageDeleter interface {
 	DeleteMessagesForRecipients(context.Context, []string) (int, error)
 }
 
+var (
+	errUnexpectedPositionalArguments = errors.New("unexpected positional arguments")
+	errMailpitAPIURLRequired         = errors.New("MAILPIT_API_URL is required; purge is disabled")
+	errDatabaseURLRequired           = errors.New("DATABASE_URL is required")
+	errTestUsersEmailDomainRequired  = errors.New("TEST_USERS_EMAIL_DOMAIN is required; purge is disabled")
+	errConfirmDomainMismatch         = errors.New("--confirm-domain must exactly match TEST_USERS_EMAIL_DOMAIN")
+)
+
 func main() {
 	if err := execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "purge-test-users:", err)
@@ -54,7 +62,7 @@ func run(ctx context.Context, args []string, lookupEnv func(string) (string, boo
 	}
 
 	if flags.NArg() != 0 {
-		return errors.New("unexpected positional arguments")
+		return errUnexpectedPositionalArguments
 	}
 
 	domain, err := confirmedDomain(lookupEnv, *confirmDomain)
@@ -64,7 +72,7 @@ func run(ctx context.Context, args []string, lookupEnv func(string) (string, boo
 
 	mailpitURL, ok := lookupEnv("MAILPIT_API_URL")
 	if !ok || mailpitURL == "" {
-		return errors.New("MAILPIT_API_URL is required; purge is disabled")
+		return errMailpitAPIURLRequired
 	}
 
 	mailpitUsername, _ := lookupEnv("MAILPIT_API_USERNAME")
@@ -77,7 +85,7 @@ func run(ctx context.Context, args []string, lookupEnv func(string) (string, boo
 
 	dsn, ok := lookupEnv("DATABASE_URL")
 	if !ok || dsn == "" {
-		return errors.New("DATABASE_URL is required")
+		return errDatabaseURLRequired
 	}
 
 	connPool, err := platformdb.NewPgxPool(ctx, dsn)
@@ -130,7 +138,7 @@ func purgeTestUsers(
 func confirmedDomain(lookupEnv func(string) (string, bool), confirmation string) (testusers.Domain, error) {
 	rawDomain, ok := lookupEnv("TEST_USERS_EMAIL_DOMAIN")
 	if !ok || rawDomain == "" {
-		return testusers.Domain{}, errors.New("TEST_USERS_EMAIL_DOMAIN is required; purge is disabled")
+		return testusers.Domain{}, errTestUsersEmailDomainRequired
 	}
 
 	domain, err := testusers.Parse(rawDomain)
@@ -139,7 +147,7 @@ func confirmedDomain(lookupEnv func(string) (string, bool), confirmation string)
 	}
 
 	if confirmation == "" || confirmation != domain.String() {
-		return testusers.Domain{}, fmt.Errorf("--confirm-domain must exactly match TEST_USERS_EMAIL_DOMAIN %q", domain.String())
+		return testusers.Domain{}, fmt.Errorf("%w %q", errConfirmDomainMismatch, domain.String())
 	}
 
 	return domain, nil

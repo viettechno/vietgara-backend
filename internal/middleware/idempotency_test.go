@@ -2,7 +2,6 @@ package middleware_test
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 
@@ -211,7 +210,7 @@ func TestIdempotency_StoreFailure(t *testing.T) {
 	t.Parallel()
 
 	store := newMemStore()
-	store.claimErr = errors.New("db down")
+	store.claimErr = errMiddlewareDBDown
 	p := &pipeline{store: store}
 
 	_, _, err := p.call(t, methodCreate, "key-1", createReq("ro-1"))

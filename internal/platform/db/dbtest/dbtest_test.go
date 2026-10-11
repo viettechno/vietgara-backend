@@ -1,7 +1,6 @@
 package dbtest_test
 
 import (
-	"errors"
 	"testing"
 	"time"
 
@@ -18,7 +17,7 @@ func TestScriptedTx(t *testing.T) {
 	t.Parallel()
 
 	now := time.Now()
-	boom := errors.New("boom")
+	boom := errDBTestBoom
 
 	var gotArgs []any
 
@@ -76,7 +75,7 @@ func TestScriptedTx(t *testing.T) {
 func TestRowsAndErrors(t *testing.T) {
 	t.Parallel()
 
-	boom := errors.New("boom")
+	boom := errDBTestBoom
 
 	require.ErrorIs(t, dbtest.ErrRow(pgx.ErrNoRows).Scan(), pgx.ErrNoRows)
 	require.ErrorContains(t, dbtest.Row(1).Scan(new(int), new(int)), "1 values for 2")

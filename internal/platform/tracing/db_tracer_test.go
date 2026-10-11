@@ -2,7 +2,6 @@ package tracing_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -42,7 +41,7 @@ func TestQueryTracer(t *testing.T) {
 		qt := tracing.NewQueryTracer(provider)
 
 		ctx := qt.TraceQueryStart(t.Context(), nil, pgx.TraceQueryStartData{SQL: "SELECT 1/0"})
-		qt.TraceQueryEnd(ctx, nil, pgx.TraceQueryEndData{Err: errors.New("division by zero")})
+		qt.TraceQueryEnd(ctx, nil, pgx.TraceQueryEndData{Err: errTraceDivisionByZero})
 
 		spans := recorder.Ended()
 		require.Len(t, spans, 1)

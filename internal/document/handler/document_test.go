@@ -1,7 +1,6 @@
 package handler_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -90,7 +89,7 @@ func TestExportQuotePdf(t *testing.T) {
 		e := newEnv(t)
 		e.garages.EXPECT().Get(anyArg, garageID).Return(defaultGarage(), nil).Once()
 
-		notFound := apperror.Wrap(apperror.CodeNotFound, "quote not found", errors.New("boom"))
+		notFound := apperror.Wrap(apperror.CodeNotFound, "quote not found", errDocumentTestBoom)
 		e.quotes.EXPECT().Get(anyArg, garageID, quoteID).Return(usecase.QuoteInfo{}, notFound).Once()
 
 		_, err := e.srv.ExportQuotePdf(t.Context(), &documentv1.ExportQuotePdfRequest{GarageId: garageID, QuoteId: quoteID})

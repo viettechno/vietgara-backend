@@ -14,6 +14,8 @@ import (
 	_ "github.com/lib/pq" // database/sql driver for EnsureAppLogin.
 )
 
+var errInvalidDatabaseUserName = errors.New("invalid database user name")
+
 // RunMigrations runs all pending migrations
 // connectionString should be in format: postgres://user:password@host:port/dbname?sslmode=disable
 // migrationsPath should be the path to migrations directory: file://path/to/migrations
@@ -107,7 +109,7 @@ func ForceMigrationVersion(connectionString, migrationsPath string, version int)
 // roles (the migration owner).
 func EnsureAppLogin(connectionString, user, password string) error {
 	if !validRoleName(user) {
-		return fmt.Errorf("invalid database user name %q", user)
+		return fmt.Errorf("%w %q", errInvalidDatabaseUserName, user)
 	}
 
 	conn, err := sql.Open("postgres", connectionString)

@@ -35,7 +35,9 @@ var (
 	ErrNotConfigured = errors.New("google id token sign-in is not configured")
 	// ErrInvalidToken: the token is malformed, forged, expired, or for
 	// another app.
-	ErrInvalidToken = errors.New("google id token is invalid")
+	ErrInvalidToken          = errors.New("google id token is invalid")
+	errUnknownSigningKey     = errors.New("unknown signing key")
+	errFetchGoogleKeysStatus = errors.New("fetch google keys")
 )
 
 // Claims are the identity claims of a verified token.
@@ -153,7 +155,7 @@ func (v *Verifier) key(ctx context.Context, kid string) (*rsa.PublicKey, error) 
 
 	key, ok := v.keys[kid]
 	if !ok {
-		return nil, fmt.Errorf("unknown signing key %q", kid)
+		return nil, fmt.Errorf("%w %q", errUnknownSigningKey, kid)
 	}
 
 	return key, nil
@@ -183,7 +185,7 @@ func (v *Verifier) refresh(ctx context.Context) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("fetch google keys: %s", resp.Status)
+		return fmt.Errorf("%w: %s", errFetchGoogleKeysStatus, resp.Status)
 	}
 
 	var set jwks

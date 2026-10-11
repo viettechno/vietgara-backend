@@ -12,6 +12,11 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/testusers"
 )
 
+var (
+	errTestMailpitUnavailable  = errors.New("mailpit unavailable")
+	errTestDatabaseUnavailable = errors.New("database unavailable")
+)
+
 func TestConfirmedDomain(t *testing.T) {
 	t.Parallel()
 
@@ -164,13 +169,13 @@ func TestPurgeTestUsersDoesNotDeleteUsersWhenMailpitFails(t *testing.T) {
 	}
 	mail := &fakeMailpitDeleter{
 		events:    &events,
-		deleteErr: errors.New("Mailpit unavailable"),
+		deleteErr: errTestMailpitUnavailable,
 	}
 
 	deletedUsers, deletedMessages, err := purgeTestUsers(
 		t.Context(), users, mail, "blackbox.vietgara.test", time.Now(),
 	)
-	require.ErrorContains(t, err, "Mailpit unavailable")
+	require.ErrorContains(t, err, "mailpit unavailable")
 	assert.Zero(t, deletedUsers)
 	assert.Zero(t, deletedMessages)
 	assert.Equal(t, []string{"list", "delete-mail"}, events)
@@ -182,7 +187,7 @@ func TestPurgeTestUsersDoesNotContactMailpitWhenListingFails(t *testing.T) {
 	events := []string{}
 	users := &fakeTestUserRepository{
 		events:  &events,
-		listErr: errors.New("database unavailable"),
+		listErr: errTestDatabaseUnavailable,
 	}
 	mail := &fakeMailpitDeleter{events: &events}
 

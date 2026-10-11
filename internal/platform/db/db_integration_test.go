@@ -5,7 +5,6 @@ package db_test
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -68,7 +67,7 @@ func TestTxManager_WithTransactionReal(t *testing.T) {
 		_, err := admin.ExecContext(t.Context(), "TRUNCATE "+txTestTable)
 		require.NoError(t, err)
 
-		wantErr := errors.New("callback failed")
+		wantErr := errIntegrationCallbackFailed
 
 		err = m.WithTransaction(t.Context(), dbpkg.GarageScope(garageID), func(ctx context.Context) error {
 			_, err := dbpkg.QuerierFromContext(ctx, pool).Exec(ctx, "INSERT INTO "+txTestTable+" (id) VALUES (2)")

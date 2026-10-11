@@ -21,6 +21,7 @@ import (
 var (
 	errDeleteTestUsersEmptyEmailDomain = errors.New("delete test users: empty e-mail domain")
 	errListTestUserEmailsEmptyDomain   = errors.New("list test user e-mails: empty e-mail domain")
+	errListTestUserGaragesEmptyDomain  = errors.New("list test-user garages: empty e-mail domain")
 )
 
 // PostgresUserRepository implements usecase.UserRepository. The
@@ -233,21 +234,80 @@ func (r *PostgresUserRepository) ListTestUserEmails(ctx context.Context, emailDo
 		return nil, errListTestUserEmailsEmptyDomain
 	}
 
-	q := platformdb.QuerierFromContext(ctx, r.pool)
-
-	rows, err := q.Query(ctx, `
+	emails, err := r.listTestUserValues(ctx, emailDomain, createdBefore, `
 		SELECT email FROM users
 		WHERE right(lower(email), length($1) + 1) = '@' || $1 AND created_at < $2
-		ORDER BY email`,
-		strings.ToLower(emailDomain), createdBefore)
-	if err != nil {
-		return nil, fmt.Errorf("list test user e-mails: %w", err)
-	}
-
-	emails, err := pgx.CollectRows(rows, pgx.RowTo[string])
+		ORDER BY email`)
 	if err != nil {
 		return nil, fmt.Errorf("list test user e-mails: %w", err)
 	}
 
 	return emails, nil
+}
+
+// ListTestUserGarageIDs returns garages owned by users eligible for purge.
+func (r *PostgresUserRepository) ListTestUserGarageIDs(ctx context.Context, emailDomain string, createdBefore time.Time) ([]string, error) {
+	if emailDomain == "" {
+		return nil, errListTestUserGaragesEmptyDomain
+	}
+
+	q := platformdb.QuerierFromContext(ctx, r.pool)
+
+	rows, err := q.Query(ctx, `
+		SELECT id::text FROM users
+		WHERE right(lower(email), length($1) + 1) = '@' || $1 AND created_at < $2
+		ORDER BY id`,
+		strings.ToLower(emailDomain), createdBefore)
+	if err != nil {
+		return nil, fmt.Errorf("list test users for garage cleanup: %w", err)
+	}
+
+	userIDs, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, fmt.Errorf("list test users for garage cleanup: %w", err)
+	}
+
+	txManager := platformdb.NewTxManager(r.pool)
+	garageIDs := make([]string, 0)
+
+	for _, userID := range userIDs {
+		err := txManager.WithTransaction(ctx, platformdb.UserScope(userID), func(userCtx context.Context) error {
+			q := platformdb.QuerierFromContext(userCtx, r.pool)
+
+			rows, err := q.Query(userCtx, `SELECT id::text FROM garages WHERE user_id = $1 ORDER BY id`, userID)
+			if err != nil {
+				return err
+			}
+
+			ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+			if err != nil {
+				return err
+			}
+
+			garageIDs = append(garageIDs, ids...)
+
+			return nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("list garages for test user %s: %w", userID, err)
+		}
+	}
+
+	return garageIDs, nil
+}
+
+func (r *PostgresUserRepository) listTestUserValues(
+	ctx context.Context,
+	emailDomain string,
+	createdBefore time.Time,
+	query string,
+) ([]string, error) {
+	q := platformdb.QuerierFromContext(ctx, r.pool)
+
+	rows, err := q.Query(ctx, query, strings.ToLower(emailDomain), createdBefore)
+	if err != nil {
+		return nil, err
+	}
+
+	return pgx.CollectRows(rows, pgx.RowTo[string])
 }

@@ -135,8 +135,11 @@ exact recipient. The command runs inside the backend container and requires
 if the test domain or Mailpit API URL is unset, or if the domain is not under a
 reserved testing TLD. Staging can run the same binary from its Compose network
 with the backend container's database and Mailpit configuration; no public
-purge endpoint is exposed. Uploaded files in local object storage are not
-deleted by this command yet.
+purge endpoint is exposed. It also removes uploaded objects under the exact
+garage prefixes owned by eligible test users using the backend's `STORAGE_*`
+configuration. File cleanup happens before database deletion; if cleanup
+fails, the command stops and leaves the test users in place so it can be
+retried safely.
 
 ## Layout
 

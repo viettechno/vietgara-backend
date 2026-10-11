@@ -68,6 +68,56 @@ func (s *LocalStore) Delete(_ context.Context, key string) error {
 	return nil
 }
 
+// DeletePrefix removes the directory named by prefix and its contents.
+func (s *LocalStore) DeletePrefix(ctx context.Context, prefix string) (int64, error) {
+	if err := ctx.Err(); err != nil {
+		return 0, fmt.Errorf("storage: delete prefix: %w", err)
+	}
+
+	key, err := cleanPrefix(prefix)
+	if err != nil {
+		return 0, err
+	}
+
+	root, err := os.OpenRoot(s.dir)
+	if err != nil {
+		return 0, fmt.Errorf("storage: open root: %w", err)
+	}
+	defer func() { _ = root.Close() }()
+
+	info, err := root.Lstat(key)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return 0, nil
+		}
+
+		return 0, fmt.Errorf("storage: stat prefix %s: %w", prefix, err)
+	}
+
+	var deleted int64
+	if !info.IsDir() {
+		deleted = 1
+	} else if err := fs.WalkDir(root.FS(), key, func(_ string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+
+		if !entry.IsDir() {
+			deleted++
+		}
+
+		return nil
+	}); err != nil {
+		return 0, fmt.Errorf("storage: walk prefix %s: %w", prefix, err)
+	}
+
+	if err := root.RemoveAll(key); err != nil {
+		return 0, fmt.Errorf("storage: delete prefix %s: %w", prefix, err)
+	}
+
+	return deleted, nil
+}
+
 // KeyFromURL strips the base URL.
 func (s *LocalStore) KeyFromURL(url string) (string, bool) {
 	key, found := strings.CutPrefix(url, s.baseURL+"/")

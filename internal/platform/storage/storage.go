@@ -22,6 +22,8 @@ type Store interface {
 	Put(ctx context.Context, key, contentType string, data []byte) (string, error)
 	// Delete removes key; a missing object is not an error.
 	Delete(ctx context.Context, key string) error
+	// DeletePrefix removes all objects under prefix and returns the number removed.
+	DeletePrefix(ctx context.Context, prefix string) (int64, error)
 	// KeyFromURL returns the key of a URL this store produced.
 	KeyFromURL(url string) (string, bool)
 }
@@ -47,6 +49,19 @@ func cleanKey(key string) (string, error) {
 	}
 
 	return cleaned, nil
+}
+
+func cleanPrefix(prefix string) (string, error) {
+	if !strings.HasSuffix(prefix, "/") {
+		return "", ErrInvalidKey
+	}
+
+	key, err := cleanKey(strings.TrimSuffix(prefix, "/"))
+	if err != nil {
+		return "", err
+	}
+
+	return key, nil
 }
 
 // Config selects and configures a backend.

@@ -15,16 +15,22 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/identity/repository"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/platform/mailpit"
+	"github.com/viettechno/vietgara-backend/internal/platform/storage"
 	"github.com/viettechno/vietgara-backend/internal/platform/testusers"
 )
 
 type testUserRepository interface {
 	ListTestUserEmails(context.Context, string, time.Time) ([]string, error)
+	ListTestUserGarageIDs(context.Context, string, time.Time) ([]string, error)
 	DeleteTestUsers(context.Context, string, time.Time) (int64, error)
 }
 
 type mailpitMessageDeleter interface {
 	DeleteMessagesForRecipients(context.Context, []string) (int, error)
+}
+
+type uploadedFileDeleter interface {
+	DeletePrefix(context.Context, string) (int64, error)
 }
 
 var (
@@ -83,56 +89,97 @@ func run(ctx context.Context, args []string, lookupEnv func(string) (string, boo
 		return fmt.Errorf("configure Mailpit client: %w", err)
 	}
 
-	dsn, ok := lookupEnv("DATABASE_URL")
-	if !ok || dsn == "" {
-		return errDatabaseURLRequired
-	}
-
-	connPool, err := platformdb.NewPgxPool(ctx, dsn)
+	pool, err := newDatabasePool(ctx, lookupEnv)
 	if err != nil {
-		return fmt.Errorf("connect to database: %w", err)
+		return err
 	}
-
-	pool := platformdb.NewPool(ctx, connPool)
 	defer pool.Close()
+
+	files, err := newFileStore(ctx, lookupEnv)
+	if err != nil {
+		return fmt.Errorf("configure file storage: %w", err)
+	}
 
 	cutoff := time.Now()
 
-	deleted, messages, err := purgeTestUsers(ctx, repository.NewPostgresUserRepository(pool), mailpitClient, domain.String(), cutoff)
+	deleted, messages, fileCount, err := purgeTestUsers(
+		ctx, repository.NewPostgresUserRepository(pool), mailpitClient, files, domain.String(), cutoff,
+	)
 	if err != nil {
 		return fmt.Errorf("purge test users: %w", err)
 	}
 
-	if _, err := fmt.Fprintf(stdout, "Purged %d test users and %d Mailpit messages from %s\n", deleted, messages, domain.String()); err != nil {
+	if _, err := fmt.Fprintf(stdout, "Purged %d test users, %d Mailpit messages, and %d uploaded files from %s\n",
+		deleted, messages, fileCount, domain.String()); err != nil {
 		return fmt.Errorf("write purge summary: %w", err)
 	}
 
 	return nil
 }
 
+func newDatabasePool(ctx context.Context, lookupEnv func(string) (string, bool)) (*platformdb.Pool, error) {
+	dsn, ok := lookupEnv("DATABASE_URL")
+	if !ok || dsn == "" {
+		return nil, errDatabaseURLRequired
+	}
+
+	connPool, err := platformdb.NewPgxPool(ctx, dsn)
+	if err != nil {
+		return nil, fmt.Errorf("connect to database: %w", err)
+	}
+
+	return platformdb.NewPool(ctx, connPool), nil
+}
+
+func newFileStore(ctx context.Context, lookupEnv func(string) (string, bool)) (storage.Store, error) {
+	return storage.New(ctx, storage.Config{
+		Backend:       envOr(lookupEnv, "STORAGE_BACKEND", "local"),
+		LocalDir:      envOr(lookupEnv, "STORAGE_LOCAL_DIR", "./.data/uploads"),
+		PublicBaseURL: envOr(lookupEnv, "STORAGE_PUBLIC_BASE_URL", ""),
+		Bucket:        envOr(lookupEnv, "STORAGE_GCS_BUCKET", ""),
+	})
+}
+
 func purgeTestUsers(
 	ctx context.Context,
 	users testUserRepository,
 	messages mailpitMessageDeleter,
+	files uploadedFileDeleter,
 	emailDomain string,
 	cutoff time.Time,
-) (int64, int, error) {
+) (int64, int, int64, error) {
 	recipients, err := users.ListTestUserEmails(ctx, emailDomain, cutoff)
 	if err != nil {
-		return 0, 0, fmt.Errorf("list test-user e-mail addresses: %w", err)
+		return 0, 0, 0, fmt.Errorf("list test-user e-mail addresses: %w", err)
+	}
+
+	garageIDs, err := users.ListTestUserGarageIDs(ctx, emailDomain, cutoff)
+	if err != nil {
+		return 0, 0, 0, fmt.Errorf("list test-user garages: %w", err)
 	}
 
 	deletedMessages, err := messages.DeleteMessagesForRecipients(ctx, recipients)
 	if err != nil {
-		return 0, 0, fmt.Errorf("delete Mailpit messages: %w", err)
+		return 0, 0, 0, fmt.Errorf("delete Mailpit messages: %w", err)
+	}
+
+	var deletedFiles int64
+
+	for _, garageID := range garageIDs {
+		count, err := files.DeletePrefix(ctx, "garages/"+garageID+"/")
+		if err != nil {
+			return 0, deletedMessages, deletedFiles, fmt.Errorf("delete uploaded files for garage %s: %w", garageID, err)
+		}
+
+		deletedFiles += count
 	}
 
 	deletedUsers, err := users.DeleteTestUsers(ctx, emailDomain, cutoff)
 	if err != nil {
-		return deletedUsers, deletedMessages, fmt.Errorf("delete test users: %w", err)
+		return deletedUsers, deletedMessages, deletedFiles, fmt.Errorf("delete test users: %w", err)
 	}
 
-	return deletedUsers, deletedMessages, nil
+	return deletedUsers, deletedMessages, deletedFiles, nil
 }
 
 func confirmedDomain(lookupEnv func(string) (string, bool), confirmation string) (testusers.Domain, error) {
@@ -151,4 +198,13 @@ func confirmedDomain(lookupEnv func(string) (string, bool), confirmation string)
 	}
 
 	return domain, nil
+}
+
+func envOr(lookupEnv func(string) (string, bool), key, fallback string) string {
+	value, ok := lookupEnv(key)
+	if !ok || value == "" {
+		return fallback
+	}
+
+	return value
 }

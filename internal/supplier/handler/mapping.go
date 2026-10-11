@@ -29,6 +29,7 @@ func supplierToProto(s *domain.Supplier) *supplierv1.Supplier {
 			AccountHolder: s.Bank.AccountHolder,
 		},
 		Note:      s.Note,
+		IsActive:  s.IsActive,
 		CreatedAt: converter.TimeToProto(s.CreatedAt),
 		UpdatedAt: converter.TimeToProto(s.UpdatedAt),
 	}

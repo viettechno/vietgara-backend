@@ -11,6 +11,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/customer/usecase"
 	"github.com/viettechno/vietgara-backend/internal/mocks"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/lifecycle"
 )
 
 const (
@@ -30,10 +31,21 @@ func existingVehicle() *domain.Vehicle {
 func newVehicleUseCase(t *testing.T) (*usecase.VehicleUseCase, *mocks.MockVehicleRepository, *mocks.MockCustomerRepository) {
 	t.Helper()
 
+	uc, vehicles, customers, _ := newVehicleUseCaseWithUsage(t)
+
+	return uc, vehicles, customers
+}
+
+func newVehicleUseCaseWithUsage(
+	t *testing.T,
+) (*usecase.VehicleUseCase, *mocks.MockVehicleRepository, *mocks.MockCustomerRepository, *mocks.MockCustomerUsageChecker) {
+	t.Helper()
+
 	vehicles := mocks.NewMockVehicleRepository(t)
 	customers := mocks.NewMockCustomerRepository(t)
+	usage := mocks.NewMockCustomerUsageChecker(t)
 
-	return usecase.NewVehicleUseCase(vehicles, customers, nil, clock()), vehicles, customers
+	return usecase.NewVehicleUseCase(vehicles, customers, nil, usage, clock()), vehicles, customers, usage
 }
 
 func TestVehicleUseCase_Create(t *testing.T) {
@@ -190,8 +202,6 @@ func TestVehicleUseCase_GetListDelete(t *testing.T) {
 		ListFilter: usecase.ListFilter{Query: "51F", Limit: 5, Offset: 5}, CustomerID: customerID,
 	}).Return([]*domain.Vehicle{existingVehicle()}, 6, nil).Once()
 	vehicles.EXPECT().List(mock.Anything, "garage-2", mock.Anything).Return(nil, 0, errBoom).Once()
-	vehicles.EXPECT().SoftDelete(mock.Anything, garageID, vehicleID, actorID).Return(nil).Once()
-	vehicles.EXPECT().SoftDelete(mock.Anything, garageID, "missing", actorID).Return(domain.ErrVehicleNotFound).Once()
 
 	v, err := uc.Get(t.Context(), garageID, vehicleID)
 	require.NoError(t, err)
@@ -209,9 +219,84 @@ func TestVehicleUseCase_GetListDelete(t *testing.T) {
 
 	_, err = uc.List(t.Context(), usecase.ListVehiclesRequest{GarageID: "garage-2"})
 	assertAppError(t, err, apperror.CodeInternal)
+}
 
-	require.NoError(t, uc.Delete(t.Context(), garageID, vehicleID, actorID))
-	assertAppError(t, uc.Delete(t.Context(), garageID, "missing", actorID), apperror.CodeNotFound)
+func TestVehicleUseCase_Delete(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		findErr     error
+		inUse       bool
+		usageErr    error
+		dryRun      bool
+		softDelete  error
+		deactivate  error
+		wantOutcome lifecycle.Outcome
+		wantCode    apperror.Code
+		wantDelete  bool
+		wantDeact   bool
+	}{
+		{name: "deletes an unused vehicle", wantOutcome: lifecycle.Deleted, wantDelete: true},
+		{name: "deactivates a vehicle that documents refer to", inUse: true, wantOutcome: lifecycle.Deactivated, wantDeact: true},
+		{name: "a dry run changes nothing", inUse: true, dryRun: true, wantOutcome: lifecycle.Deactivated},
+		{name: "unknown vehicle", findErr: domain.ErrVehicleNotFound, wantCode: apperror.CodeNotFound},
+		{name: "usage check failure", usageErr: errBoom, wantCode: apperror.CodeInternal},
+		{name: "delete failure", softDelete: errBoom, wantCode: apperror.CodeInternal, wantDelete: true},
+		{name: "deactivate failure", inUse: true, deactivate: errBoom, wantCode: apperror.CodeInternal, wantDeact: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			uc, vehicles, _, usage := newVehicleUseCaseWithUsage(t)
+
+			if tt.findErr != nil {
+				vehicles.EXPECT().FindByID(mock.Anything, garageID, vehicleID).Return(nil, tt.findErr).Once()
+			} else {
+				vehicles.EXPECT().FindByID(mock.Anything, garageID, vehicleID).Return(existingVehicle(), nil).Once()
+				usage.EXPECT().VehicleInUse(mock.Anything, garageID, vehicleID).Return(tt.inUse, tt.usageErr).Once()
+			}
+
+			if tt.wantDelete {
+				vehicles.EXPECT().SoftDelete(mock.Anything, garageID, vehicleID, actorID).Return(tt.softDelete).Once()
+			}
+
+			if tt.wantDeact {
+				vehicles.EXPECT().SetActive(mock.Anything, garageID, vehicleID, false, actorID).Return(tt.deactivate).Once()
+			}
+
+			outcome, err := uc.Delete(t.Context(), usecase.DeleteVehicleRequest{
+				GarageID: garageID, VehicleID: vehicleID, ActorID: actorID, DryRun: tt.dryRun,
+			})
+			if tt.wantCode != "" {
+				assertAppError(t, err, tt.wantCode)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantOutcome, outcome)
+		})
+	}
+}
+
+func TestVehicleUseCase_Activate(t *testing.T) {
+	t.Parallel()
+
+	uc, vehicles, _ := newVehicleUseCase(t)
+
+	vehicles.EXPECT().SetActive(mock.Anything, garageID, vehicleID, true, actorID).Return(nil).Once()
+	vehicles.EXPECT().FindByID(mock.Anything, garageID, vehicleID).Return(existingVehicle(), nil).Once()
+	vehicles.EXPECT().SetActive(mock.Anything, garageID, "missing", true, actorID).Return(domain.ErrVehicleNotFound).Once()
+
+	v, err := uc.Activate(t.Context(), garageID, vehicleID, actorID)
+	require.NoError(t, err)
+	assert.Equal(t, vehicleID, v.ID)
+
+	_, err = uc.Activate(t.Context(), garageID, "missing", actorID)
+	assertAppError(t, err, apperror.CodeNotFound)
 }
 
 func TestVehicleUseCase_GetHistory(t *testing.T) {
@@ -244,7 +329,7 @@ func TestVehicleUseCase_GetHistory(t *testing.T) {
 		vehicles := mocks.NewMockVehicleRepository(t)
 		customers := mocks.NewMockCustomerRepository(t)
 		history := mocks.NewMockHistoryReader(t)
-		uc := usecase.NewVehicleUseCase(vehicles, customers, history)
+		uc := usecase.NewVehicleUseCase(vehicles, customers, history, nil)
 
 		vehicles.EXPECT().FindByID(mock.Anything, garageID, vehicleID).Return(existingVehicle(), nil).Once()
 

@@ -120,6 +120,8 @@ func (s *Server) ListSuppliers(ctx context.Context, req *supplierv1.ListSupplier
 			PageRequest: pageRequest(req.GetPage(), req.GetPageSize()),
 			GarageID:    req.GetGarageId(),
 			Query:       req.GetQuery(),
+
+			IncludeInactive: req.GetIncludeInactive(),
 		})
 		if err != nil {
 			return nil, err
@@ -136,13 +138,29 @@ func (s *Server) ListSuppliers(ctx context.Context, req *supplierv1.ListSupplier
 	})
 }
 
-// DeleteSupplier soft-deletes a supplier.
+// DeleteSupplier deletes or deactivates a supplier (FR-CAT-07) and answers
+// which; with dry_run it only says which.
 func (s *Server) DeleteSupplier(ctx context.Context, req *supplierv1.DeleteSupplierRequest) (*supplierv1.DeleteSupplierResponse, error) {
 	return run(ctx, func(actorID string) (*supplierv1.DeleteSupplierResponse, error) {
-		if err := s.suppliers.Delete(ctx, req.GetGarageId(), req.GetSupplierId(), actorID); err != nil {
+		outcome, err := s.suppliers.Delete(ctx, usecase.DeleteRequest{
+			GarageID: req.GetGarageId(), SupplierID: req.GetSupplierId(), ActorID: actorID, DryRun: req.GetDryRun(),
+		})
+		if err != nil {
 			return nil, err
 		}
 
-		return &supplierv1.DeleteSupplierResponse{}, nil
+		return &supplierv1.DeleteSupplierResponse{Outcome: httpapi.DeleteOutcome(outcome)}, nil
+	})
+}
+
+// ActivateSupplier reactivates a deactivated supplier.
+func (s *Server) ActivateSupplier(ctx context.Context, req *supplierv1.ActivateSupplierRequest) (*supplierv1.ActivateSupplierResponse, error) {
+	return run(ctx, func(actorID string) (*supplierv1.ActivateSupplierResponse, error) {
+		activated, err := s.suppliers.Activate(ctx, req.GetGarageId(), req.GetSupplierId(), actorID)
+		if err != nil {
+			return nil, err
+		}
+
+		return &supplierv1.ActivateSupplierResponse{Supplier: supplierToProto(activated)}, nil
 	})
 }

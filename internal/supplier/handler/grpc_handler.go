@@ -31,11 +31,12 @@ func Policies() middleware.Policies {
 	read, write := access.Requires(access.SupplierRead), access.Requires(access.SupplierWrite)
 
 	return middleware.Policies{
-		supplierv1.SupplierService_ListSuppliers_FullMethodName:  middleware.GarageMethod(read),
-		supplierv1.SupplierService_GetSupplier_FullMethodName:    middleware.GarageMethod(read),
-		supplierv1.SupplierService_CreateSupplier_FullMethodName: middleware.GarageMethod(write),
-		supplierv1.SupplierService_UpdateSupplier_FullMethodName: middleware.GarageMethod(write),
-		supplierv1.SupplierService_DeleteSupplier_FullMethodName: middleware.GarageMethod(write),
+		supplierv1.SupplierService_ListSuppliers_FullMethodName:    middleware.GarageMethod(read),
+		supplierv1.SupplierService_GetSupplier_FullMethodName:      middleware.GarageMethod(read),
+		supplierv1.SupplierService_CreateSupplier_FullMethodName:   middleware.GarageMethod(write),
+		supplierv1.SupplierService_UpdateSupplier_FullMethodName:   middleware.GarageMethod(write),
+		supplierv1.SupplierService_DeleteSupplier_FullMethodName:   middleware.GarageMethod(write),
+		supplierv1.SupplierService_ActivateSupplier_FullMethodName: middleware.GarageMethod(write),
 	}
 }
 

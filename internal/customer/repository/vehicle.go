@@ -12,15 +12,16 @@ import (
 
 const (
 	vehicleColumns = `v.id, v.garage_id, v.customer_id, c.full_name, v.license_plate, v.make, v.model, v.year,
-		v.vin, v.engine_number, v.created_by, v.updated_by, v.created_at, v.updated_at`
+		v.vin, v.engine_number, v.is_active, v.created_by, v.updated_by, v.created_at, v.updated_at`
 
 	vehicleFrom = ` FROM vehicles v JOIN customers c ON c.garage_id = v.garage_id AND c.id = v.customer_id`
 
 	// vehicleSearch filters live vehicles of garage $1, optionally of
 	// customer $2 (NULL = all). $3 is an ILIKE pattern over make, model and
-	// VIN, $4 a compact pattern over the plate key; "" disables either.
+	// VIN, $4 a compact pattern over the plate key; "" disables either. $5
+	// also lists deactivated vehicles and those of a deactivated customer.
 	vehicleSearch = vehicleFrom + `
-		WHERE v.garage_id = $1 AND v.deleted_at IS NULL
+		WHERE v.garage_id = $1 AND v.deleted_at IS NULL AND ($5::bool OR (v.is_active AND c.is_active))
 		AND ($2::uuid IS NULL OR v.customer_id = $2::uuid)
 		AND ($3::text = '' OR v.make ILIKE $3 OR v.model ILIKE $3 OR v.vin ILIKE $3
 			OR ($4::text <> '' AND v.license_plate_key LIKE $4))`
@@ -45,7 +46,7 @@ func scanVehicle(row pgx.Row) (*domain.Vehicle, error) {
 	var v domain.Vehicle
 
 	err := row.Scan(&v.ID, &v.GarageID, &v.CustomerID, &v.CustomerName, &v.LicensePlate, &v.Make, &v.Model, &v.Year,
-		&v.VIN, &v.EngineNumber, &v.CreatedBy, &v.UpdatedBy, &v.CreatedAt, &v.UpdatedAt)
+		&v.VIN, &v.EngineNumber, &v.IsActive, &v.CreatedBy, &v.UpdatedBy, &v.CreatedAt, &v.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -102,11 +103,11 @@ func (r *PostgresVehicleRepository) List(ctx context.Context, garageID string, f
 		return nil, 0, nil
 	}
 
-	args := []any{garageID, nullable(filter.CustomerID), containsPattern(filter.Query), compactPattern(filter.Query)}
+	args := []any{garageID, nullable(filter.CustomerID), containsPattern(filter.Query), compactPattern(filter.Query), filter.IncludeInactive}
 
 	return listPage(ctx, platformdb.QuerierFromContext(ctx, r.pool), scanVehicle,
 		`SELECT count(*)`+vehicleSearch,
-		`SELECT `+vehicleColumns+vehicleSearch+` ORDER BY v.created_at DESC, v.id LIMIT $5 OFFSET $6`,
+		`SELECT `+vehicleColumns+vehicleSearch+` ORDER BY v.created_at DESC, v.id LIMIT $6 OFFSET $7`,
 		args, filter.Limit, filter.Offset)
 }
 
@@ -135,4 +136,45 @@ func (r *PostgresVehicleRepository) SoftDeleteByCustomer(ctx context.Context, ga
 		garageID, customerID, nullable(deletedBy))
 
 	return err
+}
+
+// SetActive deactivates or reactivates the vehicle, or returns
+// domain.ErrVehicleNotFound.
+func (r *PostgresVehicleRepository) SetActive(ctx context.Context, garageID, vehicleID string, active bool, updatedBy string) error {
+	if !isUUID(vehicleID) {
+		return domain.ErrVehicleNotFound
+	}
+
+	return execAffectingOne(ctx, platformdb.QuerierFromContext(ctx, r.pool), domain.ErrVehicleNotFound, `
+		UPDATE vehicles SET is_active = $3, updated_by = $4
+		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL`,
+		garageID, vehicleID, active, nullable(updatedBy))
+}
+
+// IDsByCustomer returns the ids of the customer's live vehicles.
+func (r *PostgresVehicleRepository) IDsByCustomer(ctx context.Context, garageID, customerID string) ([]string, error) {
+	if !isUUID(customerID) {
+		return nil, nil
+	}
+
+	rows, err := platformdb.QuerierFromContext(ctx, r.pool).Query(ctx,
+		`SELECT id FROM vehicles WHERE garage_id = $1 AND customer_id = $2 AND deleted_at IS NULL`,
+		garageID, customerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+
+		ids = append(ids, id)
+	}
+
+	return ids, rows.Err()
 }

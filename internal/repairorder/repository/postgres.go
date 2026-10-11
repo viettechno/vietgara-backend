@@ -280,6 +280,24 @@ func (r *PostgresRepository) ListForVehicle(ctx context.Context, garageID, vehic
 	return out, rows.Err()
 }
 
+// ExistsForVehicles reports whether any live repair order belongs to one of
+// the vehicles.
+func (r *PostgresRepository) ExistsForVehicles(ctx context.Context, garageID string, vehicleIDs []string) (bool, error) {
+	if len(vehicleIDs) == 0 {
+		return false, nil
+	}
+
+	var exists bool
+
+	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM repair_orders
+			WHERE garage_id = $1 AND vehicle_id = ANY($2::uuid[]) AND deleted_at IS NULL)`,
+		garageID, vehicleIDs).Scan(&exists)
+
+	return exists, err
+}
+
 func technicianIDs(ids []string) []string {
 	if ids == nil {
 		return []string{}

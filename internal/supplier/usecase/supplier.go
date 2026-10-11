@@ -7,6 +7,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/supplier/domain"
 	"github.com/viettechno/vietgara-backend/pkg/email"
+	"github.com/viettechno/vietgara-backend/pkg/lifecycle"
 	"github.com/viettechno/vietgara-backend/pkg/phone"
 )
 
@@ -101,16 +102,29 @@ type ListRequest struct {
 	GarageID string
 	// Query matches name, tax code, contact person, phone or email.
 	Query string
+	// IncludeInactive also lists deactivated suppliers.
+	IncludeInactive bool
+}
+
+// DeleteRequest is the input for UseCase.Delete.
+type DeleteRequest struct {
+	GarageID   string
+	SupplierID string
+	ActorID    string
+	// DryRun answers the outcome without changing anything.
+	DryRun bool
 }
 
 // UseCase (FR-SUP-01) manages the garage's directory of suppliers.
 type UseCase struct {
 	suppliers Repository
+	usage     UsageChecker
 }
 
-// NewUseCase wires the supplier use case to its repository.
-func NewUseCase(suppliers Repository) *UseCase {
-	return &UseCase{suppliers: suppliers}
+// NewUseCase wires the supplier use case to its repository and to the
+// check of whether documents still refer to a supplier.
+func NewUseCase(suppliers Repository, usage UsageChecker) *UseCase {
+	return &UseCase{suppliers: suppliers, usage: usage}
 }
 
 // fields is the editable part of a supplier shared by create and update;
@@ -214,7 +228,10 @@ func (uc *UseCase) Update(ctx context.Context, req UpdateRequest) (*domain.Suppl
 func (uc *UseCase) List(ctx context.Context, req ListRequest) (*Page[*domain.Supplier], error) {
 	page := req.normalize()
 
-	items, total, err := uc.suppliers.List(ctx, req.GarageID, page.filter(req.Query))
+	filter := page.filter(req.Query)
+	filter.IncludeInactive = req.IncludeInactive
+
+	items, total, err := uc.suppliers.List(ctx, req.GarageID, filter)
 	if err != nil {
 		return nil, toAppError("list suppliers", err)
 	}
@@ -222,11 +239,37 @@ func (uc *UseCase) List(ctx context.Context, req ListRequest) (*Page[*domain.Sup
 	return &Page[*domain.Supplier]{Items: items, Total: total, Page: page.Page, PageSize: page.PageSize}, nil
 }
 
-// Delete soft-deletes a supplier.
-func (uc *UseCase) Delete(ctx context.Context, garageID, supplierID, actorID string) error {
-	if err := uc.suppliers.SoftDelete(ctx, garageID, supplierID, actorID); err != nil {
-		return toAppError("delete supplier", err)
+// Delete follows the delete-or-deactivate rule (FR-CAT-07): a supplier that
+// documents refer to is deactivated; otherwise it is soft-deleted, which
+// frees its name.
+func (uc *UseCase) Delete(ctx context.Context, req DeleteRequest) (lifecycle.Outcome, error) {
+	if _, err := uc.suppliers.FindByID(ctx, req.GarageID, req.SupplierID); err != nil {
+		return "", toAppError("delete supplier", err)
 	}
 
-	return nil
+	outcome, err := lifecycle.Apply(ctx, req.DryRun, lifecycle.Rule{
+		InUse: func(ctx context.Context) (bool, error) {
+			return uc.usage.SupplierInUse(ctx, req.GarageID, req.SupplierID)
+		},
+		Delete: func(ctx context.Context) error {
+			return uc.suppliers.SoftDelete(ctx, req.GarageID, req.SupplierID, req.ActorID)
+		},
+		Deactivate: func(ctx context.Context) error {
+			return uc.suppliers.SetActive(ctx, req.GarageID, req.SupplierID, false, req.ActorID)
+		},
+	})
+	if err != nil {
+		return "", toAppError("delete supplier", err)
+	}
+
+	return outcome, nil
+}
+
+// Activate reactivates a deactivated supplier.
+func (uc *UseCase) Activate(ctx context.Context, garageID, supplierID, actorID string) (*domain.Supplier, error) {
+	if err := uc.suppliers.SetActive(ctx, garageID, supplierID, true, actorID); err != nil {
+		return nil, toAppError("activate supplier", err)
+	}
+
+	return uc.Get(ctx, garageID, supplierID)
 }

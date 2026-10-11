@@ -250,6 +250,81 @@ func (_c *MockSupplierRepository_List_Call) RunAndReturn(run func(ctx context.Co
 	return _c
 }
 
+// SetActive provides a mock function for the type MockSupplierRepository
+func (_mock *MockSupplierRepository) SetActive(ctx context.Context, garageID string, supplierID string, active bool, updatedBy string) error {
+	ret := _mock.Called(ctx, garageID, supplierID, active, updatedBy)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetActive")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, bool, string) error); ok {
+		r0 = returnFunc(ctx, garageID, supplierID, active, updatedBy)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockSupplierRepository_SetActive_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetActive'
+type MockSupplierRepository_SetActive_Call struct {
+	*mock.Call
+}
+
+// SetActive is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - supplierID string
+//   - active bool
+//   - updatedBy string
+func (_e *MockSupplierRepository_Expecter) SetActive(ctx any, garageID any, supplierID any, active any, updatedBy any) *MockSupplierRepository_SetActive_Call {
+	return &MockSupplierRepository_SetActive_Call{Call: _e.mock.On("SetActive", ctx, garageID, supplierID, active, updatedBy)}
+}
+
+func (_c *MockSupplierRepository_SetActive_Call) Run(run func(ctx context.Context, garageID string, supplierID string, active bool, updatedBy string)) *MockSupplierRepository_SetActive_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 bool
+		if args[3] != nil {
+			arg3 = args[3].(bool)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSupplierRepository_SetActive_Call) Return(err error) *MockSupplierRepository_SetActive_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockSupplierRepository_SetActive_Call) RunAndReturn(run func(ctx context.Context, garageID string, supplierID string, active bool, updatedBy string) error) *MockSupplierRepository_SetActive_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SoftDelete provides a mock function for the type MockSupplierRepository
 func (_mock *MockSupplierRepository) SoftDelete(ctx context.Context, garageID string, supplierID string, deletedBy string) error {
 	ret := _mock.Called(ctx, garageID, supplierID, deletedBy)

@@ -95,6 +95,8 @@ func (s *Server) ListVehicles(ctx context.Context, req *customerv1.ListVehiclesR
 			GarageID:    req.GetGarageId(),
 			CustomerID:  req.GetCustomerId(),
 			Query:       req.GetQuery(),
+
+			IncludeInactive: req.GetIncludeInactive(),
 		})
 		if err != nil {
 			return nil, err
@@ -109,14 +111,32 @@ func (s *Server) ListVehicles(ctx context.Context, req *customerv1.ListVehiclesR
 	})
 }
 
-// DeleteVehicle soft-deletes a vehicle.
+// DeleteVehicle deletes or deactivates a vehicle (FR-CAT-07) and answers
+// which; with dry_run it only says which.
+//
+//nolint:dupl // one RPC per resource, each with its own request and response types
 func (s *Server) DeleteVehicle(ctx context.Context, req *customerv1.DeleteVehicleRequest) (*customerv1.DeleteVehicleResponse, error) {
 	return run(ctx, func(actorID string) (*customerv1.DeleteVehicleResponse, error) {
-		if err := s.vehicles.Delete(ctx, req.GetGarageId(), req.GetVehicleId(), actorID); err != nil {
+		outcome, err := s.vehicles.Delete(ctx, usecase.DeleteVehicleRequest{
+			GarageID: req.GetGarageId(), VehicleID: req.GetVehicleId(), ActorID: actorID, DryRun: req.GetDryRun(),
+		})
+		if err != nil {
 			return nil, err
 		}
 
-		return &customerv1.DeleteVehicleResponse{}, nil
+		return &customerv1.DeleteVehicleResponse{Outcome: httpapi.DeleteOutcome(outcome)}, nil
+	})
+}
+
+// ActivateVehicle reactivates a deactivated vehicle.
+func (s *Server) ActivateVehicle(ctx context.Context, req *customerv1.ActivateVehicleRequest) (*customerv1.ActivateVehicleResponse, error) {
+	return run(ctx, func(actorID string) (*customerv1.ActivateVehicleResponse, error) {
+		v, err := s.vehicles.Activate(ctx, req.GetGarageId(), req.GetVehicleId(), actorID)
+		if err != nil {
+			return nil, err
+		}
+
+		return &customerv1.ActivateVehicleResponse{Vehicle: vehicleToProto(v)}, nil
 	})
 }
 

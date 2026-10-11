@@ -32,6 +32,7 @@ import (
 	tenantUsecase "github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 	emailpkg "github.com/viettechno/vietgara-backend/pkg/email"
+	"github.com/viettechno/vietgara-backend/pkg/lifecycle"
 	phonepkg "github.com/viettechno/vietgara-backend/pkg/phone"
 )
 
@@ -300,6 +301,37 @@ func (h vehicleHistory) History(ctx context.Context, garageID, vehicleID string)
 
 	return entries, nil
 }
+
+// customerUsage tells the Customer module whether live quotes or repair
+// orders still refer to a customer or a vehicle (the delete-or-deactivate
+// rule, FR-CAT-07), without Customer importing either module. A settlement
+// belongs to a repair order, so repair orders cover settlements too.
+type customerUsage struct {
+	quotes       *quoteRepository.PostgresRepository
+	repairOrders *repairorderUsecase.RepairOrderUseCase
+}
+
+func (u customerUsage) CustomerInUse(ctx context.Context, garageID, customerID string, vehicleIDs []string) (bool, error) {
+	return lifecycle.AnyInUse(ctx,
+		func(ctx context.Context) (bool, error) {
+			return u.quotes.ExistsLive(ctx, garageID, customerID, vehicleIDs)
+		},
+		func(ctx context.Context) (bool, error) {
+			return u.repairOrders.HasLiveForVehicles(ctx, garageID, vehicleIDs)
+		},
+	)
+}
+
+func (u customerUsage) VehicleInUse(ctx context.Context, garageID, vehicleID string) (bool, error) {
+	return u.CustomerInUse(ctx, garageID, "", []string{vehicleID})
+}
+
+// supplierUsage tells the Supplier module whether documents refer to a
+// supplier. Nothing does until goods receipts arrive (Phase 7), so a
+// supplier is always deleted for now; the goods receipt check is added here.
+type supplierUsage struct{}
+
+func (supplierUsage) SupplierInUse(context.Context, string, string) (bool, error) { return false, nil }
 
 // maxHistoryEntries bounds the vehicle history read (FR-CUS-03 shows the
 // "complete" history, but a single vehicle realistically never approaches

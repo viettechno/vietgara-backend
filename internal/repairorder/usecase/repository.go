@@ -47,6 +47,9 @@ type Repository interface {
 	// ListForVehicle returns a vehicle's repair orders, newest first, with
 	// no lines (FR-CUS-03 only needs the summary).
 	ListForVehicle(ctx context.Context, garageID, vehicleID string) ([]*domain.RepairOrder, error)
+	// ExistsForVehicles reports whether any live repair order belongs to
+	// one of the vehicles (the delete-or-deactivate rule, FR-CAT-07).
+	ExistsForVehicles(ctx context.Context, garageID string, vehicleIDs []string) (bool, error)
 }
 
 // VehicleReader confirms a vehicle belongs to the garage and reports the

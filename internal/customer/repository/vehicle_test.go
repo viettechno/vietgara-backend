@@ -18,7 +18,7 @@ func vehicleValues() []any {
 
 	return []any{
 		vehicleID, garageID, customerID, "Tran Binh", "51F-123.45", new("Toyota"), nil, &year,
-		nil, nil, nil, nil, testTime, testTime,
+		nil, nil, true, nil, nil, testTime, testTime,
 	}
 }
 
@@ -103,7 +103,7 @@ func TestPostgresVehicleRepository_List(t *testing.T) {
 
 		conn, pool := newPool(t)
 		customer := customerID
-		conn.EXPECT().QueryRow(mock.Anything, sqlContaining("SELECT count(*)"), []any{garageID, &customer, "%30a.9%", "%30A9%"}).
+		conn.EXPECT().QueryRow(mock.Anything, sqlContaining("SELECT count(*)"), []any{garageID, &customer, "%30a.9%", "%30A9%", false}).
 			Return(valuesRow(t, 1)).Once()
 		conn.EXPECT().Query(mock.Anything, sqlContaining("ORDER BY v.created_at DESC"), mock.Anything).
 			Return(resultRows(t, vehicleValues()), nil).Once()
@@ -156,4 +156,46 @@ func TestPostgresVehicleRepository_SoftDelete(t *testing.T) {
 	require.NoError(t, repo.SoftDeleteByCustomer(t.Context(), garageID, customerID, actorID))
 	require.ErrorIs(t, repo.SoftDeleteByCustomer(t.Context(), garageID, customerID, actorID), errBoom)
 	require.NoError(t, repo.SoftDeleteByCustomer(t.Context(), garageID, "nope", actorID))
+}
+
+func TestPostgresVehicleRepository_SetActive(t *testing.T) {
+	t.Parallel()
+
+	conn, pool := newPool(t)
+	repo := repository.NewPostgresVehicleRepository(pool)
+
+	conn.EXPECT().Exec(mock.Anything, sqlContaining("UPDATE vehicles SET is_active"), []any{garageID, vehicleID, false, new(actorID)}).
+		Return(commandTag("1"), nil).Once()
+	conn.EXPECT().Exec(mock.Anything, sqlContaining("UPDATE vehicles SET is_active"), mock.Anything).Return(commandTag("0"), nil).Once()
+
+	require.NoError(t, repo.SetActive(t.Context(), garageID, vehicleID, false, actorID))
+	require.ErrorIs(t, repo.SetActive(t.Context(), garageID, vehicleID, true, actorID), domain.ErrVehicleNotFound)
+	require.ErrorIs(t, repo.SetActive(t.Context(), garageID, "nope", true, actorID), domain.ErrVehicleNotFound)
+}
+
+func TestPostgresVehicleRepository_IDsByCustomer(t *testing.T) {
+	t.Parallel()
+
+	conn, pool := newPool(t)
+	repo := repository.NewPostgresVehicleRepository(pool)
+
+	conn.EXPECT().Query(mock.Anything, sqlContaining("SELECT id FROM vehicles"), []any{garageID, customerID}).
+		Return(resultRows(t, []any{vehicleID}, []any{"v-2"}), nil).Once()
+	conn.EXPECT().Query(mock.Anything, sqlContaining("SELECT id FROM vehicles"), mock.Anything).Return(nil, errBoom).Once()
+	conn.EXPECT().Query(mock.Anything, sqlContaining("SELECT id FROM vehicles"), mock.Anything).
+		Return(resultRows(t, []any{errBoom}), nil).Once()
+
+	ids, err := repo.IDsByCustomer(t.Context(), garageID, customerID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{vehicleID, "v-2"}, ids)
+
+	_, err = repo.IDsByCustomer(t.Context(), garageID, customerID)
+	require.ErrorIs(t, err, errBoom)
+
+	_, err = repo.IDsByCustomer(t.Context(), garageID, customerID)
+	require.ErrorIs(t, err, errBoom)
+
+	ids, err = repo.IDsByCustomer(t.Context(), garageID, "nope")
+	require.NoError(t, err)
+	assert.Empty(t, ids)
 }

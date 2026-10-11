@@ -178,6 +178,54 @@ func TestCustomerAndVehicleRepositories(t *testing.T) {
 		})
 	})
 
+	t.Run("deactivated customers and vehicles leave lists until reactivated", func(t *testing.T) {
+		env.inGarage(t, env.garageA, func(ctx context.Context) {
+			ids, err := env.vehicles.IDsByCustomer(ctx, env.garageA, bob.ID)
+			require.NoError(t, err)
+			require.Len(t, ids, 1, "bob owns the moved 30A vehicle")
+
+			require.NoError(t, env.customers.SetActive(ctx, env.garageA, bob.ID, false, env.userID))
+
+			inactive, err := env.customers.FindByID(ctx, env.garageA, bob.ID)
+			require.NoError(t, err)
+			assert.False(t, inactive.IsActive, "an inactive customer can still be read")
+
+			_, total, err := env.customers.List(ctx, env.garageA, usecase.ListFilter{Query: "bob", Limit: 10})
+			require.NoError(t, err)
+			assert.Zero(t, total, "pickers leave inactive customers out")
+
+			_, total, err = env.customers.List(ctx, env.garageA, usecase.ListFilter{Query: "bob", Limit: 10, IncludeInactive: true})
+			require.NoError(t, err)
+			assert.Equal(t, 1, total)
+
+			_, total, err = env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{ListFilter: usecase.ListFilter{Query: "30A", Limit: 10}})
+			require.NoError(t, err)
+			assert.Zero(t, total, "an inactive customer's vehicles are left out too")
+
+			_, total, err = env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{
+				ListFilter: usecase.ListFilter{Query: "30A", Limit: 10, IncludeInactive: true},
+			})
+			require.NoError(t, err)
+			assert.Equal(t, 1, total)
+
+			require.NoError(t, env.customers.SetActive(ctx, env.garageA, bob.ID, true, env.userID))
+
+			require.NoError(t, env.vehicles.SetActive(ctx, env.garageA, ids[0], false, env.userID))
+
+			_, total, err = env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{ListFilter: usecase.ListFilter{Query: "30A", Limit: 10}})
+			require.NoError(t, err)
+			assert.Zero(t, total, "an inactive vehicle is left out")
+
+			require.NoError(t, env.vehicles.SetActive(ctx, env.garageA, ids[0], true, env.userID))
+
+			_, total, err = env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{ListFilter: usecase.ListFilter{Query: "30A", Limit: 10}})
+			require.NoError(t, err)
+			assert.Equal(t, 1, total)
+
+			require.ErrorIs(t, env.customers.SetActive(ctx, env.garageA, uuid.NewString(), false, ""), domain.ErrCustomerNotFound)
+		})
+	})
+
 	t.Run("soft delete hides the rows and frees the phone number", func(t *testing.T) {
 		env.inGarage(t, env.garageA, func(ctx context.Context) {
 			require.NoError(t, env.customers.SoftDelete(ctx, env.garageA, alice.ID, env.userID))

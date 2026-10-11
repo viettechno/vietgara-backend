@@ -312,3 +312,24 @@ func TestPostgresRepository_ListForVehicle(t *testing.T) {
 	_, err = repo.ListForVehicle(ctx, garageID, vehicleID)
 	require.ErrorIs(t, err, errBoom)
 }
+
+func TestPostgresRepository_ExistsForVehicles(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+	tx := dbtest.New(t).
+		ExpectQueryRow("FROM repair_orders", dbtest.Row(true)).
+		ExpectQueryRow("FROM repair_orders", dbtest.ErrRow(errBoom))
+	ctx := tx.Context(t.Context())
+
+	exists, err := repo.ExistsForVehicles(ctx, garageID, []string{vehicleID})
+	require.NoError(t, err)
+	require.True(t, exists)
+
+	_, err = repo.ExistsForVehicles(ctx, garageID, []string{vehicleID})
+	require.ErrorIs(t, err, errBoom)
+
+	exists, err = repo.ExistsForVehicles(ctx, garageID, nil)
+	require.NoError(t, err)
+	require.False(t, exists, "no vehicle, no query")
+}

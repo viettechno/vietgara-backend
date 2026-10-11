@@ -8,8 +8,10 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 -- a customer's phone matches a user's verified phone (FR-CUS-06).
 -- consent_log is an append-only JSON array of personal-data consent
 -- decisions (Decree 13/2023/ND-CP): [{"granted", "recorded_at", "recorded_by"}].
--- Rows are soft-deleted (deleted_at) because quotes/repair orders keep
--- referencing them.
+-- A customer that quotes or repair orders refer to is not deleted but
+-- deactivated (is_active = false, FR-CAT-07): it leaves pickers and staff
+-- can reactivate it. Only an unreferenced customer is soft-deleted
+-- (deleted_at).
 CREATE TABLE customers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     garage_id UUID NOT NULL REFERENCES garages(id) ON DELETE CASCADE,
@@ -18,6 +20,7 @@ CREATE TABLE customers (
     email VARCHAR(255),
     address TEXT,
     consent_log JSONB NOT NULL DEFAULT '[]'::jsonb,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_by UUID,
     updated_by UUID,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),

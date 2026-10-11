@@ -12,6 +12,9 @@ type ListFilter struct {
 	Query  string
 	Limit  int
 	Offset int
+	// IncludeInactive also lists deactivated suppliers; pickers leave it
+	// off (FR-CAT-07).
+	IncludeInactive bool
 }
 
 // Repository defines the persistence contract for suppliers. Every method
@@ -28,4 +31,14 @@ type Repository interface {
 	List(ctx context.Context, garageID string, filter ListFilter) ([]*domain.Supplier, int, error)
 	// SoftDelete returns domain.ErrSupplierNotFound when absent.
 	SoftDelete(ctx context.Context, garageID, supplierID, deletedBy string) error
+	// SetActive deactivates or reactivates a supplier, or returns
+	// domain.ErrSupplierNotFound.
+	SetActive(ctx context.Context, garageID, supplierID string, active bool, updatedBy string) error
+}
+
+// UsageChecker tells whether documents still refer to a supplier, which
+// decides between deleting and deactivating it (FR-CAT-07). It is
+// implemented in cmd/server over the modules that own the documents.
+type UsageChecker interface {
+	SupplierInUse(ctx context.Context, garageID, supplierID string) (bool, error)
 }

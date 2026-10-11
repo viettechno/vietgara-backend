@@ -5,8 +5,9 @@
 -- Create suppliers table
 -- contact_info holds {"contact_person", "phone", "email", "address"};
 -- bank_details holds {"bank_name", "account_number", "account_holder"}.
--- Rows are soft-deleted (deleted_at) so documents that name a supplier
--- keep working.
+-- A supplier that documents refer to is deactivated (is_active = false,
+-- FR-CAT-07), not deleted, so those documents keep working; only an
+-- unreferenced supplier is soft-deleted (deleted_at).
 CREATE TABLE suppliers (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     garage_id UUID NOT NULL REFERENCES garages(id) ON DELETE CASCADE,
@@ -15,6 +16,7 @@ CREATE TABLE suppliers (
     contact_info JSONB NOT NULL DEFAULT '{}'::jsonb,
     bank_details JSONB NOT NULL DEFAULT '{}'::jsonb,
     note TEXT,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_by UUID,
     updated_by UUID,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),

@@ -17,7 +17,7 @@ func customerValues(consent string) []any {
 	phone := "0912345678"
 
 	return []any{
-		customerID, garageID, "Tran Binh", &phone, nil, nil, []byte(consent),
+		customerID, garageID, "Tran Binh", &phone, nil, nil, []byte(consent), true,
 		nil, nil, testTime, testTime, 2,
 	}
 }
@@ -145,9 +145,9 @@ func TestPostgresCustomerRepository_List(t *testing.T) {
 		t.Parallel()
 
 		conn, pool := newPool(t)
-		conn.EXPECT().QueryRow(mock.Anything, sqlContaining("SELECT count(*)"), []any{garageID, `%51f\_1%`, "%51F1%", ""}).
+		conn.EXPECT().QueryRow(mock.Anything, sqlContaining("SELECT count(*)"), []any{garageID, `%51f\_1%`, "%51F1%", "", false}).
 			Return(valuesRow(t, 3)).Once()
-		conn.EXPECT().Query(mock.Anything, sqlContaining("ORDER BY c.created_at DESC"), []any{garageID, `%51f\_1%`, "%51F1%", "", 2, 2}).
+		conn.EXPECT().Query(mock.Anything, sqlContaining("ORDER BY c.created_at DESC"), []any{garageID, `%51f\_1%`, "%51F1%", "", false, 2, 2}).
 			Return(resultRows(t, customerValues("[]")), nil).Once()
 
 		list, total, err := repository.NewPostgresCustomerRepository(pool).List(t.Context(), garageID, usecase.ListFilter{Query: "51f_1", Limit: 2, Offset: 2})
@@ -161,7 +161,7 @@ func TestPostgresCustomerRepository_List(t *testing.T) {
 		t.Parallel()
 
 		conn, pool := newPool(t)
-		conn.EXPECT().QueryRow(mock.Anything, sqlContaining("SELECT count(*)"), []any{garageID, "", "", ""}).Return(valuesRow(t, 0)).Once()
+		conn.EXPECT().QueryRow(mock.Anything, sqlContaining("SELECT count(*)"), []any{garageID, "", "", "", false}).Return(valuesRow(t, 0)).Once()
 
 		list, total, err := repository.NewPostgresCustomerRepository(pool).List(t.Context(), garageID, usecase.ListFilter{Limit: 20})
 		require.NoError(t, err)
@@ -240,4 +240,22 @@ func TestPostgresCustomerRepository_FindByEmailAcrossGarages(t *testing.T) {
 		_, err = repository.NewPostgresCustomerRepository(pool).FindByEmailAcrossGarages(t.Context(), "x@y.z")
 		require.ErrorIs(t, err, errBoom)
 	})
+}
+
+func TestPostgresCustomerRepository_SetActive(t *testing.T) {
+	t.Parallel()
+
+	conn, pool := newPool(t)
+	repo := repository.NewPostgresCustomerRepository(pool)
+
+	conn.EXPECT().Exec(mock.Anything, sqlContaining("UPDATE customers SET is_active"), []any{garageID, customerID, false, new(actorID)}).
+		Return(commandTag("1"), nil).Once()
+	conn.EXPECT().Exec(mock.Anything, sqlContaining("UPDATE customers SET is_active"), []any{garageID, customerID, true, (*string)(nil)}).
+		Return(commandTag("0"), nil).Once()
+	conn.EXPECT().Exec(mock.Anything, sqlContaining("UPDATE customers SET is_active"), mock.Anything).Return(commandTag("0"), errBoom).Once()
+
+	require.NoError(t, repo.SetActive(t.Context(), garageID, customerID, false, actorID))
+	require.ErrorIs(t, repo.SetActive(t.Context(), garageID, customerID, true, ""), domain.ErrCustomerNotFound)
+	require.ErrorIs(t, repo.SetActive(t.Context(), garageID, customerID, true, actorID), errBoom)
+	require.ErrorIs(t, repo.SetActive(t.Context(), garageID, "bad", true, actorID), domain.ErrCustomerNotFound)
 }

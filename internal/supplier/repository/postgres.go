@@ -23,15 +23,15 @@ import (
 const pgUniqueViolation = "23505"
 
 const (
-	supplierColumns = `s.id, s.garage_id, s.name, s.tax_code, s.contact_info, s.bank_details, s.note,
+	supplierColumns = `s.id, s.garage_id, s.name, s.tax_code, s.contact_info, s.bank_details, s.note, s.is_active,
 		s.created_by, s.updated_by, s.created_at, s.updated_at`
 
 	// supplierSearch filters live suppliers of garage $1. $2 is an ILIKE
 	// pattern over name, tax code, contact person and email, $3 the digits
 	// to look for in the phone (stored as E.164, see pkg/phone); "" disables
-	// either.
+	// either. $4 also lists deactivated suppliers.
 	supplierSearch = ` FROM suppliers s
-		WHERE s.garage_id = $1 AND s.deleted_at IS NULL
+		WHERE s.garage_id = $1 AND s.deleted_at IS NULL AND ($4::bool OR s.is_active)
 		AND ($2::text = '' OR s.name ILIKE $2 OR s.tax_code ILIKE $2
 			OR s.contact_info->>'contact_person' ILIKE $2 OR s.contact_info->>'email' ILIKE $2
 			OR ($3::text <> '' AND s.contact_info->>'phone' LIKE $3))`
@@ -73,7 +73,7 @@ func scanSupplier(row pgx.Row) (*domain.Supplier, error) {
 		bank    []byte
 	)
 
-	err := row.Scan(&s.ID, &s.GarageID, &s.Name, &s.TaxCode, &contact, &bank, &s.Note,
+	err := row.Scan(&s.ID, &s.GarageID, &s.Name, &s.TaxCode, &contact, &bank, &s.Note, &s.IsActive,
 		&s.CreatedBy, &s.UpdatedBy, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -180,7 +180,7 @@ func (r *PostgresRepository) Update(ctx context.Context, s *domain.Supplier) err
 // List returns one page of live suppliers ordered by name.
 func (r *PostgresRepository) List(ctx context.Context, garageID string, filter usecase.ListFilter) ([]*domain.Supplier, int, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
-	args := []any{garageID, containsPattern(filter.Query), phonePattern(filter.Query)}
+	args := []any{garageID, containsPattern(filter.Query), phonePattern(filter.Query), filter.IncludeInactive}
 
 	var total int
 	if err := q.QueryRow(ctx, `SELECT count(*)`+supplierSearch, args...).Scan(&total); err != nil {
@@ -192,7 +192,7 @@ func (r *PostgresRepository) List(ctx context.Context, garageID string, filter u
 	}
 
 	rows, err := q.Query(ctx,
-		`SELECT `+supplierColumns+supplierSearch+` ORDER BY lower(s.name), s.id LIMIT $4 OFFSET $5`,
+		`SELECT `+supplierColumns+supplierSearch+` ORDER BY lower(s.name), s.id LIMIT $5 OFFSET $6`,
 		append(args, filter.Limit, filter.Offset)...)
 	if err != nil {
 		return nil, 0, err
@@ -231,6 +231,35 @@ func (r *PostgresRepository) SoftDelete(ctx context.Context, garageID, supplierI
 		UPDATE suppliers SET deleted_at = now(), updated_by = $3
 		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL`,
 		garageID, supplierID, by)
+	if err != nil {
+		return err
+	}
+
+	if tag.RowsAffected() == 0 {
+		return domain.ErrSupplierNotFound
+	}
+
+	return nil
+}
+
+// SetActive deactivates or reactivates the supplier, or returns
+// domain.ErrSupplierNotFound.
+func (r *PostgresRepository) SetActive(ctx context.Context, garageID, supplierID string, active bool, updatedBy string) error {
+	if uuid.Validate(supplierID) != nil {
+		return domain.ErrSupplierNotFound
+	}
+
+	q := platformdb.QuerierFromContext(ctx, r.pool)
+
+	var by *string
+	if updatedBy != "" {
+		by = &updatedBy
+	}
+
+	tag, err := q.Exec(ctx, `
+		UPDATE suppliers SET is_active = $3, updated_by = $4
+		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL`,
+		garageID, supplierID, active, by)
 	if err != nil {
 		return err
 	}

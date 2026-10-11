@@ -12,16 +12,17 @@ import (
 )
 
 const (
-	customerColumns = `c.id, c.garage_id, c.full_name, c.phone, c.email, c.address, c.consent_log,
+	customerColumns = `c.id, c.garage_id, c.full_name, c.phone, c.email, c.address, c.consent_log, c.is_active,
 		c.created_by, c.updated_by, c.created_at, c.updated_at,
 		(SELECT count(*) FROM vehicles v WHERE v.customer_id = c.id AND v.deleted_at IS NULL)::int`
 
 	// customerSearch filters live customers of garage $1. $2 is an ILIKE
 	// pattern over name/email, $3 a compact pattern over the plates of the
 	// customer's vehicles and $4 the digits to look for in the phone (stored
-	// as E.164, see pkg/phone); "" disables either filter.
+	// as E.164, see pkg/phone); "" disables either filter. $5 also lists
+	// deactivated customers.
 	customerSearch = ` FROM customers c
-		WHERE c.garage_id = $1 AND c.deleted_at IS NULL
+		WHERE c.garage_id = $1 AND c.deleted_at IS NULL AND ($5::bool OR c.is_active)
 		AND ($2::text = '' OR c.full_name ILIKE $2 OR c.email ILIKE $2
 			OR ($4::text <> '' AND c.phone LIKE $4)
 			OR ($3::text <> '' AND EXISTS (
@@ -50,7 +51,7 @@ func scanCustomer(row pgx.Row) (*domain.Customer, error) {
 		consent []byte
 	)
 
-	err := row.Scan(&c.ID, &c.GarageID, &c.FullName, &c.Phone, &c.Email, &c.Address, &consent,
+	err := row.Scan(&c.ID, &c.GarageID, &c.FullName, &c.Phone, &c.Email, &c.Address, &consent, &c.IsActive,
 		&c.CreatedBy, &c.UpdatedBy, &c.CreatedAt, &c.UpdatedAt, &c.VehicleCount)
 	if err != nil {
 		return nil, err
@@ -156,11 +157,11 @@ func (r *PostgresCustomerRepository) Update(ctx context.Context, c *domain.Custo
 
 // List returns one page of live customers, newest first.
 func (r *PostgresCustomerRepository) List(ctx context.Context, garageID string, filter usecase.ListFilter) ([]*domain.Customer, int, error) {
-	args := []any{garageID, containsPattern(filter.Query), compactPattern(filter.Query), phonePattern(filter.Query)}
+	args := []any{garageID, containsPattern(filter.Query), compactPattern(filter.Query), phonePattern(filter.Query), filter.IncludeInactive}
 
 	return listPage(ctx, platformdb.QuerierFromContext(ctx, r.pool), scanCustomer,
 		`SELECT count(*)`+customerSearch,
-		`SELECT `+customerColumns+customerSearch+` ORDER BY c.created_at DESC, c.id LIMIT $5 OFFSET $6`,
+		`SELECT `+customerColumns+customerSearch+` ORDER BY c.created_at DESC, c.id LIMIT $6 OFFSET $7`,
 		args, filter.Limit, filter.Offset)
 }
 
@@ -175,4 +176,17 @@ func (r *PostgresCustomerRepository) SoftDelete(ctx context.Context, garageID, c
 		UPDATE customers SET deleted_at = now(), updated_by = $3
 		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL`,
 		garageID, customerID, nullable(deletedBy))
+}
+
+// SetActive deactivates or reactivates the customer, or returns
+// domain.ErrCustomerNotFound.
+func (r *PostgresCustomerRepository) SetActive(ctx context.Context, garageID, customerID string, active bool, updatedBy string) error {
+	if !isUUID(customerID) {
+		return domain.ErrCustomerNotFound
+	}
+
+	return execAffectingOne(ctx, platformdb.QuerierFromContext(ctx, r.pool), domain.ErrCustomerNotFound, `
+		UPDATE customers SET is_active = $3, updated_by = $4
+		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL`,
+		garageID, customerID, active, nullable(updatedBy))
 }

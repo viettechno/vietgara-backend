@@ -30,13 +30,14 @@ var anyArg = mock.Anything
 type env struct {
 	srv       *handler.Server
 	suppliers *mocks.MockSupplierRepository
+	usage     *mocks.MockSupplierUsageChecker
 }
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
 
-	e := &env{suppliers: mocks.NewMockSupplierRepository(t)}
-	e.srv = handler.NewServer(usecase.NewUseCase(e.suppliers))
+	e := &env{suppliers: mocks.NewMockSupplierRepository(t), usage: mocks.NewMockSupplierUsageChecker(t)}
+	e.srv = handler.NewServer(usecase.NewUseCase(e.suppliers, e.usage))
 
 	return e
 }
@@ -73,7 +74,7 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 5)
+	assert.Len(t, p, 6)
 	assert.Equal(t, access.SupplierRead, p[supplierv1.SupplierService_ListSuppliers_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.SupplierWrite, p[supplierv1.SupplierService_CreateSupplier_FullMethodName].Garage.Permission)
 }
@@ -150,12 +151,34 @@ func TestSupplierRPCs(t *testing.T) {
 	_, err = e.srv.ListSuppliers(ctx, &supplierv1.ListSuppliersRequest{GarageId: garageID})
 	require.Error(t, err)
 
+	e.usage.EXPECT().SupplierInUse(anyArg, garageID, "s-1").Return(false, nil).Once()
 	e.suppliers.EXPECT().SoftDelete(anyArg, garageID, "s-1", anyArg).Return(nil).Once()
 
-	_, err = e.srv.DeleteSupplier(ctx, &supplierv1.DeleteSupplierRequest{GarageId: garageID, SupplierId: "s-1"})
+	deleted, err := e.srv.DeleteSupplier(ctx, &supplierv1.DeleteSupplierRequest{GarageId: garageID, SupplierId: "s-1"})
 	require.NoError(t, err)
+	assert.Equal(t, commonv1.DeleteOutcome_DELETE_OUTCOME_DELETED, deleted.GetOutcome())
 
-	e.suppliers.EXPECT().SoftDelete(anyArg, garageID, "s-2", anyArg).Return(domain.ErrSupplierNotFound).Once()
+	e.usage.EXPECT().SupplierInUse(anyArg, garageID, "s-3").Return(true, nil).Twice()
+	e.suppliers.EXPECT().FindByID(anyArg, garageID, "s-3").
+		RunAndReturn(func(context.Context, string, string) (*domain.Supplier, error) { return existingSupplier(), nil }).Times(3)
+
+	dry, err := e.srv.DeleteSupplier(ctx, &supplierv1.DeleteSupplierRequest{GarageId: garageID, SupplierId: "s-3", DryRun: true})
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.DeleteOutcome_DELETE_OUTCOME_DEACTIVATED, dry.GetOutcome())
+
+	e.suppliers.EXPECT().SetActive(anyArg, garageID, "s-3", false, anyArg).Return(nil).Once()
+
+	deactivated, err := e.srv.DeleteSupplier(ctx, &supplierv1.DeleteSupplierRequest{GarageId: garageID, SupplierId: "s-3"})
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.DeleteOutcome_DELETE_OUTCOME_DEACTIVATED, deactivated.GetOutcome())
+
+	e.suppliers.EXPECT().SetActive(anyArg, garageID, "s-3", true, anyArg).Return(nil).Once()
+
+	activated, err := e.srv.ActivateSupplier(ctx, &supplierv1.ActivateSupplierRequest{GarageId: garageID, SupplierId: "s-3"})
+	require.NoError(t, err)
+	assert.NotEmpty(t, activated.GetSupplier().GetId())
+
+	e.suppliers.EXPECT().FindByID(anyArg, garageID, "s-2").Return(nil, domain.ErrSupplierNotFound).Once()
 
 	_, err = e.srv.DeleteSupplier(ctx, &supplierv1.DeleteSupplierRequest{GarageId: garageID, SupplierId: "s-2"})
 	assert.Equal(t, "NOT_FOUND", reason(err))

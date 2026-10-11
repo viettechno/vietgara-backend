@@ -27,6 +27,9 @@ type Vehicle struct {
 	Year         *int
 	VIN          *string
 	EngineNumber *string
+	// IsActive is false once the vehicle was deactivated instead of
+	// deleted because documents refer to it (FR-CAT-07).
+	IsActive bool
 	// CustomerName is derived when reading and never persisted.
 	CustomerName string
 	CreatedBy    *string

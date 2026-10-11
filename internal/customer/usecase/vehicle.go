@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/viettechno/vietgara-backend/internal/customer/domain"
+	"github.com/viettechno/vietgara-backend/pkg/lifecycle"
 )
 
 // HistoryEntryType names which module produced a vehicle history entry
@@ -79,6 +80,17 @@ type ListVehiclesRequest struct {
 	CustomerID string
 	// Query matches plate (ignoring separators), make, model or VIN.
 	Query string
+	// IncludeInactive also lists deactivated vehicles.
+	IncludeInactive bool
+}
+
+// DeleteVehicleRequest is the input for VehicleUseCase.Delete.
+type DeleteVehicleRequest struct {
+	GarageID  string
+	VehicleID string
+	ActorID   string
+	// DryRun answers the outcome without changing anything.
+	DryRun bool
 }
 
 // VehicleUseCase (FR-CUS-02) manages the vehicles of a garage's customers.
@@ -86,14 +98,18 @@ type VehicleUseCase struct {
 	vehicles  VehicleRepository
 	customers CustomerRepository
 	history   HistoryReader
+	usage     UsageChecker
 	opts      options
 }
 
 // NewVehicleUseCase wires the vehicle use case to its repositories. history
 // may be nil, in which case GetHistory always returns an empty list (unit
-// tests that do not exercise FR-CUS-03 need not provide one).
-func NewVehicleUseCase(vehicles VehicleRepository, customers CustomerRepository, history HistoryReader, opts ...Option) *VehicleUseCase {
-	return &VehicleUseCase{vehicles: vehicles, customers: customers, history: history, opts: newOptions(opts)}
+// tests that do not exercise FR-CUS-03 need not provide one). usage tells
+// whether documents still refer to a vehicle (FR-CAT-07).
+func NewVehicleUseCase(
+	vehicles VehicleRepository, customers CustomerRepository, history HistoryReader, usage UsageChecker, opts ...Option,
+) *VehicleUseCase {
+	return &VehicleUseCase{vehicles: vehicles, customers: customers, history: history, usage: usage, opts: newOptions(opts)}
 }
 
 // vehicleFields is the editable part of a vehicle shared by create and
@@ -252,6 +268,7 @@ func (uc *VehicleUseCase) Update(ctx context.Context, req UpdateVehicleRequest) 
 func (uc *VehicleUseCase) List(ctx context.Context, req ListVehiclesRequest) (*Page[*domain.Vehicle], error) {
 	page := req.normalize()
 	filter := VehicleFilter{ListFilter: page.filter(req.Query), CustomerID: strings.TrimSpace(req.CustomerID)}
+	filter.IncludeInactive = req.IncludeInactive
 
 	items, total, err := uc.vehicles.List(ctx, req.GarageID, filter)
 	if err != nil {
@@ -261,14 +278,39 @@ func (uc *VehicleUseCase) List(ctx context.Context, req ListVehiclesRequest) (*P
 	return &Page[*domain.Vehicle]{Items: items, Total: total, Page: page.Page, PageSize: page.PageSize}, nil
 }
 
-// Delete soft-deletes a vehicle; quotes and repair orders keep referencing
-// the row.
-func (uc *VehicleUseCase) Delete(ctx context.Context, garageID, vehicleID, actorID string) error {
-	if err := uc.vehicles.SoftDelete(ctx, garageID, vehicleID, actorID); err != nil {
-		return toAppError("delete vehicle", err)
+// Delete follows the delete-or-deactivate rule (FR-CAT-07): a vehicle that
+// quotes or repair orders refer to is deactivated, so its history stays;
+// otherwise it is soft-deleted.
+func (uc *VehicleUseCase) Delete(ctx context.Context, req DeleteVehicleRequest) (lifecycle.Outcome, error) {
+	if _, err := uc.vehicles.FindByID(ctx, req.GarageID, req.VehicleID); err != nil {
+		return "", toAppError("delete vehicle", err)
 	}
 
-	return nil
+	outcome, err := lifecycle.Apply(ctx, req.DryRun, lifecycle.Rule{
+		InUse: func(ctx context.Context) (bool, error) {
+			return uc.usage.VehicleInUse(ctx, req.GarageID, req.VehicleID)
+		},
+		Delete: func(ctx context.Context) error {
+			return uc.vehicles.SoftDelete(ctx, req.GarageID, req.VehicleID, req.ActorID)
+		},
+		Deactivate: func(ctx context.Context) error {
+			return uc.vehicles.SetActive(ctx, req.GarageID, req.VehicleID, false, req.ActorID)
+		},
+	})
+	if err != nil {
+		return "", toAppError("delete vehicle", err)
+	}
+
+	return outcome, nil
+}
+
+// Activate reactivates a deactivated vehicle.
+func (uc *VehicleUseCase) Activate(ctx context.Context, garageID, vehicleID, actorID string) (*domain.Vehicle, error) {
+	if err := uc.vehicles.SetActive(ctx, garageID, vehicleID, true, actorID); err != nil {
+		return nil, toAppError("activate vehicle", err)
+	}
+
+	return uc.Get(ctx, garageID, vehicleID)
 }
 
 // GetHistory returns a vehicle's quotes, repair orders and settlements,

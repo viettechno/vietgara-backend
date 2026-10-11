@@ -4,8 +4,10 @@
 -- license_plate keeps the display form ("51F-123.45"); license_plate_key is
 -- the same plate reduced to upper-case letters and digits ("51F12345") and
 -- is what uniqueness and plate search use, so formatting differences never
--- create duplicates. Rows are soft-deleted (deleted_at) because quotes and
--- repair orders keep referencing them (FR-CUS-03).
+-- create duplicates. A vehicle that quotes or repair orders refer to is
+-- deactivated (is_active = false, FR-CAT-07), not deleted, so its history
+-- (FR-CUS-03) stays; only an unreferenced vehicle is soft-deleted
+-- (deleted_at).
 CREATE TABLE vehicles (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     garage_id UUID NOT NULL REFERENCES garages(id) ON DELETE CASCADE,
@@ -17,6 +19,7 @@ CREATE TABLE vehicles (
     year INTEGER CHECK (year BETWEEN 1886 AND 2100),
     vin VARCHAR(50),
     engine_number VARCHAR(50),
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_by UUID,
     updated_by UUID,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),

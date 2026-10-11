@@ -1,7 +1,6 @@
 package apperror_test
 
 import (
-	"errors"
 	"fmt"
 	"testing"
 
@@ -17,7 +16,7 @@ import (
 func TestAppError(t *testing.T) {
 	t.Parallel()
 
-	cause := errors.New("db down")
+	cause := errApperrorDBDown
 
 	withCause := apperror.Wrap(apperror.CodeInternal, "load", cause)
 	assert.Equal(t, "INTERNAL: load: db down", withCause.Error())
@@ -84,9 +83,9 @@ func TestToGRPCError(t *testing.T) {
 		{name: "unauthenticated", err: apperror.New(apperror.CodeUnauthenticated, "who"), wantCode: codes.Unauthenticated, wantMsg: "who", wantReason: "UNAUTHENTICATED"},
 		{name: "failed precondition with reason", err: apperror.New(apperror.CodeFailedPrecondition, "limit").WithReason("PLAN_LIMIT_REACHED"), wantCode: codes.FailedPrecondition, wantMsg: "limit", wantReason: "PLAN_LIMIT_REACHED"},
 		{name: "resource exhausted", err: apperror.New(apperror.CodeResourceExhausted, "slow"), wantCode: codes.ResourceExhausted, wantMsg: "slow", wantReason: "RATE_LIMITED"},
-		{name: "internal hides details", err: apperror.Wrap(apperror.CodeInternal, "secret", errors.New("pg")), wantCode: codes.Internal, wantMsg: "internal error"},
+		{name: "internal hides details", err: apperror.Wrap(apperror.CodeInternal, "secret", errApperrorPostgres), wantCode: codes.Internal, wantMsg: "internal error"},
 		{name: "unknown code", err: apperror.New(apperror.Code("WEIRD"), "x"), wantCode: codes.Internal, wantMsg: "internal error"},
-		{name: "plain error", err: errors.New("raw"), wantCode: codes.Internal, wantMsg: "internal error"},
+		{name: "plain error", err: errApperrorRaw, wantCode: codes.Internal, wantMsg: "internal error"},
 		{name: "status passes through", err: status.Error(codes.Unavailable, "later"), wantCode: codes.Unavailable, wantMsg: "later"},
 	}
 

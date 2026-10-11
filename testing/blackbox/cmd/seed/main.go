@@ -25,6 +25,15 @@ import (
 	"github.com/viettechno/vietgara-backend/testing/blackbox/seed"
 )
 
+var (
+	errUnexpectedPositionalArguments = errors.New("unexpected positional arguments")
+	errDatasetHasNoStubbedPassword   = errors.New("dataset has no stubbed password")
+	errInvalidLoopbackURL            = errors.New("must be a plain HTTP URL without credentials, path, query, or fragment")
+	errNonLoopbackURL                = errors.New("must resolve to a loopback host; remote targets are not supported")
+	errInvalidReservedTestDomain     = errors.New("must be a valid reserved test domain")
+	errTestDomainMissingSuffix       = errors.New("must end in .test, .example, .invalid, or .localhost")
+)
+
 type apiClient struct {
 	client *client.Client
 }
@@ -88,7 +97,7 @@ func run() error {
 	}
 
 	if flags.NArg() != 0 {
-		return errors.New("unexpected positional arguments")
+		return errUnexpectedPositionalArguments
 	}
 
 	if err := validateLoopbackURL(*apiURL); err != nil {
@@ -110,7 +119,7 @@ func run() error {
 
 	environment, ok := dataset.Environments["stubbed"]
 	if !ok || environment.Password == "" {
-		return errors.New("dataset has no stubbed password")
+		return errDatasetHasNoStubbedPassword
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -143,14 +152,14 @@ func validateLoopbackURL(raw string) error {
 
 	if parsed.Scheme != "http" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
 		(parsed.Path != "" && parsed.Path != "/") {
-		return errors.New("must be a plain HTTP URL without credentials, path, query, or fragment")
+		return errInvalidLoopbackURL
 	}
 
 	host := parsed.Hostname()
 	if host != "localhost" {
 		ip := net.ParseIP(host)
 		if ip == nil || !ip.IsLoopback() {
-			return errors.New("must resolve to a loopback host; remote targets are not supported")
+			return errNonLoopbackURL
 		}
 	}
 
@@ -159,12 +168,12 @@ func validateLoopbackURL(raw string) error {
 
 func validateTestDomain(domain string) error {
 	if strings.TrimSpace(domain) != domain || strings.ContainsAny(domain, "@/ ") {
-		return errors.New("must be a valid reserved test domain")
+		return errInvalidReservedTestDomain
 	}
 
 	address, err := mail.ParseAddress("seed@" + domain)
 	if err != nil || address.Address != "seed@"+domain {
-		return errors.New("must be a valid reserved test domain")
+		return errInvalidReservedTestDomain
 	}
 
 	for _, suffix := range []string{".test", ".example", ".invalid", ".localhost"} {
@@ -173,5 +182,5 @@ func validateTestDomain(domain string) error {
 		}
 	}
 
-	return errors.New("must end in .test, .example, .invalid, or .localhost")
+	return errTestDomainMissingSuffix
 }

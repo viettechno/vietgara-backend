@@ -4,10 +4,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"time"
+)
+
+var (
+	errMailjetStatus          = errors.New("mailjet: status")
+	errMailjetMessageRejected = errors.New("mailjet: message rejected")
 )
 
 // DefaultMailjetEndpoint is the Mailjet Send API v3.1.
@@ -98,7 +104,7 @@ func (s *MailjetSender) Send(ctx context.Context, msg Message) error {
 
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 64<<10))
 	if resp.StatusCode/100 != 2 {
-		return fmt.Errorf("mailjet: status %d: %s", resp.StatusCode, bytes.TrimSpace(raw))
+		return fmt.Errorf("%w %d: %s", errMailjetStatus, resp.StatusCode, bytes.TrimSpace(raw))
 	}
 
 	var parsed mailjetResponse
@@ -113,7 +119,7 @@ func (s *MailjetSender) Send(ctx context.Context, msg Message) error {
 				reason = m.Errors[0].ErrorMessage
 			}
 
-			return fmt.Errorf("mailjet: message rejected: %s", reason)
+			return fmt.Errorf("%w: %s", errMailjetMessageRejected, reason)
 		}
 	}
 

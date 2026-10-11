@@ -2,7 +2,6 @@ package handler_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
@@ -83,7 +82,7 @@ func TestListMyWork(t *testing.T) {
 
 func TestListMyWork_Error(t *testing.T) {
 	srv := handler.NewServer(usecase.NewTechnicianUseCase(usecase.Deps{
-		Memberships: memberships{err: errors.New("db down")}, RepairOrders: &repairOrders{}, Tx: passTx{},
+		Memberships: memberships{err: errTechnicianDBDown}, RepairOrders: &repairOrders{}, Tx: passTx{},
 	}))
 
 	_, err := srv.ListMyWork(signedIn("user-tech"), &technicianv1.ListMyWorkRequest{})

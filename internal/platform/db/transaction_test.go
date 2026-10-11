@@ -2,7 +2,6 @@ package db_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/jackc/pgx/v5"
@@ -27,10 +26,10 @@ func TestScope(t *testing.T) {
 
 func TestTxManager_WithTransaction(t *testing.T) {
 	scope := db.Scope{GarageID: "garage-1", UserID: "user-1"}
-	beginErr := errors.New("connection lost")
-	setScopeErr := errors.New("database unavailable")
-	callbackErr := errors.New("callback failed")
-	commitErr := errors.New("commit failed")
+	beginErr := errTransactionConnectionLost
+	setScopeErr := errTransactionDatabaseUnavailable
+	callbackErr := errTransactionCallbackFailed
+	commitErr := errTransactionCommitFailed
 
 	tests := []struct {
 		name         string
@@ -141,7 +140,7 @@ func TestTxManager_NestedTransactionsJoin(t *testing.T) {
 		connPool := mocks.NewMockConnPool(t)
 		tx := mocks.NewMockTx(t)
 		m := db.NewTxManager(db.NewPool(t.Context(), connPool))
-		failure := errors.New("boom")
+		failure := errTransactionBoom
 
 		connPool.EXPECT().Begin(mock.Anything).Return(tx, nil).Once()
 		tx.EXPECT().Exec(mock.Anything, db.SetScopeSQL, []any{"", "user-1"}).Return(pgconn.CommandTag{}, nil).Once()
@@ -190,7 +189,7 @@ func TestAfterCommit(t *testing.T) {
 		err = m.WithTransaction(t.Context(), db.Scope{}, func(ctx context.Context) error {
 			db.AfterCommit(ctx, func() { calls = append(calls, "rolled back") })
 
-			return errors.New("fail")
+			return errTransactionFail
 		})
 		require.Error(t, err)
 		assert.Equal(t, []string{"committed"}, calls)

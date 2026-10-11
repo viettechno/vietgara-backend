@@ -2,7 +2,6 @@ package handler_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -106,7 +105,7 @@ func TestGetMyVehicleHistory(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
-	broken := server(fake{emailErr: errors.New("db down")})
+	broken := server(fake{emailErr: errCustomerPortalDBDown})
 
 	_, err := broken.ListMyVehicles(signedIn(), &customerportalv1.ListMyVehiclesRequest{})
 	assert.Equal(t, codes.Internal, status.Code(err))

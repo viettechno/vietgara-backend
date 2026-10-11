@@ -17,10 +17,26 @@ import (
 const rlsTestDriverName = "rls_test_driver"
 
 var (
-	rlsTestDriverOnce sync.Once
-	rlsTestStates     = map[string]*rlsTestState{}
-	rlsTestStatesMu   sync.Mutex
-	rlsTestSequence   int
+	rlsTestDriverOnce         sync.Once
+	rlsTestStates             = map[string]*rlsTestState{}
+	rlsTestStatesMu           sync.Mutex
+	rlsTestSequence           int
+	errRLSCallbackFailed      = errors.New("callback failed")
+	errRLSCallbackInvalidArgs = errors.New("callback received invalid arguments")
+	errRLSDatabaseUnavailable = errors.New("database unavailable")
+	errRLSCallbackMustNotRun  = errors.New("callback must not run")
+	errRLSQueryFailed         = errors.New("query failed")
+	errRLSWriteFailed         = errors.New("write failed")
+	errRLSResultUnavailable   = errors.New("result unavailable")
+	errRLSConstraintViolation = errors.New("constraint violation")
+	errUnknownTestDatabase    = errors.New("unknown test database")
+	errRLSPreparedStatements  = errors.New("prepared statements are not supported")
+	errRLSTransactions        = errors.New("transactions are not supported")
+	errRLSNoRowsDefinition    = errors.New("query returned no rows definition")
+	errRLSUnexpectedQuery     = errors.New("unexpected")
+	errRLSGot                 = errors.New("got")
+	errRLSQueryMismatch       = errors.New("query")
+	errRLSArgumentMismatch    = errors.New("argument")
 )
 
 type rlsTestStep struct {
@@ -97,7 +113,7 @@ func TestNewRLSContext(t *testing.T) {
 }
 
 func TestRLSContext_WithRLSSession(t *testing.T) {
-	callbackErr := errors.New("callback failed")
+	callbackErr := errRLSCallbackFailed
 	tests := []struct {
 		name     string
 		steps    []rlsTestStep
@@ -109,7 +125,7 @@ func TestRLSContext_WithRLSSession(t *testing.T) {
 			steps: []rlsTestStep{rlsSessionStep("garage-1")},
 			callback: func(ctx context.Context, db *sql.DB) error {
 				if ctx == nil || db == nil {
-					return errors.New("callback received invalid arguments")
+					return errRLSCallbackInvalidArgs
 				}
 
 				return nil
@@ -118,10 +134,10 @@ func TestRLSContext_WithRLSSession(t *testing.T) {
 		{
 			name: "wraps session setup error and skips callback",
 			steps: []rlsTestStep{{
-				kind: "exec", contains: "set_config", args: []driver.Value{"garage-1"}, err: errors.New("database unavailable"),
+				kind: "exec", contains: "set_config", args: []driver.Value{"garage-1"}, err: errRLSDatabaseUnavailable,
 			}},
 			callback: func(context.Context, *sql.DB) error {
-				return errors.New("callback must not run")
+				return errRLSCallbackMustNotRun
 			},
 			wantErr: "failed to set RLS session variable: database unavailable",
 		},
@@ -160,7 +176,7 @@ func TestRLSContext_GetGarage(t *testing.T) {
 	}{
 		{name: "returns garage", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garages", rows: garageRows}}, want: map[string]any{"id": "garage-1", "user_id": "user-1", "name": "Main Garage", "timezone": "Asia/Ho_Chi_Minh", "currency": "VND", "status": "active"}},
 		{name: "reports missing garage", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garages", rows: &rlsTestRows{columns: garageRows.columns}}}, wantErr: "garage not found"},
-		{name: "wraps query error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garages", err: errors.New("query failed")}}, wantErr: "query failed: query failed"},
+		{name: "wraps query error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garages", err: errRLSQueryFailed}}, wantErr: "query failed: query failed"},
 		{name: "wraps scan error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garages", rows: &rlsTestRows{columns: garageRows.columns, values: [][]driver.Value{{"only-one-column"}}}}}, wantErr: "scan failed:"},
 	}
 	for _, tt := range tests {
@@ -198,7 +214,7 @@ func TestRLSContext_GetGarageStaff(t *testing.T) {
 	}{
 		{name: "returns all staff", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garage_staff", rows: &rlsTestRows{columns: columns, values: [][]driver.Value{{"staff-1", "garage-1", "user-1", "owner", "active", "2026-01-01"}, {"staff-2", "garage-1", "user-2", "mechanic", "active", "2026-01-02"}}}}}, wantLen: 2},
 		{name: "returns empty staff", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garage_staff", rows: &rlsTestRows{columns: columns}}}},
-		{name: "wraps query error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garage_staff", err: errors.New("query failed")}}, wantErr: "query failed: query failed"},
+		{name: "wraps query error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garage_staff", err: errRLSQueryFailed}}, wantErr: "query failed: query failed"},
 		{name: "wraps scan error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "query", contains: "FROM garage_staff", rows: &rlsTestRows{columns: columns, values: [][]driver.Value{{"only-one-column"}}}}}, wantErr: "scan failed:"},
 	}
 	for _, tt := range tests {
@@ -234,9 +250,9 @@ func TestRLSContext_UpdateGarageStatus(t *testing.T) {
 		wantErr string
 	}{
 		{name: "updates garage", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garages", args: []driver.Value{"inactive", "garage-1"}, result: driver.RowsAffected(1)}}},
-		{name: "wraps update error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garages", err: errors.New("write failed")}}, wantErr: "update failed: write failed"},
+		{name: "wraps update error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garages", err: errRLSWriteFailed}}, wantErr: "update failed: write failed"},
 		{name: "reports no updated garage", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garages", result: driver.RowsAffected(0)}}, wantErr: "no garage updated"},
-		{name: "wraps rows affected error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garages", result: rlsTestResult{err: errors.New("result unavailable")}}}, wantErr: "failed to get rows affected: result unavailable"},
+		{name: "wraps rows affected error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garages", result: rlsTestResult{err: errRLSResultUnavailable}}}, wantErr: "failed to get rows affected: result unavailable"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -259,7 +275,7 @@ func TestRLSContext_AssignStaffToGarage(t *testing.T) {
 		wantErr string
 	}{
 		{name: "assigns staff", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "INSERT INTO garage_staff", args: []driver.Value{"garage-1", "user-1", "mechanic"}, result: driver.RowsAffected(1)}}},
-		{name: "wraps insert error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "INSERT INTO garage_staff", err: errors.New("constraint violation")}}, wantErr: "insert/update failed: constraint violation"},
+		{name: "wraps insert error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "INSERT INTO garage_staff", err: errRLSConstraintViolation}}, wantErr: "insert/update failed: constraint violation"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -282,9 +298,9 @@ func TestRLSContext_RemoveStaffFromGarage(t *testing.T) {
 		wantErr string
 	}{
 		{name: "removes staff", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garage_staff", args: []driver.Value{"garage-1", "user-1"}, result: driver.RowsAffected(1)}}},
-		{name: "wraps update error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garage_staff", err: errors.New("write failed")}}, wantErr: "update failed: write failed"},
+		{name: "wraps update error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garage_staff", err: errRLSWriteFailed}}, wantErr: "update failed: write failed"},
 		{name: "reports missing staff", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garage_staff", result: driver.RowsAffected(0)}}, wantErr: "staff member not found"},
-		{name: "wraps rows affected error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garage_staff", result: rlsTestResult{err: errors.New("result unavailable")}}}, wantErr: "failed to get rows affected: result unavailable"},
+		{name: "wraps rows affected error", steps: []rlsTestStep{rlsSessionStep("garage-1"), {kind: "exec", contains: "UPDATE garage_staff", result: rlsTestResult{err: errRLSResultUnavailable}}}, wantErr: "failed to get rows affected: result unavailable"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -308,7 +324,7 @@ func (rlsTestDriver) Open(name string) (driver.Conn, error) {
 	rlsTestStatesMu.Unlock()
 
 	if state == nil {
-		return nil, fmt.Errorf("unknown test database %q", name)
+		return nil, fmt.Errorf("%w %q", errUnknownTestDatabase, name)
 	}
 
 	return rlsTestConn{state: state}, nil
@@ -317,11 +333,11 @@ func (rlsTestDriver) Open(name string) (driver.Conn, error) {
 type rlsTestConn struct{ state *rlsTestState }
 
 func (rlsTestConn) Prepare(string) (driver.Stmt, error) {
-	return nil, errors.New("prepared statements are not supported")
+	return nil, errRLSPreparedStatements
 }
 func (rlsTestConn) Close() error { return nil }
 func (rlsTestConn) Begin() (driver.Tx, error) {
-	return nil, errors.New("transactions are not supported")
+	return nil, errRLSTransactions
 }
 
 func (c rlsTestConn) ExecContext(_ context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
@@ -352,7 +368,7 @@ func (c rlsTestConn) QueryContext(_ context.Context, query string, args []driver
 	}
 
 	if step.rows == nil {
-		return nil, errors.New("query returned no rows definition")
+		return nil, errRLSNoRowsDefinition
 	}
 
 	return step.rows.clone(), nil
@@ -363,28 +379,28 @@ func (s *rlsTestState) next(kind, query string, args []driver.NamedValue) (rlsTe
 	defer s.mu.Unlock()
 
 	if len(s.steps) == 0 {
-		return rlsTestStep{}, fmt.Errorf("unexpected %s query: %s", kind, query)
+		return rlsTestStep{}, fmt.Errorf("%w %s query: %s", errRLSUnexpectedQuery, kind, query)
 	}
 
 	step := s.steps[0]
 	s.steps = s.steps[1:]
 
 	if step.kind != kind {
-		return rlsTestStep{}, fmt.Errorf("got %s query, want %s", kind, step.kind)
+		return rlsTestStep{}, fmt.Errorf("%w %s query, want %s", errRLSGot, kind, step.kind)
 	}
 
 	if !strings.Contains(query, step.contains) {
-		return rlsTestStep{}, fmt.Errorf("query %q does not contain %q", query, step.contains)
+		return rlsTestStep{}, fmt.Errorf("%w %q does not contain %q", errRLSQueryMismatch, query, step.contains)
 	}
 
 	if step.args != nil {
 		if len(args) != len(step.args) {
-			return rlsTestStep{}, fmt.Errorf("got %d arguments, want %d", len(args), len(step.args))
+			return rlsTestStep{}, fmt.Errorf("%w %d arguments, want %d", errRLSGot, len(args), len(step.args))
 		}
 
 		for i, arg := range args {
 			if arg.Value != step.args[i] {
-				return rlsTestStep{}, fmt.Errorf("argument %d = %v, want %v", i, arg.Value, step.args[i])
+				return rlsTestStep{}, fmt.Errorf("%w %d = %v, want %v", errRLSArgumentMismatch, i, arg.Value, step.args[i])
 			}
 		}
 	}

@@ -22,6 +22,8 @@ const (
 	maxBackoff         = 10 * time.Second
 )
 
+var errMalformedEvent = errors.New("malformed event")
+
 // Consumer reads the topics of the subscribed event types in one consumer
 // group and runs the handlers of each record. Offsets are committed only
 // after a record was handled (or parked on its DLQ topic), so delivery is
@@ -140,7 +142,7 @@ func (c *Consumer) Run(ctx context.Context) error {
 func (c *Consumer) handleRecord(ctx context.Context, client *kgo.Client, record *kgo.Record) {
 	var event outbox.Event
 	if err := json.Unmarshal(record.Value, &event); err != nil || event.ID == "" {
-		c.park(ctx, client, record, errors.Join(errors.New("malformed event"), err))
+		c.park(ctx, client, record, errors.Join(errMalformedEvent, err))
 
 		return
 	}

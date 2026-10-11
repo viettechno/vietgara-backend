@@ -21,6 +21,7 @@ linters:
     - unused # unused variables, functions, types
     - errcheck # unchecked error returns and type assertions
     - errorlint # correct use of errors.Is/As and %w wrapping (Go 1.13+)
+    - err113 # require static sentinel errors instead of constructing errors dynamically
     - nilerr # returning nil error when err is non-nil
     - forcetypeassert # type assertions without comma-ok check
     - copyloopvar # loop variable copy issues (Go 1.22+)
@@ -77,7 +78,6 @@ linters:
     - lll # line length — handled by gofmt/gofumpt
     - prealloc # high false-positive rate; enable only after performance profiling
     - wrapcheck # forces wrapping all external errors — too noisy as a default
-    - err113 # forces package-level sentinel errors — too opinionated, breaks common patterns
     - mnd # magic number detector — extremely noisy, flags obvious constants like HTTP 200
     - iface # interface pollution detector — too opinionated, not mature enough
     - nakedret # naked returns — overlaps with funlen (short functions make naked returns fine)

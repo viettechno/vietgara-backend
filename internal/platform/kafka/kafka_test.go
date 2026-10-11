@@ -3,7 +3,6 @@ package kafka_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -135,11 +134,11 @@ func TestConsumer(t *testing.T) {
 	})
 	consumer.Subscribe("user.email_verified", func(_ context.Context, e outbox.Event) error {
 		if e.ID == "flaky" && failures.Add(1) < 2 {
-			return errors.New("transient")
+			return errKafkaTransient
 		}
 
 		if e.ID == "broken" {
-			return errors.New("permanent")
+			return errKafkaPermanent
 		}
 
 		done <- struct{}{}
@@ -212,7 +211,7 @@ func TestConsumer_CancelledWhileRetrying(t *testing.T) {
 		default:
 		}
 
-		return errors.New("down")
+		return errKafkaDown
 	})
 
 	ctx, cancel := context.WithCancel(t.Context())

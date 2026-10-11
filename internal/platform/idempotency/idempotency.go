@@ -26,6 +26,8 @@ const Retention = 24 * time.Hour
 // PurgeInterval is how often expired keys are deleted.
 const PurgeInterval = time.Hour
 
+var errExpiredKeyRead = errors.New("idempotency key expired while being read; retry")
+
 // Key identifies one request: the caller's key, scoped to the garage and
 // the calling user.
 type Key struct {
@@ -91,7 +93,7 @@ func (s *Store) Claim(ctx context.Context, k Key, method string, requestHash []b
 	).Scan(&rec.Method, &rec.RequestHash, &responseType, &rec.Response, &status)
 	if errors.Is(err, pgx.ErrNoRows) {
 		// Deleted by the purge between the two statements: expired anyway.
-		return nil, errors.New("idempotency key expired while being read; retry")
+		return nil, errExpiredKeyRead
 	}
 
 	if err != nil {

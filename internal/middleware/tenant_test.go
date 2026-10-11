@@ -2,7 +2,6 @@ package middleware_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -59,7 +58,7 @@ func TestGarage_UserScope(t *testing.T) {
 	require.NoError(t, call(nil, func(context.Context) error { return nil }))
 	assert.Equal(t, platformdb.UserScope("user-1"), tx.scope)
 
-	failing := errors.New("handler failed")
+	failing := errMiddlewareHandler
 	err := call(nil, func(context.Context) error { return apperror.New(apperror.CodeNotFound, "gone") })
 	requireCode(t, err, codes.NotFound, "NOT_FOUND")
 
@@ -70,7 +69,7 @@ func TestGarage_UserScope(t *testing.T) {
 func TestGarage_PublicSkipsTransaction(t *testing.T) {
 	t.Parallel()
 
-	tx := &fakeTx{err: errors.New("must not be called")}
+	tx := &fakeTx{err: errMiddlewareMustNotRun}
 	ran := false
 	_, err := middleware.ChainUnaryInterceptors(
 		middleware.Auth(issuer, middleware.Policies{methodPublic: middleware.PublicMethod()}),
@@ -104,7 +103,7 @@ func TestGarage_Authorization(t *testing.T) {
 		{name: "missing garage id", req: nil, wantCode: codes.InvalidArgument, wantReason: "VALIDATION_ERROR"},
 		{name: "invalid garage id", req: garageReq{id: "nope"}, wantCode: codes.InvalidArgument, wantReason: "VALIDATION_ERROR"},
 		{name: "no membership", req: garageReq{id: garageID}, accessErr: access.ErrNoMembership, wantCode: codes.PermissionDenied, wantReason: middleware.ReasonGarageAccessDenied},
-		{name: "access query fails", req: garageReq{id: garageID}, accessErr: errors.New("db"), wantCode: codes.Internal},
+		{name: "access query fails", req: garageReq{id: garageID}, accessErr: errMiddlewareDB, wantCode: codes.Internal},
 		{name: "missing permission", req: garageReq{id: garageID}, access: &access.Access{Active: true}, wantCode: codes.PermissionDenied, wantReason: "PERMISSION_DENIED"},
 		{name: "owner only", req: garageReq{id: garageID}, access: member, policy: new(middleware.GarageMethod(access.OwnerOnly())), wantCode: codes.PermissionDenied, wantReason: middleware.ReasonOwnerOnly},
 		{name: "inactive garage", req: garageReq{id: garageID}, access: &access.Access{Permissions: member.Permissions}, wantCode: codes.FailedPrecondition, wantReason: middleware.ReasonGarageInactive},
@@ -112,7 +111,7 @@ func TestGarage_Authorization(t *testing.T) {
 		{name: "locked subscription", req: garageReq{id: garageID}, access: member, mode: middleware.LicenseLocked, wantCode: codes.FailedPrecondition, wantReason: middleware.ReasonSubscriptionSuspended},
 		{name: "read-only blocks writes", req: garageReq{id: garageID}, access: member, mode: middleware.LicenseReadOnly, wantCode: codes.PermissionDenied, wantReason: middleware.ReasonSubscriptionReadOnly},
 		{name: "read-only allows reads", req: garageReq{id: garageID}, access: member, mode: middleware.LicenseReadOnly, method: methodGarageRO},
-		{name: "license failure lets through", req: garageReq{id: garageID}, access: member, modeErr: errors.New("cache down")},
+		{name: "license failure lets through", req: garageReq{id: garageID}, access: member, modeErr: errMiddlewareCacheDown},
 		{name: "license skipped", req: garageReq{id: garageID}, access: member, mode: middleware.LicenseLocked, policy: func() *middleware.Policy {
 			p := rule
 			p.SkipLicense = true

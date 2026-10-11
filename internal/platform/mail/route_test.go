@@ -2,7 +2,6 @@ package mail_test
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 
@@ -26,7 +25,7 @@ func (r *recordingSender) Send(_ context.Context, msg mail.Message) error {
 func TestRoute(t *testing.T) {
 	t.Parallel()
 
-	testInbox, provider := &recordingSender{}, &recordingSender{err: errors.New("provider down")}
+	testInbox, provider := &recordingSender{}, &recordingSender{err: errMailTestProviderDown}
 	sender := mail.Route(func(email string) bool { return strings.HasSuffix(email, "@blackbox.vietgara.test") }, testInbox, provider)
 
 	toTest, toReal := validMessage(), validMessage()

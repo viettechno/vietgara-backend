@@ -126,6 +126,7 @@ services:
       TEST_USERS_EMAIL_DOMAIN: blackbox.vietgara.test
       TEST_USERS_SMTP_HOST: vietgara-mailpit
       TEST_USERS_SMTP_PORT: 1025
+      MAILPIT_API_URL: http://vietgara-mailpit:8025
 
   vietgara-api-gateway:
     image: kong:3.9

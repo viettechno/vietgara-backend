@@ -31,7 +31,7 @@ var (
 // nil values untouched so pointer fields stay nil.
 func assignScanValues(dest, values []any) error {
 	if len(dest) != len(values) {
-		return errors.New("scan: column count mismatch")
+		return errScanColumnCountMismatch
 	}
 
 	for i := range dest {
@@ -43,7 +43,7 @@ func assignScanValues(dest, values []any) error {
 		sv := reflect.ValueOf(values[i])
 
 		if !sv.Type().AssignableTo(dv.Type()) {
-			return errors.New("scan: value type mismatch")
+			return errScanValueTypeMismatch
 		}
 
 		dv.Set(sv)

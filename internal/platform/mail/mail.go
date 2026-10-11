@@ -41,6 +41,13 @@ type From struct {
 // ErrInvalidMessage is returned for a message without recipient or body.
 var ErrInvalidMessage = errors.New("mail: message needs a recipient, subject and body")
 
+var (
+	errMailFromAddressRequired = errors.New("mail: MAIL_FROM_ADDRESS is required")
+	errSMTPHostAndPortRequired = errors.New("mail: SMTP_HOST and SMTP_PORT are required")
+	errMailjetKeysRequired     = errors.New("mail: MAILJET_API_KEY and MAILJET_SECRET_KEY are required")
+	errUnknownMailProvider     = errors.New("mail: unknown MAIL_PROVIDER")
+)
+
 func validate(msg Message) error {
 	if msg.ToEmail == "" || msg.Subject == "" || (msg.Text == "" && msg.HTML == "") {
 		return ErrInvalidMessage
@@ -69,23 +76,23 @@ type Config struct {
 // New returns the Sender selected by cfg.
 func New(cfg Config) (Sender, error) {
 	if cfg.From.Email == "" {
-		return nil, errors.New("mail: MAIL_FROM_ADDRESS is required")
+		return nil, errMailFromAddressRequired
 	}
 
 	switch cfg.Provider {
 	case "smtp":
 		if cfg.SMTPHost == "" || cfg.SMTPPort == 0 {
-			return nil, errors.New("mail: SMTP_HOST and SMTP_PORT are required")
+			return nil, errSMTPHostAndPortRequired
 		}
 
 		return NewSMTPSender(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername, cfg.SMTPPassword, cfg.From), nil
 	case "mailjet":
 		if cfg.MailjetAPIKey == "" || cfg.MailjetSecretKey == "" {
-			return nil, errors.New("mail: MAILJET_API_KEY and MAILJET_SECRET_KEY are required")
+			return nil, errMailjetKeysRequired
 		}
 
 		return NewMailjetSender(cfg.MailjetAPIKey, cfg.MailjetSecretKey, cfg.From, cfg.MailjetEndpoint), nil
 	default:
-		return nil, fmt.Errorf("mail: unknown MAIL_PROVIDER %q (want smtp or mailjet)", cfg.Provider)
+		return nil, fmt.Errorf("%w %q (want smtp or mailjet)", errUnknownMailProvider, cfg.Provider)
 	}
 }

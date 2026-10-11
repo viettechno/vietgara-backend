@@ -29,6 +29,12 @@ type Store interface {
 // ErrInvalidKey is returned for keys that could escape the store.
 var ErrInvalidKey = errors.New("storage: invalid object key")
 
+var (
+	errLocalStorageDirRequired = errors.New("storage: STORAGE_LOCAL_DIR is required")
+	errGCSBucketRequired       = errors.New("storage: STORAGE_GCS_BUCKET is required")
+	errUnknownStorageBackend   = errors.New("storage: unknown STORAGE_BACKEND")
+)
+
 // cleanKey validates key: relative, no "..", no empty segments.
 func cleanKey(key string) (string, error) {
 	if key == "" || strings.HasPrefix(key, "/") || strings.Contains(key, "\\") {
@@ -64,17 +70,17 @@ func New(ctx context.Context, cfg Config) (Store, error) {
 	switch cfg.Backend {
 	case "local":
 		if cfg.LocalDir == "" {
-			return nil, errors.New("storage: STORAGE_LOCAL_DIR is required")
+			return nil, errLocalStorageDirRequired
 		}
 
 		return NewLocal(cfg.LocalDir, cfg.PublicBaseURL)
 	case "gcs":
 		if cfg.Bucket == "" {
-			return nil, errors.New("storage: STORAGE_GCS_BUCKET is required")
+			return nil, errGCSBucketRequired
 		}
 
 		return NewGCS(ctx, cfg.Bucket, cfg.PublicBaseURL)
 	default:
-		return nil, fmt.Errorf("storage: unknown STORAGE_BACKEND %q (want local or gcs)", cfg.Backend)
+		return nil, fmt.Errorf("%w %q (want local or gcs)", errUnknownStorageBackend, cfg.Backend)
 	}
 }

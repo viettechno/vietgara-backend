@@ -24,6 +24,12 @@ import (
 
 type kind int
 
+var (
+	errDBTestValueCount     = errors.New("dbtest")
+	errDBTestScanType       = errors.New("dbtest: cannot scan")
+	errDBTestScanOutsideRow = errors.New("dbtest: Scan outside a row")
+)
+
 const (
 	kindExec kind = iota
 	kindQuery
@@ -171,7 +177,7 @@ func (r row) Scan(dest ...any) error {
 
 func assign(values, dest []any) error {
 	if len(values) != len(dest) {
-		return fmt.Errorf("dbtest: %d values for %d destinations", len(values), len(dest))
+		return fmt.Errorf("%w: %d values for %d destinations", errDBTestValueCount, len(values), len(dest))
 	}
 
 	for i, value := range values {
@@ -194,7 +200,7 @@ func assign(values, dest []any) error {
 		case vv.Type().ConvertibleTo(dv.Type()):
 			dv.Set(vv.Convert(dv.Type()))
 		default:
-			return fmt.Errorf("dbtest: cannot scan %T into %s (column %d)", value, dv.Type(), i)
+			return fmt.Errorf("%w %T into %s (column %d)", errDBTestScanType, value, dv.Type(), i)
 		}
 	}
 
@@ -234,7 +240,7 @@ func (r *Rows) Scan(dest ...any) error {
 	}
 
 	if r.idx < 0 || r.idx >= len(r.data) {
-		return errors.New("dbtest: Scan outside a row")
+		return errDBTestScanOutsideRow
 	}
 
 	return assign(r.data[r.idx], dest)

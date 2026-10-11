@@ -1,7 +1,6 @@
 package numbering_test
 
 import (
-	"errors"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -13,7 +12,7 @@ import (
 func TestSequencer_Next(t *testing.T) {
 	t.Parallel()
 
-	boom := errors.New("boom")
+	boom := errSequencerTestBoom
 	seq := numbering.NewSequencer(nil)
 
 	tx := dbtest.New(t).

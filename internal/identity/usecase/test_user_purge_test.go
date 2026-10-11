@@ -2,7 +2,6 @@ package usecase_test
 
 import (
 	"context"
-	"errors"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -50,7 +49,7 @@ func TestTestUserPurgeJob(t *testing.T) {
 	t.Run("reports a failed deletion", func(t *testing.T) {
 		t.Parallel()
 
-		deleter := &fakeDeleter{deleted: 1, err: errors.New("invited_by")}
+		deleter := &fakeDeleter{deleted: 1, err: errTestPurgeInvitedBy}
 		job := usecase.NewTestUserPurgeJob(deleter, domain, time.Hour)
 
 		require.ErrorContains(t, job.Run(t.Context()), "invited_by")
@@ -69,7 +68,7 @@ func TestTestUserPurgeJob(t *testing.T) {
 	t.Run("schedule runs at once and stops with its context", func(t *testing.T) {
 		t.Parallel()
 
-		deleter := &fakeDeleter{err: errors.New("db down")}
+		deleter := &fakeDeleter{err: errTestPurgeDBDown}
 		job := usecase.NewTestUserPurgeJob(deleter, domain, time.Hour)
 
 		ctx, cancel := context.WithCancel(t.Context())

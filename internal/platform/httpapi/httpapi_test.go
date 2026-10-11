@@ -3,7 +3,6 @@ package httpapi_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -67,7 +66,7 @@ func (s *userServer) UpdateMe(ctx context.Context, req *identityv1.UpdateMeReque
 	case "limit":
 		return nil, apperror.ToGRPCError(apperror.New(apperror.CodeFailedPrecondition, "upgrade").WithReason("PLAN_LIMIT_REACHED"))
 	case "crash":
-		return nil, errors.New("database password is hunter2")
+		return nil, errDatabasePasswordTest
 	default:
 		return nil, status.Error(codes.PermissionDenied, "no")
 	}

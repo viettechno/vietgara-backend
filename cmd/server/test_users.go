@@ -8,6 +8,8 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/testusers"
 )
 
+var errTestUsersSMTPHostRequired = errors.New("TEST_USERS_SMTP_HOST is required with TEST_USERS_EMAIL_DOMAIN")
+
 // testUsersFromEnv reads the automated suite's test users on a shared
 // deployment (staging): TEST_USERS_EMAIL_DOMAIN selects them, and their
 // e-mail goes to the SMTP server at TEST_USERS_SMTP_HOST (a Mailpit the
@@ -27,7 +29,7 @@ func testUsersFromEnv(mailer mail.Sender, from mail.From) (testusers.Domain, mai
 
 	host := envOr("TEST_USERS_SMTP_HOST", "")
 	if host == "" {
-		return testusers.Domain{}, nil, errors.New("TEST_USERS_SMTP_HOST is required with TEST_USERS_EMAIL_DOMAIN")
+		return testusers.Domain{}, nil, errTestUsersSMTPHostRequired
 	}
 
 	testInbox, err := mail.New(mail.Config{Provider: "smtp", From: from, SMTPHost: host, SMTPPort: envInt("TEST_USERS_SMTP_PORT", 1025)})

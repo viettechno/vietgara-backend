@@ -1,5 +1,5 @@
 // Package handler exposes the Customer & Vehicle module (FRD 3.4) as gRPC
-// services -- customers, vehicles and partners -- served as REST through
+// services -- customers and vehicles -- served as REST through
 // grpc-gateway. Authorization happens in the request middleware from the
 // policies below.
 package handler
@@ -15,27 +15,24 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-// Server implements customerv1.CustomerServiceServer,
-// customerv1.VehicleServiceServer and customerv1.PartnerServiceServer.
+// Server implements customerv1.CustomerServiceServer and
+// customerv1.VehicleServiceServer.
 type Server struct {
 	customerv1.UnimplementedCustomerServiceServer
 	customerv1.UnimplementedVehicleServiceServer
-	customerv1.UnimplementedPartnerServiceServer
 
 	customers *usecase.CustomerUseCase
 	vehicles  *usecase.VehicleUseCase
-	partners  *usecase.PartnerUseCase
 }
 
 // NewServer wires the handler to its use cases.
-func NewServer(customers *usecase.CustomerUseCase, vehicles *usecase.VehicleUseCase, partners *usecase.PartnerUseCase) *Server {
-	return &Server{customers: customers, vehicles: vehicles, partners: partners}
+func NewServer(customers *usecase.CustomerUseCase, vehicles *usecase.VehicleUseCase) *Server {
+	return &Server{customers: customers, vehicles: vehicles}
 }
 
 // Policies declares the permission every RPC requires in its garage.
 func Policies() middleware.Policies {
 	read, write := access.Requires(access.CustomerRead), access.Requires(access.CustomerWrite)
-	partnerRead, partnerWrite := access.Requires(access.PartnerRead), access.Requires(access.PartnerWrite)
 
 	return middleware.Policies{
 		customerv1.CustomerService_ListCustomers_FullMethodName:  middleware.GarageMethod(read),
@@ -50,12 +47,6 @@ func Policies() middleware.Policies {
 		customerv1.VehicleService_UpdateVehicle_FullMethodName:     middleware.GarageMethod(write),
 		customerv1.VehicleService_DeleteVehicle_FullMethodName:     middleware.GarageMethod(write),
 		customerv1.VehicleService_GetVehicleHistory_FullMethodName: middleware.GarageMethod(read),
-
-		customerv1.PartnerService_ListPartners_FullMethodName:  middleware.GarageMethod(partnerRead),
-		customerv1.PartnerService_GetPartner_FullMethodName:    middleware.GarageMethod(partnerRead),
-		customerv1.PartnerService_CreatePartner_FullMethodName: middleware.GarageMethod(partnerWrite),
-		customerv1.PartnerService_UpdatePartner_FullMethodName: middleware.GarageMethod(partnerWrite),
-		customerv1.PartnerService_DeletePartner_FullMethodName: middleware.GarageMethod(partnerWrite),
 	}
 }
 

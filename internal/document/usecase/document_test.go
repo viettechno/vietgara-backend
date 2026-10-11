@@ -148,8 +148,8 @@ func TestDocumentUseCase_SettlementReceiptPDF(t *testing.T) {
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(usecase.SettlementInfo{
 			Number: "QT-202609-0001", Status: "paid", CustomerName: "An Nguyen", VehiclePlate: "51F-123.45",
-			TotalAmount: 1_000_000, CustomerAmount: 600_000, InsurerAmount: 400_000, InsurerName: "ABC Insurance",
-			Payments: []render.PaymentRow{{Date: "2026-09-30", PayerType: "customer", Method: "cash", Amount: 600_000}},
+			TotalAmount: 1_000_000, PaidAmount: 600_000,
+			Payments: []render.PaymentRow{{Date: "2026-09-30", Method: "cash", Amount: 600_000}},
 		}, nil).Once()
 
 		pdf, err := uc.SettlementReceiptPDF(t.Context(), garageID, settlementID)

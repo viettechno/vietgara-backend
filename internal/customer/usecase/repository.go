@@ -21,13 +21,6 @@ type VehicleFilter struct {
 	CustomerID string
 }
 
-// PartnerFilter narrows a partner listing to one type when Type is set.
-type PartnerFilter struct {
-	ListFilter
-
-	Type domain.PartnerType
-}
-
 // CustomerRepository defines the persistence contract for customers. Every
 // method only sees live (not soft-deleted) rows of the given garage.
 type CustomerRepository interface {
@@ -60,20 +53,4 @@ type VehicleRepository interface {
 	SoftDelete(ctx context.Context, garageID, vehicleID, deletedBy string) error
 	// SoftDeleteByCustomer soft-deletes every vehicle of a customer.
 	SoftDeleteByCustomer(ctx context.Context, garageID, customerID, deletedBy string) error
-}
-
-// PartnerRepository defines the persistence contract for partners. Every
-// method only sees live (not soft-deleted) rows of the given garage.
-type PartnerRepository interface {
-	// Create inserts p; a duplicate name returns domain.ErrPartnerNameTaken.
-	Create(ctx context.Context, p *domain.Partner) error
-	// FindByID returns domain.ErrPartnerNotFound when absent.
-	FindByID(ctx context.Context, garageID, partnerID string) (*domain.Partner, error)
-	// Update persists the editable fields of p; a duplicate name returns
-	// domain.ErrPartnerNameTaken.
-	Update(ctx context.Context, p *domain.Partner) error
-	// List returns one page of partners ordered by name, and the total count.
-	List(ctx context.Context, garageID string, filter PartnerFilter) ([]*domain.Partner, int, error)
-	// SoftDelete returns domain.ErrPartnerNotFound when absent.
-	SoftDelete(ctx context.Context, garageID, partnerID, deletedBy string) error
 }

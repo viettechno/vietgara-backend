@@ -17,7 +17,6 @@ const (
 	garageID      = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	repairOrderID = "11111111-1111-1111-1111-111111111111"
 	settlementID  = "22222222-2222-2222-2222-222222222222"
-	insurerID     = "33333333-3333-3333-3333-333333333333"
 	ownerID       = "44444444-4444-4444-4444-444444444444"
 	actorID       = "55555555-5555-5555-5555-555555555555"
 )
@@ -28,7 +27,6 @@ type env struct {
 	srv          *handler.Server
 	settlements  *mocks.MockBillingRepository
 	repairOrders *mocks.MockBillingRepairOrderReader
-	partners     *mocks.MockBillingPartnerReader
 	garages      *mocks.MockBillingGarageReader
 	limits       *mocks.MockBillingTransactionLimiter
 	sequences    *mocks.MockBillingSequencer
@@ -40,8 +38,8 @@ func newEnv(t *testing.T) *env {
 
 	e := &env{
 		settlements: mocks.NewMockBillingRepository(t), repairOrders: mocks.NewMockBillingRepairOrderReader(t),
-		partners: mocks.NewMockBillingPartnerReader(t), garages: mocks.NewMockBillingGarageReader(t),
-		limits: mocks.NewMockBillingTransactionLimiter(t), sequences: mocks.NewMockBillingSequencer(t),
+		garages: mocks.NewMockBillingGarageReader(t),
+		limits:  mocks.NewMockBillingTransactionLimiter(t), sequences: mocks.NewMockBillingSequencer(t),
 		events: mocks.NewMockBillingEventPublisher(t),
 	}
 
@@ -50,18 +48,12 @@ func newEnv(t *testing.T) *env {
 	auditLog.EXPECT().Record(mock.Anything, mock.Anything).Return(nil).Maybe()
 
 	uc := usecase.NewSettlementUseCase(usecase.Deps{
-		Settlements: e.settlements, RepairOrders: e.repairOrders, Partners: e.partners, Garages: e.garages,
+		Settlements: e.settlements, RepairOrders: e.repairOrders, Garages: e.garages,
 		Limits: e.limits, Sequences: e.sequences, Events: e.events, Audit: auditLog,
 	})
 	e.srv = handler.NewServer(uc)
 
 	return e
-}
-
-func insurerIDPtr() *string {
-	id := insurerID
-
-	return &id
 }
 
 func defaultGarage() usecase.GarageInfo {

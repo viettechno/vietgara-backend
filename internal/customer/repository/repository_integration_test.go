@@ -24,7 +24,6 @@ type integrationEnv struct {
 	txm       *dbpkg.TxManager
 	customers *repository.PostgresCustomerRepository
 	vehicles  *repository.PostgresVehicleRepository
-	partners  *repository.PostgresPartnerRepository
 	userID    string
 	garageA   string
 	garageB   string
@@ -47,7 +46,6 @@ func startIntegrationEnv(t *testing.T) *integrationEnv {
 	env.txm = dbpkg.NewTxManager(pool)
 	env.customers = repository.NewPostgresCustomerRepository(pool)
 	env.vehicles = repository.NewPostgresVehicleRepository(pool)
-	env.partners = repository.NewPostgresPartnerRepository(pool)
 
 	return env
 }
@@ -216,73 +214,6 @@ func TestCustomerAndVehicleRepositories(t *testing.T) {
 			return env.vehicles.Create(ctx, &domain.Vehicle{ID: uuid.NewString(), GarageID: env.garageB, CustomerID: bob.ID, LicensePlate: "99Z-00000"})
 		})
 		require.ErrorIs(t, err, domain.ErrCustomerNotFound)
-	})
-}
-
-func TestPartnerRepository(t *testing.T) {
-	env := startIntegrationEnv(t)
-	person, phone := "Ms. Lan", "0281234567"
-	supplier := &domain.Partner{
-		ID: uuid.NewString(), GarageID: env.garageA, Type: domain.PartnerTypeSupplier, Name: "Phu Tung Sai Gon",
-		Contact: domain.PartnerContact{ContactPerson: &person, Phone: &phone},
-	}
-
-	env.inGarage(t, env.garageA, func(ctx context.Context) {
-		require.NoError(t, env.partners.Create(ctx, supplier))
-		require.NoError(t, env.partners.Create(ctx, &domain.Partner{
-			ID: uuid.NewString(), GarageID: env.garageA, Type: domain.PartnerTypeInsurer, Name: "Bao Viet",
-		}))
-		// The same name is allowed under another type.
-		require.NoError(t, env.partners.Create(ctx, &domain.Partner{
-			ID: uuid.NewString(), GarageID: env.garageA, Type: domain.PartnerTypeInsurer, Name: "Phu Tung Sai Gon",
-		}))
-
-		got, err := env.partners.FindByID(ctx, env.garageA, supplier.ID)
-		require.NoError(t, err)
-		assert.Equal(t, domain.PartnerTypeSupplier, got.Type)
-		assert.Equal(t, person, *got.Contact.ContactPerson)
-
-		list, total, err := env.partners.List(ctx, env.garageA, usecase.PartnerFilter{
-			ListFilter: usecase.ListFilter{Limit: 10}, Type: domain.PartnerTypeInsurer,
-		})
-		require.NoError(t, err)
-		require.Equal(t, 2, total)
-		assert.Equal(t, "Bao Viet", list[0].Name, "ordered by name")
-
-		for _, query := range []string{"lan", "028 123", "sai gon"} {
-			_, total, err := env.partners.List(ctx, env.garageA, usecase.PartnerFilter{
-				ListFilter: usecase.ListFilter{Query: query, Limit: 10}, Type: domain.PartnerTypeSupplier,
-			})
-			require.NoError(t, err)
-			assert.Equal(t, 1, total, query)
-		}
-
-		note := "Pays within 30 days"
-		got.Note = &note
-		require.NoError(t, env.partners.Update(ctx, got))
-
-		got, err = env.partners.FindByID(ctx, env.garageA, supplier.ID)
-		require.NoError(t, err)
-		assert.Equal(t, note, *got.Note)
-	})
-
-	err := env.txm.WithTransaction(t.Context(), dbpkg.GarageScope(env.garageA), func(ctx context.Context) error {
-		return env.partners.Create(ctx, &domain.Partner{
-			ID: uuid.NewString(), GarageID: env.garageA, Type: domain.PartnerTypeSupplier, Name: "phu tung SAI GON",
-		})
-	})
-	require.ErrorIs(t, err, domain.ErrPartnerNameTaken)
-
-	env.inGarage(t, env.garageA, func(ctx context.Context) {
-		require.NoError(t, env.partners.SoftDelete(ctx, env.garageA, supplier.ID, env.userID))
-		_, err := env.partners.FindByID(ctx, env.garageA, supplier.ID)
-		require.ErrorIs(t, err, domain.ErrPartnerNotFound)
-	})
-
-	env.inGarage(t, env.garageB, func(ctx context.Context) {
-		_, total, err := env.partners.List(ctx, env.garageA, usecase.PartnerFilter{ListFilter: usecase.ListFilter{Limit: 10}})
-		require.NoError(t, err)
-		assert.Zero(t, total)
 	})
 }
 

@@ -4,7 +4,6 @@ import (
 	billingHandler "github.com/viettechno/vietgara-backend/internal/billing/handler"
 	billingRepository "github.com/viettechno/vietgara-backend/internal/billing/repository"
 	billingUsecase "github.com/viettechno/vietgara-backend/internal/billing/usecase"
-	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
 	licenseUsecase "github.com/viettechno/vietgara-backend/internal/license/usecase"
 	"github.com/viettechno/vietgara-backend/internal/platform/audit"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
@@ -15,8 +14,8 @@ import (
 )
 
 // billingModule is the wired Billing & Settlement module (FRD 3.8/3.9,
-// Release 1.4): settlements from a closed repair order, the
-// customer/insurer allocation, and recorded payments.
+// Release 1.4): settlements from a closed repair order and recorded
+// payments.
 type billingModule struct {
 	server      *billingHandler.Server
 	uc          *billingUsecase.SettlementUseCase
@@ -28,7 +27,6 @@ func buildBilling(
 	events *outbox.EventPublisher,
 	garages *tenantRepo.PostgresGarageRepository,
 	entitlements *licenseUsecase.EntitlementUseCase,
-	partners *customerRepository.PostgresPartnerRepository,
 	repairOrders *repairorderUsecase.RepairOrderUseCase,
 	auditLog *audit.Logger,
 ) *billingModule {
@@ -36,7 +34,7 @@ func buildBilling(
 
 	uc := billingUsecase.NewSettlementUseCase(billingUsecase.Deps{
 		Settlements: settlementsRepo, RepairOrders: billingRepairOrders{uc: repairOrders},
-		Partners: billingPartners{partners: partners}, Garages: billingGarages{garages: garages}, Limits: entitlements,
+		Garages: billingGarages{garages: garages}, Limits: entitlements,
 		Sequences: numbering.NewSequencer(pool), Events: events, Audit: auditLog,
 	})
 

@@ -11,7 +11,7 @@ CREATE TYPE permission AS ENUM (
     'garage.write',
     'staff.read', 'staff.write',
     'customer.read', 'customer.write',
-    'partner.read', 'partner.write',
+    'supplier.read', 'supplier.write',
     'subscription.read',
     'quote.read', 'quote.write',
     'repair_order.read', 'repair_order.write',

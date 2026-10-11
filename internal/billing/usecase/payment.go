@@ -13,20 +13,14 @@ type RecordPaymentRequest struct {
 	GarageID     string
 	SettlementID string
 	ActorID      string
-	PayerType    domain.PayerType
 	Amount       int64
 	Method       domain.PaymentMethod
 	Note         string
 }
 
 // RecordPayment records a payment actually collected (FR-BIL-03); a
-// settlement may receive several, from either payer, until each payer's
-// allocated amount is fully collected.
+// settlement may receive several until the total is fully collected.
 func (uc *SettlementUseCase) RecordPayment(ctx context.Context, req RecordPaymentRequest) (*domain.Settlement, error) {
-	if !req.PayerType.IsValid() {
-		return nil, toAppError("record payment", domain.ErrInvalidPayerType)
-	}
-
 	if !req.Method.IsValid() {
 		return nil, toAppError("record payment", domain.ErrInvalidPaymentMethod)
 	}
@@ -36,14 +30,14 @@ func (uc *SettlementUseCase) RecordPayment(ctx context.Context, req RecordPaymen
 		return nil, toAppError("record payment", err)
 	}
 
-	if req.Amount <= 0 || req.Amount > s.RemainingDue(req.PayerType) {
+	if req.Amount <= 0 || req.Amount > s.RemainingDue() {
 		return nil, toAppError("record payment", domain.ErrInvalidPaymentAmount)
 	}
 
 	before := settlementAudit(s)
 
 	payment := &domain.Payment{
-		ID: uuid.NewString(), PayerType: req.PayerType, Amount: req.Amount, Method: req.Method, Note: req.Note,
+		ID: uuid.NewString(), Amount: req.Amount, Method: req.Method, Note: req.Note,
 		CreatedBy: actorRef(req.ActorID),
 	}
 

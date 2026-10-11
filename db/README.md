@@ -15,7 +15,7 @@ exists, schema changes must become new, forward-only migrations.)
 
 **Migration freeze.** The rule is to edit in place only while no non-test tenant exists. Staging counts as test data: after an in-place change, rebuild the local database (`make docker-clean`, then `make docker-up`) and wipe the staging database before deploying. From the first real tenant, every change is a new forward-only migration.
 
-Planned in-place changes (Release Plan, Phases 3-8): `users` and `user_id` everywhere (Phase 3, backend done in #20); `partners` becomes `suppliers` without the `partner_type` enum, the insurer columns and the `payer_type` / `partner_type` insurer values go from `settlements` and `settlement_payments`, voucher columns on `settlement_payments`, `stock_transactions.quantity` becomes `NUMERIC(14,3)` (Release 5.0); units, categories, jobs, goods receipts and the other tables listed in the Database Design, Section 11, arrive with their releases.
+Planned in-place changes (Release Plan, Phases 3-8): `users` and `user_id` everywhere (Phase 3, backend done in #20); `partners` becomes `suppliers` without the `partner_type` enum (done), the insurer columns, the allocation split and `payer_type` go from `settlements` and `settlement_payments` (done), voucher columns on `settlement_payments`, `stock_transactions.quantity` becomes `NUMERIC(14,3)` (Release 5.0); units, categories, jobs, goods receipts and the other tables listed in the Database Design, Section 11, arrive with their releases.
 
 | Version | Module | Creates |
 | --- | --- | --- |
@@ -23,7 +23,7 @@ Planned in-place changes (Release Plan, Phases 3-8): `users` and `user_id` every
 | 000002 | Tenant | RLS helpers `app_current_garage_id()` / `app_current_user_id()`; `garages` with `garage_status` (`active`, `inactive`), `Asia/Ho_Chi_Minh` time zone, contact details, operating hours, numbering templates |
 | 000003 | Tenant | `garage_staff` with `staff_status` (`active`, `inactive`); permissions come from staff groups |
 | 000004 | Platform | `outbox_events` (`outbox_status`, garage or user, relay bookkeeping) |
-| 000005–000007 | Customer | `customers` (consent log, trigram search), `vehicles` (normalized plate key), `partners`, each with its tenant RLS policy |
+| 000005–000007 | Customer | `customers` (consent log, trigram search), `vehicles` (normalized plate key), `suppliers` (000007, Supplier module, bank details), each with its tenant RLS policy |
 | 000008 | License | `plans` (limits on garages, staff and transactions per day; `plan_feature[]`; seeded catalogue), `subscriptions` (one per owner user), `entitlements` (per user and feature) |
 | 000009 | Identity | `platform_admins` |
 | 000010 | Tenant | `permission` and `default_role` enums, `roles`, `role_permissions`, `staff_groups`, `staff_group_members`, the shared `set_updated_at()` trigger |
@@ -34,7 +34,7 @@ Planned in-place changes (Release Plan, Phases 3-8): `users` and `user_id` every
 | 000015 | Quote & Pricing | `quotes` (`quote_status`, `quote_approval_mode` from 000002, the public approval token hash), `quote_lines` (`quote_item_type`, `quote_line_decision`), `find_quote_by_public_token()` |
 | 000016 | Repair Order | `repair_orders` (`repair_order_status`, incl. `waiting_on_parts`), `repair_order_lines` (`repair_order_line_status`, `assigned_technicians`) -- FR-REP-01..03/06 |
 | 000017 | Inventory | `items` (trigram search), `stock_balance` (per-item running total), `stock_transactions` (append-only, `stock_transaction_type`, `stock_transaction_ref_type`) -- FR-INV-01..03/05 |
-| 000018 | Billing & Settlement | `settlements` (`settlement_status`, customer/insurer allocation and paid totals), `settlement_payments` (append-only, `payer_type`, `payment_method`) -- FR-BIL-01..03, FR-REC-01 |
+| 000018 | Billing & Settlement | `settlements` (`settlement_status`, paid total), `settlement_payments` (append-only, `payment_method`) -- FR-BIL-01..03, FR-REC-01 |
 | 000019 | Notification | `notification_log` (append-only, `notification_channel`, `notification_status`): what was sent, for visibility -- not a dedup mechanism, the Outbox Pattern's `processed_events` already gives exactly-once delivery -- FR-NOT-04 |
 
 Tables from 000002, 000003, 000010 and 000011 enable `FORCE ROW LEVEL
@@ -87,7 +87,7 @@ garages, invitations, roles) runs with only the user set.
 | `staff_groups`, `staff_group_members` | Current garage, the owner's garages, or the caller's own groups | Current garage |
 | `roles`, `role_permissions` | The caller's roles, the current garage owner's roles, roles used by visible groups | The caller's own roles |
 | `staff_invitations` | Current garage, or invitations to the caller | Insert/delete: current garage; update: garage side (revoke) or invitee (accept/decline) |
-| `customers`, `vehicles`, `partners` | Current garage | Current garage |
+| `customers`, `vehicles`, `suppliers` | Current garage | Current garage |
 | `document_sequences`, `quotes`, `quote_lines`, `repair_orders`, `repair_order_lines` | Current garage | Current garage |
 
 Platform tables (`users`, `plans`, `subscriptions`, `entitlements`,
@@ -141,7 +141,7 @@ erDiagram
   users ||--o{ entitlements : "entitled to"
   garages ||--o{ customers : serves
   customers ||--o{ vehicles : owns
-  garages ||--o{ partners : "works with"
+  garages ||--o{ suppliers : "buys from"
 ```
 
 ## Troubleshooting

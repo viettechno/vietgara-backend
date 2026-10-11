@@ -39,6 +39,7 @@ import (
 	quotev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/quote/v1"
 	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
 	reportingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/reporting/v1"
+	supplierv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/supplier/v1"
 	technicianv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/technician/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 	"github.com/viettechno/vietgara-proto/openapi"
@@ -73,6 +74,9 @@ import (
 	quoteHandler "github.com/viettechno/vietgara-backend/internal/quote/handler"
 	repairorderHandler "github.com/viettechno/vietgara-backend/internal/repairorder/handler"
 	reportingHandler "github.com/viettechno/vietgara-backend/internal/reporting/handler"
+	supplierHandler "github.com/viettechno/vietgara-backend/internal/supplier/handler"
+	supplierRepository "github.com/viettechno/vietgara-backend/internal/supplier/repository"
+	supplierUsecase "github.com/viettechno/vietgara-backend/internal/supplier/usecase"
 	technicianHandler "github.com/viettechno/vietgara-backend/internal/technician/handler"
 	tenantHandler "github.com/viettechno/vietgara-backend/internal/tenant/handler"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
@@ -283,18 +287,18 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// repair_order.closed consumer that deducts stock (FR-INV-02).
 	inventory := buildInventory(pool, events)
 
-	partnerRepo := customerRepository.NewPostgresPartnerRepository(pool)
+	supplierUC := supplierUsecase.NewUseCase(supplierRepository.NewPostgresRepository(pool))
+	supplierSrv := supplierHandler.NewServer(supplierUC)
 
 	vehicleUC := customerUsecase.NewVehicleUseCase(vehicleRepo, customerRepo, vehicleHistory{quotes: quote.quotes, repairOrders: repairOrder.uc})
 	customerSrv := customerHandler.NewServer(
 		customerUsecase.NewCustomerUseCase(customerRepo, vehicleRepo),
 		vehicleUC,
-		customerUsecase.NewPartnerUseCase(partnerRepo),
 	)
 
 	// Billing & Settlement (Release 1.4): settlements from a closed
-	// repair order, the customer/insurer allocation, recorded payments.
-	billing := buildBilling(pool, events, garages, license.entitlements, partnerRepo, repairOrder.uc, auditLog)
+	// repair order, recorded payments.
+	billing := buildBilling(pool, events, garages, license.entitlements, repairOrder.uc, auditLog)
 
 	// Document/Print (Release 1.4): quote, repair order and settlement
 	// receipt PDFs, the stock movement report as Excel.
@@ -344,7 +348,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	policies := middleware.Merge(
 		identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
 		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
-		documentHandler.Policies(), reportingHandler.Policies(),
+		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(),
 		technicianHandler.Policies(), customerportalHandler.Policies(),
 	)
 	app.grpcServer = grpc.NewServer(
@@ -369,7 +373,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	licensev1.RegisterLicenseAdminServiceServer(app.grpcServer, license.server)
 	customerv1.RegisterCustomerServiceServer(app.grpcServer, customerSrv)
 	customerv1.RegisterVehicleServiceServer(app.grpcServer, customerSrv)
-	customerv1.RegisterPartnerServiceServer(app.grpcServer, customerSrv)
+	supplierv1.RegisterSupplierServiceServer(app.grpcServer, supplierSrv)
 	quotev1.RegisterQuoteServiceServer(app.grpcServer, quote.server)
 	quotev1.RegisterPublicQuoteServiceServer(app.grpcServer, quote.server)
 	repairorderv1.RegisterRepairOrderServiceServer(app.grpcServer, repairOrder.server)
@@ -472,7 +476,7 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 		tenantv1.RegisterStaffGroupServiceHandler,
 		licensev1.RegisterLicenseServiceHandler, licensev1.RegisterLicenseAdminServiceHandler,
 		customerv1.RegisterCustomerServiceHandler, customerv1.RegisterVehicleServiceHandler,
-		customerv1.RegisterPartnerServiceHandler,
+		supplierv1.RegisterSupplierServiceHandler,
 		quotev1.RegisterQuoteServiceHandler, quotev1.RegisterPublicQuoteServiceHandler,
 		repairorderv1.RegisterRepairOrderServiceHandler, inventoryv1.RegisterInventoryServiceHandler,
 		billingv1.RegisterSettlementServiceHandler, documentv1.RegisterDocumentServiceHandler,

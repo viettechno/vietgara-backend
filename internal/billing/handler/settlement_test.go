@@ -18,7 +18,7 @@ import (
 func openSettlement() *domain.Settlement {
 	return &domain.Settlement{
 		ID: settlementID, GarageID: garageID, RepairOrderID: repairOrderID, VehicleLicensePlate: "51F-123.45",
-		CustomerName: "An Nguyen", Number: "QT-0001", TotalAmount: 1_000_000, CustomerAmount: 1_000_000,
+		CustomerName: "An Nguyen", Number: "QT-0001", TotalAmount: 1_000_000,
 		Status: domain.StatusPending,
 	}
 }
@@ -27,7 +27,7 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 5)
+	assert.Len(t, p, 4)
 	assert.NotNil(t, p[billingv1.SettlementService_CreateSettlement_FullMethodName].Garage)
 }
 
@@ -86,23 +86,6 @@ func TestGetSettlement(t *testing.T) {
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
-func TestAllocateSettlement(t *testing.T) {
-	t.Parallel()
-
-	e := newEnv(t)
-	e.settlements.EXPECT().FindByID(anyArg, garageID, settlementID).Return(openSettlement(), nil).Once()
-	e.partners.EXPECT().FindInsurer(anyArg, garageID, insurerID).Return("ABC Insurance", nil).Once()
-	e.settlements.EXPECT().SaveAllocation(anyArg, anyArg).Return(nil).Once()
-
-	resp, err := e.srv.AllocateSettlement(signedIn(t), &billingv1.AllocateSettlementRequest{
-		GarageId: garageID, SettlementId: settlementID, CustomerAmount: 600_000, InsurerAmount: 400_000,
-		InsurerPartnerId: insurerIDPtr(),
-	})
-	require.NoError(t, err)
-	assert.Equal(t, int64(600_000), resp.GetSettlement().GetCustomerAmount())
-	assert.Equal(t, "ABC Insurance", resp.GetSettlement().GetInsurerPartnerName())
-}
-
 func TestRecordSettlementPayment(t *testing.T) {
 	t.Parallel()
 
@@ -110,16 +93,16 @@ func TestRecordSettlementPayment(t *testing.T) {
 	e.settlements.EXPECT().FindByID(anyArg, garageID, settlementID).Return(openSettlement(), nil).Once()
 
 	updated := openSettlement()
-	updated.CustomerPaidAmount = 1_000_000
+	updated.PaidAmount = 1_000_000
 	e.settlements.EXPECT().RecordPayment(anyArg, garageID, settlementID, anyArg).Return(updated, nil).Once()
 	e.settlements.EXPECT().SaveStatus(anyArg, garageID, settlementID, domain.StatusPaid).Return(nil).Once()
 
 	final := openSettlement()
-	final.CustomerPaidAmount, final.Status = 1_000_000, domain.StatusPaid
+	final.PaidAmount, final.Status = 1_000_000, domain.StatusPaid
 	e.settlements.EXPECT().FindByID(anyArg, garageID, settlementID).Return(final, nil).Once()
 
 	resp, err := e.srv.RecordSettlementPayment(signedIn(t), &billingv1.RecordSettlementPaymentRequest{
-		GarageId: garageID, SettlementId: settlementID, PayerType: billingv1.PayerType_PAYER_TYPE_CUSTOMER,
+		GarageId: garageID, SettlementId: settlementID,
 		Amount: 1_000_000, Method: billingv1.PaymentMethod_PAYMENT_METHOD_CASH,
 	})
 	require.NoError(t, err)

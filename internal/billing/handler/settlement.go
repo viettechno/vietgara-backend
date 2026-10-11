@@ -67,25 +67,6 @@ func (s *Server) GetSettlement(
 	})
 }
 
-// AllocateSettlement splits the settlement between the customer and an
-// insurer (FR-BIL-02).
-func (s *Server) AllocateSettlement(
-	ctx context.Context, req *billingv1.AllocateSettlementRequest,
-) (*billingv1.AllocateSettlementResponse, error) {
-	return run(ctx, func(actorID string) (*billingv1.AllocateSettlementResponse, error) {
-		settlement, err := s.uc.Allocate(ctx, usecase.AllocateSettlementRequest{
-			GarageID: req.GetGarageId(), SettlementID: req.GetSettlementId(), ActorID: actorID,
-			CustomerAmount: req.GetCustomerAmount(), InsurerAmount: req.GetInsurerAmount(),
-			InsurerPartnerID: req.InsurerPartnerId,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		return &billingv1.AllocateSettlementResponse{Settlement: settlementToProto(settlement)}, nil
-	})
-}
-
 // RecordSettlementPayment records a payment actually collected (FR-BIL-03).
 func (s *Server) RecordSettlementPayment(
 	ctx context.Context, req *billingv1.RecordSettlementPaymentRequest,
@@ -93,7 +74,7 @@ func (s *Server) RecordSettlementPayment(
 	return run(ctx, func(actorID string) (*billingv1.RecordSettlementPaymentResponse, error) {
 		settlement, err := s.uc.RecordPayment(ctx, usecase.RecordPaymentRequest{
 			GarageID: req.GetGarageId(), SettlementID: req.GetSettlementId(), ActorID: actorID,
-			PayerType: payerTypeFromProto(req.GetPayerType()), Amount: req.GetAmount(),
+			Amount: req.GetAmount(),
 			Method: methodFromProto(req.GetMethod()), Note: req.GetNote(),
 		})
 		if err != nil {

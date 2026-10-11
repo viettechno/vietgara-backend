@@ -1,7 +1,6 @@
 // Package usecase contains the application use cases of the Billing &
 // Settlement module: creating a settlement from a closed repair order
-// (FR-BIL-01), allocating it between the customer and an insurer
-// (FR-BIL-02), and recording payments as they are actually collected
+// (FR-BIL-01) and recording payments as they are actually collected
 // (FR-BIL-03). ListSettlements also serves FR-REC-01's receivables view
 // (outstanding_only). Every method expects to run inside a garage-scoped
 // transaction (see middleware.Garage) so Row-Level Security applies.
@@ -39,8 +38,6 @@ type Repository interface {
 	// FindByRepairOrderID returns the repair order's settlement, if any,
 	// or domain.ErrSettlementNotFound.
 	FindByRepairOrderID(ctx context.Context, garageID, repairOrderID string) (*domain.Settlement, error)
-	// SaveAllocation persists the customer/insurer split (FR-BIL-02).
-	SaveAllocation(ctx context.Context, s *domain.Settlement) error
 	// List returns one page of settlements (without payments), newest
 	// first, and the total count.
 	List(ctx context.Context, garageID string, filter ListFilter) ([]*domain.Settlement, int, error)
@@ -69,15 +66,6 @@ type RepairOrderInfo struct {
 // unchanged, so the adapter needs no error translation of its own.
 type RepairOrderReader interface {
 	Get(ctx context.Context, garageID, repairOrderID string) (RepairOrderInfo, error)
-}
-
-// PartnerReader validates and names an insurer partner; implemented by an
-// adapter over the Customer module in cmd/server.
-type PartnerReader interface {
-	// FindInsurer returns the partner's display name, or
-	// domain.ErrInsurerNotFound when it does not exist, is not visible in
-	// the current garage, or is not of type insurer.
-	FindInsurer(ctx context.Context, garageID, partnerID string) (name string, err error)
 }
 
 // GarageInfo is the Tenant module's view of a garage that Billing &

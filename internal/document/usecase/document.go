@@ -48,9 +48,9 @@ type RepairOrderReader interface {
 // SettlementInfo is the Billing & Settlement module's view of a
 // settlement that Document/Print needs to render its receipt PDF.
 type SettlementInfo struct {
-	Number, Status, CustomerName, VehiclePlate, InsurerName string
-	TotalAmount, CustomerAmount, InsurerAmount              int64
-	Payments                                                []render.PaymentRow
+	Number, Status, CustomerName, VehiclePlate string
+	TotalAmount, PaidAmount                    int64
+	Payments                                   []render.PaymentRow
 }
 
 // SettlementReader reads a settlement for receipt PDF export; implemented
@@ -97,6 +97,8 @@ func NewDocumentUseCase(
 }
 
 // QuotePDF renders a quote as a PDF (FR-DOC-01).
+//
+//nolint:dupl // each export reads one kind of document and renders it with its own layout
 func (uc *DocumentUseCase) QuotePDF(ctx context.Context, garageID, quoteID string) ([]byte, error) {
 	garage, err := uc.garageHeader(ctx, garageID)
 	if err != nil {
@@ -143,6 +145,8 @@ func (uc *DocumentUseCase) RepairOrderPDF(ctx context.Context, garageID, repairO
 }
 
 // SettlementReceiptPDF renders a settlement as a receipt PDF (FR-DOC-01).
+//
+//nolint:dupl // each export reads one kind of document and renders it with its own layout
 func (uc *DocumentUseCase) SettlementReceiptPDF(ctx context.Context, garageID, settlementID string) ([]byte, error) {
 	garage, err := uc.garageHeader(ctx, garageID)
 	if err != nil {
@@ -157,8 +161,7 @@ func (uc *DocumentUseCase) SettlementReceiptPDF(ctx context.Context, garageID, s
 	pdf, err := render.SettlementReceiptPDF(render.SettlementReceiptData{
 		Garage: garage, Number: settlement.Number, Status: settlement.Status, CustomerName: settlement.CustomerName,
 		VehiclePlate: settlement.VehiclePlate, TotalAmount: settlement.TotalAmount,
-		CustomerAmount: settlement.CustomerAmount, InsurerAmount: settlement.InsurerAmount,
-		InsurerName: settlement.InsurerName, Payments: settlement.Payments,
+		PaidAmount: settlement.PaidAmount, Payments: settlement.Payments,
 	})
 	if err != nil {
 		return nil, apperror.Internal("export settlement receipt pdf", err)

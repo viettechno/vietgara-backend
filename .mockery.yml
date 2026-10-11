@@ -145,14 +145,17 @@ packages:
         config:
           filename: "customer_usecase_vehicle_repository.go"
           dir: "./internal/mocks"
-      PartnerRepository:
-        config:
-          filename: "customer_usecase_partner_repository.go"
-          dir: "./internal/mocks"
       HistoryReader:
         config:
           filename: "customer_usecase_history_reader.go"
           dir: "./internal/mocks"
+  github.com/viettechno/vietgara-backend/internal/supplier/usecase:
+    interfaces:
+      Repository:
+        config:
+          filename: "supplier_usecase_repository.go"
+          dir: "./internal/mocks"
+          structname: "MockSupplierRepository"
   github.com/viettechno/vietgara-backend/internal/license/usecase:
     interfaces:
       PlanRepository:
@@ -297,11 +300,6 @@ packages:
           filename: "billing_usecase_repair_order_reader.go"
           dir: "./internal/mocks"
           structname: "MockBillingRepairOrderReader"
-      PartnerReader:
-        config:
-          filename: "billing_usecase_partner_reader.go"
-          dir: "./internal/mocks"
-          structname: "MockBillingPartnerReader"
       GarageReader:
         config:
           filename: "billing_usecase_garage_reader.go"

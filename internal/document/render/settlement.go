@@ -2,25 +2,22 @@ package render
 
 // PaymentRow is one payment line on a settlement receipt.
 type PaymentRow struct {
-	Date      string
-	PayerType string
-	Method    string
-	Amount    int64
+	Date   string
+	Method string
+	Amount int64
 }
 
 // SettlementReceiptData is everything a settlement receipt's PDF needs
 // (FR-DOC-01).
 type SettlementReceiptData struct {
-	Garage         GarageHeader
-	Number         string
-	Status         string
-	CustomerName   string
-	VehiclePlate   string
-	TotalAmount    int64
-	CustomerAmount int64
-	InsurerAmount  int64
-	InsurerName    string
-	Payments       []PaymentRow
+	Garage       GarageHeader
+	Number       string
+	Status       string
+	CustomerName string
+	VehiclePlate string
+	TotalAmount  int64
+	PaidAmount   int64
+	Payments     []PaymentRow
 }
 
 // SettlementReceiptPDF renders a settlement as a receipt PDF using
@@ -32,11 +29,7 @@ func SettlementReceiptPDF(data SettlementReceiptData) ([]byte, error) {
 	writeKeyValue(pdf, "Customer", data.CustomerName)
 	writeKeyValue(pdf, "Vehicle", data.VehiclePlate)
 	writeKeyValue(pdf, "Status", data.Status)
-	writeKeyValue(pdf, "Customer share", formatVND(data.CustomerAmount))
-
-	if data.InsurerAmount > 0 {
-		writeKeyValue(pdf, "Insurer share", formatVND(data.InsurerAmount)+" ("+data.InsurerName+")")
-	}
+	writeKeyValue(pdf, "Paid", formatVND(data.PaidAmount))
 
 	pdf.Ln(4)
 	pdf.SetFont("Helvetica", "B", 12)
@@ -53,8 +46,8 @@ func SettlementReceiptPDF(data SettlementReceiptData) ([]byte, error) {
 		return finish(pdf)
 	}
 
-	widths := [4]float64{40, 35, 40, 70}
-	headers := [4]string{"Date", "Payer", "Method", "Amount"}
+	widths := [3]float64{50, 60, 75}
+	headers := [3]string{"Date", "Method", "Amount"}
 
 	pdf.SetFillColor(240, 240, 240)
 
@@ -68,9 +61,8 @@ func SettlementReceiptPDF(data SettlementReceiptData) ([]byte, error) {
 
 	for _, p := range data.Payments {
 		pdf.CellFormat(widths[0], 7, p.Date, "1", 0, "L", false, 0, "")
-		pdf.CellFormat(widths[1], 7, p.PayerType, "1", 0, "L", false, 0, "")
-		pdf.CellFormat(widths[2], 7, p.Method, "1", 0, "L", false, 0, "")
-		pdf.CellFormat(widths[3], 7, formatVND(p.Amount), "1", 0, "R", false, 0, "")
+		pdf.CellFormat(widths[1], 7, p.Method, "1", 0, "L", false, 0, "")
+		pdf.CellFormat(widths[2], 7, formatVND(p.Amount), "1", 0, "R", false, 0, "")
 		pdf.Ln(-1)
 	}
 

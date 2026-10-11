@@ -1,9 +1,8 @@
 // Package repository implements the persistence layer of the Billing &
 // Settlement module on top of the shared Postgres pool. Every query
 // filters on garage_id explicitly on top of Row-Level Security; it never
-// queries another module's tables (customer name, vehicle plate and the
-// insurer's name are denormalized on the settlement itself, see migration
-// 000018). See: Database Design Section 6.1.
+// queries another module's tables (customer name and vehicle plate are
+// denormalized on the settlement itself, see migration 000018). See: Database Design Section 6.1.
 package repository
 
 import (
@@ -34,19 +33,16 @@ func NewPostgresRepository(pool *platformdb.Pool) *PostgresRepository {
 }
 
 const settlementColumns = `id, garage_id, repair_order_id, vehicle_license_plate, customer_name, number, total_amount,
-	customer_amount, insurer_amount, insurer_partner_id, insurer_partner_name, customer_paid_amount,
-	insurer_paid_amount, status, created_by, updated_by, created_at, updated_at`
+	paid_amount, status, created_by, updated_by, created_at, updated_at`
 
 func scanSettlement(row pgx.Row) (*domain.Settlement, error) {
 	var (
-		s                  domain.Settlement
-		status             string
-		insurerPartnerName *string
+		s      domain.Settlement
+		status string
 	)
 
 	err := row.Scan(&s.ID, &s.GarageID, &s.RepairOrderID, &s.VehicleLicensePlate, &s.CustomerName, &s.Number,
-		&s.TotalAmount, &s.CustomerAmount, &s.InsurerAmount, &s.InsurerPartnerID, &insurerPartnerName,
-		&s.CustomerPaidAmount, &s.InsurerPaidAmount, &status, &s.CreatedBy, &s.UpdatedBy, &s.CreatedAt, &s.UpdatedAt)
+		&s.TotalAmount, &s.PaidAmount, &status, &s.CreatedBy, &s.UpdatedBy, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrSettlementNotFound
@@ -56,29 +52,25 @@ func scanSettlement(row pgx.Row) (*domain.Settlement, error) {
 	}
 
 	s.Status = domain.SettlementStatus(status)
-	if insurerPartnerName != nil {
-		s.InsurerPartnerName = *insurerPartnerName
-	}
 
 	return &s, nil
 }
 
-const paymentColumns = `id, payer_type, amount, method, note, created_by, created_at`
+const paymentColumns = `id, amount, method, note, created_by, created_at`
 
 func scanPayment(row pgx.Row) (domain.Payment, error) {
 	var (
-		p         domain.Payment
-		payerType string
-		method    string
-		note      *string
+		p      domain.Payment
+		method string
+		note   *string
 	)
 
-	err := row.Scan(&p.ID, &payerType, &p.Amount, &method, &note, &p.CreatedBy, &p.CreatedAt)
+	err := row.Scan(&p.ID, &p.Amount, &method, &note, &p.CreatedBy, &p.CreatedAt)
 	if err != nil {
 		return domain.Payment{}, err
 	}
 
-	p.PayerType, p.Method = domain.PayerType(payerType), domain.PaymentMethod(method)
+	p.Method = domain.PaymentMethod(method)
 	if note != nil {
 		p.Note = *note
 	}
@@ -93,11 +85,11 @@ func (r *PostgresRepository) Create(ctx context.Context, s *domain.Settlement) e
 
 	row := q.QueryRow(ctx, `
 		INSERT INTO settlements (id, garage_id, repair_order_id, vehicle_license_plate, customer_name, number,
-			total_amount, customer_amount, insurer_amount, status, created_by, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			total_amount, status, created_by, updated_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING created_at, updated_at`,
 		s.ID, s.GarageID, s.RepairOrderID, s.VehicleLicensePlate, s.CustomerName, s.Number, s.TotalAmount,
-		s.CustomerAmount, s.InsurerAmount, string(s.Status), s.CreatedBy, s.UpdatedBy,
+		string(s.Status), s.CreatedBy, s.UpdatedBy,
 	)
 
 	err := row.Scan(&s.CreatedAt, &s.UpdatedAt)
@@ -164,27 +156,6 @@ func (r *PostgresRepository) FindByRepairOrderID(ctx context.Context, garageID, 
 	return scanSettlement(q.QueryRow(ctx, `
 		SELECT `+settlementColumns+` FROM settlements WHERE garage_id = $1 AND repair_order_id = $2`,
 		garageID, repairOrderID))
-}
-
-// SaveAllocation persists the customer/insurer split (FR-BIL-02).
-func (r *PostgresRepository) SaveAllocation(ctx context.Context, s *domain.Settlement) error {
-	q := platformdb.QuerierFromContext(ctx, r.pool)
-
-	row := q.QueryRow(ctx, `
-		UPDATE settlements SET customer_amount = $3, insurer_amount = $4, insurer_partner_id = $5,
-			insurer_partner_name = $6, status = $7, updated_by = $8
-		WHERE garage_id = $1 AND id = $2
-		RETURNING updated_at`,
-		s.GarageID, s.ID, s.CustomerAmount, s.InsurerAmount, s.InsurerPartnerID, nullableString(s.InsurerPartnerName),
-		string(s.Status), s.UpdatedBy,
-	)
-
-	err := row.Scan(&s.UpdatedAt)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return domain.ErrSettlementNotFound
-	}
-
-	return err
 }
 
 // SaveStatus persists a settlement's status alone, after RecordPayment.
@@ -259,23 +230,18 @@ func (r *PostgresRepository) RecordPayment(
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
 	row := q.QueryRow(ctx, `
-		INSERT INTO settlement_payments (id, garage_id, settlement_id, payer_type, amount, method, note, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		INSERT INTO settlement_payments (id, garage_id, settlement_id, amount, method, note, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING created_at`,
-		payment.ID, garageID, settlementID, string(payment.PayerType), payment.Amount, string(payment.Method),
+		payment.ID, garageID, settlementID, payment.Amount, string(payment.Method),
 		nullableString(payment.Note), payment.CreatedBy,
 	)
 	if err := row.Scan(&payment.CreatedAt); err != nil {
 		return nil, err
 	}
 
-	column := "customer_paid_amount"
-	if payment.PayerType == domain.PayerInsurer {
-		column = "insurer_paid_amount"
-	}
-
 	s, err := scanSettlement(q.QueryRow(ctx, `
-		UPDATE settlements SET `+column+` = `+column+` + $3
+		UPDATE settlements SET paid_amount = paid_amount + $3
 		WHERE garage_id = $1 AND id = $2
 		RETURNING `+settlementColumns,
 		garageID, settlementID, payment.Amount,

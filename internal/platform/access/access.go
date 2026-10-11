@@ -29,8 +29,8 @@ const (
 	StaffWrite        Permission = "staff.write"
 	CustomerRead      Permission = "customer.read"
 	CustomerWrite     Permission = "customer.write"
-	PartnerRead       Permission = "partner.read"
-	PartnerWrite      Permission = "partner.write"
+	SupplierRead      Permission = "supplier.read"
+	SupplierWrite     Permission = "supplier.write"
 	SubscriptionRead  Permission = "subscription.read"
 	QuoteRead         Permission = "quote.read"
 	QuoteWrite        Permission = "quote.write"
@@ -51,8 +51,8 @@ var Catalog = []CatalogEntry{
 	{StaffWrite, "staff"},
 	{CustomerRead, "customer"},
 	{CustomerWrite, "customer"},
-	{PartnerRead, "partner"},
-	{PartnerWrite, "partner"},
+	{SupplierRead, "supplier"},
+	{SupplierWrite, "supplier"},
 	{SubscriptionRead, "subscription"},
 	{QuoteRead, "quote"},
 	{QuoteWrite, "quote"},

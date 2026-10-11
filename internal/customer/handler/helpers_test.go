@@ -21,7 +21,6 @@ type env struct {
 	srv       *handler.Server
 	customers *mocks.MockCustomerRepository
 	vehicles  *mocks.MockVehicleRepository
-	partners  *mocks.MockPartnerRepository
 }
 
 func newEnv(t *testing.T) *env {
@@ -30,12 +29,10 @@ func newEnv(t *testing.T) *env {
 	e := &env{
 		customers: mocks.NewMockCustomerRepository(t),
 		vehicles:  mocks.NewMockVehicleRepository(t),
-		partners:  mocks.NewMockPartnerRepository(t),
 	}
 	e.srv = handler.NewServer(
 		usecase.NewCustomerUseCase(e.customers, e.vehicles),
 		usecase.NewVehicleUseCase(e.vehicles, e.customers, nil),
-		usecase.NewPartnerUseCase(e.partners),
 	)
 
 	return e

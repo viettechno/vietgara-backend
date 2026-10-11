@@ -22,7 +22,6 @@ const EventSettlementCreated = "settlement.created"
 type Deps struct {
 	Settlements  Repository
 	RepairOrders RepairOrderReader
-	Partners     PartnerReader
 	Garages      GarageReader
 	Limits       TransactionLimiter
 	Sequences    Sequencer
@@ -55,10 +54,8 @@ type CreateSettlementRequest struct {
 }
 
 // Create creates a settlement from a closed repair order (FR-BIL-01),
-// aggregating its total; the whole amount starts allocated to the
-// customer until AllocateSettlement says otherwise. Counts against the
-// plan's daily transaction limit (FR-LIC-02), the same as quote and
-// repair order creation.
+// aggregating its total. Counts against the plan's daily transaction
+// limit (FR-LIC-02), the same as quote and repair order creation.
 func (uc *SettlementUseCase) Create(ctx context.Context, req CreateSettlementRequest) (*domain.Settlement, error) {
 	switch _, err := uc.Settlements.FindByRepairOrderID(ctx, req.GarageID, req.RepairOrderID); {
 	case err == nil:
@@ -93,7 +90,7 @@ func (uc *SettlementUseCase) Create(ctx context.Context, req CreateSettlementReq
 	s := &domain.Settlement{
 		ID: uuid.NewString(), GarageID: req.GarageID, RepairOrderID: req.RepairOrderID,
 		VehicleLicensePlate: ro.VehicleLicensePlate, CustomerName: ro.CustomerName, Number: number,
-		TotalAmount: ro.TotalAmount, CustomerAmount: ro.TotalAmount, Status: domain.StatusPending,
+		TotalAmount: ro.TotalAmount, Status: domain.StatusPending,
 		CreatedBy: actorRef(req.ActorID), UpdatedBy: actorRef(req.ActorID),
 	}
 	s.DeriveStatus()

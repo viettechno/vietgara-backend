@@ -60,7 +60,7 @@ func closedRepairOrder(t *testing.T, api *client.Client) (garageID, orderID stri
 
 func cash(amount int64) *billingv1.RecordSettlementPaymentRequest {
 	return &billingv1.RecordSettlementPaymentRequest{
-		PayerType: billingv1.PayerType_PAYER_TYPE_CUSTOMER, Amount: amount, Method: billingv1.PaymentMethod_PAYMENT_METHOD_CASH,
+		Amount: amount, Method: billingv1.PaymentMethod_PAYMENT_METHOD_CASH,
 	}
 }
 
@@ -114,13 +114,13 @@ func TestSettlementAndPaymentsAreIdempotent(t *testing.T) {
 
 		for i := range attempts {
 			require.NoError(t, errs[i])
-			assert.EqualValues(t, 100000, answers[i].GetCustomerPaidAmount(), "attempt %d", i)
+			assert.EqualValues(t, 100000, answers[i].GetPaidAmount(), "attempt %d", i)
 			assert.True(t, proto.Equal(answers[0], answers[i]), "every attempt gets the same answer")
 		}
 
 		current, err := owner.API.WithIdempotencyKey(uuid.NewString()).RecordPayment(ctx, garageID, settlement.GetId(), cash(100000))
 		require.NoError(t, err)
-		assert.EqualValues(t, 200000, current.GetCustomerPaidAmount(), "only one of the five was recorded")
+		assert.EqualValues(t, 200000, current.GetPaidAmount(), "only one of the five was recorded")
 		assert.Len(t, current.GetPayments(), 2)
 	})
 
@@ -135,7 +135,7 @@ func TestSettlementAndPaymentsAreIdempotent(t *testing.T) {
 
 		final, err := owner.API.WithIdempotencyKey(uuid.NewString()).RecordPayment(ctx, garageID, settlement.GetId(), cash(200000))
 		require.NoError(t, err)
-		assert.Equal(t, paid.GetCustomerPaidAmount()+200000, final.GetCustomerPaidAmount())
+		assert.Equal(t, paid.GetPaidAmount()+200000, final.GetPaidAmount())
 		assert.Equal(t, billingv1.SettlementStatus_SETTLEMENT_STATUS_PAID, final.GetStatus())
 	})
 

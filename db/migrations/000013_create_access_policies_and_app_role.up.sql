@@ -4,7 +4,7 @@
 -- (app_current_garage_id()) or to the caller's own roles; reads also admit
 -- the caller's own memberships and invitations (app_current_user_id()),
 -- so a user can list its garages without a tenant context.
--- customers, vehicles and partners carry their policies in 000005-000007.
+-- customers, vehicles and suppliers carry their policies in 000005-000007.
 
 -- ---------------------------------------------------------------------------
 -- garages

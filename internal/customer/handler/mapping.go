@@ -64,65 +64,6 @@ func vehicleToProto(v *domain.Vehicle) *customerv1.Vehicle {
 	return out
 }
 
-func partnerToProto(p *domain.Partner) *customerv1.Partner {
-	return &customerv1.Partner{
-		Id:       p.ID,
-		GarageId: p.GarageID,
-		Type:     partnerTypeToProto(p.Type),
-		Name:     p.Name,
-		TaxCode:  p.TaxCode,
-		Contact: &customerv1.PartnerContact{
-			ContactPerson: p.Contact.ContactPerson,
-			Phone:         p.Contact.Phone,
-			Email:         p.Contact.Email,
-			Address:       p.Contact.Address,
-		},
-		Note:      p.Note,
-		CreatedAt: converter.TimeToProto(p.CreatedAt),
-		UpdatedAt: converter.TimeToProto(p.UpdatedAt),
-	}
-}
-
-// partnerContactFromProto maps an absent contact to an empty one.
-func partnerContactFromProto(c *customerv1.PartnerContact) usecase.PartnerContactInput {
-	if c == nil {
-		return usecase.PartnerContactInput{}
-	}
-
-	return usecase.PartnerContactInput{
-		ContactPerson: c.ContactPerson,
-		Phone:         c.Phone,
-		Email:         c.Email,
-		Address:       c.Address,
-	}
-}
-
-func partnerTypeToProto(t domain.PartnerType) customerv1.PartnerType {
-	switch t {
-	case domain.PartnerTypeSupplier:
-		return customerv1.PartnerType_PARTNER_TYPE_SUPPLIER
-	case domain.PartnerTypeInsurer:
-		return customerv1.PartnerType_PARTNER_TYPE_INSURER
-	default:
-		return customerv1.PartnerType_PARTNER_TYPE_UNSPECIFIED
-	}
-}
-
-// partnerTypeFromProto maps UNSPECIFIED (and unknown values) to "", which
-// the use cases treat as "no type" (rejected on create, "all" when listing).
-func partnerTypeFromProto(t customerv1.PartnerType) domain.PartnerType {
-	switch t {
-	case customerv1.PartnerType_PARTNER_TYPE_SUPPLIER:
-		return domain.PartnerTypeSupplier
-	case customerv1.PartnerType_PARTNER_TYPE_INSURER:
-		return domain.PartnerTypeInsurer
-	case customerv1.PartnerType_PARTNER_TYPE_UNSPECIFIED:
-		return ""
-	default:
-		return ""
-	}
-}
-
 func historyEntryToProto(e usecase.HistoryEntry) *customerv1.VehicleHistoryEntry {
 	return &customerv1.VehicleHistoryEntry{
 		Type: historyEntryTypeToProto(e.Type), EntityId: e.EntityID, Number: e.Number, Status: e.Status,

@@ -60,7 +60,7 @@ func scanRepairOrder(row pgx.Row) (*domain.RepairOrder, error) {
 	return &ro, nil
 }
 
-const lineColumns = `id, position, item_type, item_ref_id, description, quantity, unit_price, line_total, status, assigned_technicians`
+const lineColumns = `id, position, item_type, item_ref_id, description, trim_scale(quantity)::text, unit_price, line_total, status, assigned_technicians`
 
 func scanLine(row pgx.Row) (domain.Line, error) {
 	var (
@@ -112,7 +112,7 @@ func (r *PostgresRepository) insertLines(ctx context.Context, q platformdb.Queri
 			INSERT INTO repair_order_lines
 				(id, garage_id, repair_order_id, position, item_type, item_ref_id, description, quantity, unit_price,
 				 line_total, status, assigned_technicians)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10, $11, $12)`,
 			line.ID, garageID, repairOrderID, line.Position, string(line.ItemType), line.ItemRefID, line.Description,
 			line.Quantity, line.UnitPrice, line.LineTotal, string(line.Status), technicianIDs(line.AssignedTechnicianIDs),
 		)

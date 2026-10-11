@@ -79,7 +79,8 @@ CREATE TABLE repair_order_lines (
     item_type quote_item_type NOT NULL,
     item_ref_id UUID,
     description TEXT NOT NULL,
-    quantity VARCHAR(12) NOT NULL DEFAULT '1',
+    -- NUMERIC(14,3), the same as quote_lines.quantity.
+    quantity NUMERIC(14, 3) NOT NULL DEFAULT 1,
     unit_price BIGINT NOT NULL DEFAULT 0,
     line_total BIGINT NOT NULL DEFAULT 0,
     status repair_order_line_status NOT NULL DEFAULT 'not_started',

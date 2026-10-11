@@ -35,7 +35,7 @@ func (r *PostgresRepository) insertLines(ctx context.Context, q platformdb.Queri
 		_, err := q.Exec(ctx, `
 			INSERT INTO quote_lines (id, garage_id, quote_id, position, item_type, item_ref_id, description, quantity,
 				unit_price, line_total, decision)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10, $11)`,
 			line.ID, garageID, quoteID, line.Position, string(line.ItemType), line.ItemRefID, line.Description,
 			line.Quantity, line.UnitPrice, line.LineTotal, string(line.Decision),
 		)

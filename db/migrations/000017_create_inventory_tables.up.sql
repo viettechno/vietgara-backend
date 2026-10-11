@@ -13,7 +13,7 @@ CREATE TABLE items (
     sku VARCHAR(50) NOT NULL,
     name VARCHAR(255) NOT NULL,
     unit VARCHAR(20) NOT NULL DEFAULT '',
-    reorder_threshold INTEGER NOT NULL DEFAULT 0,
+    reorder_threshold NUMERIC(14, 3) NOT NULL DEFAULT 0,
     created_by UUID,
     updated_by UUID,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
@@ -47,16 +47,15 @@ COMMENT ON POLICY items_rls_policy ON items IS
 -- current by an atomic upsert alongside each stock_transactions insert,
 -- in the same application transaction (the same pattern as
 -- document_sequences.next_seq, migration 000014). quantity_on_hand is
--- NUMERIC, not the quote/repair-order line VARCHAR convention, because it
--- is updated with in-database arithmetic ("+= delta") for correctness
--- under concurrent receipts/issues of the same item; the Go layer still
--- only ever sees it as a decimal string (cast to/from text at the query
--- boundary), matching every other quantity in the API.
+-- updated with in-database arithmetic ("+= delta") for correctness under
+-- concurrent receipts/issues of the same item; the Go layer only ever
+-- sees it as a decimal string (cast to/from text at the query boundary),
+-- matching every other quantity in the API.
 -- ---------------------------------------------------------------------------
 CREATE TABLE stock_balance (
     garage_id UUID NOT NULL,
     item_id UUID NOT NULL,
-    quantity_on_hand NUMERIC(14, 2) NOT NULL DEFAULT 0,
+    quantity_on_hand NUMERIC(14, 3) NOT NULL DEFAULT 0,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     PRIMARY KEY (garage_id, item_id),
     CONSTRAINT stock_balance_garage_item_fkey FOREIGN KEY (garage_id, item_id)
@@ -77,17 +76,19 @@ COMMENT ON POLICY stock_balance_rls_policy ON stock_balance IS
 -- ---------------------------------------------------------------------------
 -- stock_transactions: an append-only log of every stock movement
 -- (FR-INV-01/02/05). quantity is always positive; type gives the
--- direction, matching quote_lines.quantity's decimal-string convention
--- since it is never summed in SQL (stock_balance is the running total).
+-- direction. quantity is NUMERIC(14,3) like every other quantity, so the
+-- valuation and profit reports can aggregate it in SQL.
 -- ---------------------------------------------------------------------------
 CREATE TABLE stock_transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     garage_id UUID NOT NULL,
     item_id UUID NOT NULL,
     type stock_transaction_type NOT NULL,
-    quantity VARCHAR(12) NOT NULL,
+    quantity NUMERIC(14, 3) NOT NULL,
     -- VND; set for a 'purchase' receipt, NULL for a 'repair_order' issue.
-    unit_cost BIGINT,
+    -- Four decimals: a cost rounded to whole dong would drift once average
+    -- cost arrives (Phase 7).
+    unit_cost NUMERIC(18, 4),
     ref_type stock_transaction_ref_type NOT NULL,
     -- The repair order id for a 'repair_order' issue; NULL for a purchase.
     ref_id UUID,

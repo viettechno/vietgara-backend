@@ -109,6 +109,22 @@ shared Go loader. Run `make testdata` from the repository root to fetch it
 without running tests. No deploy key or other credential is needed. The
 fetched checkout is ignored by Git and is not modified by the test suite.
 
+## Seeding the local baseline
+
+Start the stubbed stack with `make blackbox-stubbed-up`, then run
+`make seed`. The command creates the dataset owners referenced by garages,
+applies each owner's dataset plan when set, then creates the garages through
+the public API. It verifies new owners through Mailpit and leaves matching
+existing records unchanged. A same-name garage with different dataset values
+is an error instead of being silently updated. `make blackbox-stubbed` runs
+the seed command before the suite.
+
+For safety, the seeder only accepts loopback HTTP API and Mailpit URLs and
+requires a reserved test e-mail domain. It currently seeds owners and
+garages on the stubbed stack; platform admins, custom plan definitions,
+staff, customers, suppliers, and inventory records are not seeded. Staging
+seeding is not supported by this command.
+
 ## Layout
 
 ```

@@ -3,6 +3,7 @@ TESTDATA_VERSION_FILE ?= testing/blackbox/testdata.version
 TESTDATA_DIR ?= .data/vietgara-testdata
 
 blackbox-test: testdata
+blackbox-seed: testdata
 
 .PHONY: testdata
 

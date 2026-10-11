@@ -83,6 +83,19 @@ func (c *Client) MySubscription(ctx context.Context) (*licensev1.Subscription, e
 	return call[licensev1.Subscription](ctx, c, http.MethodGet, "/api/v1/me/subscription", nil)
 }
 
+// ListPlans returns the public plans available to the signed-in owner.
+func (c *Client) ListPlans(ctx context.Context) ([]*licensev1.Plan, error) {
+	resp, err := call[licensev1.ListPlansResponse](ctx, c, http.MethodGet, "/api/v1/plans", nil)
+
+	return resp.GetData(), err
+}
+
+// ChangeMyPlan changes the signed-in owner's subscription to planID.
+func (c *Client) ChangeMyPlan(ctx context.Context, planID string) (*licensev1.Subscription, error) {
+	return call[licensev1.Subscription](ctx, c, http.MethodPost, "/api/v1/me/subscription/plan-changes",
+		&licensev1.ChangeMyPlanRequest{PlanId: planID})
+}
+
 // ---- Customer --------------------------------------------------------------
 
 // CreateCustomer adds a customer to garageID.

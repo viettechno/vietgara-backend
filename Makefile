@@ -27,7 +27,7 @@ BG_RED	:= \033[41m
 BG_GREEN:= \033[42m
 BG_BLUE	:= \033[44m
 
-.PHONY: help run
+.PHONY: help run seed
 help: ## Show all available commands
 	@echo ""
 	@echo "Available commands:"
@@ -42,3 +42,5 @@ help: ## Show all available commands
 
 run: ## Run the gRPC server locally (loads .env when present)
 	@set -a; [ -f .env ] && . ./.env; set +a; go run ./cmd/server
+
+seed: blackbox-seed ## Seed supported shared baseline records into the local blackbox stack

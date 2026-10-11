@@ -3,8 +3,15 @@
 # no emulation is needed.
 FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
 
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
+# Target platform for the final image. BuildKit (compose up --build,
+# buildx, CI image builds) injects TARGETOS/TARGETARCH automatically; when
+# they are empty (plain docker build without BuildKit) fall back to the
+# builder's own platform. Never hardcode a default here: a default like
+# amd64 silently ships a foreign-arch binary inside a native-arch image,
+# which then crashes under emulation (flaky SIGSEGV, seen in gRPC
+# transport goroutines on Apple Silicon).
+ARG TARGETOS
+ARG TARGETARCH
 
 WORKDIR /src
 
@@ -12,8 +19,8 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/vietgara-backend ./cmd/server
-RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/purge-test-users ./cmd/purge-test-users
+RUN CGO_ENABLED=0 GOOS="${TARGETOS:-$(go env GOOS)}" GOARCH="${TARGETARCH:-$(go env GOARCH)}" go build -trimpath -ldflags='-s -w' -o /out/vietgara-backend ./cmd/server
+RUN CGO_ENABLED=0 GOOS="${TARGETOS:-$(go env GOOS)}" GOARCH="${TARGETARCH:-$(go env GOARCH)}" go build -trimpath -ldflags='-s -w' -o /out/purge-test-users ./cmd/purge-test-users
 
 FROM alpine:3.22
 

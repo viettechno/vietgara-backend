@@ -43,6 +43,7 @@ func Policies() middleware.Policies {
 		documentv1.DocumentService_ExportQuotePdf_FullMethodName:             middleware.GarageMethod(quoteRead),
 		documentv1.DocumentService_ExportRepairOrderPdf_FullMethodName:       middleware.GarageMethod(repairOrderRead),
 		documentv1.DocumentService_ExportSettlementReceiptPdf_FullMethodName: middleware.GarageMethod(billingRead),
+		documentv1.DocumentService_ExportPaymentVoucherPdf_FullMethodName:    middleware.GarageMethod(billingRead),
 		documentv1.DocumentService_ExportStockMovementsExcel_FullMethodName:  middleware.GarageMethod(inventoryRead),
 	}
 }

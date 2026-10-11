@@ -10,6 +10,7 @@ package render
 
 import (
 	"bytes"
+	_ "embed" // the PDF fonts
 	"fmt"
 	"net/http"
 	"strconv"
@@ -42,11 +43,25 @@ type DocumentLine struct {
 	LineTotal   int64
 }
 
+// fontFamily is the embedded TrueType family every document uses: the PDF
+// core fonts are Latin-1 only and cannot print Vietnamese diacritics.
+// DejaVu Sans is free to embed (fonts/LICENSE).
+const fontFamily = "DejaVu"
+
+var (
+	//go:embed fonts/DejaVuSans.ttf
+	fontRegular []byte
+	//go:embed fonts/DejaVuSans-Bold.ttf
+	fontBold []byte
+)
+
 func newPDF() *fpdf.Fpdf {
 	pdf := fpdf.New("P", "mm", "A4", "")
+	pdf.AddUTF8FontFromBytes(fontFamily, "", fontRegular)
+	pdf.AddUTF8FontFromBytes(fontFamily, "B", fontBold)
 	pdf.SetMargins(18, 18, 18)
 	pdf.AddPage()
-	pdf.SetFont("Helvetica", "", 10)
+	pdf.SetFont(fontFamily, "", 10)
 
 	return pdf
 }
@@ -87,14 +102,15 @@ func drawLogo(pdf *fpdf.Fpdf, logo []byte) {
 	pdf.ImageOptions("logo", pageWidth-18-width, 18, width, logoHeight, false, fpdf.ImageOptions{ImageType: imageType}, 0, "")
 }
 
-func writeHeader(pdf *fpdf.Fpdf, garage GarageHeader, title, number string) {
+// writeLetterhead prints the logo and the garage's legal identity.
+func writeLetterhead(pdf *fpdf.Fpdf, garage GarageHeader) {
 	if len(garage.Logo) > 0 {
 		drawLogo(pdf, garage.Logo)
 	}
 
-	pdf.SetFont("Helvetica", "B", 16)
+	pdf.SetFont(fontFamily, "B", 16)
 	pdf.CellFormat(0, 8, garage.Name, "", 1, "L", false, 0, "")
-	pdf.SetFont("Helvetica", "", 10)
+	pdf.SetFont(fontFamily, "", 10)
 
 	for _, line := range []string{
 		garage.Address, labelled("Tax code", garage.TaxCode), garage.Phone,
@@ -104,11 +120,15 @@ func writeHeader(pdf *fpdf.Fpdf, garage GarageHeader, title, number string) {
 			pdf.CellFormat(0, 5, line, "", 1, "L", false, 0, "")
 		}
 	}
+}
+
+func writeHeader(pdf *fpdf.Fpdf, garage GarageHeader, title, number string) {
+	writeLetterhead(pdf, garage)
 
 	pdf.Ln(4)
-	pdf.SetFont("Helvetica", "B", 14)
+	pdf.SetFont(fontFamily, "B", 14)
 	pdf.CellFormat(0, 8, title, "", 1, "L", false, 0, "")
-	pdf.SetFont("Helvetica", "", 10)
+	pdf.SetFont(fontFamily, "", 10)
 	pdf.CellFormat(0, 6, "No. "+number, "", 1, "L", false, 0, "")
 	pdf.Ln(4)
 }
@@ -123,9 +143,9 @@ func labelled(label, value string) string {
 }
 
 func writeKeyValue(pdf *fpdf.Fpdf, label, value string) {
-	pdf.SetFont("Helvetica", "B", 10)
+	pdf.SetFont(fontFamily, "B", 10)
 	pdf.CellFormat(40, 6, label, "", 0, "L", false, 0, "")
-	pdf.SetFont("Helvetica", "", 10)
+	pdf.SetFont(fontFamily, "", 10)
 	pdf.CellFormat(0, 6, value, "", 1, "L", false, 0, "")
 }
 
@@ -133,7 +153,7 @@ var lineColumnWidths = [4]float64{90, 25, 35, 35}
 
 func writeLineTable(pdf *fpdf.Fpdf, lines []DocumentLine, total int64) {
 	pdf.Ln(2)
-	pdf.SetFont("Helvetica", "B", 10)
+	pdf.SetFont(fontFamily, "B", 10)
 	pdf.SetFillColor(240, 240, 240)
 
 	headers := [4]string{"Description", "Qty", "Unit Price", "Line Total"}
@@ -144,7 +164,7 @@ func writeLineTable(pdf *fpdf.Fpdf, lines []DocumentLine, total int64) {
 
 	pdf.Ln(-1)
 
-	pdf.SetFont("Helvetica", "", 10)
+	pdf.SetFont(fontFamily, "", 10)
 
 	for _, line := range lines {
 		pdf.CellFormat(lineColumnWidths[0], 7, line.Description, "1", 0, "L", false, 0, "")
@@ -154,7 +174,7 @@ func writeLineTable(pdf *fpdf.Fpdf, lines []DocumentLine, total int64) {
 		pdf.Ln(-1)
 	}
 
-	pdf.SetFont("Helvetica", "B", 10)
+	pdf.SetFont(fontFamily, "B", 10)
 	pdf.CellFormat(lineColumnWidths[0]+lineColumnWidths[1]+lineColumnWidths[2], 8, "Total", "1", 0, "R", false, 0, "")
 	pdf.CellFormat(lineColumnWidths[3], 8, formatVND(total), "1", 0, "R", false, 0, "")
 	pdf.Ln(-1)

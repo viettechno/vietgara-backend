@@ -24,7 +24,7 @@ DROP TRIGGER IF EXISTS trigger_staff_group_members_created_audit ON staff_group_
 DROP TRIGGER IF EXISTS trigger_outbox_events_created_audit ON outbox_events;
 DROP TRIGGER IF EXISTS trigger_audit_log_created_audit ON audit_log;
 DROP TRIGGER IF EXISTS trigger_stock_transactions_created_audit ON stock_transactions;
-DROP TRIGGER IF EXISTS trigger_settlement_payments_created_audit ON settlement_payments;
+DROP TRIGGER IF EXISTS trigger_settlement_payments_row_audit ON settlement_payments;
 DROP TRIGGER IF EXISTS trigger_notification_log_created_audit ON notification_log;
 
 DROP FUNCTION IF EXISTS set_created_audit();

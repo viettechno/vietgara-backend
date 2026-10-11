@@ -74,15 +74,23 @@ type Payment struct {
 	// CollectorName is the staff member who collected the money.
 	CollectorName string
 	Issuer        issuer.Issuer
-	CreatedBy     *string
-	CreatedAt     time.Time
+	// VoidReason and VoidedAt are set once the voucher is voided
+	// (FR-BIL-06); a voided payment no longer counts towards PaidAmount.
+	VoidReason string
+	VoidedAt   *time.Time
+	CreatedBy  *string
+	CreatedAt  time.Time
 }
+
+// Voided reports whether the voucher has been voided.
+func (p Payment) Voided() bool { return p.VoidedAt != nil }
 
 // Field limits of a voucher, matching the settlement_payments columns.
 const (
 	MaxPayerNameLength    = 255
 	MaxPayerAddressLength = 500
 	MaxReasonLength       = 500
+	MaxVoidReasonLength   = 500
 )
 
 // Settlement is the final bill of a closed repair order (FR-BIL-01),
@@ -144,6 +152,13 @@ var (
 	// ErrInvalidVoucher is returned when a voucher's payer, address or
 	// reason is too long.
 	ErrInvalidVoucher = errors.New("the payer name, address or reason is too long")
+	// ErrPaymentNotFound is returned when the settlement has no such payment.
+	ErrPaymentNotFound = errors.New("payment not found")
+	// ErrPaymentAlreadyVoided is returned when a voucher is voided twice.
+	ErrPaymentAlreadyVoided = errors.New("this payment voucher is already voided")
+	// ErrInvalidVoidReason is returned when the reason for voiding a
+	// voucher is empty or too long.
+	ErrInvalidVoidReason = errors.New("a reason of at most 500 characters is required to void a payment voucher")
 	// ErrInvalidPaymentAmount is returned when a payment is not positive,
 	// or would collect more than the amount still due.
 	ErrInvalidPaymentAmount = errors.New("payment amount must be positive and not exceed the amount still due")

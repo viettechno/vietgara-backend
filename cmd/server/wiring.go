@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	billingDomain "github.com/viettechno/vietgara-backend/internal/billing/domain"
 	billingRepository "github.com/viettechno/vietgara-backend/internal/billing/repository"
 	billingUsecase "github.com/viettechno/vietgara-backend/internal/billing/usecase"
 	customerDomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
@@ -551,7 +552,20 @@ func (s documentSettlements) Get(ctx context.Context, garageID, settlementID str
 	}
 
 	payments := make([]render.PaymentRow, 0, len(settlement.Payments))
+	vouchers := make([]documentUsecase.VoucherInfo, 0, len(settlement.Payments))
+
 	for _, p := range settlement.Payments {
+		vouchers = append(vouchers, documentUsecase.VoucherInfo{
+			ID: p.ID, Number: p.VoucherNumber, Date: p.CreatedAt.In(vietnamTime).Format("02/01/2006"),
+			PayerName: p.PayerName, PayerAddress: p.PayerAddress, Reason: p.Reason, Method: voucherMethod(p.Method),
+			CollectorName: p.CollectorName, Amount: p.Amount, Voided: p.Voided(), VoidReason: p.VoidReason, Issuer: p.Issuer,
+		})
+
+		// A voided payment is not money received.
+		if p.Voided() {
+			continue
+		}
+
 		payments = append(payments, render.PaymentRow{
 			Date: p.CreatedAt.Format("2006-01-02"), Method: string(p.Method), Amount: p.Amount,
 		})
@@ -560,8 +574,25 @@ func (s documentSettlements) Get(ctx context.Context, garageID, settlementID str
 	return documentUsecase.SettlementInfo{
 		Number: settlement.Number, Status: string(settlement.Status), CustomerName: settlement.CustomerName,
 		VehiclePlate: settlement.VehicleLicensePlate, TotalAmount: settlement.TotalAmount,
-		PaidAmount: settlement.PaidAmount, Payments: payments, Issuer: settlement.Issuer,
+		PaidAmount: settlement.PaidAmount, Payments: payments, Vouchers: vouchers, Issuer: settlement.Issuer,
 	}, nil
+}
+
+// vietnamTime is the zone a voucher's date is printed in.
+var vietnamTime = time.FixedZone("ICT", 7*60*60)
+
+// voucherMethod names a payment method on the Vietnamese voucher.
+func voucherMethod(m billingDomain.PaymentMethod) string {
+	switch m {
+	case billingDomain.MethodCash:
+		return "Tiền mặt"
+	case billingDomain.MethodBankTransfer:
+		return "Chuyển khoản"
+	case billingDomain.MethodOnline:
+		return "Thanh toán trực tuyến"
+	default:
+		return string(m)
+	}
 }
 
 // documentStockMovements lets the Document/Print module render the stock

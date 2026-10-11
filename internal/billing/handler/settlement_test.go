@@ -3,6 +3,7 @@ package handler_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -28,7 +29,7 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 4)
+	assert.Len(t, p, 5)
 	assert.NotNil(t, p[billingv1.SettlementService_CreateSettlement_FullMethodName].Garage)
 }
 
@@ -131,4 +132,43 @@ func TestRecordSettlementPayment(t *testing.T) {
 	assert.Equal(t, "Thanh toán", payment.GetReason())
 	assert.Equal(t, "Le Thu Ngan", payment.GetCollectorName())
 	assert.False(t, payment.GetVoided())
+}
+
+func TestVoidSettlementPayment(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t)
+
+	paid := openSettlement()
+	paid.PaidAmount, paid.Status = 400_000, domain.StatusPartiallyPaid
+	paid.Payments = []domain.Payment{{ID: "p-1", Amount: 400_000, Method: domain.MethodCash, VoucherNumber: "PT-0001"}}
+	e.settlements.EXPECT().FindByID(anyArg, garageID, settlementID).Return(paid, nil).Once()
+
+	after := openSettlement()
+	e.settlements.EXPECT().VoidPayment(anyArg, garageID, settlementID, "p-1", "typo").Return(after, nil).Once()
+	e.settlements.EXPECT().SaveStatus(anyArg, garageID, settlementID, domain.StatusPending).Return(nil).Once()
+
+	voidedAt := time.Now()
+	final := openSettlement()
+	final.Payments = []domain.Payment{{
+		ID: "p-1", Amount: 400_000, Method: domain.MethodCash, VoucherNumber: "PT-0001", VoidReason: "typo", VoidedAt: &voidedAt,
+	}}
+	e.settlements.EXPECT().FindByID(anyArg, garageID, settlementID).Return(final, nil).Once()
+
+	resp, err := e.srv.VoidSettlementPayment(signedIn(t), &billingv1.VoidSettlementPaymentRequest{
+		GarageId: garageID, SettlementId: settlementID, PaymentId: "p-1", Reason: "typo",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, billingv1.SettlementStatus_SETTLEMENT_STATUS_PENDING, resp.GetSettlement().GetStatus())
+
+	payment := resp.GetSettlement().GetPayments()[0]
+	assert.True(t, payment.GetVoided())
+	assert.Equal(t, "typo", payment.GetVoidReason())
+	assert.NotNil(t, payment.GetVoidedAt())
+
+	_, err = e.srv.VoidSettlementPayment(signedIn(t), &billingv1.VoidSettlementPaymentRequest{
+		GarageId: garageID, SettlementId: settlementID, PaymentId: "p-1",
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }

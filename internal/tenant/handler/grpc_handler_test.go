@@ -132,6 +132,16 @@ func TestGarageRPCs(t *testing.T) {
 	assert.Equal(t, tenantv1.GarageStatus_GARAGE_STATUS_INACTIVE, updated.GetGarage().GetStatus())
 	assert.Equal(t, "B-{SEQ:2}", updated.GetGarage().GetNumbering().GetRepairOrder())
 
+	withVoucher, err := e.srv.UpdateGarage(gctx, &tenantv1.UpdateGarageRequest{
+		GarageId: g.GetId(),
+		Garage: &tenantv1.Garage{Numbering: &tenantv1.NumberingTemplates{
+			Quote: "A-{SEQ:2}", RepairOrder: "B-{SEQ:2}", Settlement: "C-{SEQ:2}", PaymentVoucher: "PT-{SEQ:3}",
+		}},
+		UpdateMask: mask("numbering"),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "PT-{SEQ:3}", withVoucher.GetGarage().GetNumbering().GetPaymentVoucher())
+
 	for _, m := range []*fieldmaskpb.FieldMask{mask("owner_user_id"), mask("status"), nil} {
 		_, err = e.srv.UpdateGarage(gctx, &tenantv1.UpdateGarageRequest{GarageId: g.GetId(), Garage: &tenantv1.Garage{}, UpdateMask: m})
 		assert.Equal(t, "VALIDATION_ERROR", reason(err))

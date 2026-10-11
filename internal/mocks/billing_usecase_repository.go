@@ -472,3 +472,89 @@ func (_c *MockBillingRepository_SaveStatus_Call) RunAndReturn(run func(ctx conte
 	_c.Call.Return(run)
 	return _c
 }
+
+// VoidPayment provides a mock function for the type MockBillingRepository
+func (_mock *MockBillingRepository) VoidPayment(ctx context.Context, garageID string, settlementID string, paymentID string, reason string) (*domain.Settlement, error) {
+	ret := _mock.Called(ctx, garageID, settlementID, paymentID, reason)
+
+	if len(ret) == 0 {
+		panic("no return value specified for VoidPayment")
+	}
+
+	var r0 *domain.Settlement
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string) (*domain.Settlement, error)); ok {
+		return returnFunc(ctx, garageID, settlementID, paymentID, reason)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string) *domain.Settlement); ok {
+		r0 = returnFunc(ctx, garageID, settlementID, paymentID, reason)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*domain.Settlement)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, string, string) error); ok {
+		r1 = returnFunc(ctx, garageID, settlementID, paymentID, reason)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockBillingRepository_VoidPayment_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'VoidPayment'
+type MockBillingRepository_VoidPayment_Call struct {
+	*mock.Call
+}
+
+// VoidPayment is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - settlementID string
+//   - paymentID string
+//   - reason string
+func (_e *MockBillingRepository_Expecter) VoidPayment(ctx any, garageID any, settlementID any, paymentID any, reason any) *MockBillingRepository_VoidPayment_Call {
+	return &MockBillingRepository_VoidPayment_Call{Call: _e.mock.On("VoidPayment", ctx, garageID, settlementID, paymentID, reason)}
+}
+
+func (_c *MockBillingRepository_VoidPayment_Call) Run(run func(ctx context.Context, garageID string, settlementID string, paymentID string, reason string)) *MockBillingRepository_VoidPayment_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBillingRepository_VoidPayment_Call) Return(settlement *domain.Settlement, err error) *MockBillingRepository_VoidPayment_Call {
+	_c.Call.Return(settlement, err)
+	return _c
+}
+
+func (_c *MockBillingRepository_VoidPayment_Call) RunAndReturn(run func(ctx context.Context, garageID string, settlementID string, paymentID string, reason string) (*domain.Settlement, error)) *MockBillingRepository_VoidPayment_Call {
+	_c.Call.Return(run)
+	return _c
+}

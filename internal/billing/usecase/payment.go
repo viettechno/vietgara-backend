@@ -71,6 +71,69 @@ func (uc *SettlementUseCase) RecordPayment(ctx context.Context, req RecordPaymen
 	return uc.Get(ctx, req.GarageID, req.SettlementID)
 }
 
+// VoidPaymentRequest is the input for SettlementUseCase.VoidPayment.
+type VoidPaymentRequest struct {
+	GarageID     string
+	SettlementID string
+	PaymentID    string
+	ActorID      string
+	Reason       string
+}
+
+// VoidPayment voids a payment voucher that was recorded by mistake
+// (FR-BIL-06): the voucher stays on file with its number and the reason,
+// the settlement's paid amount and status are recalculated, and the audit
+// log records who voided it. A voucher is never deleted.
+func (uc *SettlementUseCase) VoidPayment(ctx context.Context, req VoidPaymentRequest) (*domain.Settlement, error) {
+	reason := strings.TrimSpace(req.Reason)
+	if reason == "" || utf8.RuneCountInString(reason) > domain.MaxVoidReasonLength {
+		return nil, toAppError("void payment", domain.ErrInvalidVoidReason)
+	}
+
+	s, err := uc.Settlements.FindByID(ctx, req.GarageID, req.SettlementID)
+	if err != nil {
+		return nil, toAppError("void payment", err)
+	}
+
+	payment := findPayment(s, req.PaymentID)
+	if payment == nil {
+		return nil, toAppError("void payment", domain.ErrPaymentNotFound)
+	}
+
+	before := settlementAudit(s)
+	before["payment"] = paymentAudit(payment)
+
+	updated, err := uc.Settlements.VoidPayment(ctx, req.GarageID, req.SettlementID, req.PaymentID, reason)
+	if err != nil {
+		return nil, toAppError("void payment", err)
+	}
+
+	updated.DeriveStatus()
+
+	if err := uc.Settlements.SaveStatus(ctx, req.GarageID, req.SettlementID, updated.Status); err != nil {
+		return nil, toAppError("void payment", err)
+	}
+
+	after := settlementAudit(updated)
+	after["payment"] = map[string]any{"voucher_number": payment.VoucherNumber, "amount": payment.Amount, "voided": true, "void_reason": reason}
+
+	if err := uc.audit(ctx, req.ActorID, req.GarageID, ActionPaymentVoided, entityPayment, req.PaymentID, before, after); err != nil {
+		return nil, err
+	}
+
+	return uc.Get(ctx, req.GarageID, req.SettlementID)
+}
+
+func findPayment(s *domain.Settlement, paymentID string) *domain.Payment {
+	for i := range s.Payments {
+		if s.Payments[i].ID == paymentID {
+			return &s.Payments[i]
+		}
+	}
+
+	return nil
+}
+
 // issueVoucher builds the payment with its payment voucher (FR-BIL-05): the
 // next number from the garage's template, who paid and why, who collected,
 // and the garage's legal identity as it is now.

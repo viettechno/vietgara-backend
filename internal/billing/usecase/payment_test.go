@@ -2,6 +2,7 @@ package usecase_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -299,6 +300,119 @@ func TestSettlementUseCase_RecordPayment_Voucher(t *testing.T) {
 		d.Collectors.EXPECT().FullName(mock.Anything, actorID).Return("", errBoom).Once()
 
 		_, err = uc.RecordPayment(t.Context(), req)
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+}
+
+func TestSettlementUseCase_VoidPayment(t *testing.T) {
+	t.Parallel()
+
+	paid := func() *domain.Settlement {
+		s := openSettlement()
+		s.PaidAmount, s.Status = 400_000, domain.StatusPartiallyPaid
+		s.Payments = []domain.Payment{{ID: "p-1", Amount: 400_000, Method: domain.MethodCash, VoucherNumber: "PT-0001", PayerName: "An"}}
+
+		return s
+	}
+	request := usecase.VoidPaymentRequest{
+		GarageID: garageID, SettlementID: settlementID, PaymentID: "p-1", ActorID: actorID, Reason: "  nhập nhầm  ",
+	}
+
+	t.Run("voids it, recalculates the status and audits who did", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(paid(), nil).Once()
+		d.Settlements.EXPECT().VoidPayment(mock.Anything, garageID, settlementID, "p-1", "nhập nhầm").Return(openSettlement(), nil).Once()
+		d.Settlements.EXPECT().SaveStatus(mock.Anything, garageID, settlementID, domain.StatusPending).Return(nil).Once()
+		entry := expectAudit(d)
+		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
+
+		s, err := uc.VoidPayment(t.Context(), request)
+		require.NoError(t, err)
+		require.Equal(t, domain.StatusPending, s.Status)
+		require.Equal(t, usecase.ActionPaymentVoided, entry.Action)
+		require.Equal(t, "p-1", entry.EntityID)
+		require.Equal(t, actorID, entry.Actor)
+
+		before, ok := entry.Before.(map[string]any)
+		require.True(t, ok)
+		after, ok := entry.After.(map[string]any)
+		require.True(t, ok)
+		require.Equal(t, int64(400_000), before["paid_amount"])
+		require.Equal(t, int64(0), after["paid_amount"])
+		require.Equal(t, domain.StatusPending, after["status"])
+	})
+
+	t.Run("a reason is required", func(t *testing.T) {
+		t.Parallel()
+
+		uc, _ := newUseCase(t)
+		req := request
+		req.Reason = "   "
+
+		_, err := uc.VoidPayment(t.Context(), req)
+		assertAppError(t, err, apperror.CodeInvalidArgument)
+
+		req.Reason = strings.Repeat("x", domain.MaxVoidReasonLength+1)
+		_, err = uc.VoidPayment(t.Context(), req)
+		assertAppError(t, err, apperror.CodeInvalidArgument)
+	})
+
+	t.Run("unknown settlement", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(nil, domain.ErrSettlementNotFound).Once()
+
+		_, err := uc.VoidPayment(t.Context(), request)
+		assertAppError(t, err, apperror.CodeNotFound)
+	})
+
+	t.Run("unknown payment", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
+
+		_, err := uc.VoidPayment(t.Context(), request)
+		assertAppError(t, err, apperror.CodeNotFound)
+	})
+
+	t.Run("already void", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(paid(), nil).Once()
+		d.Settlements.EXPECT().VoidPayment(mock.Anything, garageID, settlementID, "p-1", "nhập nhầm").
+			Return(nil, domain.ErrPaymentAlreadyVoided).Once()
+
+		_, err := uc.VoidPayment(t.Context(), request)
+		assertAppError(t, err, apperror.CodeAlreadyExists)
+	})
+
+	t.Run("status save failure", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(paid(), nil).Once()
+		d.Settlements.EXPECT().VoidPayment(mock.Anything, garageID, settlementID, "p-1", "nhập nhầm").Return(openSettlement(), nil).Once()
+		d.Settlements.EXPECT().SaveStatus(mock.Anything, garageID, settlementID, domain.StatusPending).Return(errBoom).Once()
+
+		_, err := uc.VoidPayment(t.Context(), request)
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+
+	t.Run("audit failure", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(paid(), nil).Once()
+		d.Settlements.EXPECT().VoidPayment(mock.Anything, garageID, settlementID, "p-1", "nhập nhầm").Return(openSettlement(), nil).Once()
+		d.Settlements.EXPECT().SaveStatus(mock.Anything, garageID, settlementID, domain.StatusPending).Return(nil).Once()
+		d.Audit.EXPECT().Record(mock.Anything, mock.Anything).Return(errBoom).Once()
+
+		_, err := uc.VoidPayment(t.Context(), request)
 		assertAppError(t, err, apperror.CodeInternal)
 	})
 }

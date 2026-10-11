@@ -32,15 +32,15 @@ func SettlementReceiptPDF(data SettlementReceiptData) ([]byte, error) {
 	writeKeyValue(pdf, "Paid", formatVND(data.PaidAmount))
 
 	pdf.Ln(4)
-	pdf.SetFont("Helvetica", "B", 12)
+	pdf.SetFont(fontFamily, "B", 12)
 	pdf.CellFormat(0, 7, "Total: "+formatVND(data.TotalAmount), "", 1, "L", false, 0, "")
 	pdf.Ln(4)
 
-	pdf.SetFont("Helvetica", "B", 10)
+	pdf.SetFont(fontFamily, "B", 10)
 	pdf.CellFormat(0, 6, "Payments received", "", 1, "L", false, 0, "")
 
 	if len(data.Payments) == 0 {
-		pdf.SetFont("Helvetica", "", 10)
+		pdf.SetFont(fontFamily, "", 10)
 		pdf.CellFormat(0, 6, "None yet.", "", 1, "L", false, 0, "")
 
 		return finish(pdf)
@@ -57,7 +57,7 @@ func SettlementReceiptPDF(data SettlementReceiptData) ([]byte, error) {
 
 	pdf.Ln(-1)
 
-	pdf.SetFont("Helvetica", "", 10)
+	pdf.SetFont(fontFamily, "", 10)
 
 	for _, p := range data.Payments {
 		pdf.CellFormat(widths[0], 7, p.Date, "1", 0, "L", false, 0, "")

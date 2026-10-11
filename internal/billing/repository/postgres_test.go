@@ -44,7 +44,7 @@ func settlementRow() []any {
 func paymentRow() []any {
 	return []any{
 		"p-1", int64(300_000), "cash", nil, "PT-202609-0001", "An Nguyen", new("5 Le Loi"), "Thanh toán quyết toán QT-1",
-		"Le Thu Ngan", []byte(`{"name":"Cong ty An Phat","tax_code":"0301234567"}`), nil, now,
+		"Le Thu Ngan", []byte(`{"name":"Cong ty An Phat","tax_code":"0301234567"}`), nil, nil, nil, now,
 	}
 }
 
@@ -110,6 +110,24 @@ func TestPostgresRepository_FindByID(t *testing.T) {
 		require.Equal(t, "5 Le Loi", s.Payments[0].PayerAddress)
 		require.Equal(t, "Le Thu Ngan", s.Payments[0].CollectorName)
 		require.Equal(t, "Cong ty An Phat", s.Payments[0].Issuer.Name)
+	})
+
+	t.Run("a voided payment", func(t *testing.T) {
+		t.Parallel()
+
+		row := paymentRow()
+		row[10], row[11] = new("typo"), new(now)
+
+		repo := repository.NewPostgresRepository(nil)
+		tx := dbtest.New(t).
+			ExpectQueryRow("FROM settlements WHERE garage_id", dbtest.Row(settlementRow()...)).
+			ExpectQuery("FROM settlement_payments", dbtest.NewRows(row), nil)
+		ctx := tx.Context(t.Context())
+
+		s, err := repo.FindByID(ctx, garageID, settlementID)
+		require.NoError(t, err)
+		require.True(t, s.Payments[0].Voided())
+		require.Equal(t, "typo", s.Payments[0].VoidReason)
 	})
 
 	t.Run("not found", func(t *testing.T) {
@@ -320,6 +338,73 @@ func TestPostgresRepository_RecordPayment(t *testing.T) {
 		ctx := tx.Context(t.Context())
 
 		_, err := repo.RecordPayment(ctx, garageID, settlementID, payment)
+		require.ErrorIs(t, err, errBoom)
+	})
+}
+
+func TestPostgresRepository_VoidPayment(t *testing.T) {
+	t.Parallel()
+
+	t.Run("success, taken off the paid total", func(t *testing.T) {
+		t.Parallel()
+
+		repo := repository.NewPostgresRepository(nil)
+		tx := dbtest.New(t).
+			ExpectQueryRow("UPDATE settlement_payments SET voided_at", dbtest.Row(int64(300_000))).
+			WithArgs(func(args []any) { require.Equal(t, "typo", args[3]) }).
+			ExpectQueryRow("UPDATE settlements SET paid_amount = paid_amount -", dbtest.Row(settlementRow()...))
+		ctx := tx.Context(t.Context())
+
+		s, err := repo.VoidPayment(ctx, garageID, settlementID, "p-1", "typo")
+		require.NoError(t, err)
+		require.Equal(t, settlementID, s.ID)
+	})
+
+	t.Run("no such payment", func(t *testing.T) {
+		t.Parallel()
+
+		repo := repository.NewPostgresRepository(nil)
+		tx := dbtest.New(t).
+			ExpectQueryRow("UPDATE settlement_payments SET voided_at", dbtest.ErrRow(pgx.ErrNoRows)).
+			ExpectQueryRow("SELECT EXISTS", dbtest.Row(false))
+		ctx := tx.Context(t.Context())
+
+		_, err := repo.VoidPayment(ctx, garageID, settlementID, "p-1", "typo")
+		require.ErrorIs(t, err, domain.ErrPaymentNotFound)
+	})
+
+	t.Run("already void", func(t *testing.T) {
+		t.Parallel()
+
+		repo := repository.NewPostgresRepository(nil)
+		tx := dbtest.New(t).
+			ExpectQueryRow("UPDATE settlement_payments SET voided_at", dbtest.ErrRow(pgx.ErrNoRows)).
+			ExpectQueryRow("SELECT EXISTS", dbtest.Row(true))
+		ctx := tx.Context(t.Context())
+
+		_, err := repo.VoidPayment(ctx, garageID, settlementID, "p-1", "typo")
+		require.ErrorIs(t, err, domain.ErrPaymentAlreadyVoided)
+	})
+
+	t.Run("failures", func(t *testing.T) {
+		t.Parallel()
+
+		repo := repository.NewPostgresRepository(nil)
+
+		tx := dbtest.New(t).ExpectQueryRow("UPDATE settlement_payments SET voided_at", dbtest.ErrRow(errBoom))
+		_, err := repo.VoidPayment(tx.Context(t.Context()), garageID, settlementID, "p-1", "typo")
+		require.ErrorIs(t, err, errBoom)
+
+		tx = dbtest.New(t).
+			ExpectQueryRow("UPDATE settlement_payments SET voided_at", dbtest.ErrRow(pgx.ErrNoRows)).
+			ExpectQueryRow("SELECT EXISTS", dbtest.ErrRow(errBoom))
+		_, err = repo.VoidPayment(tx.Context(t.Context()), garageID, settlementID, "p-1", "typo")
+		require.ErrorIs(t, err, errBoom)
+
+		tx = dbtest.New(t).
+			ExpectQueryRow("UPDATE settlement_payments SET voided_at", dbtest.Row(int64(1))).
+			ExpectQueryRow("UPDATE settlements SET paid_amount", dbtest.ErrRow(errBoom))
+		_, err = repo.VoidPayment(tx.Context(t.Context()), garageID, settlementID, "p-1", "typo")
 		require.ErrorIs(t, err, errBoom)
 	})
 }

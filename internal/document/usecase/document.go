@@ -58,9 +58,24 @@ type RepairOrderReader interface {
 type SettlementInfo struct {
 	Number, Status, CustomerName, VehiclePlate string
 	TotalAmount, PaidAmount                    int64
-	Payments                                   []render.PaymentRow
+	// Payments are the payments that count, for the receipt.
+	Payments []render.PaymentRow
+	// Vouchers are every payment voucher of the settlement, voided ones
+	// included.
+	Vouchers []VoucherInfo
 	// Issuer is the garage's legal identity when the settlement was
 	// created (FR-TEN-06).
+	Issuer issuer.Issuer
+}
+
+// VoucherInfo is one payment voucher (phiếu thu) of a settlement.
+type VoucherInfo struct {
+	ID, Number, Date, PayerName, PayerAddress, Reason, Method, CollectorName string
+	Amount                                                                   int64
+	Voided                                                                   bool
+	VoidReason                                                               string
+	// Issuer is the garage's legal identity when the voucher was issued
+	// (FR-TEN-06).
 	Issuer issuer.Issuer
 }
 
@@ -190,6 +205,47 @@ func (uc *DocumentUseCase) SettlementReceiptPDF(ctx context.Context, garageID, s
 	}
 
 	return pdf, nil
+}
+
+// PaymentVoucherPDF renders one payment voucher as a PDF in the 01-TT
+// layout (FR-BIL-05), from the legal identity it was issued with.
+func (uc *DocumentUseCase) PaymentVoucherPDF(ctx context.Context, garageID, settlementID, paymentID string) ([]byte, error) {
+	settlement, err := uc.Settlements.Get(ctx, garageID, settlementID)
+	if err != nil {
+		return nil, toAppError("export payment voucher pdf", err)
+	}
+
+	voucher, ok := findVoucher(settlement.Vouchers, paymentID)
+	if !ok {
+		return nil, apperror.New(apperror.CodeNotFound, "payment not found")
+	}
+
+	garage, err := uc.letterhead(ctx, garageID, voucher.Issuer)
+	if err != nil {
+		return nil, err
+	}
+
+	pdf, err := render.PaymentVoucherPDF(render.VoucherPDFData{
+		Garage: garage, Number: voucher.Number, Date: voucher.Date, PayerName: voucher.PayerName,
+		PayerAddress: voucher.PayerAddress, Reason: voucher.Reason, Amount: voucher.Amount, Method: voucher.Method,
+		SettlementNumber: settlement.Number, CollectorName: voucher.CollectorName,
+		Voided: voucher.Voided, VoidReason: voucher.VoidReason,
+	})
+	if err != nil {
+		return nil, apperror.Internal("export payment voucher pdf", err)
+	}
+
+	return pdf, nil
+}
+
+func findVoucher(vouchers []VoucherInfo, paymentID string) (VoucherInfo, bool) {
+	for _, v := range vouchers {
+		if v.ID == paymentID {
+			return v, true
+		}
+	}
+
+	return VoucherInfo{}, false
 }
 
 // StockMovementsExcel renders the stock movement report as an Excel

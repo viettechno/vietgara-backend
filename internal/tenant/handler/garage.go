@@ -116,6 +116,10 @@ var garageSetters = map[string]func(f *usecase.GarageFields, in *tenantv1.Garage
 		f.QuoteNumberTemplate = new(in.GetNumbering().GetQuote())
 		f.RepairOrderNumberTemplate = new(in.GetNumbering().GetRepairOrder())
 		f.SettlementNumberTemplate = new(in.GetNumbering().GetSettlement())
+		// Clients that predate vouchers do not send it; keep the current one.
+		if v := in.GetNumbering().GetPaymentVoucher(); v != "" {
+			f.PaymentVoucherNumberTemplate = new(v)
+		}
 	},
 	"numbering.quote": func(f *usecase.GarageFields, in *tenantv1.Garage) {
 		f.QuoteNumberTemplate = new(in.GetNumbering().GetQuote())

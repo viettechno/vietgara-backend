@@ -25,9 +25,9 @@ func QuotePDF(data QuotePDFData) ([]byte, error) {
 
 	if data.Notes != "" {
 		pdf.Ln(4)
-		pdf.SetFont("Helvetica", "B", 10)
+		pdf.SetFont(fontFamily, "B", 10)
 		pdf.CellFormat(0, 6, "Notes", "", 1, "L", false, 0, "")
-		pdf.SetFont("Helvetica", "", 10)
+		pdf.SetFont(fontFamily, "", 10)
 		pdf.MultiCell(0, 5, data.Notes, "", "L", false)
 	}
 

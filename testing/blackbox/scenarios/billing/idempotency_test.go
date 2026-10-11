@@ -66,6 +66,9 @@ func cash(amount int64) *billingv1.RecordSettlementPaymentRequest {
 
 // TestSettlementAndPaymentsAreIdempotent: a retried settlement or payment
 // is answered from the first attempt, never created twice.
+//
+// Scenario: E2E-BIL-006 (partial): partial payments, vouchers, voids and
+// receipt PDFs are later batches.
 func TestSettlementAndPaymentsAreIdempotent(t *testing.T) {
 	t.Parallel()
 

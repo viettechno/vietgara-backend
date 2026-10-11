@@ -17,6 +17,9 @@ import (
 // (POST /api/v1/auth/google/id-token) against the stubbed Google: the
 // backend fetches the stub's JWKS through GOOGLE_CERTS_URL and accepts only
 // tokens for its own client ID with a verified e-mail.
+//
+// Scenario: E2E-IAM-014, E2E-IAM-015 (partial): cancelled and blocked
+// sign-ins are a later batch.
 func TestGoogleIDTokenSignIn(t *testing.T) {
 	t.Parallel()
 

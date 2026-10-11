@@ -4,6 +4,7 @@
 	blackbox-stubbed-down \
 	blackbox-staging \
 	blackbox-seed \
+	blackbox-purge \
 	blackbox-test \
 	blackbox-lint
 
@@ -45,6 +46,10 @@ blackbox-test: ## Run the blackbox suite against a running target (BLACKBOX_TARG
 	@printf "$(CYAN)▶ Running blackbox tests against $${BLACKBOX_TARGET:-stubbed}...$(RESET)\n"
 	@data_dir="$$(cd "$(TESTDATA_DIR)/data" && pwd)"; \
 	cd $(BLACKBOX_DIR) && BLACKBOX_TESTDATA_DIR="$$data_dir" go test -count=1 -v ./...
+
+blackbox-purge: ## Immediately delete all users on the reserved test domain from the running stubbed stack
+	@$(BLACKBOX_COMPOSE) exec -T vietgara-backend /app/purge-test-users \
+		--confirm-domain blackbox.vietgara.test
 
 blackbox-lint: ## Lint the blackbox module with the repository's golangci-lint config
 	@printf "$(CYAN)▶ Running golangci-lint on $(BLACKBOX_DIR)...$(RESET)\n"

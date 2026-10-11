@@ -103,12 +103,14 @@ func buildCustomerPortal(
 	customers *customerRepository.PostgresCustomerRepository,
 	vehicles *customerUsecase.VehicleUseCase,
 	garages *tenantRepo.PostgresGarageRepository,
+	links *customerUsecase.LinkUseCase,
 ) *customerportalHandler.Server {
 	return customerportalHandler.NewServer(customerportalUsecase.NewPortalUseCase(customerportalUsecase.Deps{
 		Users:     portalUsers{identity: identity},
 		Customers: portalCustomers{customers: customers},
 		Vehicles:  portalVehicles{vehicles: vehicles},
 		Garages:   portalGarages{garages: garages},
+		Links:     links,
 		Tx:        tx,
 	}))
 }

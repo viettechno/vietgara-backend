@@ -21,6 +21,7 @@ func customerToProto(c *domain.Customer) *customerv1.Customer {
 		Address:      c.Address,
 		VehicleCount: toInt32(c.VehicleCount),
 		IsActive:     c.IsActive,
+		LinkStatus:   LinkStatusToProto(c.LinkStatus),
 		CreatedAt:    converter.TimeToProto(c.CreatedAt),
 		UpdatedAt:    converter.TimeToProto(c.UpdatedAt),
 	}

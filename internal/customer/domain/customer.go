@@ -40,6 +40,9 @@ type Customer struct {
 	// IsActive is false once the customer was deactivated instead of
 	// deleted because documents refer to it (FR-CAT-07).
 	IsActive bool
+	// LinkStatus is the state of the link with a user, "" when the profile
+	// was never linked; derived when reading and never persisted.
+	LinkStatus LinkStatus
 	// VehicleCount is derived when reading and never persisted.
 	VehicleCount int
 	CreatedBy    *string

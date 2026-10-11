@@ -14,7 +14,9 @@ import (
 const (
 	customerColumns = `c.id, c.garage_id, c.full_name, c.phone, c.email, c.address, c.consent_log, c.is_active,
 		c.created_by, c.updated_by, c.created_at, c.updated_at,
-		(SELECT count(*) FROM vehicles v WHERE v.customer_id = c.id AND v.deleted_at IS NULL)::int`
+		(SELECT count(*) FROM vehicles v WHERE v.customer_id = c.id AND v.deleted_at IS NULL)::int,
+		(SELECT l.status::text FROM customer_user_links l WHERE l.customer_id = c.id
+			ORDER BY (l.status IN ('requested', 'linked')) DESC, l.created_at DESC LIMIT 1)`
 
 	// customerSearch filters live customers of garage $1. $2 is an ILIKE
 	// pattern over name/email, $3 a compact pattern over the plates of the
@@ -47,14 +49,19 @@ func NewPostgresCustomerRepository(pool *platformdb.Pool) *PostgresCustomerRepos
 
 func scanCustomer(row pgx.Row) (*domain.Customer, error) {
 	var (
-		c       domain.Customer
-		consent []byte
+		c          domain.Customer
+		consent    []byte
+		linkStatus *string
 	)
 
 	err := row.Scan(&c.ID, &c.GarageID, &c.FullName, &c.Phone, &c.Email, &c.Address, &consent, &c.IsActive,
-		&c.CreatedBy, &c.UpdatedBy, &c.CreatedAt, &c.UpdatedAt, &c.VehicleCount)
+		&c.CreatedBy, &c.UpdatedBy, &c.CreatedAt, &c.UpdatedAt, &c.VehicleCount, &linkStatus)
 	if err != nil {
 		return nil, err
+	}
+
+	if linkStatus != nil {
+		c.LinkStatus = domain.LinkStatus(*linkStatus)
 	}
 
 	if len(consent) > 0 {

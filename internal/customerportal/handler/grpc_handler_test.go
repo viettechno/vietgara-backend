@@ -34,6 +34,28 @@ func (fake) Get(_ context.Context, _, id string) (*customerdomain.Customer, erro
 	return &customerdomain.Customer{ID: id, FullName: "Tran Thi Binh"}, nil
 }
 
+func (fake) ListForUser(context.Context, string) ([]*customerdomain.UserLink, error) {
+	return []*customerdomain.UserLink{{ID: "l-1", GarageID: "g-1", CustomerID: "c-1", Status: customerdomain.LinkLinked}}, nil
+}
+
+func (fake) FindForUser(context.Context, string, string) (*customerdomain.UserLink, error) {
+	return &customerdomain.UserLink{ID: "l-1", GarageID: "g-1", CustomerID: "c-1", Status: customerdomain.LinkRequested}, nil
+}
+
+func (fake) Accept(context.Context, string, string) (*customerdomain.UserLink, error) {
+	return &customerdomain.UserLink{ID: "l-1", GarageID: "g-1", CustomerID: "c-1", Status: customerdomain.LinkLinked}, nil
+}
+
+func (fake) Decline(context.Context, string, string) (*customerdomain.UserLink, error) {
+	return &customerdomain.UserLink{ID: "l-1", GarageID: "g-1", CustomerID: "c-1", Status: customerdomain.LinkDeclined}, nil
+}
+
+func (fake) UnlinkByUser(context.Context, string, string) (*customerdomain.UserLink, error) {
+	return &customerdomain.UserLink{ID: "l-1", GarageID: "g-1", CustomerID: "c-1", Status: customerdomain.LinkUnlinked}, nil
+}
+
+func (fake) AutoLink(context.Context, string, string, string) error { return nil }
+
 type vehicles struct{}
 
 func (vehicles) ListForCustomer(context.Context, string, string) ([]*customerdomain.Vehicle, error) {
@@ -62,7 +84,7 @@ func (passTx) WithTransaction(ctx context.Context, _ platformdb.Scope, fn func(c
 
 func server(f fake) *handler.Server {
 	return handler.NewServer(usecase.NewPortalUseCase(usecase.Deps{
-		Users: f, Customers: f, Vehicles: vehicles{}, Garages: garages{}, Tx: passTx{},
+		Users: f, Customers: f, Vehicles: vehicles{}, Garages: garages{}, Links: f, Tx: passTx{},
 	}))
 }
 
@@ -116,7 +138,31 @@ func TestErrors(t *testing.T) {
 
 func TestPolicies(t *testing.T) {
 	p := handler.Policies()
-	assert.Len(t, p, 2)
+	assert.Len(t, p, 6)
 	assert.Equal(t, middleware.UserMethod(), p[customerportalv1.CustomerPortalService_ListMyVehicles_FullMethodName])
 	assert.Equal(t, middleware.UserMethod(), p[customerportalv1.CustomerPortalService_GetMyVehicleHistory_FullMethodName])
+}
+
+func TestGarageLinks(t *testing.T) {
+	list, err := server(fake{}).ListMyGarageLinks(signedIn(), &customerportalv1.ListMyGarageLinksRequest{})
+	require.NoError(t, err)
+	require.Len(t, list.GetData(), 1)
+
+	l := list.GetData()[0]
+	assert.Equal(t, "l-1", l.GetId())
+	assert.Equal(t, "Gara An Phat", l.GetGarageName())
+	assert.Equal(t, "Tran Thi Binh", l.GetCustomerName())
+	assert.Equal(t, customerv1.CustomerUserLinkStatus_CUSTOMER_USER_LINK_STATUS_LINKED, l.GetStatus())
+
+	accepted, err := server(fake{}).AcceptGarageLink(signedIn(), &customerportalv1.AcceptGarageLinkRequest{LinkId: "l-1"})
+	require.NoError(t, err)
+	assert.Equal(t, customerv1.CustomerUserLinkStatus_CUSTOMER_USER_LINK_STATUS_LINKED, accepted.GetLink().GetStatus())
+
+	declined, err := server(fake{}).DeclineGarageLink(signedIn(), &customerportalv1.DeclineGarageLinkRequest{LinkId: "l-1"})
+	require.NoError(t, err)
+	assert.Equal(t, customerv1.CustomerUserLinkStatus_CUSTOMER_USER_LINK_STATUS_DECLINED, declined.GetLink().GetStatus())
+
+	unlinked, err := server(fake{}).UnlinkGarageLink(signedIn(), &customerportalv1.UnlinkGarageLinkRequest{LinkId: "l-1"})
+	require.NoError(t, err)
+	assert.Equal(t, customerv1.CustomerUserLinkStatus_CUSTOMER_USER_LINK_STATUS_UNLINKED, unlinked.GetLink().GetStatus())
 }

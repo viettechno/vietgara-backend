@@ -13,6 +13,7 @@ RUN go mod download
 
 COPY . .
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/vietgara-backend ./cmd/server
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags='-s -w' -o /out/purge-test-users ./cmd/purge-test-users
 
 FROM alpine:3.22
 
@@ -20,6 +21,7 @@ RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 COPY --from=builder /out/vietgara-backend /app/vietgara-backend
+COPY --from=builder /out/purge-test-users /app/purge-test-users
 COPY db/migrations /app/db/migrations
 RUN mkdir -p /app/data/uploads
 

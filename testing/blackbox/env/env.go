@@ -7,10 +7,16 @@
 package env
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"sync"
 	"testing"
+)
+
+var (
+	errBlackboxAPIURLRequired = errors.New("BLACKBOX_API_URL is required for target")
+	errUnknownBlackboxTarget  = errors.New("unknown BLACKBOX_TARGET")
 )
 
 // Target is a deployment the suite can run against.
@@ -91,13 +97,13 @@ func load() (Config, error) {
 	case Stubbed:
 	case Staging:
 		if os.Getenv("BLACKBOX_API_URL") == "" {
-			return Config{}, fmt.Errorf("BLACKBOX_API_URL is required for target %q", cfg.Target)
+			return Config{}, fmt.Errorf("%w %q", errBlackboxAPIURLRequired, cfg.Target)
 		}
 
 		// No local defaults on staging: its inbox is configured or absent.
 		cfg.MailpitURL, cfg.GoogleStubURL = os.Getenv("BLACKBOX_MAILPIT_URL"), ""
 	default:
-		return Config{}, fmt.Errorf("unknown BLACKBOX_TARGET %q (want %q or %q)", cfg.Target, Stubbed, Staging)
+		return Config{}, fmt.Errorf("%w %q (want %q or %q)", errUnknownBlackboxTarget, cfg.Target, Stubbed, Staging)
 	}
 
 	return cfg, nil

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/viettechno/vietgara-backend/testing/blackbox/stubs/google/idtoken"
 )
+
+var errGoogleStubResponse = errors.New("google stub")
 
 // GoogleStub asks the stubbed Google (stubs/google) for ID tokens signed
 // with the key it publishes as its JWKS, which the stubbed backend trusts
@@ -53,7 +56,7 @@ func (g *GoogleStub) IDToken(ctx context.Context, claims idtoken.Claims) (string
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("google stub: %s: %s", resp.Status, raw)
+		return "", fmt.Errorf("%w: %s: %s", errGoogleStubResponse, resp.Status, raw)
 	}
 
 	var minted idtoken.Minted

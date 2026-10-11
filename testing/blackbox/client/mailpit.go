@@ -32,11 +32,16 @@ type Message struct {
 
 var otpPattern = regexp.MustCompile(`\b(\d{6})\b`)
 
+var (
+	errNoOTPCode       = errors.New("no 6-digit code in")
+	errMailpitResponse = errors.New("mailpit")
+)
+
 // OTP returns the 6-digit code in the body.
 func (m *Message) OTP() (string, error) {
 	match := otpPattern.FindStringSubmatch(m.Text)
 	if match == nil {
-		return "", fmt.Errorf("no 6-digit code in %q", m.Subject)
+		return "", fmt.Errorf("%w %q", errNoOTPCode, m.Subject)
 	}
 
 	return match[1], nil
@@ -104,7 +109,7 @@ func (m *Mailpit) getJSON(ctx context.Context, path string, out any) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("mailpit %s: %s", path, resp.Status)
+		return fmt.Errorf("%w %s: %s", errMailpitResponse, path, resp.Status)
 	}
 
 	return json.NewDecoder(resp.Body).Decode(out)

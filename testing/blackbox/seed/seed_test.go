@@ -16,6 +16,13 @@ import (
 	"github.com/viettechno/vietgara-backend/testing/blackbox/seed"
 )
 
+var (
+	errFakeUserAlreadyExists = errors.New("user already exists")
+	errInvalidOTP            = errors.New("invalid OTP")
+	errUnsupportedFakePlanID = errors.New("unsupported fake plan id")
+	errGarageCreationFailed  = errors.New("create failed")
+)
+
 type fakeState struct {
 	users         map[string]*identityv1.User
 	subscriptions map[string]*licensev1.Subscription
@@ -44,7 +51,7 @@ func (a *fakeAPI) Login(_ context.Context, email, _ string) (*identityv1.Session
 
 func (a *fakeAPI) Register(_ context.Context, request *identityv1.RegisterRequest) (*identityv1.Session, error) {
 	if a.state.users[request.GetEmail()] != nil {
-		return nil, errors.New("user already exists")
+		return nil, errFakeUserAlreadyExists
 	}
 
 	a.state.registers++
@@ -56,7 +63,7 @@ func (a *fakeAPI) Register(_ context.Context, request *identityv1.RegisterReques
 
 func (a *fakeAPI) VerifyEmail(_ context.Context, otp, _ string) (*identityv1.Session, error) {
 	if otp != "123456" {
-		return nil, errors.New("invalid OTP")
+		return nil, errInvalidOTP
 	}
 
 	a.state.verifications++
@@ -79,7 +86,7 @@ func (a *fakeAPI) ListPlans(context.Context) ([]*licensev1.Plan, error) {
 
 func (a *fakeAPI) ChangeMyPlan(_ context.Context, planID string) (*licensev1.Subscription, error) {
 	if planID != "professional-id" {
-		return nil, fmt.Errorf("unsupported fake plan id %q", planID)
+		return nil, fmt.Errorf("%w %q", errUnsupportedFakePlanID, planID)
 	}
 
 	a.state.planChanges++
@@ -224,7 +231,7 @@ func TestRunReturnsGarageCreationError(t *testing.T) {
 	t.Parallel()
 
 	state := newFakeState()
-	state.createError = errors.New("create failed")
+	state.createError = errGarageCreationFailed
 	api := &fakeAPI{state: state}
 
 	_, err := seed.Run(t.Context(), sampleDataset(), api, fakeInbox{}, "blackbox.vietgara.test", "test-password")

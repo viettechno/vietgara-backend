@@ -16,6 +16,21 @@ import (
 	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 )
 
+var (
+	errSharedDatasetNil             = errors.New("shared dataset is nil")
+	errSeedAPIAndInboxRequired      = errors.New("API and verification inbox are required")
+	errDatasetHasNoGarages          = errors.New("shared dataset contains no garages to seed")
+	errGarageOwnerMissing           = errors.New("garage owner")
+	errUnsupportedOwnerSetup        = errors.New("owner")
+	errMultiplePublicPlansMatch     = errors.New("multiple public plans match")
+	errPublicPlanNotFound           = errors.New("public plan")
+	errGarageHasNoSeededOwner       = errors.New("garage")
+	errMultipleGaragesNamed         = errors.New("multiple garages are named")
+	errExistingGarageValuesMismatch = errors.New("existing garage values differ from the dataset")
+	errUnexpectedOrUnverifiedUser   = errors.New("API returned an unexpected or unverified user")
+	errUserNameDiffersFromDataset   = errors.New("user name differs from the dataset")
+)
+
 // API is the public API surface the baseline seeder needs.
 type API interface {
 	Login(context.Context, string, string) (*identityv1.Session, error)
@@ -49,15 +64,15 @@ type Summary struct {
 // than silently changing shared state.
 func Run(ctx context.Context, dataset *testdata.Dataset, apiClient API, mail Inbox, emailDomain, password string) (Summary, error) {
 	if dataset == nil {
-		return Summary{}, errors.New("shared dataset is nil")
+		return Summary{}, errSharedDatasetNil
 	}
 
 	if apiClient == nil || mail == nil {
-		return Summary{}, errors.New("API and verification inbox are required")
+		return Summary{}, errSeedAPIAndInboxRequired
 	}
 
 	if len(dataset.Garages) == 0 {
-		return Summary{}, errors.New("shared dataset contains no garages to seed")
+		return Summary{}, errDatasetHasNoGarages
 	}
 
 	owners, err := datasetOwners(dataset)
@@ -94,7 +109,7 @@ func datasetOwners(dataset *testdata.Dataset) ([]testdata.User, error) {
 	for _, garage := range dataset.Garages {
 		needed[garage.Owner] = struct{}{}
 		if _, ok := ownersByKey[garage.Owner]; !ok {
-			return nil, fmt.Errorf("garage owner %q is missing from the dataset", garage.Owner)
+			return nil, fmt.Errorf("%w %q is missing from the dataset", errGarageOwnerMissing, garage.Owner)
 		}
 	}
 
@@ -121,7 +136,7 @@ func seedOwners(
 
 	for _, user := range owners {
 		if user.PlatformAdmin || user.Requires != "" {
-			return nil, summary, fmt.Errorf("owner %q requires unsupported platform or feature setup", user.Key)
+			return nil, summary, fmt.Errorf("%w %q requires unsupported platform or feature setup", errUnsupportedOwnerSetup, user.Key)
 		}
 
 		email := user.Key + "@" + emailDomain
@@ -190,7 +205,7 @@ func ensurePlan(ctx context.Context, apiClient API, planCode string) (bool, erro
 			}
 
 			if selected != nil {
-				return false, fmt.Errorf("multiple public plans match %q", planCode)
+				return false, fmt.Errorf("%w %q", errMultiplePublicPlansMatch, planCode)
 			}
 
 			selected = plan
@@ -198,7 +213,7 @@ func ensurePlan(ctx context.Context, apiClient API, planCode string) (bool, erro
 	}
 
 	if selected == nil {
-		return false, fmt.Errorf("public plan %q was not found", planCode)
+		return false, fmt.Errorf("%w %q was not found", errPublicPlanNotFound, planCode)
 	}
 
 	if _, err := apiClient.ChangeMyPlan(ctx, selected.GetId()); err != nil {
@@ -223,7 +238,7 @@ func seedGarages(
 	for _, garage := range garages {
 		session := sessions[garage.Owner]
 		if session == nil {
-			return summary, fmt.Errorf("garage %q has no seeded owner %q", garage.Key, garage.Owner)
+			return summary, fmt.Errorf("%w %q has no seeded owner %q", errGarageHasNoSeededOwner, garage.Key, garage.Owner)
 		}
 
 		ownerAPI := apiClient.WithToken(session.GetAccessToken())
@@ -257,7 +272,7 @@ func seedGarage(ctx context.Context, apiClient API, garage testdata.Garage) (boo
 		}
 
 		if match != nil {
-			return false, fmt.Errorf("multiple garages are named %q", garage.Name)
+			return false, fmt.Errorf("%w %q", errMultipleGaragesNamed, garage.Name)
 		}
 
 		match = existing
@@ -265,7 +280,7 @@ func seedGarage(ctx context.Context, apiClient API, garage testdata.Garage) (boo
 
 	if match != nil {
 		if !garageMatches(match, garage) {
-			return false, errors.New("existing garage values differ from the dataset")
+			return false, errExistingGarageValuesMismatch
 		}
 
 		return false, nil
@@ -343,11 +358,11 @@ func registerOwner(
 
 func checkOwnerSession(session *identityv1.Session, user testdata.User, email string, newlyRegistered bool) (*identityv1.Session, bool, error) {
 	if session.GetUser().GetEmail() != email || !session.GetUser().GetEmailVerified() {
-		return nil, false, errors.New("API returned an unexpected or unverified user")
+		return nil, false, errUnexpectedOrUnverifiedUser
 	}
 
 	if session.GetUser().GetFullName() != user.Name {
-		return nil, false, errors.New("user name differs from the dataset")
+		return nil, false, errUserNameDiffersFromDataset
 	}
 
 	return session, newlyRegistered, nil

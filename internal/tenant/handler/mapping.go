@@ -32,7 +32,7 @@ func quoteApprovalModeFromProto(m commonv1.QuoteApprovalMode) domain.QuoteApprov
 	return domain.QuoteApprovalModeLink
 }
 
-func garageToProto(g *usecase.GarageWithAccess) *tenantv1.Garage {
+func garageToProto(uc *usecase.TenantUseCase, g *usecase.GarageWithAccess) *tenantv1.Garage {
 	hours := make([]*tenantv1.DailyHours, 0, len(g.Garage.OperatingHours))
 	for _, h := range g.Garage.OperatingHours {
 		hours = append(hours, &tenantv1.DailyHours{Day: dayofweek.DayOfWeek(h.Day), Closed: h.Closed, Open: h.Open, Close: h.Close}) //nolint:gosec // G115: day is validated to 1..7
@@ -46,7 +46,7 @@ func garageToProto(g *usecase.GarageWithAccess) *tenantv1.Garage {
 		Address:        g.Garage.Address,
 		Phone:          g.Garage.Phone,
 		Email:          g.Garage.Email,
-		LogoUrl:        g.Garage.LogoURL,
+		LogoUrl:        uc.LogoURL(g.Garage.LogoKey),
 		Timezone:       g.Garage.Timezone,
 		Currency:       g.Garage.Currency,
 		Status:         garageStatusToProto(g.Garage.Status),

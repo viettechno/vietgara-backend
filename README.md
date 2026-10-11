@@ -65,7 +65,7 @@ The plan is in `vietgara-docs` (Release Plan, Phases 3-17). What changes in this
 | --- | --- |
 | Phase 3 | `account` becomes `user` in the database, proto, events, tokens and configuration (the backend part is merged in #20; proto and the clients follow); migrations are edited in place |
 | Phase 4 | The blackbox suite reads a shared dataset from `vietgara-testdata` and grows to every P1 scenario and at least 80% of API operations; a test-only purge of the test users (see `testing/blackbox/README.md`) |
-| Release 5.0 | Done: insurance code is removed (insurer split, insurer partner type), `partners` becomes the Supplier module (`suppliers`, `supplier.*`), the delete-or-deactivate rule (`pkg/lifecycle`, applied to customers, vehicles and suppliers; each later entity adopts it), shared E.164 phone and e-mail normalization (`pkg/phone`, `pkg/email`). quantities and stock cost are numeric (`NUMERIC(14,3)`, `NUMERIC(18,4)`). row audit columns on every business table filled by triggers from the session user (migration 000022), edited user names kept (`users.full_name_source`). Planned: legal profile; payment vouchers; file registry |
+| Release 5.0 | Done: insurance code is removed (insurer split, insurer partner type), `partners` becomes the Supplier module (`suppliers`, `supplier.*`), the delete-or-deactivate rule (`pkg/lifecycle`, applied to customers, vehicles and suppliers; each later entity adopts it), shared E.164 phone and e-mail normalization (`pkg/phone`, `pkg/email`). quantities and stock cost are numeric (`NUMERIC(14,3)`, `NUMERIC(18,4)`), the file registry (`internal/file`, `files`, private kinds served through signed URLs; the garage logo moves into it). row audit columns on every business table filled by triggers from the session user (migration 000022), edited user names kept (`users.full_name_source`). Planned: legal profile; payment vouchers |
 | Release 5.1 | Customers without a user, user links, tax profiles by kind with an invoice-requested check, vehicle identity fields locked while live documents use them (`customer.correct` to correct) |
 | Release 5.2 | Plan changes (upgrade and downgrade) take effect at the end of the billing period: pending change, applied by the daily job |
 | Releases 6.0, 6.1 | Units, selling price per part, part categories and images, Excel exports; MFA |
@@ -154,7 +154,7 @@ local defaults.
 | `MAIL_PROVIDER`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` | E-mail provider and sender. See [E-mail](#e-mail) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | SMTP provider (Mailpit) |
 | `MAILJET_API_KEY`, `MAILJET_SECRET_KEY` | Mailjet provider |
-| `STORAGE_BACKEND`, `STORAGE_LOCAL_DIR`, `STORAGE_PUBLIC_BASE_URL`, `STORAGE_GCS_BUCKET` | Uploaded files. See [File storage](#file-storage) |
+| `STORAGE_BACKEND`, `STORAGE_LOCAL_DIR`, `STORAGE_PUBLIC_BASE_URL`, `STORAGE_GCS_BUCKET`, `STORAGE_GCS_PRIVATE_BUCKET`, `STORAGE_SIGNING_KEY` | Uploaded files. See [File storage](#file-storage) |
 
 **Test users (staging only)**
 
@@ -281,16 +281,22 @@ Never set it in production.
 
 ## File storage
 
-`internal/platform/storage` stores garage logos:
+Every upload is registered in the `files` table (the File module,
+`internal/file`) with its owner, kind and object key; business rows keep the
+key, never the URL. Object keys are
+`garages/{garageId}/{kind}/{entityId}/{uuid}.{ext}` and
+`users/{userId}/{kind}/{uuid}.{ext}`. `internal/platform/storage` stores the
+objects. A kind is **public** (the garage logo: served by URL) or **private**
+(every later kind: served only through short-lived signed URLs):
 
 | Environment | `STORAGE_BACKEND` | Notes |
 | --- | --- | --- |
-| Local, staging | `local` | Files are written under `STORAGE_LOCAL_DIR` (Compose mounts the `vietgara-uploads` volume there) and served at `/api/v1/files/…` |
-| Production | `gcs` | Files go to the `STORAGE_GCS_BUCKET` bucket. Credentials come from the workload identity (Application Default Credentials). `STORAGE_PUBLIC_BASE_URL` is the public URL prefix, either the bucket or a CDN |
+| Local, staging | `local` | Files are written under `STORAGE_LOCAL_DIR` (Compose mounts the `vietgara-uploads` volume there) and public ones served at `/api/v1/files/…`. Private ones live under `_private/` and are served at `/api/v1/files/private/…` only for an HMAC-signed, expiring URL; `STORAGE_SIGNING_KEY` is the secret (a random one per process when unset, so URLs stop working at a restart; set it on staging) |
+| Production | `gcs` | Public files go to the `STORAGE_GCS_BUCKET` bucket and private ones to `STORAGE_GCS_PRIVATE_BUCKET`, which must not be public. Credentials come from the workload identity (Application Default Credentials); V4 URLs are signed through the IAM Credentials API, so the service account needs `roles/iam.serviceAccountTokenCreator` on itself. `STORAGE_PUBLIC_BASE_URL` is the public URL prefix, either the bucket or a CDN |
 
 The test-user purge command uses these same `STORAGE_*` settings. It removes
-all objects under each eligible test user's garage prefix (including old,
-unreferenced logo uploads), and stops before deleting database users if file
+all objects, public and private, under each eligible test user's garage
+prefix (including old, unreferenced logo uploads), and stops before deleting database users if file
 cleanup fails.
 
 ## Events

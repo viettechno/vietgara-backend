@@ -33,6 +33,7 @@ import (
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 	customerportalv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customerportal/v1"
 	documentv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/document/v1"
+	filev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/file/v1"
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
@@ -51,6 +52,7 @@ import (
 	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
 	customerportalHandler "github.com/viettechno/vietgara-backend/internal/customerportal/handler"
 	documentHandler "github.com/viettechno/vietgara-backend/internal/document/handler"
+	fileHandler "github.com/viettechno/vietgara-backend/internal/file/handler"
 	identityHandler "github.com/viettechno/vietgara-backend/internal/identity/handler"
 	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
 	identityUsecase "github.com/viettechno/vietgara-backend/internal/identity/usecase"
@@ -214,6 +216,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		LocalDir:      envOr("STORAGE_LOCAL_DIR", "./.data/uploads"),
 		PublicBaseURL: envOr("STORAGE_PUBLIC_BASE_URL", ""),
 		Bucket:        envOr("STORAGE_GCS_BUCKET", ""),
+		PrivateBucket: envOr("STORAGE_GCS_PRIVATE_BUCKET", ""),
+		SigningKey:    []byte(envOr("STORAGE_SIGNING_KEY", "")),
 	})
 	if err != nil {
 		return nil, err
@@ -253,6 +257,9 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	accessReader := tenantRepo.NewPostgresAccessReader(pool)
 	license := buildLicense(pool, tx, redisClient, events, auditLog, accessReader, garages)
 
+	// File registry (Release 5.0): the garage logo and every later upload.
+	fileModule := buildFiles(pool, files, garages)
+
 	tenantUC := tenantUsecase.NewTenantUseCase(tenantUsecase.Deps{
 		Garages:     garages,
 		Staff:       tenantRepo.NewPostgresStaffRepository(pool),
@@ -263,7 +270,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		Usage:       accessReader,
 		Limits:      limitChecker{entitlements: license.entitlements},
 		Users:       userDirectory{users: users},
-		Logos:       files,
+		Logos:       tenantLogos{files: fileModule.uc, store: files},
 		Mailer:      mailer,
 		Events:      events,
 		Audit:       auditLog,
@@ -349,7 +356,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	policies := middleware.Merge(
 		identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
 		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
-		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(),
+		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(), fileHandler.Policies(),
 		technicianHandler.Policies(), customerportalHandler.Policies(),
 	)
 	app.grpcServer = grpc.NewServer(
@@ -375,6 +382,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	customerv1.RegisterCustomerServiceServer(app.grpcServer, customerSrv)
 	customerv1.RegisterVehicleServiceServer(app.grpcServer, customerSrv)
 	supplierv1.RegisterSupplierServiceServer(app.grpcServer, supplierSrv)
+	filev1.RegisterFileServiceServer(app.grpcServer, fileModule.server)
 	quotev1.RegisterQuoteServiceServer(app.grpcServer, quote.server)
 	quotev1.RegisterPublicQuoteServiceServer(app.grpcServer, quote.server)
 	repairorderv1.RegisterRepairOrderServiceServer(app.grpcServer, repairOrder.server)
@@ -477,7 +485,7 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 		tenantv1.RegisterStaffGroupServiceHandler,
 		licensev1.RegisterLicenseServiceHandler, licensev1.RegisterLicenseAdminServiceHandler,
 		customerv1.RegisterCustomerServiceHandler, customerv1.RegisterVehicleServiceHandler,
-		supplierv1.RegisterSupplierServiceHandler,
+		supplierv1.RegisterSupplierServiceHandler, filev1.RegisterFileServiceHandler,
 		quotev1.RegisterQuoteServiceHandler, quotev1.RegisterPublicQuoteServiceHandler,
 		repairorderv1.RegisterRepairOrderServiceHandler, inventoryv1.RegisterInventoryServiceHandler,
 		billingv1.RegisterSettlementServiceHandler, documentv1.RegisterDocumentServiceHandler,

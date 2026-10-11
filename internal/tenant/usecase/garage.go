@@ -2,9 +2,7 @@ package usecase
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
-	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
@@ -14,11 +12,6 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
-
-// MaxLogoBytes is the largest accepted logo.
-const MaxLogoBytes = 1 << 20
-
-var logoExtensions = map[string]string{"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
 
 // GarageFields are the settable garage fields; nil fields are left
 // unchanged (on create: defaulted). Empty optional strings clear them.
@@ -187,26 +180,30 @@ func (uc *TenantUseCase) UpdateGarage(ctx context.Context, garageID string, fiel
 	return &GarageWithAccess{Garage: g, Access: caller}, nil
 }
 
+// LogoURL returns the public URL of a garage's logo key, nil without one.
+func (uc *TenantUseCase) LogoURL(key *string) *string {
+	if key == nil {
+		return nil
+	}
+
+	url := uc.Logos.PublicURL(*key)
+
+	return &url
+}
+
 // UploadGarageLogo replaces the garage logo (PNG, JPEG or WebP, at most
 // 1 MB); the old file is removed once the change is committed.
 func (uc *TenantUseCase) UploadGarageLogo(ctx context.Context, garageID string, content []byte, contentType string) (*GarageWithAccess, error) {
-	contentType = strings.ToLower(strings.TrimSpace(contentType))
+	caller, _ := access.FromContext(ctx)
 
-	ext, ok := logoExtensions[contentType]
-	if !ok || len(content) == 0 || len(content) > MaxLogoBytes || http.DetectContentType(content) != contentType {
-		return nil, toAppError("upload logo", domain.ErrInvalidLogo)
-	}
-
-	key := fmt.Sprintf("garages/%s/logo-%s.%s", garageID, uuid.NewString(), ext)
-
-	url, err := uc.Logos.Put(ctx, key, contentType, content)
+	key, err := uc.Logos.StoreLogo(ctx, garageID, callerID(caller), content, strings.ToLower(strings.TrimSpace(contentType)))
 	if err != nil {
 		return nil, toAppError("store logo", err)
 	}
 
-	result, err := uc.setLogo(ctx, garageID, &url)
+	result, err := uc.setLogo(ctx, garageID, &key)
 	if err != nil {
-		_ = uc.Logos.Delete(context.WithoutCancel(ctx), key)
+		uc.Logos.Discard(context.WithoutCancel(ctx), key)
 
 		return nil, err
 	}
@@ -219,7 +216,7 @@ func (uc *TenantUseCase) DeleteGarageLogo(ctx context.Context, garageID string) 
 	return uc.setLogo(ctx, garageID, nil)
 }
 
-func (uc *TenantUseCase) setLogo(ctx context.Context, garageID string, url *string) (*GarageWithAccess, error) {
+func (uc *TenantUseCase) setLogo(ctx context.Context, garageID string, key *string) (*GarageWithAccess, error) {
 	caller, _ := access.FromContext(ctx)
 
 	g, err := uc.Garages.FindByID(ctx, garageID)
@@ -227,8 +224,8 @@ func (uc *TenantUseCase) setLogo(ctx context.Context, garageID string, url *stri
 		return nil, toAppError("update logo", err)
 	}
 
-	old := g.LogoURL
-	g.LogoURL = url
+	old := g.LogoKey
+	g.LogoKey = key
 	actor := callerID(caller)
 	g.UpdatedBy = &actor
 
@@ -237,12 +234,8 @@ func (uc *TenantUseCase) setLogo(ctx context.Context, garageID string, url *stri
 	}
 
 	if old != nil {
-		if key, ok := uc.Logos.KeyFromURL(*old); ok {
-			platformdb.AfterCommit(ctx, func() {
-				if err := uc.Logos.Delete(context.WithoutCancel(ctx), key); err != nil {
-					slog.Warn("tenant: removing the old logo failed", "key", key, "error", err)
-				}
-			})
+		if err := uc.Logos.RemoveByKey(ctx, garageID, actor, *old); err != nil {
+			slog.Warn("tenant: removing the old logo failed", "key", *old, "error", err)
 		}
 	}
 

@@ -4,6 +4,7 @@ package tenanttest
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -638,28 +639,55 @@ func (l Limits) CheckLimit(_ context.Context, _ string, limit usecase.Limit, cur
 	return nil
 }
 
+// Logos is an in-memory tenant LogoFiles. Err makes StoreLogo fail; Removed
+// and Discarded record the keys removed after a replace and after a
+// rolled-back upload.
 type Logos struct {
-	mu      sync.Mutex
-	Deleted []string
-	Err     error
+	mu        sync.Mutex
+	seq       int
+	Removed   []string
+	Discarded []string
+	Err       error
 }
 
-func (l *Logos) Put(_ context.Context, key, _ string, _ []byte) (string, error) {
-	return "/files/" + key, l.Err
-}
+// StoreLogo accepts PNG content of at most 1 MB.
+func (l *Logos) StoreLogo(_ context.Context, garageID, _ string, content []byte, contentType string) (string, error) {
+	if l.Err != nil {
+		return "", l.Err
+	}
 
-func (l *Logos) Delete(_ context.Context, key string) error {
+	if contentType != "image/png" || len(content) == 0 || len(content) > 1<<20 || !strings.HasPrefix(string(content), "\x89PNG") {
+		return "", domain.ErrInvalidLogo
+	}
+
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	l.Deleted = append(l.Deleted, key)
+	l.seq++
+
+	return fmt.Sprintf("garages/%s/logo/%s/%d.png", garageID, garageID, l.seq), nil
+}
+
+// Discard records a discarded upload.
+func (l *Logos) Discard(_ context.Context, key string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.Discarded = append(l.Discarded, key)
+}
+
+// RemoveByKey records a removed logo.
+func (l *Logos) RemoveByKey(_ context.Context, _, _, key string) error {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	l.Removed = append(l.Removed, key)
 
 	return nil
 }
 
-func (l *Logos) KeyFromURL(url string) (string, bool) {
-	return strings.CutPrefix(url, "/files/")
-}
+// PublicURL is the key under /files/.
+func (l *Logos) PublicURL(key string) string { return "/files/" + key }
 
 type Mailer struct {
 	mu   sync.Mutex

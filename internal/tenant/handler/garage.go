@@ -21,7 +21,7 @@ func (s *Server) ListGarages(ctx context.Context, _ *tenantv1.ListGaragesRequest
 
 	resp := &tenantv1.ListGaragesResponse{Data: make([]*tenantv1.Garage, 0, len(garages))}
 	for i := range garages {
-		resp.Data = append(resp.Data, garageToProto(&garages[i]))
+		resp.Data = append(resp.Data, garageToProto(s.uc, &garages[i]))
 	}
 
 	return resp, nil
@@ -41,7 +41,7 @@ func (s *Server) CreateGarage(ctx context.Context, req *tenantv1.CreateGarageReq
 
 	httpapi.Created(ctx)
 
-	return &tenantv1.CreateGarageResponse{Garage: garageToProto(garage)}, nil
+	return &tenantv1.CreateGarageResponse{Garage: garageToProto(s.uc, garage)}, nil
 }
 
 // GetGarage returns a garage.
@@ -51,7 +51,7 @@ func (s *Server) GetGarage(ctx context.Context, req *tenantv1.GetGarageRequest) 
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	return &tenantv1.GetGarageResponse{Garage: garageToProto(garage)}, nil
+	return &tenantv1.GetGarageResponse{Garage: garageToProto(s.uc, garage)}, nil
 }
 
 // UpdateGarage changes the fields named by the update mask.
@@ -66,7 +66,7 @@ func (s *Server) UpdateGarage(ctx context.Context, req *tenantv1.UpdateGarageReq
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	return &tenantv1.UpdateGarageResponse{Garage: garageToProto(garage)}, nil
+	return &tenantv1.UpdateGarageResponse{Garage: garageToProto(s.uc, garage)}, nil
 }
 
 // UploadGarageLogo replaces the logo.
@@ -76,7 +76,7 @@ func (s *Server) UploadGarageLogo(ctx context.Context, req *tenantv1.UploadGarag
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	return &tenantv1.UploadGarageLogoResponse{Garage: garageToProto(garage)}, nil
+	return &tenantv1.UploadGarageLogoResponse{Garage: garageToProto(s.uc, garage)}, nil
 }
 
 // DeleteGarageLogo removes the logo.
@@ -86,7 +86,7 @@ func (s *Server) DeleteGarageLogo(ctx context.Context, req *tenantv1.DeleteGarag
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	return &tenantv1.DeleteGarageLogoResponse{Garage: garageToProto(garage)}, nil
+	return &tenantv1.DeleteGarageLogoResponse{Garage: garageToProto(s.uc, garage)}, nil
 }
 
 const pathName = "name"

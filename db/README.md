@@ -39,6 +39,7 @@ Planned in-place changes (Release Plan, Phases 3-8; the audit columns and `full_
 | 000020 | Customer | `find_customers_by_email()`: the Customer BFF's `SECURITY DEFINER` lookup of a person's customer records across garages (ids only) |
 | 000021 | Platform | `idempotency_keys`: the stored answer of a financial request, kept 24 hours (API Specification 1.3) |
 | 000022 | Platform | Row audit (NFR-MT-07): `set_row_audit()` and `set_created_audit()` and their triggers fill `created_by` / `updated_by` from `app.current_user_id` (NULL for a system job) on every business table; `created_at` / `created_by` never change; `db/audit_columns_test.go` fails when a table has neither the columns nor an allowlist entry |
+| 000023 | File | `files` (`file_kind`): the registry of uploaded files, owned by a garage or a user, with the object key, content type, size and SHA-256; garage files under the garage's row-level security. `garages.logo_url` becomes `logo_key` |
 
 Tables from 000002, 000003, 000010 and 000011 enable `FORCE ROW LEVEL
 SECURITY` when created; their policies are created together in 000013,

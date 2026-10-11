@@ -121,10 +121,11 @@ packages:
         config:
           filename: "tenant_usecase_user_directory.go"
           dir: "./internal/mocks"
-      LogoStore:
+      LogoFiles:
         config:
-          filename: "tenant_usecase_logo_store.go"
+          filename: "tenant_usecase_logo_files.go"
           dir: "./internal/mocks"
+          structname: "MockLogoFiles"
       AuditLogger:
         config:
           filename: "tenant_usecase_audit_logger.go"
@@ -154,6 +155,28 @@ packages:
           filename: "customer_usecase_usage_checker.go"
           dir: "./internal/mocks"
           structname: "MockCustomerUsageChecker"
+  github.com/viettechno/vietgara-backend/internal/file/usecase:
+    interfaces:
+      Repository:
+        config:
+          filename: "file_usecase_repository.go"
+          dir: "./internal/mocks"
+          structname: "MockFileRepository"
+      Storage:
+        config:
+          filename: "file_usecase_storage.go"
+          dir: "./internal/mocks"
+          structname: "MockFileStorage"
+      UsageChecker:
+        config:
+          filename: "file_usecase_usage_checker.go"
+          dir: "./internal/mocks"
+          structname: "MockFileUsageChecker"
+      EntityChecker:
+        config:
+          filename: "file_usecase_entity_checker.go"
+          dir: "./internal/mocks"
+          structname: "MockFileEntityChecker"
   github.com/viettechno/vietgara-backend/internal/supplier/usecase:
     interfaces:
       Repository:

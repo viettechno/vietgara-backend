@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
+	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/customer/domain"
@@ -63,13 +64,30 @@ func TestVehicleRPCs(t *testing.T) {
 	_, err = e.srv.ListVehicles(ctx, &customerv1.ListVehiclesRequest{GarageId: garageID})
 	require.Error(t, err)
 
+	e.usage.EXPECT().VehicleInUse(anyArg, garageID, "v-1").Return(false, nil).Once()
 	e.vehicles.EXPECT().SoftDelete(anyArg, garageID, "v-1", anyArg).Return(nil).Once()
-	_, err = e.srv.DeleteVehicle(ctx, &customerv1.DeleteVehicleRequest{GarageId: garageID, VehicleId: "v-1"})
-	require.NoError(t, err)
 
-	e.vehicles.EXPECT().SoftDelete(anyArg, garageID, "v-2", anyArg).Return(domain.ErrVehicleNotFound).Once()
+	deleted, err := e.srv.DeleteVehicle(ctx, &customerv1.DeleteVehicleRequest{GarageId: garageID, VehicleId: "v-1"})
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.DeleteOutcome_DELETE_OUTCOME_DELETED, deleted.GetOutcome())
+
+	e.vehicles.EXPECT().FindByID(anyArg, garageID, "v-4").Return(existingVehicle(), nil).Once()
+	e.usage.EXPECT().VehicleInUse(anyArg, garageID, "v-4").Return(true, nil).Once()
+
+	dry, err := e.srv.DeleteVehicle(ctx, &customerv1.DeleteVehicleRequest{GarageId: garageID, VehicleId: "v-4", DryRun: true})
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.DeleteOutcome_DELETE_OUTCOME_DEACTIVATED, dry.GetOutcome())
+
+	e.vehicles.EXPECT().FindByID(anyArg, garageID, "v-2").Return(nil, domain.ErrVehicleNotFound).Once()
 	_, err = e.srv.DeleteVehicle(ctx, &customerv1.DeleteVehicleRequest{GarageId: garageID, VehicleId: "v-2"})
 	assert.Equal(t, "NOT_FOUND", reason(err))
+
+	e.vehicles.EXPECT().SetActive(anyArg, garageID, "v-4", true, anyArg).Return(nil).Once()
+	e.vehicles.EXPECT().FindByID(anyArg, garageID, "v-4").Return(existingVehicle(), nil).Once()
+
+	activated, err := e.srv.ActivateVehicle(ctx, &customerv1.ActivateVehicleRequest{GarageId: garageID, VehicleId: "v-4"})
+	require.NoError(t, err)
+	assert.NotEmpty(t, activated.GetVehicle().GetId())
 
 	e.vehicles.EXPECT().FindByID(anyArg, garageID, "v-3").Return(nil, domain.ErrVehicleNotFound)
 	_, err = e.srv.GetVehicle(ctx, &customerv1.GetVehicleRequest{GarageId: garageID, VehicleId: "v-3"})

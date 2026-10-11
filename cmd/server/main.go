@@ -287,12 +287,13 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// repair_order.closed consumer that deducts stock (FR-INV-02).
 	inventory := buildInventory(pool, events)
 
-	supplierUC := supplierUsecase.NewUseCase(supplierRepository.NewPostgresRepository(pool))
+	supplierUC := supplierUsecase.NewUseCase(supplierRepository.NewPostgresRepository(pool), supplierUsage{})
 	supplierSrv := supplierHandler.NewServer(supplierUC)
 
-	vehicleUC := customerUsecase.NewVehicleUseCase(vehicleRepo, customerRepo, vehicleHistory{quotes: quote.quotes, repairOrders: repairOrder.uc})
+	usage := customerUsage{quotes: quote.quotes, repairOrders: repairOrder.uc}
+	vehicleUC := customerUsecase.NewVehicleUseCase(vehicleRepo, customerRepo, vehicleHistory{quotes: quote.quotes, repairOrders: repairOrder.uc}, usage)
 	customerSrv := customerHandler.NewServer(
-		customerUsecase.NewCustomerUseCase(customerRepo, vehicleRepo),
+		customerUsecase.NewCustomerUseCase(customerRepo, vehicleRepo, usage),
 		vehicleUC,
 	)
 

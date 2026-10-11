@@ -291,3 +291,31 @@ func TestPostgresRepository_FindByPublicToken(t *testing.T) {
 	_, _, err = repo.FindByPublicToken(ctx, "bad-hash")
 	require.ErrorIs(t, err, domain.ErrPublicTokenInvalid)
 }
+
+func TestPostgresRepository_ExistsLive(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+	tx := dbtest.New(t).
+		ExpectQueryRow("FROM quotes", dbtest.Row(true)).
+		WithArgs(func(args []any) { require.Equal(t, []any{garageID, new(customerID), []string{vehicleID}}, args) }).
+		ExpectQueryRow("FROM quotes", dbtest.Row(false)).
+		WithArgs(func(args []any) { require.Equal(t, []any{garageID, (*string)(nil), []string{vehicleID}}, args) }).
+		ExpectQueryRow("FROM quotes", dbtest.ErrRow(errBoom))
+	ctx := tx.Context(t.Context())
+
+	exists, err := repo.ExistsLive(ctx, garageID, customerID, []string{vehicleID})
+	require.NoError(t, err)
+	require.True(t, exists)
+
+	exists, err = repo.ExistsLive(ctx, garageID, "", []string{vehicleID})
+	require.NoError(t, err)
+	require.False(t, exists)
+
+	_, err = repo.ExistsLive(ctx, garageID, customerID, nil)
+	require.ErrorIs(t, err, errBoom)
+
+	exists, err = repo.ExistsLive(ctx, garageID, "", nil)
+	require.NoError(t, err)
+	require.False(t, exists, "nothing to look for")
+}

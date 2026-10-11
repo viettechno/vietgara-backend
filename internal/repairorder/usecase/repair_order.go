@@ -193,6 +193,13 @@ func (uc *RepairOrderUseCase) ListForVehicle(ctx context.Context, garageID, vehi
 	return uc.RepairOrders.ListForVehicle(ctx, garageID, vehicleID)
 }
 
+// HasLiveForVehicles reports whether any live repair order belongs to one of
+// the vehicles, which keeps a vehicle (or its customer) from being deleted
+// instead of deactivated (FR-CAT-07).
+func (uc *RepairOrderUseCase) HasLiveForVehicles(ctx context.Context, garageID string, vehicleIDs []string) (bool, error) {
+	return uc.RepairOrders.ExistsForVehicles(ctx, garageID, vehicleIDs)
+}
+
 // garageInfo reads the garage's numbering and owner configuration.
 func (uc *RepairOrderUseCase) garageInfo(ctx context.Context, garageID string) (GarageInfo, error) {
 	garage, err := uc.Garages.Get(ctx, garageID)

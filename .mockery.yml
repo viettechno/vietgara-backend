@@ -149,6 +149,11 @@ packages:
         config:
           filename: "customer_usecase_history_reader.go"
           dir: "./internal/mocks"
+      UsageChecker:
+        config:
+          filename: "customer_usecase_usage_checker.go"
+          dir: "./internal/mocks"
+          structname: "MockCustomerUsageChecker"
   github.com/viettechno/vietgara-backend/internal/supplier/usecase:
     interfaces:
       Repository:
@@ -156,6 +161,11 @@ packages:
           filename: "supplier_usecase_repository.go"
           dir: "./internal/mocks"
           structname: "MockSupplierRepository"
+      UsageChecker:
+        config:
+          filename: "supplier_usecase_usage_checker.go"
+          dir: "./internal/mocks"
+          structname: "MockSupplierUsageChecker"
   github.com/viettechno/vietgara-backend/internal/license/usecase:
     interfaces:
       PlanRepository:

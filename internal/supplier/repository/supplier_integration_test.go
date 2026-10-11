@@ -86,6 +86,26 @@ func TestSupplierRepository(t *testing.T) {
 	})
 	require.ErrorIs(t, err, domain.ErrSupplierNameTaken)
 
+	// A deactivated supplier leaves the default list but keeps its name.
+	inGarage(garageA, func(ctx context.Context) {
+		require.NoError(t, repo.SetActive(ctx, garageA, supplier.ID, false, userID))
+
+		_, total, err := repo.List(ctx, garageA, usecase.ListFilter{Limit: 10})
+		require.NoError(t, err)
+		assert.Equal(t, 1, total)
+
+		_, total, err = repo.List(ctx, garageA, usecase.ListFilter{Limit: 10, IncludeInactive: true})
+		require.NoError(t, err)
+		assert.Equal(t, 2, total)
+
+		got, err := repo.FindByID(ctx, garageA, supplier.ID)
+		require.NoError(t, err)
+		assert.False(t, got.IsActive)
+
+		require.NoError(t, repo.SetActive(ctx, garageA, supplier.ID, true, userID))
+		require.ErrorIs(t, repo.SetActive(ctx, garageA, uuid.NewString(), true, ""), domain.ErrSupplierNotFound)
+	})
+
 	// The same name is free in another garage.
 	inGarage(garageB, func(ctx context.Context) {
 		require.NoError(t, repo.Create(ctx, &domain.Supplier{ID: uuid.NewString(), GarageID: garageB, Name: "Phu Tung Sai Gon"}))

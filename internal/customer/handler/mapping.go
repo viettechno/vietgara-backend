@@ -20,6 +20,7 @@ func customerToProto(c *domain.Customer) *customerv1.Customer {
 		Email:        c.Email,
 		Address:      c.Address,
 		VehicleCount: toInt32(c.VehicleCount),
+		IsActive:     c.IsActive,
 		CreatedAt:    converter.TimeToProto(c.CreatedAt),
 		UpdatedAt:    converter.TimeToProto(c.UpdatedAt),
 	}
@@ -52,6 +53,7 @@ func vehicleToProto(v *domain.Vehicle) *customerv1.Vehicle {
 		Model:        v.Model,
 		Vin:          v.VIN,
 		EngineNumber: v.EngineNumber,
+		IsActive:     v.IsActive,
 		CreatedAt:    converter.TimeToProto(v.CreatedAt),
 		UpdatedAt:    converter.TimeToProto(v.UpdatedAt),
 	}

@@ -39,13 +39,16 @@ type BankDetails struct {
 // Supplier is a business that sells parts to the garage (FR-SUP-01). See:
 // Database Design Section 3.3.
 type Supplier struct {
-	ID        string
-	GarageID  string
-	Name      string
-	TaxCode   *string
-	Contact   Contact
-	Bank      BankDetails
-	Note      *string
+	ID       string
+	GarageID string
+	Name     string
+	TaxCode  *string
+	Contact  Contact
+	Bank     BankDetails
+	Note     *string
+	// IsActive is false once the supplier was deactivated instead of
+	// deleted because documents refer to it (FR-CAT-07).
+	IsActive  bool
 	CreatedBy *string
 	UpdatedBy *string
 	CreatedAt time.Time

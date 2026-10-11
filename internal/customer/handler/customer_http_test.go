@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
+	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/customer/domain"
@@ -19,7 +20,7 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 11)
+	assert.Len(t, p, 13)
 	assert.Equal(t, access.CustomerWrite, p[customerv1.CustomerService_CreateCustomer_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.CustomerRead, p[customerv1.VehicleService_GetVehicleHistory_FullMethodName].Garage.Permission)
 }
@@ -83,14 +84,43 @@ func TestCustomerRPCs(t *testing.T) {
 	_, err = e.srv.ListCustomers(ctx, &customerv1.ListCustomersRequest{GarageId: garageID})
 	require.Error(t, err)
 
+	// An unused customer is deleted with their vehicles.
+	e.customers.EXPECT().FindByID(anyArg, garageID, "c-1").Return(existingCustomer(), nil).Once()
+	e.vehicles.EXPECT().IDsByCustomer(anyArg, garageID, "c-1").Return([]string{"v-1"}, nil).Once()
+	e.usage.EXPECT().CustomerInUse(anyArg, garageID, "c-1", []string{"v-1"}).Return(false, nil).Once()
 	e.customers.EXPECT().SoftDelete(anyArg, garageID, "c-1", anyArg).Return(nil).Once()
 	e.vehicles.EXPECT().SoftDeleteByCustomer(anyArg, garageID, "c-1", anyArg).Return(nil).Once()
-	_, err = e.srv.DeleteCustomer(ctx, &customerv1.DeleteCustomerRequest{GarageId: garageID, CustomerId: "c-1"})
-	require.NoError(t, err)
 
-	e.customers.EXPECT().SoftDelete(anyArg, garageID, "c-2", anyArg).Return(domain.ErrCustomerNotFound).Once()
+	deleted, err := e.srv.DeleteCustomer(ctx, &customerv1.DeleteCustomerRequest{GarageId: garageID, CustomerId: "c-1"})
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.DeleteOutcome_DELETE_OUTCOME_DELETED, deleted.GetOutcome())
+
+	// A customer in use is deactivated; a dry run only says so.
+	e.customers.EXPECT().FindByID(anyArg, garageID, "c-4").Return(existingCustomer(), nil).Twice()
+	e.vehicles.EXPECT().IDsByCustomer(anyArg, garageID, "c-4").Return(nil, nil).Twice()
+	e.usage.EXPECT().CustomerInUse(anyArg, garageID, "c-4", []string(nil)).Return(true, nil).Twice()
+
+	dry, err := e.srv.DeleteCustomer(ctx, &customerv1.DeleteCustomerRequest{GarageId: garageID, CustomerId: "c-4", DryRun: true})
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.DeleteOutcome_DELETE_OUTCOME_DEACTIVATED, dry.GetOutcome())
+
+	e.customers.EXPECT().SetActive(anyArg, garageID, "c-4", false, anyArg).Return(nil).Once()
+
+	deactivated, err := e.srv.DeleteCustomer(ctx, &customerv1.DeleteCustomerRequest{GarageId: garageID, CustomerId: "c-4"})
+	require.NoError(t, err)
+	assert.Equal(t, commonv1.DeleteOutcome_DELETE_OUTCOME_DEACTIVATED, deactivated.GetOutcome())
+
+	e.customers.EXPECT().FindByID(anyArg, garageID, "c-2").Return(nil, domain.ErrCustomerNotFound).Once()
 	_, err = e.srv.DeleteCustomer(ctx, &customerv1.DeleteCustomerRequest{GarageId: garageID, CustomerId: "c-2"})
 	assert.Equal(t, "NOT_FOUND", reason(err))
+
+	// Reactivating returns the customer.
+	e.customers.EXPECT().SetActive(anyArg, garageID, "c-4", true, anyArg).Return(nil).Once()
+	e.customers.EXPECT().FindByID(anyArg, garageID, "c-4").Return(existingCustomer(), nil).Once()
+
+	activated, err := e.srv.ActivateCustomer(ctx, &customerv1.ActivateCustomerRequest{GarageId: garageID, CustomerId: "c-4"})
+	require.NoError(t, err)
+	assert.NotEmpty(t, activated.GetCustomer().GetId())
 
 	e.customers.EXPECT().FindByID(anyArg, garageID, "c-3").Return(nil, domain.ErrCustomerNotFound).Twice()
 	_, err = e.srv.GetCustomer(ctx, &customerv1.GetCustomerRequest{GarageId: garageID, CustomerId: "c-3"})

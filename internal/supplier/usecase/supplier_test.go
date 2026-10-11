@@ -11,6 +11,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/supplier/domain"
 	"github.com/viettechno/vietgara-backend/internal/supplier/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/lifecycle"
 )
 
 const (
@@ -77,7 +78,7 @@ func TestUseCase_Create(t *testing.T) {
 			t.Parallel()
 
 			suppliers := mocks.NewMockSupplierRepository(t)
-			uc := usecase.NewUseCase(suppliers)
+			uc := usecase.NewUseCase(suppliers, nil)
 
 			req := valid()
 			if tt.mutate != nil {
@@ -139,7 +140,7 @@ func TestUseCase_Update(t *testing.T) {
 			t.Parallel()
 
 			suppliers := mocks.NewMockSupplierRepository(t)
-			uc := usecase.NewUseCase(suppliers)
+			uc := usecase.NewUseCase(suppliers, nil)
 			tt.req.GarageID, tt.req.SupplierID, tt.req.ActorID = garageID, supplierID, actorID
 
 			if tt.findErr != nil {
@@ -174,15 +175,13 @@ func TestUseCase_GetListDelete(t *testing.T) {
 	t.Parallel()
 
 	suppliers := mocks.NewMockSupplierRepository(t)
-	uc := usecase.NewUseCase(suppliers)
+	uc := usecase.NewUseCase(suppliers, nil)
 
 	suppliers.EXPECT().FindByID(mock.Anything, garageID, supplierID).Return(existingSupplier(), nil).Once()
 	suppliers.EXPECT().FindByID(mock.Anything, garageID, "missing").Return(nil, domain.ErrSupplierNotFound).Once()
 	suppliers.EXPECT().List(mock.Anything, garageID, usecase.ListFilter{Query: "sai gon", Limit: 20}).
 		Return([]*domain.Supplier{existingSupplier()}, 1, nil).Once()
 	suppliers.EXPECT().List(mock.Anything, "garage-2", mock.Anything).Return(nil, 0, errBoom).Once()
-	suppliers.EXPECT().SoftDelete(mock.Anything, garageID, supplierID, actorID).Return(nil).Once()
-	suppliers.EXPECT().SoftDelete(mock.Anything, garageID, "missing", actorID).Return(domain.ErrSupplierNotFound).Once()
 
 	s, err := uc.Get(t.Context(), garageID, supplierID)
 	require.NoError(t, err)
@@ -198,7 +197,85 @@ func TestUseCase_GetListDelete(t *testing.T) {
 
 	_, err = uc.List(t.Context(), usecase.ListRequest{GarageID: "garage-2"})
 	assertAppError(t, err, apperror.CodeInternal)
+}
 
-	require.NoError(t, uc.Delete(t.Context(), garageID, supplierID, actorID))
-	assertAppError(t, uc.Delete(t.Context(), garageID, "missing", actorID), apperror.CodeNotFound)
+func TestUseCase_Delete(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		findErr     error
+		inUse       bool
+		usageErr    error
+		dryRun      bool
+		softDelete  error
+		deactivate  error
+		wantOutcome lifecycle.Outcome
+		wantCode    apperror.Code
+		wantDelete  bool
+		wantDeact   bool
+	}{
+		{name: "deletes an unused supplier", wantOutcome: lifecycle.Deleted, wantDelete: true},
+		{name: "deactivates a supplier that documents refer to", inUse: true, wantOutcome: lifecycle.Deactivated, wantDeact: true},
+		{name: "a dry run changes nothing", inUse: true, dryRun: true, wantOutcome: lifecycle.Deactivated},
+		{name: "unknown supplier", findErr: domain.ErrSupplierNotFound, wantCode: apperror.CodeNotFound},
+		{name: "usage check failure", usageErr: errBoom, wantCode: apperror.CodeInternal},
+		{name: "delete failure", softDelete: errBoom, wantCode: apperror.CodeInternal, wantDelete: true},
+		{name: "deactivate failure", inUse: true, deactivate: errBoom, wantCode: apperror.CodeInternal, wantDeact: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			suppliers := mocks.NewMockSupplierRepository(t)
+			usage := mocks.NewMockSupplierUsageChecker(t)
+			uc := usecase.NewUseCase(suppliers, usage)
+
+			if tt.findErr != nil {
+				suppliers.EXPECT().FindByID(mock.Anything, garageID, supplierID).Return(nil, tt.findErr).Once()
+			} else {
+				suppliers.EXPECT().FindByID(mock.Anything, garageID, supplierID).Return(existingSupplier(), nil).Once()
+				usage.EXPECT().SupplierInUse(mock.Anything, garageID, supplierID).Return(tt.inUse, tt.usageErr).Once()
+			}
+
+			if tt.wantDelete {
+				suppliers.EXPECT().SoftDelete(mock.Anything, garageID, supplierID, actorID).Return(tt.softDelete).Once()
+			}
+
+			if tt.wantDeact {
+				suppliers.EXPECT().SetActive(mock.Anything, garageID, supplierID, false, actorID).Return(tt.deactivate).Once()
+			}
+
+			outcome, err := uc.Delete(t.Context(), usecase.DeleteRequest{
+				GarageID: garageID, SupplierID: supplierID, ActorID: actorID, DryRun: tt.dryRun,
+			})
+			if tt.wantCode != "" {
+				assertAppError(t, err, tt.wantCode)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantOutcome, outcome)
+		})
+	}
+}
+
+func TestUseCase_Activate(t *testing.T) {
+	t.Parallel()
+
+	suppliers := mocks.NewMockSupplierRepository(t)
+	uc := usecase.NewUseCase(suppliers, nil)
+
+	suppliers.EXPECT().SetActive(mock.Anything, garageID, supplierID, true, actorID).Return(nil).Once()
+	suppliers.EXPECT().FindByID(mock.Anything, garageID, supplierID).Return(existingSupplier(), nil).Once()
+	suppliers.EXPECT().SetActive(mock.Anything, garageID, "missing", true, actorID).Return(domain.ErrSupplierNotFound).Once()
+
+	s, err := uc.Activate(t.Context(), garageID, supplierID, actorID)
+	require.NoError(t, err)
+	assert.Equal(t, supplierID, s.ID)
+
+	_, err = uc.Activate(t.Context(), garageID, "missing", actorID)
+	assertAppError(t, err, apperror.CodeNotFound)
 }

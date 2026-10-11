@@ -11,6 +11,9 @@ type ListFilter struct {
 	Query  string
 	Limit  int
 	Offset int
+	// IncludeInactive also lists deactivated records (FR-CAT-07); pickers
+	// leave it off.
+	IncludeInactive bool
 }
 
 // VehicleFilter narrows a vehicle listing to one customer when CustomerID
@@ -35,6 +38,9 @@ type CustomerRepository interface {
 	List(ctx context.Context, garageID string, filter ListFilter) ([]*domain.Customer, int, error)
 	// SoftDelete returns domain.ErrCustomerNotFound when absent.
 	SoftDelete(ctx context.Context, garageID, customerID, deletedBy string) error
+	// SetActive deactivates or reactivates a customer, or returns
+	// domain.ErrCustomerNotFound.
+	SetActive(ctx context.Context, garageID, customerID string, active bool, updatedBy string) error
 }
 
 // VehicleRepository defines the persistence contract for vehicles. Every
@@ -53,4 +59,22 @@ type VehicleRepository interface {
 	SoftDelete(ctx context.Context, garageID, vehicleID, deletedBy string) error
 	// SoftDeleteByCustomer soft-deletes every vehicle of a customer.
 	SoftDeleteByCustomer(ctx context.Context, garageID, customerID, deletedBy string) error
+	// SetActive deactivates or reactivates a vehicle, or returns
+	// domain.ErrVehicleNotFound.
+	SetActive(ctx context.Context, garageID, vehicleID string, active bool, updatedBy string) error
+	// IDsByCustomer returns the ids of a customer's live vehicles.
+	IDsByCustomer(ctx context.Context, garageID, customerID string) ([]string, error)
+}
+
+// UsageChecker tells whether other modules' live documents (quotes, repair
+// orders and, through them, settlements) still refer to a customer or a
+// vehicle, which decides between deleting and deactivating it (FR-CAT-07).
+// It is implemented in cmd/server over the modules that own the documents,
+// so this module imports none of them.
+type UsageChecker interface {
+	// CustomerInUse reports a live document of the customer, or of one of
+	// the customer's vehicles (vehicleIDs).
+	CustomerInUse(ctx context.Context, garageID, customerID string, vehicleIDs []string) (bool, error)
+	// VehicleInUse reports a live document of the vehicle.
+	VehicleInUse(ctx context.Context, garageID, vehicleID string) (bool, error)
 }

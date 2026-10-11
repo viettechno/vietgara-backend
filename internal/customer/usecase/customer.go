@@ -7,6 +7,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/customer/domain"
 	"github.com/viettechno/vietgara-backend/pkg/email"
+	"github.com/viettechno/vietgara-backend/pkg/lifecycle"
 	"github.com/viettechno/vietgara-backend/pkg/phone"
 )
 
@@ -42,18 +43,31 @@ type ListCustomersRequest struct {
 	GarageID string
 	// Query matches name, phone, email or one of the customer's plates.
 	Query string
+	// IncludeInactive also lists deactivated customers.
+	IncludeInactive bool
+}
+
+// DeleteCustomerRequest is the input for CustomerUseCase.Delete.
+type DeleteCustomerRequest struct {
+	GarageID   string
+	CustomerID string
+	ActorID    string
+	// DryRun answers the outcome without changing anything.
+	DryRun bool
 }
 
 // CustomerUseCase (FR-CUS-01) manages the customer profiles of a garage.
 type CustomerUseCase struct {
 	customers CustomerRepository
 	vehicles  VehicleRepository
+	usage     UsageChecker
 	opts      options
 }
 
-// NewCustomerUseCase wires the customer use case to its repositories.
-func NewCustomerUseCase(customers CustomerRepository, vehicles VehicleRepository, opts ...Option) *CustomerUseCase {
-	return &CustomerUseCase{customers: customers, vehicles: vehicles, opts: newOptions(opts)}
+// NewCustomerUseCase wires the customer use case to its repositories and to
+// the check of whether documents still refer to a customer.
+func NewCustomerUseCase(customers CustomerRepository, vehicles VehicleRepository, usage UsageChecker, opts ...Option) *CustomerUseCase {
+	return &CustomerUseCase{customers: customers, vehicles: vehicles, usage: usage, opts: newOptions(opts)}
 }
 
 // customerFields is the editable part of a customer shared by create and
@@ -149,7 +163,10 @@ func (uc *CustomerUseCase) Update(ctx context.Context, req UpdateCustomerRequest
 func (uc *CustomerUseCase) List(ctx context.Context, req ListCustomersRequest) (*Page[*domain.Customer], error) {
 	page := req.normalize()
 
-	items, total, err := uc.customers.List(ctx, req.GarageID, page.filter(req.Query))
+	filter := page.filter(req.Query)
+	filter.IncludeInactive = req.IncludeInactive
+
+	items, total, err := uc.customers.List(ctx, req.GarageID, filter)
 	if err != nil {
 		return nil, toAppError("list customers", err)
 	}
@@ -157,16 +174,47 @@ func (uc *CustomerUseCase) List(ctx context.Context, req ListCustomersRequest) (
 	return &Page[*domain.Customer]{Items: items, Total: total, Page: page.Page, PageSize: page.PageSize}, nil
 }
 
-// Delete soft-deletes a customer together with their vehicles; quotes and
-// repair orders keep referencing the rows.
-func (uc *CustomerUseCase) Delete(ctx context.Context, garageID, customerID, actorID string) error {
-	if err := uc.customers.SoftDelete(ctx, garageID, customerID, actorID); err != nil {
-		return toAppError("delete customer", err)
+// Delete follows the delete-or-deactivate rule (FR-CAT-07): a customer that
+// quotes or repair orders refer to (directly or through their vehicles) is
+// deactivated, so those documents and the vehicle history stay; otherwise
+// the customer and their vehicles are soft-deleted.
+func (uc *CustomerUseCase) Delete(ctx context.Context, req DeleteCustomerRequest) (lifecycle.Outcome, error) {
+	if _, err := uc.customers.FindByID(ctx, req.GarageID, req.CustomerID); err != nil {
+		return "", toAppError("delete customer", err)
 	}
 
-	if err := uc.vehicles.SoftDeleteByCustomer(ctx, garageID, customerID, actorID); err != nil {
-		return toAppError("delete customer vehicles", err)
+	outcome, err := lifecycle.Apply(ctx, req.DryRun, lifecycle.Rule{
+		InUse: func(ctx context.Context) (bool, error) {
+			vehicleIDs, err := uc.vehicles.IDsByCustomer(ctx, req.GarageID, req.CustomerID)
+			if err != nil {
+				return false, err
+			}
+
+			return uc.usage.CustomerInUse(ctx, req.GarageID, req.CustomerID, vehicleIDs)
+		},
+		Delete: func(ctx context.Context) error {
+			if err := uc.customers.SoftDelete(ctx, req.GarageID, req.CustomerID, req.ActorID); err != nil {
+				return err
+			}
+
+			return uc.vehicles.SoftDeleteByCustomer(ctx, req.GarageID, req.CustomerID, req.ActorID)
+		},
+		Deactivate: func(ctx context.Context) error {
+			return uc.customers.SetActive(ctx, req.GarageID, req.CustomerID, false, req.ActorID)
+		},
+	})
+	if err != nil {
+		return "", toAppError("delete customer", err)
 	}
 
-	return nil
+	return outcome, nil
+}
+
+// Activate reactivates a deactivated customer.
+func (uc *CustomerUseCase) Activate(ctx context.Context, garageID, customerID, actorID string) (*domain.Customer, error) {
+	if err := uc.customers.SetActive(ctx, garageID, customerID, true, actorID); err != nil {
+		return nil, toAppError("activate customer", err)
+	}
+
+	return uc.Get(ctx, garageID, customerID)
 }

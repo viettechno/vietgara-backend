@@ -35,17 +35,19 @@ func Policies() middleware.Policies {
 	read, write := access.Requires(access.CustomerRead), access.Requires(access.CustomerWrite)
 
 	return middleware.Policies{
-		customerv1.CustomerService_ListCustomers_FullMethodName:  middleware.GarageMethod(read),
-		customerv1.CustomerService_GetCustomer_FullMethodName:    middleware.GarageMethod(read),
-		customerv1.CustomerService_CreateCustomer_FullMethodName: middleware.GarageMethod(write),
-		customerv1.CustomerService_UpdateCustomer_FullMethodName: middleware.GarageMethod(write),
-		customerv1.CustomerService_DeleteCustomer_FullMethodName: middleware.GarageMethod(write),
+		customerv1.CustomerService_ListCustomers_FullMethodName:    middleware.GarageMethod(read),
+		customerv1.CustomerService_GetCustomer_FullMethodName:      middleware.GarageMethod(read),
+		customerv1.CustomerService_CreateCustomer_FullMethodName:   middleware.GarageMethod(write),
+		customerv1.CustomerService_UpdateCustomer_FullMethodName:   middleware.GarageMethod(write),
+		customerv1.CustomerService_DeleteCustomer_FullMethodName:   middleware.GarageMethod(write),
+		customerv1.CustomerService_ActivateCustomer_FullMethodName: middleware.GarageMethod(write),
 
 		customerv1.VehicleService_ListVehicles_FullMethodName:      middleware.GarageMethod(read),
 		customerv1.VehicleService_GetVehicle_FullMethodName:        middleware.GarageMethod(read),
 		customerv1.VehicleService_CreateVehicle_FullMethodName:     middleware.GarageMethod(write),
 		customerv1.VehicleService_UpdateVehicle_FullMethodName:     middleware.GarageMethod(write),
 		customerv1.VehicleService_DeleteVehicle_FullMethodName:     middleware.GarageMethod(write),
+		customerv1.VehicleService_ActivateVehicle_FullMethodName:   middleware.GarageMethod(write),
 		customerv1.VehicleService_GetVehicleHistory_FullMethodName: middleware.GarageMethod(read),
 	}
 }

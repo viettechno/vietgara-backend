@@ -28,7 +28,7 @@ var (
 
 func supplierRow(contact, bank string) []any {
 	return []any{
-		supplierID, garageID, "Phu Tung Sai Gon", nil, []byte(contact), []byte(bank), new("VIP"), nil, nil, now, now,
+		supplierID, garageID, "Phu Tung Sai Gon", nil, []byte(contact), []byte(bank), new("VIP"), true, nil, nil, now, now,
 	}
 }
 
@@ -178,9 +178,9 @@ func TestPostgresRepository_List(t *testing.T) {
 
 		tx := dbtest.New(t).
 			ExpectQueryRow("SELECT count(*)", dbtest.Row(1)).
-			WithArgs(func(args []any) { require.Equal(t, []any{garageID, "%sai 12%", ""}, args) }).
+			WithArgs(func(args []any) { require.Equal(t, []any{garageID, "%sai 12%", "", false}, args) }).
 			ExpectQuery("ORDER BY lower(s.name)", dbtest.NewRows(supplierRow(`{}`, `{}`)), nil).
-			WithArgs(func(args []any) { require.Equal(t, []any{garageID, "%sai 12%", "", 20, 0}, args) })
+			WithArgs(func(args []any) { require.Equal(t, []any{garageID, "%sai 12%", "", false, 20, 0}, args) })
 
 		list, total, err := repo.List(tx.Context(t.Context()), garageID, usecase.ListFilter{Query: "sai 12", Limit: 20})
 		require.NoError(t, err)
@@ -194,7 +194,7 @@ func TestPostgresRepository_List(t *testing.T) {
 
 		tx := dbtest.New(t).
 			ExpectQueryRow("SELECT count(*)", dbtest.Row(0)).
-			WithArgs(func(args []any) { require.Equal(t, []any{garageID, "%0912 345%", "%912345%"}, args) })
+			WithArgs(func(args []any) { require.Equal(t, []any{garageID, "%0912 345%", "%912345%", false}, args) })
 
 		_, _, err := repo.List(tx.Context(t.Context()), garageID, usecase.ListFilter{Query: "0912 345", Limit: 20})
 		require.NoError(t, err)
@@ -240,6 +240,54 @@ func TestPostgresRepository_List(t *testing.T) {
 
 		_, _, err := repo.List(tx.Context(t.Context()), garageID, usecase.ListFilter{Limit: 20})
 		require.ErrorIs(t, err, errBoom)
+	})
+}
+
+func TestPostgresRepository_SetActive(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+
+	t.Run("deactivates", func(t *testing.T) {
+		t.Parallel()
+
+		tx := dbtest.New(t).
+			ExpectExec("UPDATE suppliers SET is_active", dbtest.Tag(1), nil).
+			WithArgs(func(args []any) { require.Equal(t, []any{garageID, supplierID, false, new(actorID)}, args) })
+
+		require.NoError(t, repo.SetActive(tx.Context(t.Context()), garageID, supplierID, false, actorID))
+	})
+
+	t.Run("unknown actor stores NULL", func(t *testing.T) {
+		t.Parallel()
+
+		tx := dbtest.New(t).
+			ExpectExec("UPDATE suppliers SET is_active", dbtest.Tag(1), nil).
+			WithArgs(func(args []any) { require.Equal(t, (*string)(nil), args[3]) })
+
+		require.NoError(t, repo.SetActive(tx.Context(t.Context()), garageID, supplierID, true, ""))
+	})
+
+	t.Run("not found", func(t *testing.T) {
+		t.Parallel()
+
+		tx := dbtest.New(t).ExpectExec("UPDATE suppliers SET is_active", dbtest.Tag(0), nil)
+
+		require.ErrorIs(t, repo.SetActive(tx.Context(t.Context()), garageID, supplierID, true, actorID), domain.ErrSupplierNotFound)
+	})
+
+	t.Run("exec failure", func(t *testing.T) {
+		t.Parallel()
+
+		tx := dbtest.New(t).ExpectExec("UPDATE suppliers SET is_active", dbtest.Tag(0), errBoom)
+
+		require.ErrorIs(t, repo.SetActive(tx.Context(t.Context()), garageID, supplierID, true, actorID), errBoom)
+	})
+
+	t.Run("not a uuid", func(t *testing.T) {
+		t.Parallel()
+
+		require.ErrorIs(t, repo.SetActive(t.Context(), garageID, "nope", true, actorID), domain.ErrSupplierNotFound)
 	})
 }
 

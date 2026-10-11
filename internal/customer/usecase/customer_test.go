@@ -14,6 +14,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/customer/usecase"
 	"github.com/viettechno/vietgara-backend/internal/mocks"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/lifecycle"
 )
 
 const (
@@ -100,7 +101,7 @@ func TestCustomerUseCase_Create(t *testing.T) {
 			t.Parallel()
 
 			customers := mocks.NewMockCustomerRepository(t)
-			uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t), clock())
+			uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t), nil, clock())
 
 			if tt.wantCode == "" || tt.createErr != nil {
 				customers.EXPECT().Create(mock.Anything, mock.Anything).Return(tt.createErr).Once()
@@ -124,7 +125,7 @@ func TestCustomerUseCase_Get(t *testing.T) {
 	t.Parallel()
 
 	customers := mocks.NewMockCustomerRepository(t)
-	uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t))
+	uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t), nil)
 
 	customers.EXPECT().FindByID(mock.Anything, garageID, customerID).Return(existingCustomer(), nil).Once()
 	customers.EXPECT().FindByID(mock.Anything, garageID, "missing").Return(nil, domain.ErrCustomerNotFound).Once()
@@ -178,7 +179,7 @@ func TestCustomerUseCase_Update(t *testing.T) {
 			t.Parallel()
 
 			customers := mocks.NewMockCustomerRepository(t)
-			uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t), clock())
+			uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t), nil, clock())
 			tt.req.GarageID, tt.req.CustomerID = garageID, customerID
 
 			if tt.findErr != nil {
@@ -224,7 +225,7 @@ func TestCustomerUseCase_List(t *testing.T) {
 			t.Parallel()
 
 			customers := mocks.NewMockCustomerRepository(t)
-			uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t))
+			uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t), nil)
 			customers.EXPECT().List(mock.Anything, garageID, tt.wantFilter).Return([]*domain.Customer{existingCustomer()}, 41, nil).Once()
 
 			page, err := uc.List(t.Context(), usecase.ListCustomersRequest{PageRequest: tt.page, GarageID: garageID, Query: " binh "})
@@ -238,9 +239,8 @@ func TestCustomerUseCase_List(t *testing.T) {
 
 	t.Run("wraps storage failures", func(t *testing.T) {
 		t.Parallel()
-
 		customers := mocks.NewMockCustomerRepository(t)
-		uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t))
+		uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t), nil)
 		customers.EXPECT().List(mock.Anything, garageID, mock.Anything).Return(nil, 0, errBoom).Once()
 
 		_, err := uc.List(t.Context(), usecase.ListCustomersRequest{GarageID: garageID})
@@ -252,14 +252,26 @@ func TestCustomerUseCase_Delete(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name       string
-		deleteErr  error
-		vehicleErr error
-		wantCode   apperror.Code
+		name         string
+		findErr      error
+		vehicleIDs   []string
+		inUse        bool
+		dryRun       bool
+		deleteErr    error
+		vehicleErr   error
+		deactivate   error
+		wantOutcome  lifecycle.Outcome
+		wantCode     apperror.Code
+		wantDelete   bool
+		wantDeactive bool
 	}{
-		{name: "deletes the customer and their vehicles"},
-		{name: "unknown customer", deleteErr: domain.ErrCustomerNotFound, wantCode: apperror.CodeNotFound},
-		{name: "vehicle cleanup failure", vehicleErr: errBoom, wantCode: apperror.CodeInternal},
+		{name: "deletes an unused customer and their vehicles", vehicleIDs: []string{vehicleID}, wantOutcome: lifecycle.Deleted, wantDelete: true},
+		{name: "deactivates a customer that documents refer to", vehicleIDs: []string{vehicleID}, inUse: true, wantOutcome: lifecycle.Deactivated, wantDeactive: true},
+		{name: "a dry run changes nothing", inUse: true, dryRun: true, wantOutcome: lifecycle.Deactivated},
+		{name: "unknown customer", findErr: domain.ErrCustomerNotFound, wantCode: apperror.CodeNotFound},
+		{name: "delete failure", deleteErr: domain.ErrCustomerNotFound, wantCode: apperror.CodeNotFound, wantDelete: true},
+		{name: "vehicle cleanup failure", vehicleErr: errBoom, wantCode: apperror.CodeInternal, wantDelete: true},
+		{name: "deactivate failure", inUse: true, deactivate: errBoom, wantCode: apperror.CodeInternal, wantDeactive: true},
 	}
 
 	for _, tt := range tests {
@@ -268,15 +280,32 @@ func TestCustomerUseCase_Delete(t *testing.T) {
 
 			customers := mocks.NewMockCustomerRepository(t)
 			vehicles := mocks.NewMockVehicleRepository(t)
-			uc := usecase.NewCustomerUseCase(customers, vehicles)
+			usage := mocks.NewMockCustomerUsageChecker(t)
+			uc := usecase.NewCustomerUseCase(customers, vehicles, usage)
 
-			customers.EXPECT().SoftDelete(mock.Anything, garageID, customerID, actorID).Return(tt.deleteErr).Once()
-
-			if tt.deleteErr == nil {
-				vehicles.EXPECT().SoftDeleteByCustomer(mock.Anything, garageID, customerID, actorID).Return(tt.vehicleErr).Once()
+			if tt.findErr != nil {
+				customers.EXPECT().FindByID(mock.Anything, garageID, customerID).Return(nil, tt.findErr).Once()
+			} else {
+				customers.EXPECT().FindByID(mock.Anything, garageID, customerID).Return(existingCustomer(), nil).Once()
+				vehicles.EXPECT().IDsByCustomer(mock.Anything, garageID, customerID).Return(tt.vehicleIDs, nil).Once()
+				usage.EXPECT().CustomerInUse(mock.Anything, garageID, customerID, tt.vehicleIDs).Return(tt.inUse, nil).Once()
 			}
 
-			err := uc.Delete(t.Context(), garageID, customerID, actorID)
+			if tt.wantDelete {
+				customers.EXPECT().SoftDelete(mock.Anything, garageID, customerID, actorID).Return(tt.deleteErr).Once()
+
+				if tt.deleteErr == nil {
+					vehicles.EXPECT().SoftDeleteByCustomer(mock.Anything, garageID, customerID, actorID).Return(tt.vehicleErr).Once()
+				}
+			}
+
+			if tt.wantDeactive {
+				customers.EXPECT().SetActive(mock.Anything, garageID, customerID, false, actorID).Return(tt.deactivate).Once()
+			}
+
+			outcome, err := uc.Delete(t.Context(), usecase.DeleteCustomerRequest{
+				GarageID: garageID, CustomerID: customerID, ActorID: actorID, DryRun: tt.dryRun,
+			})
 			if tt.wantCode != "" {
 				assertAppError(t, err, tt.wantCode)
 
@@ -284,6 +313,47 @@ func TestCustomerUseCase_Delete(t *testing.T) {
 			}
 
 			require.NoError(t, err)
+			assert.Equal(t, tt.wantOutcome, outcome)
 		})
 	}
+}
+
+func TestCustomerUseCase_DeleteInUseCheckFailures(t *testing.T) {
+	t.Parallel()
+
+	customers := mocks.NewMockCustomerRepository(t)
+	vehicles := mocks.NewMockVehicleRepository(t)
+	usage := mocks.NewMockCustomerUsageChecker(t)
+	uc := usecase.NewCustomerUseCase(customers, vehicles, usage)
+
+	customers.EXPECT().FindByID(mock.Anything, garageID, customerID).Return(existingCustomer(), nil).Twice()
+	vehicles.EXPECT().IDsByCustomer(mock.Anything, garageID, customerID).Return(nil, errBoom).Once()
+	vehicles.EXPECT().IDsByCustomer(mock.Anything, garageID, customerID).Return([]string{vehicleID}, nil).Once()
+	usage.EXPECT().CustomerInUse(mock.Anything, garageID, customerID, []string{vehicleID}).Return(false, errBoom).Once()
+
+	req := usecase.DeleteCustomerRequest{GarageID: garageID, CustomerID: customerID, ActorID: actorID}
+
+	_, err := uc.Delete(t.Context(), req)
+	assertAppError(t, err, apperror.CodeInternal)
+
+	_, err = uc.Delete(t.Context(), req)
+	assertAppError(t, err, apperror.CodeInternal)
+}
+
+func TestCustomerUseCase_Activate(t *testing.T) {
+	t.Parallel()
+
+	customers := mocks.NewMockCustomerRepository(t)
+	uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t), nil)
+
+	customers.EXPECT().SetActive(mock.Anything, garageID, customerID, true, actorID).Return(nil).Once()
+	customers.EXPECT().FindByID(mock.Anything, garageID, customerID).Return(existingCustomer(), nil).Once()
+	customers.EXPECT().SetActive(mock.Anything, garageID, "missing", true, actorID).Return(domain.ErrCustomerNotFound).Once()
+
+	c, err := uc.Activate(t.Context(), garageID, customerID, actorID)
+	require.NoError(t, err)
+	assert.Equal(t, customerID, c.ID)
+
+	_, err = uc.Activate(t.Context(), garageID, "missing", actorID)
+	assertAppError(t, err, apperror.CodeNotFound)
 }

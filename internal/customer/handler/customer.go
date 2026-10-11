@@ -86,6 +86,8 @@ func (s *Server) ListCustomers(ctx context.Context, req *customerv1.ListCustomer
 			PageRequest: pageRequest(req.GetPage(), req.GetPageSize()),
 			GarageID:    req.GetGarageId(),
 			Query:       req.GetQuery(),
+
+			IncludeInactive: req.GetIncludeInactive(),
 		})
 		if err != nil {
 			return nil, err
@@ -100,13 +102,31 @@ func (s *Server) ListCustomers(ctx context.Context, req *customerv1.ListCustomer
 	})
 }
 
-// DeleteCustomer soft-deletes a customer and their vehicles.
+// DeleteCustomer deletes or deactivates a customer (FR-CAT-07) and answers
+// which; with dry_run it only says which.
+//
+//nolint:dupl // one RPC per resource, each with its own request and response types
 func (s *Server) DeleteCustomer(ctx context.Context, req *customerv1.DeleteCustomerRequest) (*customerv1.DeleteCustomerResponse, error) {
 	return run(ctx, func(actorID string) (*customerv1.DeleteCustomerResponse, error) {
-		if err := s.customers.Delete(ctx, req.GetGarageId(), req.GetCustomerId(), actorID); err != nil {
+		outcome, err := s.customers.Delete(ctx, usecase.DeleteCustomerRequest{
+			GarageID: req.GetGarageId(), CustomerID: req.GetCustomerId(), ActorID: actorID, DryRun: req.GetDryRun(),
+		})
+		if err != nil {
 			return nil, err
 		}
 
-		return &customerv1.DeleteCustomerResponse{}, nil
+		return &customerv1.DeleteCustomerResponse{Outcome: httpapi.DeleteOutcome(outcome)}, nil
+	})
+}
+
+// ActivateCustomer reactivates a deactivated customer.
+func (s *Server) ActivateCustomer(ctx context.Context, req *customerv1.ActivateCustomerRequest) (*customerv1.ActivateCustomerResponse, error) {
+	return run(ctx, func(actorID string) (*customerv1.ActivateCustomerResponse, error) {
+		c, err := s.customers.Activate(ctx, req.GetGarageId(), req.GetCustomerId(), actorID)
+		if err != nil {
+			return nil, err
+		}
+
+		return &customerv1.ActivateCustomerResponse{Customer: customerToProto(c)}, nil
 	})
 }

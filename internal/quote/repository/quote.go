@@ -260,3 +260,33 @@ func nullableString(s string) *string {
 
 	return &s
 }
+
+// ExistsLive reports whether any live (not deleted) quote belongs to the
+// customer or to one of the vehicles, which keeps a customer or a vehicle
+// from being deleted instead of deactivated (FR-CAT-07). Either may be
+// empty.
+func (r *PostgresRepository) ExistsLive(ctx context.Context, garageID, customerID string, vehicleIDs []string) (bool, error) {
+	if customerID == "" && len(vehicleIDs) == 0 {
+		return false, nil
+	}
+
+	if vehicleIDs == nil {
+		vehicleIDs = []string{}
+	}
+
+	var customer *string
+	if customerID != "" {
+		customer = &customerID
+	}
+
+	var exists bool
+
+	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM quotes
+			WHERE garage_id = $1 AND deleted_at IS NULL
+			AND (customer_id = $2::uuid OR vehicle_id = ANY($3::uuid[])))`,
+		garageID, customer, vehicleIDs).Scan(&exists)
+
+	return exists, err
+}

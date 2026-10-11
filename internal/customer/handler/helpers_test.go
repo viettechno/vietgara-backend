@@ -20,6 +20,7 @@ const garageID = "11111111-1111-4111-8111-111111111111"
 type env struct {
 	srv       *handler.Server
 	customers *mocks.MockCustomerRepository
+	usage     *mocks.MockCustomerUsageChecker
 	vehicles  *mocks.MockVehicleRepository
 }
 
@@ -29,10 +30,11 @@ func newEnv(t *testing.T) *env {
 	e := &env{
 		customers: mocks.NewMockCustomerRepository(t),
 		vehicles:  mocks.NewMockVehicleRepository(t),
+		usage:     mocks.NewMockCustomerUsageChecker(t),
 	}
 	e.srv = handler.NewServer(
-		usecase.NewCustomerUseCase(e.customers, e.vehicles),
-		usecase.NewVehicleUseCase(e.vehicles, e.customers, nil),
+		usecase.NewCustomerUseCase(e.customers, e.vehicles, e.usage),
+		usecase.NewVehicleUseCase(e.vehicles, e.customers, nil, e.usage),
 	)
 
 	return e

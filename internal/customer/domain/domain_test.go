@@ -151,12 +151,3 @@ func TestCheckLength(t *testing.T) {
 	require.ErrorIs(t, err, domain.ErrFieldTooLong)
 	assert.EqualError(t, err, "name must be at most 6 characters")
 }
-
-func TestPartnerTypeIsValid(t *testing.T) {
-	t.Parallel()
-
-	assert.True(t, domain.PartnerTypeSupplier.IsValid())
-	assert.True(t, domain.PartnerTypeInsurer.IsValid())
-	assert.False(t, domain.PartnerType("").IsValid())
-	assert.False(t, domain.PartnerType("SUPPLIER").IsValid())
-}

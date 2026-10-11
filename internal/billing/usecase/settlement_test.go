@@ -46,7 +46,7 @@ func TestSettlementUseCase_Create(t *testing.T) {
 		require.Equal(t, "51F-123.45", s.VehicleLicensePlate)
 		require.Equal(t, "QT-202609-0001", s.Number)
 		require.Equal(t, int64(1_000_000), s.TotalAmount)
-		require.Equal(t, int64(1_000_000), s.CustomerAmount)
+		require.Equal(t, int64(0), s.PaidAmount)
 		require.Equal(t, domain.StatusPending, s.Status)
 	})
 

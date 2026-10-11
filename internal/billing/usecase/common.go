@@ -48,12 +48,9 @@ type Page[T any] struct {
 }
 
 var (
-	notFoundErrors = []error{domain.ErrSettlementNotFound, domain.ErrInsurerNotFound}
-	conflictErrors = []error{domain.ErrAlreadySettled}
-	invalidErrors  = []error{
-		domain.ErrInvalidAllocation, domain.ErrInsurerPartnerRequired, domain.ErrInvalidPayerType,
-		domain.ErrInvalidPaymentMethod, domain.ErrInvalidPaymentAmount,
-	}
+	notFoundErrors     = []error{domain.ErrSettlementNotFound}
+	conflictErrors     = []error{domain.ErrAlreadySettled}
+	invalidErrors      = []error{domain.ErrInvalidPaymentMethod, domain.ErrInvalidPaymentAmount}
 	preconditionErrors = []error{domain.ErrRepairOrderNotClosed}
 )
 
@@ -99,9 +96,8 @@ func actorRef(userID string) *string {
 
 // Audited actions (Security Architecture Section 7).
 const (
-	ActionSettlementCreated   = "settlement.created"
-	ActionSettlementAllocated = "settlement.allocated"
-	ActionPaymentRecorded     = "settlement.payment_recorded"
+	ActionSettlementCreated = "settlement.created"
+	ActionPaymentRecorded   = "settlement.payment_recorded"
 
 	entitySettlement = "settlement"
 	entityPayment    = "settlement_payment"
@@ -121,16 +117,15 @@ func (uc *SettlementUseCase) audit(ctx context.Context, actorID, garageID, actio
 	return nil
 }
 
-// settlementAudit is what the audit log keeps of a settlement: its money,
-// who pays it and its status.
+// settlementAudit is what the audit log keeps of a settlement: its money
+// and its status.
 func settlementAudit(s *domain.Settlement) map[string]any {
 	return map[string]any{
 		"number": s.Number, "repair_order_id": s.RepairOrderID, "total_amount": s.TotalAmount,
-		"customer_amount": s.CustomerAmount, "insurer_amount": s.InsurerAmount, "insurer_partner_id": s.InsurerPartnerID,
-		"customer_paid_amount": s.CustomerPaidAmount, "insurer_paid_amount": s.InsurerPaidAmount, "status": s.Status,
+		"paid_amount": s.PaidAmount, "status": s.Status,
 	}
 }
 
 func paymentAudit(p *domain.Payment) map[string]any {
-	return map[string]any{"payer_type": p.PayerType, "amount": p.Amount, "method": p.Method, "note": p.Note}
+	return map[string]any{"amount": p.Amount, "method": p.Method, "note": p.Note}
 }

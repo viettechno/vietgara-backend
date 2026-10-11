@@ -20,7 +20,6 @@ const (
 	garageID      = "11111111-1111-1111-1111-111111111111"
 	repairOrderID = "22222222-2222-2222-2222-222222222222"
 	settlementID  = "33333333-3333-3333-3333-333333333333"
-	insurerID     = "44444444-4444-4444-4444-444444444444"
 	actorID       = "55555555-5555-5555-5555-555555555555"
 	ownerID       = "66666666-6666-6666-6666-666666666666"
 )
@@ -34,7 +33,6 @@ var (
 type deps struct {
 	Settlements  *mocks.MockBillingRepository
 	RepairOrders *mocks.MockBillingRepairOrderReader
-	Partners     *mocks.MockBillingPartnerReader
 	Garages      *mocks.MockBillingGarageReader
 	Limits       *mocks.MockBillingTransactionLimiter
 	Sequences    *mocks.MockBillingSequencer
@@ -47,13 +45,13 @@ func newUseCase(t *testing.T) (*usecase.SettlementUseCase, *deps) {
 
 	d := &deps{
 		Settlements: mocks.NewMockBillingRepository(t), RepairOrders: mocks.NewMockBillingRepairOrderReader(t),
-		Partners: mocks.NewMockBillingPartnerReader(t), Garages: mocks.NewMockBillingGarageReader(t),
-		Limits: mocks.NewMockBillingTransactionLimiter(t), Sequences: mocks.NewMockBillingSequencer(t),
+		Garages: mocks.NewMockBillingGarageReader(t),
+		Limits:  mocks.NewMockBillingTransactionLimiter(t), Sequences: mocks.NewMockBillingSequencer(t),
 		Events: mocks.NewMockBillingEventPublisher(t), Audit: mocks.NewMockBillingAuditLogger(t),
 	}
 
 	uc := usecase.NewSettlementUseCase(usecase.Deps{
-		Settlements: d.Settlements, RepairOrders: d.RepairOrders, Partners: d.Partners, Garages: d.Garages,
+		Settlements: d.Settlements, RepairOrders: d.RepairOrders, Garages: d.Garages,
 		Limits: d.Limits, Sequences: d.Sequences, Events: d.Events, Audit: d.Audit, Now: func() time.Time { return now },
 	})
 
@@ -68,12 +66,6 @@ func expectAudit(d *deps) *audit.Entry {
 		Run(func(_ context.Context, e audit.Entry) { got = e }).Return(nil).Once()
 
 	return &got
-}
-
-func insurerIDPtr() *string {
-	id := insurerID
-
-	return &id
 }
 
 func defaultGarage() usecase.GarageInfo {
@@ -91,7 +83,7 @@ func closedRepairOrder() usecase.RepairOrderInfo {
 func openSettlement() *domain.Settlement {
 	return &domain.Settlement{
 		ID: settlementID, GarageID: garageID, RepairOrderID: repairOrderID, VehicleLicensePlate: "51F-123.45",
-		CustomerName: "An Nguyen", Number: "QT-202609-0001", TotalAmount: 1_000_000, CustomerAmount: 1_000_000,
+		CustomerName: "An Nguyen", Number: "QT-202609-0001", TotalAmount: 1_000_000,
 		Status: domain.StatusPending, CreatedAt: now, UpdatedAt: now,
 	}
 }

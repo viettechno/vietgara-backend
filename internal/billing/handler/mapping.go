@@ -14,10 +14,9 @@ import (
 func settlementToProto(s *domain.Settlement) *billingv1.Settlement {
 	out := &billingv1.Settlement{
 		Id: s.ID, GarageId: s.GarageID, RepairOrderId: s.RepairOrderID, VehicleLicensePlate: s.VehicleLicensePlate,
-		CustomerName: s.CustomerName, Number: s.Number, TotalAmount: s.TotalAmount, CustomerAmount: s.CustomerAmount,
-		InsurerAmount: s.InsurerAmount, InsurerPartnerId: s.InsurerPartnerID, InsurerPartnerName: s.InsurerPartnerName,
-		CustomerPaidAmount: s.CustomerPaidAmount, InsurerPaidAmount: s.InsurerPaidAmount,
-		Status: statusToProto(s.Status), Payments: make([]*billingv1.SettlementPayment, 0, len(s.Payments)),
+		CustomerName: s.CustomerName, Number: s.Number, TotalAmount: s.TotalAmount,
+		PaidAmount: s.PaidAmount,
+		Status:     statusToProto(s.Status), Payments: make([]*billingv1.SettlementPayment, 0, len(s.Payments)),
 		CreatedAt: converter.TimeToProto(s.CreatedAt), UpdatedAt: converter.TimeToProto(s.UpdatedAt),
 	}
 
@@ -30,7 +29,7 @@ func settlementToProto(s *domain.Settlement) *billingv1.Settlement {
 
 func paymentToProto(p domain.Payment) *billingv1.SettlementPayment {
 	return &billingv1.SettlementPayment{
-		Id: p.ID, PayerType: payerTypeToProto(p.PayerType), Amount: p.Amount, Method: methodToProto(p.Method),
+		Id: p.ID, Amount: p.Amount, Method: methodToProto(p.Method),
 		Note: p.Note, CreatedAt: converter.TimeToProto(p.CreatedAt),
 	}
 }
@@ -59,27 +58,6 @@ func statusFromProto(s billingv1.SettlementStatus) domain.SettlementStatus {
 	case billingv1.SettlementStatus_SETTLEMENT_STATUS_PAID:
 		return domain.StatusPaid
 	case billingv1.SettlementStatus_SETTLEMENT_STATUS_UNSPECIFIED:
-		return ""
-	default:
-		return ""
-	}
-}
-
-func payerTypeToProto(p domain.PayerType) billingv1.PayerType {
-	if p == domain.PayerInsurer {
-		return billingv1.PayerType_PAYER_TYPE_INSURER
-	}
-
-	return billingv1.PayerType_PAYER_TYPE_CUSTOMER
-}
-
-func payerTypeFromProto(p billingv1.PayerType) domain.PayerType {
-	switch p {
-	case billingv1.PayerType_PAYER_TYPE_CUSTOMER:
-		return domain.PayerCustomer
-	case billingv1.PayerType_PAYER_TYPE_INSURER:
-		return domain.PayerInsurer
-	case billingv1.PayerType_PAYER_TYPE_UNSPECIFIED:
 		return ""
 	default:
 		return ""

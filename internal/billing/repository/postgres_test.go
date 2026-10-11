@@ -28,7 +28,7 @@ const (
 func newSettlement() *domain.Settlement {
 	return &domain.Settlement{
 		ID: settlementID, GarageID: garageID, RepairOrderID: repairOrderID, VehicleLicensePlate: "51F-123.45",
-		CustomerName: "An Nguyen", Number: "QT-202609-0001", TotalAmount: 1_000_000, CustomerAmount: 1_000_000,
+		CustomerName: "An Nguyen", Number: "QT-202609-0001", TotalAmount: 1_000_000,
 		Status: domain.StatusPending,
 	}
 }
@@ -36,24 +36,12 @@ func newSettlement() *domain.Settlement {
 func settlementRow() []any {
 	return []any{
 		settlementID, garageID, repairOrderID, "51F-123.45", "An Nguyen", "QT-202609-0001", int64(1_000_000),
-		int64(600_000), int64(400_000), nil, "ABC Insurance", int64(0), int64(0), "pending", nil, nil, now, now,
+		int64(0), "pending", nil, nil, now, now,
 	}
 }
 
 func paymentRow() []any {
-	return []any{"p-1", "customer", int64(300_000), "cash", nil, nil, now}
-}
-
-// settlementRowNoInsurer is a settlement with no insurer allocated yet --
-// both insurer_partner_id and insurer_partner_name are NULL, the actual
-// shape of every settlement from creation until its first allocation with
-// an insurer amount (regression test for scanning a NULL
-// insurer_partner_name into domain.Settlement's plain string field).
-func settlementRowNoInsurer() []any {
-	return []any{
-		settlementID, garageID, repairOrderID, "51F-123.45", "An Nguyen", "QT-202609-0001", int64(1_000_000),
-		int64(1_000_000), int64(0), nil, nil, int64(0), int64(0), "pending", nil, nil, now, now,
-	}
+	return []any{"p-1", int64(300_000), "cash", nil, nil, now}
 }
 
 func TestPostgresRepository_Create(t *testing.T) {
@@ -112,24 +100,8 @@ func TestPostgresRepository_FindByID(t *testing.T) {
 		s, err := repo.FindByID(ctx, garageID, settlementID)
 		require.NoError(t, err)
 		require.Equal(t, domain.StatusPending, s.Status)
-		require.Equal(t, "ABC Insurance", s.InsurerPartnerName)
 		require.Len(t, s.Payments, 1)
-		require.Equal(t, domain.PayerCustomer, s.Payments[0].PayerType)
-	})
-
-	t.Run("success, no insurer allocated yet", func(t *testing.T) {
-		t.Parallel()
-
-		repo := repository.NewPostgresRepository(nil)
-		tx := dbtest.New(t).
-			ExpectQueryRow("FROM settlements WHERE garage_id", dbtest.Row(settlementRowNoInsurer()...)).
-			ExpectQuery("FROM settlement_payments", dbtest.NewRows(), nil)
-		ctx := tx.Context(t.Context())
-
-		s, err := repo.FindByID(ctx, garageID, settlementID)
-		require.NoError(t, err)
-		require.Nil(t, s.InsurerPartnerID)
-		require.Empty(t, s.InsurerPartnerName)
+		require.Equal(t, domain.MethodCash, s.Payments[0].Method)
 	})
 
 	t.Run("not found", func(t *testing.T) {
@@ -192,43 +164,6 @@ func TestPostgresRepository_FindByRepairOrderID(t *testing.T) {
 
 		_, err := repo.FindByRepairOrderID(ctx, garageID, "missing")
 		require.ErrorIs(t, err, domain.ErrSettlementNotFound)
-	})
-}
-
-func TestPostgresRepository_SaveAllocation(t *testing.T) {
-	t.Parallel()
-
-	t.Run("success", func(t *testing.T) {
-		t.Parallel()
-
-		repo := repository.NewPostgresRepository(nil)
-		s := newSettlement()
-
-		tx := dbtest.New(t).ExpectQueryRow("UPDATE settlements SET customer_amount", dbtest.Row(now))
-		ctx := tx.Context(t.Context())
-
-		require.NoError(t, repo.SaveAllocation(ctx, s))
-		require.Equal(t, now, s.UpdatedAt)
-	})
-
-	t.Run("not found", func(t *testing.T) {
-		t.Parallel()
-
-		repo := repository.NewPostgresRepository(nil)
-		tx := dbtest.New(t).ExpectQueryRow("UPDATE settlements SET customer_amount", dbtest.ErrRow(pgx.ErrNoRows))
-		ctx := tx.Context(t.Context())
-
-		require.ErrorIs(t, repo.SaveAllocation(ctx, newSettlement()), domain.ErrSettlementNotFound)
-	})
-
-	t.Run("unexpected update error", func(t *testing.T) {
-		t.Parallel()
-
-		repo := repository.NewPostgresRepository(nil)
-		tx := dbtest.New(t).ExpectQueryRow("UPDATE settlements SET customer_amount", dbtest.ErrRow(errBoom))
-		ctx := tx.Context(t.Context())
-
-		require.ErrorIs(t, repo.SaveAllocation(ctx, newSettlement()), errBoom)
 	})
 }
 
@@ -325,15 +260,15 @@ func TestPostgresRepository_List(t *testing.T) {
 func TestPostgresRepository_RecordPayment(t *testing.T) {
 	t.Parallel()
 
-	t.Run("success, applied to the customer's running total", func(t *testing.T) {
+	t.Run("success, applied to the paid total", func(t *testing.T) {
 		t.Parallel()
 
 		repo := repository.NewPostgresRepository(nil)
-		payment := &domain.Payment{ID: "p-1", PayerType: domain.PayerCustomer, Amount: 300_000, Method: domain.MethodCash}
+		payment := &domain.Payment{ID: "p-1", Amount: 300_000, Method: domain.MethodCash}
 
 		tx := dbtest.New(t).
 			ExpectQueryRow("INSERT INTO settlement_payments", dbtest.Row(now)).
-			ExpectQueryRow("UPDATE settlements SET customer_paid_amount", dbtest.Row(settlementRow()...))
+			ExpectQueryRow("UPDATE settlements SET paid_amount", dbtest.Row(settlementRow()...))
 		ctx := tx.Context(t.Context())
 
 		s, err := repo.RecordPayment(ctx, garageID, settlementID, payment)
@@ -342,26 +277,11 @@ func TestPostgresRepository_RecordPayment(t *testing.T) {
 		require.Equal(t, settlementID, s.ID)
 	})
 
-	t.Run("success, applied to the insurer's running total", func(t *testing.T) {
-		t.Parallel()
-
-		repo := repository.NewPostgresRepository(nil)
-		payment := &domain.Payment{ID: "p-2", PayerType: domain.PayerInsurer, Amount: 400_000, Method: domain.MethodBankTransfer}
-
-		tx := dbtest.New(t).
-			ExpectQueryRow("INSERT INTO settlement_payments", dbtest.Row(now)).
-			ExpectQueryRow("UPDATE settlements SET insurer_paid_amount", dbtest.Row(settlementRow()...))
-		ctx := tx.Context(t.Context())
-
-		_, err := repo.RecordPayment(ctx, garageID, settlementID, payment)
-		require.NoError(t, err)
-	})
-
 	t.Run("insert failure", func(t *testing.T) {
 		t.Parallel()
 
 		repo := repository.NewPostgresRepository(nil)
-		payment := &domain.Payment{ID: "p-1", PayerType: domain.PayerCustomer, Amount: 300_000, Method: domain.MethodCash}
+		payment := &domain.Payment{ID: "p-1", Amount: 300_000, Method: domain.MethodCash}
 
 		tx := dbtest.New(t).ExpectQueryRow("INSERT INTO settlement_payments", dbtest.ErrRow(errBoom))
 		ctx := tx.Context(t.Context())
@@ -374,11 +294,11 @@ func TestPostgresRepository_RecordPayment(t *testing.T) {
 		t.Parallel()
 
 		repo := repository.NewPostgresRepository(nil)
-		payment := &domain.Payment{ID: "p-1", PayerType: domain.PayerCustomer, Amount: 300_000, Method: domain.MethodCash}
+		payment := &domain.Payment{ID: "p-1", Amount: 300_000, Method: domain.MethodCash}
 
 		tx := dbtest.New(t).
 			ExpectQueryRow("INSERT INTO settlement_payments", dbtest.Row(now)).
-			ExpectQueryRow("UPDATE settlements SET customer_paid_amount", dbtest.ErrRow(errBoom))
+			ExpectQueryRow("UPDATE settlements SET paid_amount", dbtest.ErrRow(errBoom))
 		ctx := tx.Context(t.Context())
 
 		_, err := repo.RecordPayment(ctx, garageID, settlementID, payment)

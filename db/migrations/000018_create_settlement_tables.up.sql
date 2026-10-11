@@ -1,14 +1,12 @@
 -- Billing & Settlement module (HLD module #8), Database Design Section 6.1.
--- The final bill of a closed repair order (FR-BIL-01), split between what
--- the customer pays directly and what insurance covers (FR-BIL-02), with
--- payments recorded as they are actually collected (FR-BIL-03). No
--- separate receivables table: FR-REC-01's "list of settlements not yet
--- fully collected" is this table filtered by status -- Release 2.2's
--- reminders and reconciliation are what will need their own persisted
--- state, not the list itself.
+-- The final bill of a closed repair order (FR-BIL-01), paid by the
+-- customer, with payments recorded as they are actually collected
+-- (FR-BIL-03). No separate receivables table: FR-REC-01's "list of
+-- settlements not yet fully collected" is this table filtered by status --
+-- Release 2.2's reminders and reconciliation are what will need their own
+-- persisted state, not the list itself.
 
 CREATE TYPE settlement_status AS ENUM ('pending', 'partially_paid', 'paid');
-CREATE TYPE payer_type AS ENUM ('customer', 'insurer');
 -- 'online' is recorded manually in Release 1.4 (staff sees a bank app or
 -- gateway dashboard confirmation and records it); automatic confirmation
 -- via a payment gateway webhook is Release 2.0 (FR-PAY-02).
@@ -27,22 +25,8 @@ CREATE TABLE settlements (
     number VARCHAR(50) NOT NULL,
     -- Copied from the repair order's total at creation time.
     total_amount BIGINT NOT NULL DEFAULT 0,
-    -- How much of total_amount is allocated to each payer (FR-BIL-02);
-    -- always customer_amount + insurer_amount = total_amount, enforced in
-    -- the application. Starts entirely allocated to the customer.
-    customer_amount BIGINT NOT NULL DEFAULT 0,
-    insurer_amount BIGINT NOT NULL DEFAULT 0,
-    -- Set once insurer_amount > 0; a Partner of type 'insurer'. Not a
-    -- foreign key -- app-level validation only, the same choice already
-    -- made for repair_order_lines.item_ref_id, so this table is not
-    -- coupled to the Partner module's row lifecycle. insurer_partner_name
-    -- is denormalized at allocation time, the same pattern as
-    -- customer_name/vehicle_license_plate below.
-    insurer_partner_id UUID,
-    insurer_partner_name VARCHAR(255),
-    -- Running totals from settlement_payments (FR-BIL-03).
-    customer_paid_amount BIGINT NOT NULL DEFAULT 0,
-    insurer_paid_amount BIGINT NOT NULL DEFAULT 0,
+    -- Running total from settlement_payments (FR-BIL-03).
+    paid_amount BIGINT NOT NULL DEFAULT 0,
     status settlement_status NOT NULL DEFAULT 'pending',
     created_by UUID,
     updated_by UUID,
@@ -74,14 +58,13 @@ COMMENT ON POLICY settlements_rls_policy ON settlements IS
 
 -- ---------------------------------------------------------------------------
 -- settlement_payments: append-only record of money actually collected
--- (FR-BIL-03). A settlement may receive several, from either payer, until
--- each payer's allocated amount is fully collected.
+-- (FR-BIL-03). A settlement may receive several until the total is fully
+-- collected.
 -- ---------------------------------------------------------------------------
 CREATE TABLE settlement_payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     garage_id UUID NOT NULL,
     settlement_id UUID NOT NULL,
-    payer_type payer_type NOT NULL,
     amount BIGINT NOT NULL,
     method payment_method NOT NULL,
     note TEXT,

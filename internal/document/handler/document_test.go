@@ -122,7 +122,7 @@ func TestExportSettlementReceiptPdf(t *testing.T) {
 	e := newEnv(t)
 	e.garages.EXPECT().Get(anyArg, garageID).Return(defaultGarage(), nil).Once()
 	e.settlements.EXPECT().Get(anyArg, garageID, settlementID).Return(usecase.SettlementInfo{
-		Number: "QT-0001", CustomerName: "An Nguyen", TotalAmount: 1_000_000, CustomerAmount: 1_000_000,
+		Number: "QT-0001", CustomerName: "An Nguyen", TotalAmount: 1_000_000,
 	}, nil).Once()
 
 	resp, err := e.srv.ExportSettlementReceiptPdf(t.Context(), &documentv1.ExportSettlementReceiptPdfRequest{

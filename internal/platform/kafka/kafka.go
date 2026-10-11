@@ -21,6 +21,7 @@ const (
 	contextTenant   = "tenant"
 	contextLicense  = "license"
 	contextCustomer = "customer"
+	contextSupplier = "supplier"
 )
 
 // contexts maps an event's first name segment to its bounded context.
@@ -35,7 +36,7 @@ var contexts = map[string]string{
 	"plan":         contextLicense,
 	"customer":     contextCustomer,
 	"vehicle":      contextCustomer,
-	"partner":      contextCustomer,
+	"supplier":     contextSupplier,
 }
 
 // TopicFor returns the topic of an event type, e.g. "garage.created" ->

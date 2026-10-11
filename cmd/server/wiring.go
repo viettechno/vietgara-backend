@@ -7,7 +7,6 @@ import (
 	"sort"
 	"time"
 
-	billingDomain "github.com/viettechno/vietgara-backend/internal/billing/domain"
 	billingRepository "github.com/viettechno/vietgara-backend/internal/billing/repository"
 	billingUsecase "github.com/viettechno/vietgara-backend/internal/billing/usecase"
 	customerDomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
@@ -327,30 +326,6 @@ func (r billingRepairOrders) Get(ctx context.Context, garageID, repairOrderID st
 	}, nil
 }
 
-// billingPartners lets the Billing & Settlement module validate and name
-// an insurer allocated to a settlement (FR-BIL-02) without importing the
-// Customer module directly.
-type billingPartners struct {
-	partners *customerRepository.PostgresPartnerRepository
-}
-
-func (p billingPartners) FindInsurer(ctx context.Context, garageID, partnerID string) (string, error) {
-	partner, err := p.partners.FindByID(ctx, garageID, partnerID)
-	if err != nil {
-		if errors.Is(err, customerDomain.ErrPartnerNotFound) {
-			return "", billingDomain.ErrInsurerNotFound
-		}
-
-		return "", err
-	}
-
-	if partner.Type != customerDomain.PartnerTypeInsurer {
-		return "", billingDomain.ErrInsurerNotFound
-	}
-
-	return partner.Name, nil
-}
-
 // billingGarages lets the Billing & Settlement module read a garage's
 // numbering configuration (FR-TEN-05) without importing Tenant.
 type billingGarages struct {
@@ -445,15 +420,14 @@ func (s documentSettlements) Get(ctx context.Context, garageID, settlementID str
 	payments := make([]render.PaymentRow, 0, len(settlement.Payments))
 	for _, p := range settlement.Payments {
 		payments = append(payments, render.PaymentRow{
-			Date: p.CreatedAt.Format("2006-01-02"), PayerType: string(p.PayerType), Method: string(p.Method), Amount: p.Amount,
+			Date: p.CreatedAt.Format("2006-01-02"), Method: string(p.Method), Amount: p.Amount,
 		})
 	}
 
 	return documentUsecase.SettlementInfo{
 		Number: settlement.Number, Status: string(settlement.Status), CustomerName: settlement.CustomerName,
-		VehiclePlate: settlement.VehicleLicensePlate, InsurerName: settlement.InsurerPartnerName,
-		TotalAmount: settlement.TotalAmount, CustomerAmount: settlement.CustomerAmount,
-		InsurerAmount: settlement.InsurerAmount, Payments: payments,
+		VehiclePlate: settlement.VehicleLicensePlate, TotalAmount: settlement.TotalAmount,
+		PaidAmount: settlement.PaidAmount, Payments: payments,
 	}, nil
 }
 

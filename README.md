@@ -50,7 +50,8 @@ flowchart LR
 | Identity | `internal/identity` | Users, sessions, e-mail verification and password-reset OTPs, Google sign-in, platform admins |
 | Tenant | `internal/tenant` | Garages, staff, invitations, roles and staff groups |
 | License | `internal/license` | Plans, per-user subscriptions, entitlements, plan limits |
-| Customer | `internal/customer` | Customers, vehicles, partners (suppliers; the partners become the Supplier module in Release 5.0) |
+| Customer | `internal/customer` | Customers, vehicles |
+| Supplier | `internal/supplier` | The garage's suppliers with contact and bank details (FR-SUP-01) |
 
 Shared infrastructure (db, access, mail, storage, kafka, outbox, audit,
 httpapi, auth) is in `internal/platform`. The gRPC interceptors are in
@@ -64,7 +65,7 @@ The plan is in `vietgara-docs` (Release Plan, Phases 3-17). What changes in this
 | --- | --- |
 | Phase 3 | `account` becomes `user` in the database, proto, events, tokens and configuration (the backend part is merged in #20; proto and the clients follow); migrations are edited in place |
 | Phase 4 | The blackbox suite reads a shared dataset from `vietgara-testdata` and grows to every P1 scenario and at least 80% of API operations; a test-only purge of the test users (see `testing/blackbox/README.md`) |
-| Release 5.0 | Audit columns on every business table by trigger; edited user names kept (`full_name_source`); insurance code is removed (insurer split, insurer partner type); `partners` becomes the Supplier module (`suppliers`, `supplier.*`); delete-or-deactivate rule; legal profile; payment vouchers; file registry; `stock_transactions.quantity` becomes numeric |
+| Release 5.0 | Done: insurance code is removed (insurer split, insurer partner type), `partners` becomes the Supplier module (`suppliers`, `supplier.*`). Planned: audit columns on every business table by trigger; edited user names kept (`full_name_source`); delete-or-deactivate rule; legal profile; payment vouchers; file registry; `stock_transactions.quantity` becomes numeric |
 | Release 5.1 | Customers without a user, user links, tax profiles by kind with an invoice-requested check, vehicle identity fields locked while live documents use them (`customer.correct` to correct) |
 | Release 5.2 | Plan changes (upgrade and downgrade) take effect at the end of the billing period: pending change, applied by the daily job |
 | Releases 6.0, 6.1 | Units, selling price per part, part categories and images, Excel exports; MFA |

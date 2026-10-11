@@ -74,7 +74,7 @@ var DefaultRoleTemplates = []DefaultRoleTemplate{
 			"en": "Settlements, receivables, invoices and reports.",
 		},
 		Permissions: []access.Permission{
-			access.CustomerRead, access.PartnerRead, access.SubscriptionRead, access.QuoteRead, access.RepairOrderRead,
+			access.CustomerRead, access.SupplierRead, access.SubscriptionRead, access.QuoteRead, access.RepairOrderRead,
 			access.InventoryRead, access.BillingRead, access.BillingWrite, access.ReportRead,
 		},
 	},
@@ -86,7 +86,7 @@ var DefaultRoleTemplates = []DefaultRoleTemplate{
 			"en": "Customers, quotes and repair orders.",
 		},
 		Permissions: []access.Permission{
-			access.CustomerRead, access.CustomerWrite, access.PartnerRead, access.QuoteRead, access.QuoteWrite,
+			access.CustomerRead, access.CustomerWrite, access.SupplierRead, access.QuoteRead, access.QuoteWrite,
 			access.RepairOrderRead, access.RepairOrderWrite, access.InventoryRead,
 		},
 	},
@@ -107,7 +107,7 @@ var DefaultRoleTemplates = []DefaultRoleTemplate{
 			"en": "Parts stock in, stock out and stock on hand.",
 		},
 		Permissions: []access.Permission{
-			access.InventoryRead, access.InventoryWrite, access.PartnerRead, access.PartnerWrite, access.RepairOrderRead,
+			access.InventoryRead, access.InventoryWrite, access.SupplierRead, access.SupplierWrite, access.RepairOrderRead,
 		},
 	},
 }

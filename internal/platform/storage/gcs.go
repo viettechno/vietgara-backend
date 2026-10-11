@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	gcs "cloud.google.com/go/storage"
+	"google.golang.org/api/iterator"
 )
 
 // GCSStore keeps objects in a Cloud Storage bucket (production).
@@ -70,6 +71,41 @@ func (s *GCSStore) Delete(ctx context.Context, key string) error {
 	}
 
 	return nil
+}
+
+// DeletePrefix removes every object under prefix.
+func (s *GCSStore) DeletePrefix(ctx context.Context, prefix string) (int64, error) {
+	prefix, err := cleanPrefix(prefix)
+	if err != nil {
+		return 0, err
+	}
+
+	prefix += "/"
+
+	objects := s.bucket.Objects(ctx, &gcs.Query{Prefix: prefix})
+
+	var deleted int64
+
+	for {
+		attrs, err := objects.Next()
+		if errors.Is(err, iterator.Done) {
+			return deleted, nil
+		}
+
+		if err != nil {
+			return deleted, fmt.Errorf("storage: list prefix %s: %w", prefix, err)
+		}
+
+		if err := s.bucket.Object(attrs.Name).Delete(ctx); err != nil {
+			if errors.Is(err, gcs.ErrObjectNotExist) {
+				continue
+			}
+
+			return deleted, fmt.Errorf("storage: delete %s: %w", attrs.Name, err)
+		}
+
+		deleted++
+	}
 }
 
 // KeyFromURL strips the base URL.

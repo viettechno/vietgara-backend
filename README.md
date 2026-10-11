@@ -245,8 +245,9 @@ it. With `TEST_USERS_EMAIL_DOMAIN` set:
 - The domain must be under a TLD reserved for testing, so no real person
   can own an address on it. The server refuses to start otherwise.
 - Every hour, users on the domain older than `TEST_USERS_RETENTION`
-  are deleted with everything they own. Garages and their data, staff
-  memberships and subscriptions all go by foreign-key cascade.
+  are deleted with everything they own. Uploaded files under each owned
+  garage's storage prefix are removed before database deletion; garages and
+  their data, staff memberships and subscriptions go by foreign-key cascade.
 
 Never set it in production.
 
@@ -286,6 +287,11 @@ Never set it in production.
 | --- | --- | --- |
 | Local, staging | `local` | Files are written under `STORAGE_LOCAL_DIR` (Compose mounts the `vietgara-uploads` volume there) and served at `/api/v1/files/…` |
 | Production | `gcs` | Files go to the `STORAGE_GCS_BUCKET` bucket. Credentials come from the workload identity (Application Default Credentials). `STORAGE_PUBLIC_BASE_URL` is the public URL prefix, either the bucket or a CDN |
+
+The test-user purge command uses these same `STORAGE_*` settings. It removes
+all objects under each eligible test user's garage prefix (including old,
+unreferenced logo uploads), and stops before deleting database users if file
+cleanup fails.
 
 ## Events
 

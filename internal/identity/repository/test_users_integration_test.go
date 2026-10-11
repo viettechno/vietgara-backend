@@ -46,9 +46,9 @@ func TestDeleteTestUsersCascades(t *testing.T) {
 	}
 
 	staleTest, staleGarage := seed("bb.old@blackbox.vietgara.test", old)
-	freshTest, _ := seed("bb.new@blackbox.vietgara.test", time.Now())
+	freshTest, freshGarage := seed("bb.new@blackbox.vietgara.test", time.Now())
 	realOwner, realGarage := seed("owner@gmail.com", old)
-	lookalike, _ := seed("x@notblackbox.vietgara.test", old)
+	lookalike, lookalikeGarage := seed("x@notblackbox.vietgara.test", old)
 
 	repo := repository.NewPostgresUserRepository(pg.AppPool(t))
 	cutoff := time.Now().Add(-24 * time.Hour)
@@ -56,6 +56,10 @@ func TestDeleteTestUsersCascades(t *testing.T) {
 	emails, err := repo.ListTestUserEmails(ctx, "blackbox.vietgara.test", cutoff)
 	require.NoError(t, err)
 	assert.Equal(t, []string{"bb.old@blackbox.vietgara.test"}, emails)
+
+	garageIDs, err := repo.ListTestUserGarageIDs(ctx, "blackbox.vietgara.test", cutoff)
+	require.NoError(t, err)
+	assert.Equal(t, []string{staleGarage}, garageIDs)
 
 	deleted, err := repo.DeleteTestUsers(ctx, "blackbox.vietgara.test", cutoff)
 	require.NoError(t, err)
@@ -71,6 +75,8 @@ func TestDeleteTestUsersCascades(t *testing.T) {
 	}
 
 	assert.Equal(t, 1, count(t, pg.Admin, `SELECT count(*) FROM customers WHERE garage_id = $1`, realGarage))
+	assert.Equal(t, 1, count(t, pg.Admin, `SELECT count(*) FROM garages WHERE id = $1`, freshGarage))
+	assert.Equal(t, 1, count(t, pg.Admin, `SELECT count(*) FROM garages WHERE id = $1`, lookalikeGarage))
 }
 
 func count(t *testing.T, db *sql.DB, query string, args ...any) int {

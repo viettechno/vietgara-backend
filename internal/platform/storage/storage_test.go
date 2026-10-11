@@ -1,6 +1,7 @@
 package storage_test
 
 import (
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -106,7 +107,40 @@ func TestLocalStore(t *testing.T) {
 	require.Error(t, store.Delete(t.Context(), "dir.png"))
 }
 
-// fakeGCS implements the two Cloud Storage JSON API calls the store makes.
+func TestLocalStoreDeletePrefix(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	store, err := storage.NewLocal(dir, "")
+	require.NoError(t, err)
+
+	for _, key := range []string{
+		"garages/g1/logo.png",
+		"garages/g1/older/logo-old.png",
+		"garages/g10/logo.png",
+	} {
+		_, err := store.Put(t.Context(), key, "image/png", png)
+		require.NoError(t, err)
+	}
+
+	deleted, err := store.DeletePrefix(t.Context(), "garages/g1/")
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, deleted)
+	assert.NoFileExists(t, filepath.Join(dir, "garages", "g1", "logo.png"))
+	assert.NoFileExists(t, filepath.Join(dir, "garages", "g1", "older", "logo-old.png"))
+	assert.FileExists(t, filepath.Join(dir, "garages", "g10", "logo.png"))
+
+	deleted, err = store.DeletePrefix(t.Context(), "garages/g1/")
+	require.NoError(t, err)
+	assert.Zero(t, deleted)
+
+	for _, prefix := range []string{"", "/", "garages", "../garages/g1/", "garages/../g2/", "garages//g1/"} {
+		_, err := store.DeletePrefix(t.Context(), prefix)
+		require.ErrorIs(t, err, storage.ErrInvalidKey, prefix)
+	}
+}
+
+// fakeGCS implements the Cloud Storage JSON API calls the store makes.
 type fakeGCS struct {
 	mu      sync.Mutex
 	objects map[string][]byte
@@ -118,6 +152,12 @@ func (f *fakeGCS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer f.mu.Unlock()
 
 	if f.fail {
+		if r.Method == http.MethodGet {
+			http.Error(w, `{"error":{"code":400,"message":"bad request"}}`, http.StatusBadRequest)
+
+			return
+		}
+
 		http.Error(w, `{"error":{"code":500,"message":"boom"}}`, http.StatusInternalServerError)
 
 		return
@@ -136,6 +176,34 @@ func (f *fakeGCS) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = io.WriteString(w, `{"bucket":"logos","name":"`+name+`"}`) //nolint:gosec // fake storage API in a test
+	case r.Method == http.MethodGet && r.URL.Path == "/storage/v1/b/logos/o":
+		prefix := r.URL.Query().Get("prefix")
+
+		items := make([]struct {
+			Name string `json:"name"`
+		}, 0)
+
+		for name := range f.objects {
+			if strings.HasPrefix(name, prefix) {
+				items = append(items, struct {
+					Name string `json:"name"`
+				}{Name: name})
+			}
+		}
+
+		response, err := json.Marshal(struct {
+			Items []struct {
+				Name string `json:"name"`
+			} `json:"items"`
+		}{Items: items})
+		if err != nil {
+			http.Error(w, "encode response", http.StatusInternalServerError)
+
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write(response)
 	case r.Method == http.MethodDelete && strings.HasPrefix(r.URL.Path, "/storage/v1/b/logos/o/"):
 		name := strings.TrimPrefix(r.URL.Path, "/storage/v1/b/logos/o/")
 		if _, ok := f.objects[name]; !ok {
@@ -177,14 +245,34 @@ func TestGCSStore(t *testing.T) {
 	require.NoError(t, store.Delete(t.Context(), key))
 	require.NoError(t, store.Delete(t.Context(), key), "missing objects are ignored")
 
+	for _, objectKey := range []string{
+		"garages/g1/logo-old.png",
+		"garages/g1/older/logo.png",
+		"garages/g10/logo.png",
+	} {
+		_, err := store.Put(t.Context(), objectKey, "image/png", png)
+		require.NoError(t, err)
+	}
+
+	deleted, err := store.DeletePrefix(t.Context(), "garages/g1/")
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, deleted)
+	assert.Contains(t, fake.objects, "garages/g10/logo.png")
+	assert.NotContains(t, fake.objects, "garages/g1/logo-old.png")
+	assert.NotContains(t, fake.objects, "garages/g1/older/logo.png")
+
 	_, err = store.Put(t.Context(), "../x", "image/png", png)
 	require.ErrorIs(t, err, storage.ErrInvalidKey)
 	require.ErrorIs(t, store.Delete(t.Context(), "../x"), storage.ErrInvalidKey)
+	_, err = store.DeletePrefix(t.Context(), "../x/")
+	require.ErrorIs(t, err, storage.ErrInvalidKey)
 
 	fake.fail = true
 	_, err = store.Put(t.Context(), "garages/g1/other.png", "image/png", png)
 	require.ErrorContains(t, err, "upload")
 	require.ErrorContains(t, store.Delete(t.Context(), "garages/g1/other.png"), "delete")
+	_, err = store.DeletePrefix(t.Context(), "garages/g1/")
+	require.ErrorContains(t, err, "list prefix")
 
 	cdn, err := storage.NewGCS(t.Context(), "logos", "https://cdn.vietgara.viettechno.com/")
 	require.NoError(t, err)

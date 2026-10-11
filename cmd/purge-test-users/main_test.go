@@ -94,12 +94,15 @@ func TestConfirmedDomain(t *testing.T) {
 type fakeTestUserRepository struct {
 	events        *[]string
 	recipients    []string
+	garageIDs     []string
 	listErr       error
+	garageListErr error
 	deleteErr     error
 	deletedUsers  int64
 	listedDomain  string
 	deletedDomain string
 	listedCutoff  time.Time
+	garageCutoff  time.Time
 	deletedCutoff time.Time
 }
 
@@ -109,6 +112,14 @@ func (f *fakeTestUserRepository) ListTestUserEmails(_ context.Context, domain st
 	f.listedCutoff = cutoff
 
 	return f.recipients, f.listErr
+}
+
+func (f *fakeTestUserRepository) ListTestUserGarageIDs(_ context.Context, domain string, cutoff time.Time) ([]string, error) {
+	*f.events = append(*f.events, "list-garages")
+	f.listedDomain = domain
+	f.garageCutoff = cutoff
+
+	return f.garageIDs, f.garageListErr
 }
 
 func (f *fakeTestUserRepository) DeleteTestUsers(_ context.Context, domain string, cutoff time.Time) (int64, error) {
@@ -133,7 +144,21 @@ func (f *fakeMailpitDeleter) DeleteMessagesForRecipients(_ context.Context, reci
 	return f.deleted, f.deleteErr
 }
 
-func TestPurgeTestUsersDeletesMailBeforeUsersWithSameCutoff(t *testing.T) {
+type fakeUploadedFileDeleter struct {
+	events    *[]string
+	prefixes  []string
+	deleted   int64
+	deleteErr error
+}
+
+func (f *fakeUploadedFileDeleter) DeletePrefix(_ context.Context, prefix string) (int64, error) {
+	*f.events = append(*f.events, "delete-files")
+	f.prefixes = append(f.prefixes, prefix)
+
+	return f.deleted, f.deleteErr
+}
+
+func TestPurgeTestUsersDeletesMailAndFilesBeforeUsersWithSameCutoff(t *testing.T) {
 	t.Parallel()
 
 	events := []string{}
@@ -141,21 +166,26 @@ func TestPurgeTestUsersDeletesMailBeforeUsersWithSameCutoff(t *testing.T) {
 	users := &fakeTestUserRepository{
 		events:       &events,
 		recipients:   []string{"old@blackbox.vietgara.test"},
+		garageIDs:    []string{"garage-1", "garage-2"},
 		deletedUsers: 1,
 	}
 	mail := &fakeMailpitDeleter{events: &events, deleted: 3}
+	files := &fakeUploadedFileDeleter{events: &events, deleted: 4}
 
-	deletedUsers, deletedMessages, err := purgeTestUsers(
-		t.Context(), users, mail, "blackbox.vietgara.test", cutoff,
+	deletedUsers, deletedMessages, deletedFiles, err := purgeTestUsers(
+		t.Context(), users, mail, files, "blackbox.vietgara.test", cutoff,
 	)
 	require.NoError(t, err)
 	assert.Equal(t, int64(1), deletedUsers)
 	assert.Equal(t, 3, deletedMessages)
-	assert.Equal(t, []string{"list", "delete-mail", "delete-users"}, events)
+	assert.Equal(t, int64(8), deletedFiles)
+	assert.Equal(t, []string{"list", "list-garages", "delete-mail", "delete-files", "delete-files", "delete-users"}, events)
+	assert.Equal(t, []string{"garages/garage-1/", "garages/garage-2/"}, files.prefixes)
 	assert.Equal(t, users.recipients, mail.recipients)
 	assert.Equal(t, "blackbox.vietgara.test", users.listedDomain)
 	assert.Equal(t, users.listedDomain, users.deletedDomain)
 	assert.Equal(t, cutoff, users.listedCutoff)
+	assert.Equal(t, cutoff, users.garageCutoff)
 	assert.Equal(t, users.listedCutoff, users.deletedCutoff)
 }
 
@@ -171,14 +201,16 @@ func TestPurgeTestUsersDoesNotDeleteUsersWhenMailpitFails(t *testing.T) {
 		events:    &events,
 		deleteErr: errTestMailpitUnavailable,
 	}
+	files := &fakeUploadedFileDeleter{events: &events}
 
-	deletedUsers, deletedMessages, err := purgeTestUsers(
-		t.Context(), users, mail, "blackbox.vietgara.test", time.Now(),
+	deletedUsers, deletedMessages, deletedFiles, err := purgeTestUsers(
+		t.Context(), users, mail, files, "blackbox.vietgara.test", time.Now(),
 	)
 	require.ErrorContains(t, err, "mailpit unavailable")
 	assert.Zero(t, deletedUsers)
 	assert.Zero(t, deletedMessages)
-	assert.Equal(t, []string{"list", "delete-mail"}, events)
+	assert.Zero(t, deletedFiles)
+	assert.Equal(t, []string{"list", "list-garages", "delete-mail"}, events)
 }
 
 func TestPurgeTestUsersDoesNotContactMailpitWhenListingFails(t *testing.T) {
@@ -190,10 +222,52 @@ func TestPurgeTestUsersDoesNotContactMailpitWhenListingFails(t *testing.T) {
 		listErr: errTestDatabaseUnavailable,
 	}
 	mail := &fakeMailpitDeleter{events: &events}
+	files := &fakeUploadedFileDeleter{events: &events}
 
-	_, _, err := purgeTestUsers(
-		t.Context(), users, mail, "blackbox.vietgara.test", time.Now(),
+	_, _, _, err := purgeTestUsers(
+		t.Context(), users, mail, files, "blackbox.vietgara.test", time.Now(),
 	)
 	require.ErrorContains(t, err, "database unavailable")
 	assert.Equal(t, []string{"list"}, events)
+}
+
+func TestPurgeTestUsersDoesNotDeleteAnythingWhenGarageListingFails(t *testing.T) {
+	t.Parallel()
+
+	events := []string{}
+	users := &fakeTestUserRepository{
+		events:        &events,
+		garageListErr: errTestDatabaseUnavailable,
+	}
+	mail := &fakeMailpitDeleter{events: &events}
+	files := &fakeUploadedFileDeleter{events: &events}
+
+	_, _, _, err := purgeTestUsers(
+		t.Context(), users, mail, files, "blackbox.vietgara.test", time.Now(),
+	)
+	require.ErrorContains(t, err, "database unavailable")
+	assert.Equal(t, []string{"list", "list-garages"}, events)
+}
+
+func TestPurgeTestUsersDoesNotDeleteUsersWhenFileCleanupFails(t *testing.T) {
+	t.Parallel()
+
+	events := []string{}
+	users := &fakeTestUserRepository{
+		events:     &events,
+		recipients: []string{"old@blackbox.vietgara.test"},
+		garageIDs:  []string{"garage-1"},
+	}
+	mail := &fakeMailpitDeleter{events: &events}
+	files := &fakeUploadedFileDeleter{
+		events:    &events,
+		deleteErr: errTestDatabaseUnavailable,
+	}
+
+	deletedUsers, _, _, err := purgeTestUsers(
+		t.Context(), users, mail, files, "blackbox.vietgara.test", time.Now(),
+	)
+	require.ErrorContains(t, err, "delete uploaded files for garage garage-1")
+	assert.Zero(t, deletedUsers)
+	assert.Equal(t, []string{"list", "list-garages", "delete-mail", "delete-files"}, events)
 }

@@ -12,7 +12,10 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/numbering"
 )
 
-const docTypeSettlement = "settlement"
+const (
+	docTypeSettlement     = "settlement"
+	docTypePaymentVoucher = "payment_voucher"
+)
 
 // EventSettlementCreated is published by the Billing & Settlement module
 // (Event Design Section 4).
@@ -23,6 +26,7 @@ type Deps struct {
 	Settlements  Repository
 	RepairOrders RepairOrderReader
 	Garages      GarageReader
+	Collectors   CollectorReader
 	Limits       TransactionLimiter
 	Sequences    Sequencer
 	Events       EventPublisher
@@ -82,7 +86,7 @@ func (uc *SettlementUseCase) Create(ctx context.Context, req CreateSettlementReq
 		return nil, err
 	}
 
-	number, err := uc.nextNumber(ctx, req.GarageID, garage)
+	number, err := uc.nextNumber(ctx, req.GarageID, docTypeSettlement, garage.SettlementNumberTemplate, garage.Timezone)
 	if err != nil {
 		return nil, toAppError("create settlement", err)
 	}
@@ -90,7 +94,7 @@ func (uc *SettlementUseCase) Create(ctx context.Context, req CreateSettlementReq
 	s := &domain.Settlement{
 		ID: uuid.NewString(), GarageID: req.GarageID, RepairOrderID: req.RepairOrderID,
 		VehicleLicensePlate: ro.VehicleLicensePlate, CustomerName: ro.CustomerName, Number: number,
-		TotalAmount: ro.TotalAmount, Status: domain.StatusPending,
+		TotalAmount: ro.TotalAmount, Status: domain.StatusPending, Issuer: garage.Issuer,
 		CreatedBy: actorRef(req.ActorID), UpdatedBy: actorRef(req.ActorID),
 	}
 	s.DeriveStatus()
@@ -158,21 +162,20 @@ func (uc *SettlementUseCase) garageInfo(ctx context.Context, garageID string) (G
 	return garage, nil
 }
 
-// nextNumber reserves and renders the settlement's document number from
-// the garage's settlement_number_template (FR-TEN-05), in the garage's
-// timezone.
-func (uc *SettlementUseCase) nextNumber(ctx context.Context, garageID string, garage GarageInfo) (string, error) {
+// nextNumber reserves and renders the next document number of docType from
+// the garage's numbering template (FR-TEN-05), in the garage's timezone.
+func (uc *SettlementUseCase) nextNumber(ctx context.Context, garageID, docType, template, timezone string) (string, error) {
 	now := uc.Now()
-	if loc, err := time.LoadLocation(garage.Timezone); err == nil {
+	if loc, err := time.LoadLocation(timezone); err == nil {
 		now = now.In(loc)
 	}
 
-	period := numbering.Period(garage.SettlementNumberTemplate, now)
+	period := numbering.Period(template, now)
 
-	seq, err := uc.Sequences.Next(ctx, garageID, docTypeSettlement, period)
+	seq, err := uc.Sequences.Next(ctx, garageID, docType, period)
 	if err != nil {
 		return "", err
 	}
 
-	return numbering.Render(garage.SettlementNumberTemplate, now, seq), nil
+	return numbering.Render(template, now, seq), nil
 }

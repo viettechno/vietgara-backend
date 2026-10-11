@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path"
 	"strings"
 	"time"
@@ -36,6 +37,9 @@ type Store interface {
 	KeyFromURL(url string) (string, bool)
 	// PublicURL returns the URL of a public object's key.
 	PublicURL(key string) string
+	// Get returns the content of a public object (at most MaxGetBytes), for
+	// what the server itself draws, such as the logo of a PDF header.
+	Get(ctx context.Context, key string) ([]byte, error)
 	// PutPrivate stores data under key without making it public.
 	PutPrivate(ctx context.Context, key, contentType string, data []byte) error
 	// SignedURL returns a URL that serves the private object for ttl, and
@@ -49,6 +53,12 @@ var ErrInvalidKey = errors.New("storage: invalid object key")
 // ErrPrivateNotConfigured is returned when private objects are used but no
 // private bucket (gcs) is configured.
 var ErrPrivateNotConfigured = errors.New("storage: private storage is not configured")
+
+// MaxGetBytes is the largest object Get returns.
+const MaxGetBytes = 2 << 20
+
+// ErrTooLarge is returned by Get for an object over MaxGetBytes.
+var ErrTooLarge = errors.New("storage: object is too large")
 
 // privateRoot is reserved by the local backend for private objects, so a
 // public key may never name it.
@@ -144,4 +154,18 @@ func New(ctx context.Context, cfg Config) (Store, error) {
 	default:
 		return nil, fmt.Errorf("%w %q (want local or gcs)", errUnknownStorageBackend, cfg.Backend)
 	}
+}
+
+// readLimited reads r up to MaxGetBytes.
+func readLimited(r io.Reader, key string) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, MaxGetBytes+1))
+	if err != nil {
+		return nil, fmt.Errorf("storage: read %s: %w", key, err)
+	}
+
+	if len(data) > MaxGetBytes {
+		return nil, fmt.Errorf("%w: %s", ErrTooLarge, key)
+	}
+
+	return data, nil
 }

@@ -173,13 +173,13 @@ func TestLogo(t *testing.T) {
 	g, err = e.UC.UploadGarageLogo(ctx, id, png, "image/png")
 	require.NoError(t, err)
 	assert.NotEqual(t, first, *g.Garage.LogoKey)
-	assert.Equal(t, []string{first}, e.Logos.Removed, "old logo removed")
+	assert.Equal(t, []string{first}, e.Logos.Retired, "old logo retired")
 
 	g, err = e.UC.DeleteGarageLogo(ctx, id)
 	require.NoError(t, err)
 	assert.Nil(t, g.Garage.LogoKey)
 	assert.Nil(t, e.UC.LogoURL(g.Garage.LogoKey))
-	assert.Len(t, e.Logos.Removed, 2)
+	assert.Len(t, e.Logos.Retired, 2)
 
 	for _, tc := range []struct {
 		content []byte
@@ -217,4 +217,57 @@ func TestListGaragesFailures(t *testing.T) {
 	e.Store.Fail["garage.list"] = errBoom
 	_, err = e.UC.ListGarages(t.Context(), owner)
 	requireReason(t, err, apperror.ReasonInternal)
+}
+
+// TestLegalProfile covers FR-TEN-06: the garage's legal identity, bank
+// account and voucher numbering template.
+func TestLegalProfile(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t, limits{Garages: 1, Staff: 5})
+	id := e.garage(t)
+	ctx := e.as(t, owner, id)
+
+	g, err := e.UC.GetGarage(ctx, id)
+	require.NoError(t, err)
+	assert.Nil(t, g.Garage.LegalName)
+	assert.Equal(t, domain.DefaultPaymentVoucherNumberTemplate, g.Garage.PaymentVoucherNumberTemplate)
+
+	g, err = e.UC.UpdateGarage(ctx, id, usecase.GarageFields{
+		LegalName: new("  Cong ty TNHH Gara An Phat "), LegalAddress: new("12 Nguyen Hue, Q1"), Representative: new("Nguyen Van An"),
+		Bank:                         &domain.BankDetails{BankName: new("Vietcombank"), AccountNumber: new(" 0011 2233 "), AccountHolder: new("")},
+		PaymentVoucherNumberTemplate: new("PT-{YYYY}-{SEQ:5}"),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Cong ty TNHH Gara An Phat", *g.Garage.LegalName)
+	assert.Equal(t, "Nguyen Van An", *g.Garage.Representative)
+	assert.Equal(t, "Vietcombank", *g.Garage.Bank.BankName)
+	assert.Equal(t, "0011 2233", *g.Garage.Bank.AccountNumber)
+	assert.Nil(t, g.Garage.Bank.AccountHolder, "blank clears")
+	assert.Equal(t, "PT-{YYYY}-{SEQ:5}", g.Garage.PaymentVoucherNumberTemplate)
+
+	// A blank value clears; omitted fields are kept; a bank block replaces the account.
+	g, err = e.UC.UpdateGarage(ctx, id, usecase.GarageFields{
+		LegalAddress: new(" "), Bank: &domain.BankDetails{AccountHolder: new("An Phat")},
+	})
+	require.NoError(t, err)
+	assert.Nil(t, g.Garage.LegalAddress)
+	assert.Equal(t, "Cong ty TNHH Gara An Phat", *g.Garage.LegalName)
+	assert.Nil(t, g.Garage.Bank.BankName)
+	assert.Equal(t, "An Phat", *g.Garage.Bank.AccountHolder)
+
+	long := string(make([]rune, 256))
+
+	for name, fields := range map[string]usecase.GarageFields{
+		"legal name":      {LegalName: &long},
+		"representative":  {Representative: &long},
+		"legal address":   {LegalAddress: new(string(make([]rune, 501)))},
+		"bank name":       {Bank: &domain.BankDetails{BankName: new(string(make([]rune, 101)))}},
+		"bank account":    {Bank: &domain.BankDetails{AccountNumber: new(string(make([]rune, 101)))}},
+		"bank holder":     {Bank: &domain.BankDetails{AccountHolder: new(string(make([]rune, 101)))}},
+		"voucher numbers": {PaymentVoucherNumberTemplate: new("PT-no-sequence")},
+	} {
+		_, err := e.UC.UpdateGarage(ctx, id, fields)
+		requireReason(t, err, apperror.ReasonValidation, name)
+	}
 }

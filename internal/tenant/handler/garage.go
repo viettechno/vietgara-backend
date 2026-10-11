@@ -8,6 +8,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/middleware"
 	"github.com/viettechno/vietgara-backend/internal/platform/httpapi"
+	"github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	"github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
@@ -93,7 +94,7 @@ const pathName = "name"
 
 var garageSettable = []string{
 	pathName, "tax_code", "address", "phone", "email", "timezone", "currency", "status", "operating_hours", "numbering",
-	"default_quote_approval_mode",
+	"default_quote_approval_mode", "legal_name", "legal_address", "representative", "bank",
 }
 
 // garageSetters copy one masked field of the API garage into GarageFields.
@@ -124,6 +125,20 @@ var garageSetters = map[string]func(f *usecase.GarageFields, in *tenantv1.Garage
 	},
 	"numbering.settlement": func(f *usecase.GarageFields, in *tenantv1.Garage) {
 		f.SettlementNumberTemplate = new(in.GetNumbering().GetSettlement())
+	},
+	"numbering.payment_voucher": func(f *usecase.GarageFields, in *tenantv1.Garage) {
+		f.PaymentVoucherNumberTemplate = new(in.GetNumbering().GetPaymentVoucher())
+	},
+	"legal_name":     func(f *usecase.GarageFields, in *tenantv1.Garage) { f.LegalName = new(in.GetLegalName()) },
+	"legal_address":  func(f *usecase.GarageFields, in *tenantv1.Garage) { f.LegalAddress = new(in.GetLegalAddress()) },
+	"representative": func(f *usecase.GarageFields, in *tenantv1.Garage) { f.Representative = new(in.GetRepresentative()) },
+	"bank": func(f *usecase.GarageFields, in *tenantv1.Garage) {
+		bank := &domain.BankDetails{}
+		if b := in.GetBank(); b != nil {
+			bank = &domain.BankDetails{BankName: b.BankName, AccountNumber: b.AccountNumber, AccountHolder: b.AccountHolder}
+		}
+
+		f.Bank = bank
 	},
 	"default_quote_approval_mode": func(f *usecase.GarageFields, in *tenantv1.Garage) {
 		f.DefaultQuoteApprovalMode = new(quoteApprovalModeFromProto(in.GetDefaultQuoteApprovalMode()))
@@ -160,6 +175,9 @@ func presentGarageFields(in *tenantv1.Garage) []string {
 		"timezone": in.GetTimezone() != "", "currency": in.GetCurrency() != "",
 		"operating_hours": len(in.GetOperatingHours()) > 0,
 		"numbering.quote": in.GetNumbering().GetQuote() != "", "numbering.repair_order": in.GetNumbering().GetRepairOrder() != "",
+		"numbering.settlement": in.GetNumbering().GetSettlement() != "", "numbering.payment_voucher": in.GetNumbering().GetPaymentVoucher() != "",
+		"legal_name": in.LegalName != nil, "legal_address": in.LegalAddress != nil, "representative": in.Representative != nil,
+		"bank":                        in.GetBank() != nil,
 		"default_quote_approval_mode": in.GetDefaultQuoteApprovalMode() != commonv1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_UNSPECIFIED,
 	} {
 		if set {

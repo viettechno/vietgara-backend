@@ -639,13 +639,13 @@ func (l Limits) CheckLimit(_ context.Context, _ string, limit usecase.Limit, cur
 	return nil
 }
 
-// Logos is an in-memory tenant LogoFiles. Err makes StoreLogo fail; Removed
-// and Discarded record the keys removed after a replace and after a
+// Logos is an in-memory tenant LogoFiles. Err makes StoreLogo fail; Retired
+// and Discarded record the keys retired after a replace and the keys of a
 // rolled-back upload.
 type Logos struct {
 	mu        sync.Mutex
 	seq       int
-	Removed   []string
+	Retired   []string
 	Discarded []string
 	Err       error
 }
@@ -676,12 +676,12 @@ func (l *Logos) Discard(_ context.Context, key string) {
 	l.Discarded = append(l.Discarded, key)
 }
 
-// RemoveByKey records a removed logo.
-func (l *Logos) RemoveByKey(_ context.Context, _, _, key string) error {
+// Retire records a retired logo.
+func (l *Logos) Retire(_ context.Context, _, _, key string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	l.Removed = append(l.Removed, key)
+	l.Retired = append(l.Retired, key)
 
 	return nil
 }

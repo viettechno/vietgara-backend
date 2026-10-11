@@ -19,6 +19,7 @@ import (
 	quoteRepository "github.com/viettechno/vietgara-backend/internal/quote/repository"
 	repairorderDomain "github.com/viettechno/vietgara-backend/internal/repairorder/domain"
 	repairorderRepository "github.com/viettechno/vietgara-backend/internal/repairorder/repository"
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 // TestQuantitiesAreNumeric runs the quantity and cost columns (NUMERIC,
@@ -68,11 +69,13 @@ func TestQuantitiesAreNumeric(t *testing.T) {
 				{ID: uuid.NewString(), Position: 3, ItemType: quoteDomain.ItemTypePart, Description: "Filter", Quantity: "0.25", UnitPrice: 100, LineTotal: 25, Decision: quoteDomain.DecisionPending},
 			},
 			TotalAmount: 375,
+			Issuer:      issuer.Issuer{Name: "Cong ty TNHH An Phat", TaxCode: "0301234567", LogoKey: "garages/g/logo/g/l.png"},
 		}
 
 		order := &repairorderDomain.RepairOrder{
 			ID: uuid.NewString(), GarageID: garageID, VehicleID: vehicleID, VehicleLicensePlate: "51F-111.11", CustomerName: "An",
 			Number: "LSC-1", Status: repairorderDomain.StatusOpen, TotalAmount: 150,
+			Issuer: issuer.Issuer{Name: "Cong ty TNHH An Phat", Representative: "Nguyen Van An"},
 			Lines: []repairorderDomain.Line{
 				{ID: uuid.NewString(), Position: 1, ItemType: repairorderDomain.ItemTypePart, Description: "Oil", Quantity: "1.5", UnitPrice: 100, LineTotal: 150, Status: repairorderDomain.LineNotStarted},
 			},
@@ -85,6 +88,15 @@ func TestQuantitiesAreNumeric(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, got.Lines, 3)
 			assert.Equal(t, []string{"2", "1.5", "0.25"}, []string{got.Lines[0].Quantity, got.Lines[1].Quantity, got.Lines[2].Quantity})
+			assert.Equal(t, quote.Issuer, got.Issuer, "the garage's identity is kept with the quote")
+
+			// Sending refreshes it: the quote is issued to the customer then.
+			got.Issuer = issuer.Issuer{Name: "Cong ty TNHH An Phat Moi"}
+			require.NoError(t, quotes.Save(ctx, got))
+
+			sent, err := quotes.FindByID(ctx, garageID, quote.ID)
+			require.NoError(t, err)
+			assert.Equal(t, "Cong ty TNHH An Phat Moi", sent.Issuer.Name)
 
 			require.NoError(t, orders.Create(ctx, order))
 
@@ -92,6 +104,7 @@ func TestQuantitiesAreNumeric(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, gotOrder.Lines, 1)
 			assert.Equal(t, "1.5", gotOrder.Lines[0].Quantity)
+			assert.Equal(t, order.Issuer, gotOrder.Issuer)
 		})
 	})
 

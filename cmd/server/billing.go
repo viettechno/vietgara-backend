@@ -4,6 +4,7 @@ import (
 	billingHandler "github.com/viettechno/vietgara-backend/internal/billing/handler"
 	billingRepository "github.com/viettechno/vietgara-backend/internal/billing/repository"
 	billingUsecase "github.com/viettechno/vietgara-backend/internal/billing/usecase"
+	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
 	licenseUsecase "github.com/viettechno/vietgara-backend/internal/license/usecase"
 	"github.com/viettechno/vietgara-backend/internal/platform/audit"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
@@ -26,6 +27,7 @@ func buildBilling(
 	pool *platformdb.Pool,
 	events *outbox.EventPublisher,
 	garages *tenantRepo.PostgresGarageRepository,
+	users *identityRepo.PostgresUserRepository,
 	entitlements *licenseUsecase.EntitlementUseCase,
 	repairOrders *repairorderUsecase.RepairOrderUseCase,
 	auditLog *audit.Logger,
@@ -34,7 +36,7 @@ func buildBilling(
 
 	uc := billingUsecase.NewSettlementUseCase(billingUsecase.Deps{
 		Settlements: settlementsRepo, RepairOrders: billingRepairOrders{uc: repairOrders},
-		Garages: billingGarages{garages: garages}, Limits: entitlements,
+		Garages: billingGarages{garages: garages}, Collectors: billingCollectors{users: users}, Limits: entitlements,
 		Sequences: numbering.NewSequencer(pool), Events: events, Audit: auditLog,
 	})
 

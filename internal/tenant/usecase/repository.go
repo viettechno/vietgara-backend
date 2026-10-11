@@ -132,9 +132,9 @@ type LogoFiles interface {
 	// Discard removes an object stored by StoreLogo whose registration was
 	// rolled back.
 	Discard(ctx context.Context, key string)
-	// RemoveByKey removes a replaced or deleted logo once the surrounding
-	// change commits.
-	RemoveByKey(ctx context.Context, garageID, actorID, key string) error
+	// Retire deactivates a replaced or removed logo. Its object is kept:
+	// documents issued with it still print it.
+	Retire(ctx context.Context, garageID, actorID, key string) error
 	// PublicURL returns the URL of a logo key.
 	PublicURL(key string) string
 }

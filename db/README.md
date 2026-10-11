@@ -20,7 +20,7 @@ Planned in-place changes (Release Plan, Phases 3-8; the audit columns and `full_
 | Version | Module | Creates |
 | --- | --- | --- |
 | 000001 | Identity | `users` with enums `user_status` (`active`, `suspended`), `user_auth_provider` (`email`, `google`), `user_locale` (`vi` default, `en`); required e-mail unique case-insensitively; `email_verified_at` |
-| 000002 | Tenant | RLS helpers `app_current_garage_id()` / `app_current_user_id()`; `garages` with `garage_status` (`active`, `inactive`), `Asia/Ho_Chi_Minh` time zone, contact details, operating hours, numbering templates |
+| 000002 | Tenant | RLS helpers `app_current_garage_id()` / `app_current_user_id()`; `garages` with `garage_status` (`active`, `inactive`), `Asia/Ho_Chi_Minh` time zone, contact details, legal profile (legal name, address, representative, bank), operating hours, numbering templates (quote, repair order, settlement, payment voucher) |
 | 000003 | Tenant | `garage_staff` with `staff_status` (`active`, `inactive`); permissions come from staff groups |
 | 000004 | Platform | `outbox_events` (`outbox_status`, garage or user, relay bookkeeping) |
 | 000005–000007 | Customer | `customers` (consent log, trigram search), `vehicles` (normalized plate key), `suppliers` (000007, Supplier module, bank details), each with its tenant RLS policy and an `is_active` flag for the delete-or-deactivate rule (FR-CAT-07) |
@@ -34,7 +34,7 @@ Planned in-place changes (Release Plan, Phases 3-8; the audit columns and `full_
 | 000015 | Quote & Pricing | `quotes` (`quote_status`, `quote_approval_mode` from 000002, the public approval token hash), `quote_lines` (`quote_item_type`, `quote_line_decision`), `find_quote_by_public_token()` |
 | 000016 | Repair Order | `repair_orders` (`repair_order_status`, incl. `waiting_on_parts`), `repair_order_lines` (`repair_order_line_status`, `assigned_technicians`) -- FR-REP-01..03/06 |
 | 000017 | Inventory | `items` (trigram search), `stock_balance` (per-item running total), `stock_transactions` (append-only, `stock_transaction_type`, `stock_transaction_ref_type`) -- FR-INV-01..03/05 |
-| 000018 | Billing & Settlement | `settlements` (`settlement_status`, paid total), `settlement_payments` (append-only, `payment_method`) -- FR-BIL-01..03, FR-REC-01 |
+| 000018 | Billing & Settlement | `settlements` (`settlement_status`, paid total), `settlement_payments` (append-only, `payment_method`; each payment is a numbered payment voucher with payer, reason, collector and the issuer snapshot) -- FR-BIL-01..03, FR-REC-01 |
 | 000019 | Notification | `notification_log` (append-only, `notification_channel`, `notification_status`): what was sent, for visibility -- not a dedup mechanism, the Outbox Pattern's `processed_events` already gives exactly-once delivery -- FR-NOT-04 |
 | 000020 | Customer | `find_customers_by_email()`: the Customer BFF's `SECURITY DEFINER` lookup of a person's customer records across garages (ids only) |
 | 000021 | Platform | `idempotency_keys`: the stored answer of a financial request, kept 24 hours (API Specification 1.3) |

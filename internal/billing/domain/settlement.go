@@ -5,6 +5,8 @@ package domain
 import (
 	"errors"
 	"time"
+
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 // SettlementStatus is a settlement's collection status, derived from the
@@ -56,15 +58,32 @@ func (m PaymentMethod) IsValid() bool {
 
 // Payment is one amount recorded as collected against a settlement
 // (FR-BIL-03); a settlement may receive several. The customer is the only
-// payer.
+// payer. Every payment is a payment voucher (phiếu thu, FR-BIL-05).
 type Payment struct {
-	ID        string
-	Amount    int64
-	Method    PaymentMethod
-	Note      string
-	CreatedBy *string
-	CreatedAt time.Time
+	ID     string
+	Amount int64
+	Method PaymentMethod
+	Note   string
+	// VoucherNumber comes from the garage's voucher numbering template.
+	VoucherNumber string
+	// PayerName and PayerAddress default to the customer's; Reason to a
+	// standard text naming the settlement.
+	PayerName    string
+	PayerAddress string
+	Reason       string
+	// CollectorName is the staff member who collected the money.
+	CollectorName string
+	Issuer        issuer.Issuer
+	CreatedBy     *string
+	CreatedAt     time.Time
 }
+
+// Field limits of a voucher, matching the settlement_payments columns.
+const (
+	MaxPayerNameLength    = 255
+	MaxPayerAddressLength = 500
+	MaxReasonLength       = 500
+)
 
 // Settlement is the final bill of a closed repair order (FR-BIL-01),
 // paid by the customer. See: Database Design Section 6.1.
@@ -80,6 +99,9 @@ type Settlement struct {
 	Number              string
 	// TotalAmount is copied from the repair order's total at creation.
 	TotalAmount int64
+	// Issuer is the garage's legal identity when the settlement was created
+	// (FR-TEN-06); the receipt prints it.
+	Issuer issuer.Issuer
 	// PaidAmount is the running total of Payments.
 	PaidAmount int64
 	Status     SettlementStatus
@@ -119,6 +141,9 @@ var (
 	// repair order is not yet closed (FR-BIL-01).
 	ErrRepairOrderNotClosed = errors.New("the repair order must be closed before it can be settled")
 	ErrInvalidPaymentMethod = errors.New("payment method is invalid")
+	// ErrInvalidVoucher is returned when a voucher's payer, address or
+	// reason is too long.
+	ErrInvalidVoucher = errors.New("the payer name, address or reason is too long")
 	// ErrInvalidPaymentAmount is returned when a payment is not positive,
 	// or would collect more than the amount still due.
 	ErrInvalidPaymentAmount = errors.New("payment amount must be positive and not exceed the amount still due")

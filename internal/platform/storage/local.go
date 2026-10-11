@@ -94,6 +94,22 @@ func (s *LocalStore) PutPrivate(_ context.Context, key, _ string, data []byte) e
 // PublicURL returns the URL Handler serves key at.
 func (s *LocalStore) PublicURL(key string) string { return s.baseURL + "/" + key }
 
+// Get reads a public object.
+func (s *LocalStore) Get(_ context.Context, key string) ([]byte, error) {
+	key, err := cleanPublicKey(key)
+	if err != nil {
+		return nil, err
+	}
+
+	f, err := os.Open(filepath.Join(s.dir, filepath.FromSlash(key)))
+	if err != nil {
+		return nil, fmt.Errorf("storage: open %s: %w", key, err)
+	}
+	defer func() { _ = f.Close() }()
+
+	return readLimited(f, key)
+}
+
 // Delete removes dir/key, public or private.
 func (s *LocalStore) Delete(_ context.Context, key string) error {
 	key, err := cleanPublicKey(key)

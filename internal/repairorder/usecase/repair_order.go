@@ -93,7 +93,7 @@ func (uc *RepairOrderUseCase) Create(ctx context.Context, req CreateRepairOrderR
 
 	ro := &domain.RepairOrder{
 		ID: uuid.NewString(), GarageID: req.GarageID, VehicleID: req.VehicleID, VehicleLicensePlate: plate,
-		CustomerName: customerName, Number: number, Status: domain.StatusOpen, Lines: lines,
+		CustomerName: customerName, Number: number, Status: domain.StatusOpen, Lines: lines, Issuer: garage.Issuer,
 		CreatedBy: actorRef(req.ActorID), UpdatedBy: actorRef(req.ActorID),
 	}
 	ro.Recalculate()
@@ -129,10 +129,15 @@ type CreateFromQuoteRequest struct {
 // this inside the same transaction as marking the quote converted, so
 // both changes commit or roll back together.
 func (uc *RepairOrderUseCase) CreateFromQuote(ctx context.Context, req CreateFromQuoteRequest) (*domain.RepairOrder, error) {
+	garage, err := uc.garageInfo(ctx, req.GarageID)
+	if err != nil {
+		return nil, err
+	}
+
 	ro := &domain.RepairOrder{
 		ID: uuid.NewString(), GarageID: req.GarageID, QuoteID: &req.QuoteID, VehicleID: req.VehicleID,
 		VehicleLicensePlate: req.VehiclePlate, CustomerName: req.CustomerName, Number: req.Number, Status: domain.StatusOpen,
-		CreatedBy: actorRef(req.ActorID), UpdatedBy: actorRef(req.ActorID),
+		Issuer: garage.Issuer, CreatedBy: actorRef(req.ActorID), UpdatedBy: actorRef(req.ActorID),
 	}
 
 	for _, line := range req.Lines {

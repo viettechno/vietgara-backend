@@ -338,6 +338,11 @@ packages:
           filename: "billing_usecase_garage_reader.go"
           dir: "./internal/mocks"
           structname: "MockBillingGarageReader"
+      CollectorReader:
+        config:
+          filename: "billing_usecase_collector_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockBillingCollectorReader"
       TransactionLimiter:
         config:
           filename: "billing_usecase_transaction_limiter.go"

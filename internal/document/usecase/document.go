@@ -9,9 +9,11 @@ package usecase
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/viettechno/vietgara-backend/internal/document/render"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 // QuoteInfo is the Quote & Pricing module's view of a quote that
@@ -20,6 +22,9 @@ type QuoteInfo struct {
 	Number, Status, CustomerName, VehiclePlate, Notes string
 	Lines                                             []render.DocumentLine
 	TotalAmount                                       int64
+	// Issuer is the garage's legal identity when the quote was issued
+	// (FR-TEN-06).
+	Issuer issuer.Issuer
 }
 
 // QuoteReader reads a quote for PDF export; implemented by an adapter
@@ -37,6 +42,9 @@ type RepairOrderInfo struct {
 	Number, Status, CustomerName, VehiclePlate string
 	Lines                                      []render.DocumentLine
 	TotalAmount                                int64
+	// Issuer is the garage's legal identity when the repair order was
+	// created (FR-TEN-06).
+	Issuer issuer.Issuer
 }
 
 // RepairOrderReader reads a repair order for PDF export; implemented by
@@ -51,6 +59,9 @@ type SettlementInfo struct {
 	Number, Status, CustomerName, VehiclePlate string
 	TotalAmount, PaidAmount                    int64
 	Payments                                   []render.PaymentRow
+	// Issuer is the garage's legal identity when the settlement was
+	// created (FR-TEN-06).
+	Issuer issuer.Issuer
 }
 
 // SettlementReader reads a settlement for receipt PDF export; implemented
@@ -68,13 +79,24 @@ type StockMovementReader interface {
 // GarageHeaderInfo is the Tenant module's view of a garage that every
 // document's letterhead needs.
 type GarageHeaderInfo struct {
+	// Name and Address are the legal name and address, or the trading ones
+	// when the garage has no legal profile (FR-TEN-06).
 	Name, Address, Phone string
+	TaxCode              string
+	Representative       string
+	Bank                 string
+	// Logo is the logo's image content, empty when the garage has none.
+	Logo []byte
 }
 
 // GarageReader reads a garage's letterhead; implemented by an adapter
 // over the Tenant module in cmd/server.
 type GarageReader interface {
+	// Get returns the garage's current letterhead, for a document that has
+	// no snapshot of its own.
 	Get(ctx context.Context, garageID string) (GarageHeaderInfo, error)
+	// Logo returns the content of a logo by its object key.
+	Logo(ctx context.Context, key string) ([]byte, error)
 }
 
 // DocumentUseCase implements every export of the Document/Print module.
@@ -100,14 +122,14 @@ func NewDocumentUseCase(
 //
 //nolint:dupl // each export reads one kind of document and renders it with its own layout
 func (uc *DocumentUseCase) QuotePDF(ctx context.Context, garageID, quoteID string) ([]byte, error) {
-	garage, err := uc.garageHeader(ctx, garageID)
-	if err != nil {
-		return nil, err
-	}
-
 	quote, err := uc.Quotes.Get(ctx, garageID, quoteID)
 	if err != nil {
 		return nil, toAppError("export quote pdf", err)
+	}
+
+	garage, err := uc.letterhead(ctx, garageID, quote.Issuer)
+	if err != nil {
+		return nil, err
 	}
 
 	pdf, err := render.QuotePDF(render.QuotePDFData{
@@ -123,14 +145,14 @@ func (uc *DocumentUseCase) QuotePDF(ctx context.Context, garageID, quoteID strin
 
 // RepairOrderPDF renders a repair order as a PDF (FR-DOC-01).
 func (uc *DocumentUseCase) RepairOrderPDF(ctx context.Context, garageID, repairOrderID string) ([]byte, error) {
-	garage, err := uc.garageHeader(ctx, garageID)
-	if err != nil {
-		return nil, err
-	}
-
 	ro, err := uc.RepairOrders.Get(ctx, garageID, repairOrderID)
 	if err != nil {
 		return nil, toAppError("export repair order pdf", err)
+	}
+
+	garage, err := uc.letterhead(ctx, garageID, ro.Issuer)
+	if err != nil {
+		return nil, err
 	}
 
 	pdf, err := render.RepairOrderPDF(render.RepairOrderPDFData{
@@ -148,14 +170,14 @@ func (uc *DocumentUseCase) RepairOrderPDF(ctx context.Context, garageID, repairO
 //
 //nolint:dupl // each export reads one kind of document and renders it with its own layout
 func (uc *DocumentUseCase) SettlementReceiptPDF(ctx context.Context, garageID, settlementID string) ([]byte, error) {
-	garage, err := uc.garageHeader(ctx, garageID)
-	if err != nil {
-		return nil, err
-	}
-
 	settlement, err := uc.Settlements.Get(ctx, garageID, settlementID)
 	if err != nil {
 		return nil, toAppError("export settlement receipt pdf", err)
+	}
+
+	garage, err := uc.letterhead(ctx, garageID, settlement.Issuer)
+	if err != nil {
+		return nil, err
 	}
 
 	pdf, err := render.SettlementReceiptPDF(render.SettlementReceiptData{
@@ -187,13 +209,38 @@ func (uc *DocumentUseCase) StockMovementsExcel(ctx context.Context, garageID, it
 	return workbook, nil
 }
 
-func (uc *DocumentUseCase) garageHeader(ctx context.Context, garageID string) (render.GarageHeader, error) {
-	g, err := uc.Garages.Get(ctx, garageID)
-	if err != nil {
-		return render.GarageHeader{}, apperror.Internal("read garage", err)
+// letterhead returns the header a document prints: the garage's legal
+// identity as it was when the document was issued (FR-TEN-06) or, for a
+// document without a snapshot, the garage's current profile. A logo that
+// cannot be read is left out.
+func (uc *DocumentUseCase) letterhead(ctx context.Context, garageID string, snapshot issuer.Issuer) (render.GarageHeader, error) {
+	if snapshot.IsZero() {
+		g, err := uc.Garages.Get(ctx, garageID)
+		if err != nil {
+			return render.GarageHeader{}, apperror.Internal("read garage", err)
+		}
+
+		return render.GarageHeader{
+			Name: g.Name, Address: g.Address, Phone: g.Phone, TaxCode: g.TaxCode, Representative: g.Representative,
+			Bank: g.Bank, Logo: g.Logo,
+		}, nil
 	}
 
-	return render.GarageHeader{Name: g.Name, Address: g.Address, Phone: g.Phone}, nil
+	header := render.GarageHeader{
+		Name: snapshot.Name, Address: snapshot.Address, Phone: snapshot.Phone, TaxCode: snapshot.TaxCode,
+		Representative: snapshot.Representative, Bank: snapshot.BankLine(),
+	}
+
+	if snapshot.LogoKey != "" {
+		logo, err := uc.Garages.Logo(ctx, snapshot.LogoKey)
+		if err != nil {
+			slog.Warn("document: reading the logo failed", "garage_id", garageID, "key", snapshot.LogoKey, "error", err)
+		} else {
+			header.Logo = logo
+		}
+	}
+
+	return header, nil
 }
 
 // toAppError passes an already-classified error (from a reader adapter)

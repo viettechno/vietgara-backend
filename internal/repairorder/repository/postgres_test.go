@@ -47,7 +47,7 @@ func newRepairOrder() *domain.RepairOrder {
 func repairOrderRow() []any {
 	return []any{
 		repairOrderID, garageID, "q-1", vehicleID, "51F-123.45", "An Nguyen", "LSC-202609-0001", "open",
-		int64(730_000), nil, nil, nil, now, now,
+		int64(730_000), []byte(`{"name":"Cong ty An Phat"}`), nil, nil, nil, now, now,
 	}
 }
 

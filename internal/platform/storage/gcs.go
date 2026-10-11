@@ -85,6 +85,22 @@ func (s *GCSStore) Put(ctx context.Context, key, contentType string, data []byte
 	return s.baseURL + "/" + key, nil
 }
 
+// Get reads a public object.
+func (s *GCSStore) Get(ctx context.Context, key string) ([]byte, error) {
+	key, err := cleanPublicKey(key)
+	if err != nil {
+		return nil, err
+	}
+
+	r, err := s.bucket.Object(key).NewReader(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("storage: open %s: %w", key, err)
+	}
+	defer func() { _ = r.Close() }()
+
+	return readLimited(r, key)
+}
+
 // PublicURL returns the URL a public object is served at.
 func (s *GCSStore) PublicURL(key string) string { return s.baseURL + "/" + key }
 

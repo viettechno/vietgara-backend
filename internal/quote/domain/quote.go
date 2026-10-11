@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 // Field length limits shared by the module's use cases.
@@ -129,6 +131,9 @@ type Quote struct {
 	// TotalAmount is the sum of Lines[i].LineTotal.
 	TotalAmount int64
 	Notes       string
+	// Issuer is the garage's legal identity when the quote was created or
+	// sent (FR-TEN-06); its PDF prints it.
+	Issuer issuer.Issuer
 	// PublicTokenHash/PublicTokenExpiresAt back the LINK-mode approval
 	// link (FR-QUO-02); the plaintext token is never stored, only its
 	// SHA-256 hash. Both are cleared once the quote is decided.

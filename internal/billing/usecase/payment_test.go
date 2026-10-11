@@ -1,8 +1,10 @@
 package usecase_test
 
 import (
+	"context"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -19,6 +21,7 @@ func TestSettlementUseCase_RecordPayment_Success(t *testing.T) {
 
 		uc, d := newUseCase(t)
 		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
+		expectVoucher(d)
 
 		updated := openSettlement()
 		updated.PaidAmount = 300_000
@@ -47,7 +50,8 @@ func TestSettlementUseCase_RecordPayment_Success(t *testing.T) {
 		require.Equal(t, int64(300_000), after["paid_amount"])
 		require.Equal(t, domain.StatusPartiallyPaid, after["status"])
 		require.Equal(t, map[string]any{
-			"amount": int64(300_000), "method": domain.MethodCash, "note": "",
+			"voucher_number": "PT-202609-0007", "amount": int64(300_000), "method": domain.MethodCash, "note": "",
+			"payer_name": "An Nguyen",
 		}, after["payment"])
 		require.Equal(t, domain.StatusPartiallyPaid, s.Status)
 	})
@@ -57,6 +61,7 @@ func TestSettlementUseCase_RecordPayment_Success(t *testing.T) {
 
 		uc, d := newUseCase(t)
 		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
+		expectVoucher(d)
 
 		updated := openSettlement()
 		updated.PaidAmount = 1_000_000
@@ -131,6 +136,7 @@ func TestSettlementUseCase_RecordPayment_Errors(t *testing.T) {
 
 		uc, d := newUseCase(t)
 		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
+		expectVoucher(d)
 		d.Settlements.EXPECT().RecordPayment(mock.Anything, garageID, settlementID, mock.Anything).Return(nil, errBoom).Once()
 
 		_, err := uc.RecordPayment(t.Context(), usecase.RecordPaymentRequest{
@@ -144,6 +150,7 @@ func TestSettlementUseCase_RecordPayment_Errors(t *testing.T) {
 
 		uc, d := newUseCase(t)
 		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
+		expectVoucher(d)
 
 		updated := openSettlement()
 		updated.PaidAmount = 300_000
@@ -165,6 +172,7 @@ func TestSettlementUseCase_AuditFailure(t *testing.T) {
 
 	uc, d := newUseCase(t)
 	d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
+	expectVoucher(d)
 
 	updated := openSettlement()
 	updated.PaidAmount = 300_000
@@ -177,4 +185,120 @@ func TestSettlementUseCase_AuditFailure(t *testing.T) {
 		Amount: 300_000, Method: domain.MethodCash,
 	})
 	assertAppError(t, err, apperror.CodeInternal)
+}
+
+func TestSettlementUseCase_RecordPayment_Voucher(t *testing.T) {
+	t.Parallel()
+
+	t.Run("issues a numbered voucher with the garage's identity and the collector", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+		d.Sequences.EXPECT().Next(mock.Anything, garageID, "payment_voucher", "PT-202609-{SEQ:4}").Return(12, nil).Once()
+		d.Collectors.EXPECT().FullName(mock.Anything, actorID).Return("Le Thu Ngan", nil).Once()
+
+		var issued domain.Payment
+
+		d.Settlements.EXPECT().RecordPayment(mock.Anything, garageID, settlementID, mock.Anything).
+			Run(func(_ context.Context, _, _ string, p *domain.Payment) { issued = *p }).
+			Return(func() *domain.Settlement { s := openSettlement(); s.PaidAmount = 100_000; return s }(), nil).Once()
+		d.Settlements.EXPECT().SaveStatus(mock.Anything, garageID, settlementID, domain.StatusPartiallyPaid).Return(nil).Once()
+		expectAudit(d)
+		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
+
+		_, err := uc.RecordPayment(t.Context(), usecase.RecordPaymentRequest{
+			GarageID: garageID, SettlementID: settlementID, ActorID: actorID, Amount: 100_000, Method: domain.MethodCash,
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, "PT-202609-0012", issued.VoucherNumber)
+		assert.Equal(t, "An Nguyen", issued.PayerName, "defaults to the customer's name")
+		assert.Empty(t, issued.PayerAddress)
+		assert.Equal(t, "Thanh toán quyết toán QT-202609-0001", issued.Reason)
+		assert.Equal(t, "Le Thu Ngan", issued.CollectorName)
+		assert.Equal(t, "Cong ty TNHH An Phat", issued.Issuer.Name)
+		assert.Equal(t, "0301234567", issued.Issuer.TaxCode)
+	})
+
+	t.Run("takes the payer and reason from the request", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
+		expectVoucher(d)
+
+		var issued domain.Payment
+
+		d.Settlements.EXPECT().RecordPayment(mock.Anything, garageID, settlementID, mock.Anything).
+			Run(func(_ context.Context, _, _ string, p *domain.Payment) { issued = *p }).
+			Return(func() *domain.Settlement { s := openSettlement(); s.PaidAmount = 100_000; return s }(), nil).Once()
+		d.Settlements.EXPECT().SaveStatus(mock.Anything, garageID, settlementID, domain.StatusPartiallyPaid).Return(nil).Once()
+		expectAudit(d)
+		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
+
+		_, err := uc.RecordPayment(t.Context(), usecase.RecordPaymentRequest{
+			GarageID: garageID, SettlementID: settlementID, ActorID: actorID, Amount: 100_000, Method: domain.MethodCash,
+			PayerName: "  Cong ty Van Tai A ", PayerAddress: " 5 Le Loi ", Reason: " Dat coc sua chua ",
+		})
+		require.NoError(t, err)
+
+		assert.Equal(t, "Cong ty Van Tai A", issued.PayerName)
+		assert.Equal(t, "5 Le Loi", issued.PayerAddress)
+		assert.Equal(t, "Dat coc sua chua", issued.Reason)
+	})
+
+	t.Run("a payer, address or reason that is too long", func(t *testing.T) {
+		t.Parallel()
+
+		long := string(make([]rune, 600))
+
+		for name, req := range map[string]usecase.RecordPaymentRequest{
+			"payer":   {PayerName: long},
+			"address": {PayerAddress: long},
+			"reason":  {Reason: long},
+		} {
+			uc, d := newUseCase(t)
+			d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
+
+			req.GarageID, req.SettlementID, req.Amount, req.Method = garageID, settlementID, 100_000, domain.MethodCash
+
+			_, err := uc.RecordPayment(t.Context(), req)
+			assertAppError(t, err, apperror.CodeInvalidArgument)
+			require.ErrorIs(t, err, domain.ErrInvalidVoucher, name)
+		}
+	})
+
+	t.Run("voucher reads that fail", func(t *testing.T) {
+		t.Parallel()
+
+		req := usecase.RecordPaymentRequest{
+			GarageID: garageID, SettlementID: settlementID, ActorID: actorID, Amount: 100_000, Method: domain.MethodCash,
+		}
+
+		uc, d := newUseCase(t)
+		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(usecase.GarageInfo{}, errBoom).Once()
+
+		_, err := uc.RecordPayment(t.Context(), req)
+		assertAppError(t, err, apperror.CodeInternal)
+
+		uc, d = newUseCase(t)
+		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+		d.Sequences.EXPECT().Next(mock.Anything, garageID, "payment_voucher", mock.Anything).Return(0, errBoom).Once()
+
+		_, err = uc.RecordPayment(t.Context(), req)
+		assertAppError(t, err, apperror.CodeInternal)
+
+		uc, d = newUseCase(t)
+		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+		d.Sequences.EXPECT().Next(mock.Anything, garageID, "payment_voucher", mock.Anything).Return(1, nil).Once()
+		d.Collectors.EXPECT().FullName(mock.Anything, actorID).Return("", errBoom).Once()
+
+		_, err = uc.RecordPayment(t.Context(), req)
+		assertAppError(t, err, apperror.CodeInternal)
+	})
 }

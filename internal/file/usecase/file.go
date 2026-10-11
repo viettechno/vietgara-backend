@@ -87,26 +87,24 @@ func (uc *UseCase) StoreLogo(ctx context.Context, garageID, actorID string, cont
 	return result.File.Key, nil
 }
 
-// RemoveByKey removes a file by its object key once the surrounding change
-// commits: the registry row is soft-deleted and the object deleted. A key
-// that is not registered (an old upload) only has its object deleted.
-func (uc *UseCase) RemoveByKey(ctx context.Context, garageID, actorID, key string) error {
+// RetireByKey deactivates a file whose owner no longer uses it, by its
+// object key, and keeps the object: documents issued with it still print it
+// (a garage logo is snapshotted on every quote, repair order, settlement and
+// voucher, FR-TEN-06). A key that is not registered (an old upload) is left
+// alone.
+func (uc *UseCase) RetireByKey(ctx context.Context, garageID, actorID, key string) error {
 	f, err := uc.files.FindByKey(ctx, garageID, key)
-	if err != nil && !errors.Is(err, domain.ErrFileNotFound) {
-		return toAppError("remove file", err)
+	if err != nil {
+		if errors.Is(err, domain.ErrFileNotFound) {
+			return nil
+		}
+
+		return toAppError("retire file", err)
 	}
 
-	if f != nil {
-		if err := uc.files.SoftDelete(ctx, garageID, f.ID, actorID); err != nil {
-			return toAppError("remove file", err)
-		}
+	if err := uc.files.SetActive(ctx, garageID, f.ID, false, actorID); err != nil {
+		return toAppError("retire file", err)
 	}
-
-	platformdb.AfterCommit(ctx, func() {
-		if err := uc.storage.Delete(context.WithoutCancel(ctx), key); err != nil {
-			slog.Warn("file: removing the object failed", "key", key, "error", err)
-		}
-	})
 
 	return nil
 }

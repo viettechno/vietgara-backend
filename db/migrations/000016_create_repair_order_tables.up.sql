@@ -26,6 +26,9 @@ CREATE TABLE repair_orders (
     status repair_order_status NOT NULL DEFAULT 'open',
     -- Sum of repair_order_lines.line_total at creation time.
     total_amount BIGINT NOT NULL DEFAULT 0,
+    -- The garage's legal identity (FR-TEN-06) when the repair order was
+    -- created.
+    issuer JSONB NOT NULL DEFAULT '{}'::jsonb,
     closed_at TIMESTAMP WITH TIME ZONE,
     created_by UUID,
     updated_by UUID,

@@ -32,6 +32,9 @@ CREATE TABLE quotes (
     notes TEXT,
     -- Sum of quote_lines.line_total; denormalized for fast reads/listing.
     total_amount BIGINT NOT NULL DEFAULT 0,
+    -- The garage's legal identity (FR-TEN-06) when the quote was created or
+    -- sent: a later change of the profile never rewrites it.
+    issuer JSONB NOT NULL DEFAULT '{}'::jsonb,
     public_token_hash CHAR(64),
     public_token_expires_at TIMESTAMP WITH TIME ZONE,
     sent_at TIMESTAMP WITH TIME ZONE,

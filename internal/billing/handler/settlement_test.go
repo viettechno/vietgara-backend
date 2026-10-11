@@ -1,6 +1,7 @@
 package handler_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -91,20 +92,43 @@ func TestRecordSettlementPayment(t *testing.T) {
 
 	e := newEnv(t)
 	e.settlements.EXPECT().FindByID(anyArg, garageID, settlementID).Return(openSettlement(), nil).Once()
+	e.garages.EXPECT().Get(anyArg, garageID).Return(defaultGarage(), nil).Once()
+	e.sequences.EXPECT().Next(anyArg, garageID, "payment_voucher", "PT-{SEQ:4}").Return(5, nil).Once()
+	e.collectors.EXPECT().FullName(anyArg, actorID).Return("Le Thu Ngan", nil).Once()
+
+	var issued *domain.Payment
 
 	updated := openSettlement()
 	updated.PaidAmount = 1_000_000
-	e.settlements.EXPECT().RecordPayment(anyArg, garageID, settlementID, anyArg).Return(updated, nil).Once()
+	e.settlements.EXPECT().RecordPayment(anyArg, garageID, settlementID, anyArg).
+		Run(func(_ context.Context, _, _ string, p *domain.Payment) { issued = p }).Return(updated, nil).Once()
 	e.settlements.EXPECT().SaveStatus(anyArg, garageID, settlementID, domain.StatusPaid).Return(nil).Once()
 
 	final := openSettlement()
 	final.PaidAmount, final.Status = 1_000_000, domain.StatusPaid
+	final.Payments = []domain.Payment{{
+		ID: "p-1", Amount: 1_000_000, Method: domain.MethodCash, VoucherNumber: "PT-0005", PayerName: "Cong ty A",
+		PayerAddress: "5 Le Loi", Reason: "Thanh toán", CollectorName: "Le Thu Ngan",
+	}}
 	e.settlements.EXPECT().FindByID(anyArg, garageID, settlementID).Return(final, nil).Once()
 
 	resp, err := e.srv.RecordSettlementPayment(signedIn(t), &billingv1.RecordSettlementPaymentRequest{
 		GarageId: garageID, SettlementId: settlementID,
 		Amount: 1_000_000, Method: billingv1.PaymentMethod_PAYMENT_METHOD_CASH,
+		PayerName: "Cong ty A", PayerAddress: "5 Le Loi", Reason: "Thanh toán",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, billingv1.SettlementStatus_SETTLEMENT_STATUS_PAID, resp.GetSettlement().GetStatus())
+
+	require.NotNil(t, issued)
+	assert.Equal(t, "PT-0005", issued.VoucherNumber)
+	assert.Equal(t, "Cong ty A", issued.PayerName)
+
+	payment := resp.GetSettlement().GetPayments()[0]
+	assert.Equal(t, "PT-0005", payment.GetVoucherNumber())
+	assert.Equal(t, "Cong ty A", payment.GetPayerName())
+	assert.Equal(t, "5 Le Loi", payment.GetPayerAddress())
+	assert.Equal(t, "Thanh toán", payment.GetReason())
+	assert.Equal(t, "Le Thu Ngan", payment.GetCollectorName())
+	assert.False(t, payment.GetVoided())
 }

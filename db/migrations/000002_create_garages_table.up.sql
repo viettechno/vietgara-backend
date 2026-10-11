@@ -29,6 +29,13 @@ CREATE TABLE garages (
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
     tax_code VARCHAR(20),
+    -- The garage's legal identity, printed in the header of every document
+    -- with the logo and tax_code (FR-TEN-06). bank_details holds
+    -- {"bank_name", "account_number", "account_holder"}.
+    legal_name VARCHAR(255),
+    legal_address TEXT,
+    representative VARCHAR(255),
+    bank_details JSONB NOT NULL DEFAULT '{}'::jsonb,
     address TEXT,
     phone VARCHAR(20),
     email VARCHAR(255),
@@ -50,6 +57,7 @@ CREATE TABLE garages (
     quote_number_template VARCHAR(50) NOT NULL DEFAULT 'BG-{YYYY}{MM}-{SEQ:4}',
     repair_order_number_template VARCHAR(50) NOT NULL DEFAULT 'LSC-{YYYY}{MM}-{SEQ:4}',
     settlement_number_template VARCHAR(50) NOT NULL DEFAULT 'QT-{YYYY}{MM}-{SEQ:4}',
+    payment_voucher_number_template VARCHAR(50) NOT NULL DEFAULT 'PT-{YYYY}{MM}-{SEQ:4}',
     default_quote_approval_mode quote_approval_mode NOT NULL DEFAULT 'link',
     created_by UUID,
     updated_by UUID,

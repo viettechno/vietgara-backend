@@ -87,7 +87,6 @@ func TestExportQuotePdf(t *testing.T) {
 		t.Parallel()
 
 		e := newEnv(t)
-		e.garages.EXPECT().Get(anyArg, garageID).Return(defaultGarage(), nil).Once()
 
 		notFound := apperror.Wrap(apperror.CodeNotFound, "quote not found", errDocumentTestBoom)
 		e.quotes.EXPECT().Get(anyArg, garageID, quoteID).Return(usecase.QuoteInfo{}, notFound).Once()

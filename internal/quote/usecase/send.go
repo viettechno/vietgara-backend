@@ -40,9 +40,17 @@ func (uc *QuoteUseCase) Send(ctx context.Context, garageID, quoteID, actorID str
 		return SendQuoteResult{}, toAppError("send quote", domain.ErrNotEditable)
 	}
 
+	// The quote is issued to the customer now: it carries the garage's
+	// legal identity (FR-TEN-06) as it is at this moment.
+	garage, err := uc.garageInfo(ctx, garageID)
+	if err != nil {
+		return SendQuoteResult{}, err
+	}
+
 	now := uc.Now()
 	q.Status = domain.StatusSent
 	q.SentAt = &now
+	q.Issuer = garage.Issuer
 	q.UpdatedBy = actorRef(actorID)
 
 	result := SendQuoteResult{Quote: q}

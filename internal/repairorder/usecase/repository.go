@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/viettechno/vietgara-backend/internal/repairorder/domain"
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 // ListFilter selects one page of a garage's repair orders (the Kanban
@@ -69,6 +70,8 @@ type GarageInfo struct {
 	OwnerUserID               string
 	Timezone                  string
 	RepairOrderNumberTemplate string
+	// Issuer is the legal identity a repair order snapshots (FR-TEN-06).
+	Issuer issuer.Issuer
 }
 
 // GarageReader reads a garage's numbering configuration; implemented by an

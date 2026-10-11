@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sort"
+	"strings"
 	"time"
 
 	billingRepository "github.com/viettechno/vietgara-backend/internal/billing/repository"
@@ -35,6 +37,7 @@ import (
 	tenantUsecase "github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 	emailpkg "github.com/viettechno/vietgara-backend/pkg/email"
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 	"github.com/viettechno/vietgara-backend/pkg/lifecycle"
 	phonepkg "github.com/viettechno/vietgara-backend/pkg/phone"
 )
@@ -191,7 +194,7 @@ func (g quoteGarages) Get(ctx context.Context, garageID string) (quoteUsecase.Ga
 	return quoteUsecase.GarageInfo{
 		OwnerUserID: garage.OwnerUserID, Timezone: garage.Timezone, Name: garage.Name,
 		QuoteNumberTemplate: garage.QuoteNumberTemplate, RepairOrderNumberTemplate: garage.RepairOrderNumberTemplate,
-		DefaultQuoteApprovalMode: mode,
+		DefaultQuoteApprovalMode: mode, Issuer: issuerOf(garage),
 	}, nil
 }
 
@@ -262,8 +265,24 @@ func (g repairOrderGarages) Get(ctx context.Context, garageID string) (repairord
 
 	return repairorderUsecase.GarageInfo{
 		OwnerUserID: garage.OwnerUserID, Timezone: garage.Timezone,
-		RepairOrderNumberTemplate: garage.RepairOrderNumberTemplate,
+		RepairOrderNumberTemplate: garage.RepairOrderNumberTemplate, Issuer: issuerOf(garage),
 	}, nil
+}
+
+// issuerOf is the garage's legal identity (FR-TEN-06) for a document to
+// snapshot: the legal name and address, falling back to the trading ones.
+func issuerOf(garage *tenantDomain.Garage) issuer.Issuer {
+	return issuer.Issuer{
+		Name:           firstNonEmpty(deref(garage.LegalName), garage.Name),
+		Address:        firstNonEmpty(deref(garage.LegalAddress), deref(garage.Address)),
+		Phone:          deref(garage.Phone),
+		TaxCode:        deref(garage.TaxCode),
+		Representative: deref(garage.Representative),
+		BankName:       deref(garage.Bank.BankName),
+		AccountNumber:  deref(garage.Bank.AccountNumber),
+		AccountHolder:  deref(garage.Bank.AccountHolder),
+		LogoKey:        deref(garage.LogoKey),
+	}
 }
 
 // vehicleHistory gives the Customer module a read-only view of a
@@ -359,8 +378,8 @@ func (l tenantLogos) StoreLogo(ctx context.Context, garageID, actorID string, co
 // Discard removes the object of an upload whose registration rolled back.
 func (l tenantLogos) Discard(ctx context.Context, key string) { _ = l.store.Delete(ctx, key) }
 
-func (l tenantLogos) RemoveByKey(ctx context.Context, garageID, actorID, key string) error {
-	return l.files.RemoveByKey(ctx, garageID, actorID, key)
+func (l tenantLogos) Retire(ctx context.Context, garageID, actorID, key string) error {
+	return l.files.RetireByKey(ctx, garageID, actorID, key)
 }
 
 func (l tenantLogos) PublicURL(key string) string { return l.files.PublicURL(key) }
@@ -433,7 +452,28 @@ func (g billingGarages) Get(ctx context.Context, garageID string) (billingUsecas
 	return billingUsecase.GarageInfo{
 		OwnerUserID: garage.OwnerUserID, Timezone: garage.Timezone,
 		SettlementNumberTemplate: garage.SettlementNumberTemplate,
+		VoucherNumberTemplate:    garage.PaymentVoucherNumberTemplate,
+		Issuer:                   issuerOf(garage),
 	}, nil
+}
+
+// billingCollectors lets the Billing & Settlement module name the staff
+// member who collects a payment on its voucher without importing Identity.
+type billingCollectors struct {
+	users *identityRepo.PostgresUserRepository
+}
+
+func (c billingCollectors) FullName(ctx context.Context, userID string) (string, error) {
+	if userID == "" {
+		return "", nil
+	}
+
+	user, err := c.users.FindByID(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+
+	return user.FullName, nil
 }
 
 // documentQuotes lets the Document/Print module render a quote PDF
@@ -464,6 +504,7 @@ func (q documentQuotes) Get(ctx context.Context, garageID, quoteID string) (docu
 	return documentUsecase.QuoteInfo{
 		Number: quote.Number, Status: string(quote.Status), CustomerName: quote.CustomerName,
 		VehiclePlate: quote.VehicleLicensePlate, Notes: quote.Notes, Lines: lines, TotalAmount: quote.TotalAmount,
+		Issuer: quote.Issuer,
 	}, nil
 }
 
@@ -492,7 +533,7 @@ func (r documentRepairOrders) Get(ctx context.Context, garageID, repairOrderID s
 
 	return documentUsecase.RepairOrderInfo{
 		Number: ro.Number, Status: string(ro.Status), CustomerName: ro.CustomerName, VehiclePlate: ro.VehicleLicensePlate,
-		Lines: lines, TotalAmount: ro.TotalAmount,
+		Lines: lines, TotalAmount: ro.TotalAmount, Issuer: ro.Issuer,
 	}, nil
 }
 
@@ -519,7 +560,7 @@ func (s documentSettlements) Get(ctx context.Context, garageID, settlementID str
 	return documentUsecase.SettlementInfo{
 		Number: settlement.Number, Status: string(settlement.Status), CustomerName: settlement.CustomerName,
 		VehiclePlate: settlement.VehicleLicensePlate, TotalAmount: settlement.TotalAmount,
-		PaidAmount: settlement.PaidAmount, Payments: payments,
+		PaidAmount: settlement.PaidAmount, Payments: payments, Issuer: settlement.Issuer,
 	}, nil
 }
 
@@ -571,9 +612,11 @@ func (s documentStockMovements) List(ctx context.Context, garageID, itemID strin
 }
 
 // documentGarages lets the Document/Print module read a garage's
-// letterhead (name, address, phone) without importing Tenant.
+// letterhead -- the legal identity (FR-TEN-06) and the logo -- without
+// importing Tenant or the file store.
 type documentGarages struct {
 	garages *tenantRepo.PostgresGarageRepository
+	store   storage.Store
 }
 
 func (g documentGarages) Get(ctx context.Context, garageID string) (documentUsecase.GarageHeaderInfo, error) {
@@ -582,16 +625,55 @@ func (g documentGarages) Get(ctx context.Context, garageID string) (documentUsec
 		return documentUsecase.GarageHeaderInfo{}, err
 	}
 
-	info := documentUsecase.GarageHeaderInfo{Name: garage.Name}
-	if garage.Address != nil {
-		info.Address = *garage.Address
+	info := documentUsecase.GarageHeaderInfo{
+		Name:           firstNonEmpty(deref(garage.LegalName), garage.Name),
+		Address:        firstNonEmpty(deref(garage.LegalAddress), deref(garage.Address)),
+		Phone:          deref(garage.Phone),
+		TaxCode:        deref(garage.TaxCode),
+		Representative: deref(garage.Representative),
+		Bank: strings.Join(nonEmpty(
+			deref(garage.Bank.BankName), deref(garage.Bank.AccountNumber), deref(garage.Bank.AccountHolder)), " - "),
 	}
 
-	if garage.Phone != nil {
-		info.Phone = *garage.Phone
+	if garage.LogoKey != nil {
+		// A logo that cannot be read leaves the letterhead without it.
+		logo, err := g.store.Get(ctx, *garage.LogoKey)
+		if err != nil {
+			slog.Warn("document: reading the logo failed", "garage_id", garageID, "error", err)
+		} else {
+			info.Logo = logo
+		}
 	}
 
 	return info, nil
+}
+
+// Logo reads a logo by its object key; the garage's own current logo or the
+// one a document snapshotted.
+func (g documentGarages) Logo(ctx context.Context, key string) ([]byte, error) {
+	return g.store.Get(ctx, key)
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+
+	return ""
+}
+
+func nonEmpty(values ...string) []string {
+	out := make([]string, 0, len(values))
+
+	for _, v := range values {
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+
+	return out
 }
 
 // reportingSettlements lets the Reporting module read a garage's revenue

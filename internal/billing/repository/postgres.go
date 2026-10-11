@@ -7,6 +7,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -35,16 +36,17 @@ func NewPostgresRepository(pool *platformdb.Pool) *PostgresRepository {
 }
 
 const settlementColumns = `id, garage_id, repair_order_id, vehicle_license_plate, customer_name, number, total_amount,
-	paid_amount, status, created_by, updated_by, created_at, updated_at`
+	paid_amount, issuer, status, created_by, updated_by, created_at, updated_at`
 
 func scanSettlement(row pgx.Row) (*domain.Settlement, error) {
 	var (
 		s      domain.Settlement
 		status string
+		issuer []byte
 	)
 
 	err := row.Scan(&s.ID, &s.GarageID, &s.RepairOrderID, &s.VehicleLicensePlate, &s.CustomerName, &s.Number,
-		&s.TotalAmount, &s.PaidAmount, &status, &s.CreatedBy, &s.UpdatedBy, &s.CreatedAt, &s.UpdatedAt)
+		&s.TotalAmount, &s.PaidAmount, &issuer, &status, &s.CreatedBy, &s.UpdatedBy, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrSettlementNotFound
@@ -55,21 +57,41 @@ func scanSettlement(row pgx.Row) (*domain.Settlement, error) {
 
 	s.Status = domain.SettlementStatus(status)
 
+	if len(issuer) > 0 {
+		if err := json.Unmarshal(issuer, &s.Issuer); err != nil {
+			return nil, err
+		}
+	}
+
 	return &s, nil
 }
 
-const paymentColumns = `id, amount, method, note, created_by, created_at`
+const paymentColumns = `id, amount, method, note, voucher_number, payer_name, payer_address, reason, collector_name, issuer,
+	created_by, created_at`
 
 func scanPayment(row pgx.Row) (domain.Payment, error) {
 	var (
-		p      domain.Payment
-		method string
-		note   *string
+		p            domain.Payment
+		method       string
+		note         *string
+		payerAddress *string
+		issuer       []byte
 	)
 
-	err := row.Scan(&p.ID, &p.Amount, &method, &note, &p.CreatedBy, &p.CreatedAt)
+	err := row.Scan(&p.ID, &p.Amount, &method, &note, &p.VoucherNumber, &p.PayerName, &payerAddress, &p.Reason,
+		&p.CollectorName, &issuer, &p.CreatedBy, &p.CreatedAt)
 	if err != nil {
 		return domain.Payment{}, err
+	}
+
+	if payerAddress != nil {
+		p.PayerAddress = *payerAddress
+	}
+
+	if len(issuer) > 0 {
+		if err := json.Unmarshal(issuer, &p.Issuer); err != nil {
+			return domain.Payment{}, err
+		}
 	}
 
 	p.Method = domain.PaymentMethod(method)
@@ -85,16 +107,21 @@ func scanPayment(row pgx.Row) (domain.Payment, error) {
 func (r *PostgresRepository) Create(ctx context.Context, s *domain.Settlement) error {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
+	issuer, err := json.Marshal(s.Issuer)
+	if err != nil {
+		return err
+	}
+
 	row := q.QueryRow(ctx, `
 		INSERT INTO settlements (id, garage_id, repair_order_id, vehicle_license_plate, customer_name, number,
-			total_amount, status, created_by, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			total_amount, issuer, status, created_by, updated_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING created_at, updated_at`,
 		s.ID, s.GarageID, s.RepairOrderID, s.VehicleLicensePlate, s.CustomerName, s.Number, s.TotalAmount,
-		string(s.Status), s.CreatedBy, s.UpdatedBy,
+		issuer, string(s.Status), s.CreatedBy, s.UpdatedBy,
 	)
 
-	err := row.Scan(&s.CreatedAt, &s.UpdatedAt)
+	err = row.Scan(&s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		if isUniqueViolation(err, "settlements_repair_order_id_unique") {
 			return domain.ErrAlreadySettled
@@ -231,12 +258,19 @@ func (r *PostgresRepository) RecordPayment(
 ) (*domain.Settlement, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
+	issuer, err := json.Marshal(payment.Issuer)
+	if err != nil {
+		return nil, err
+	}
+
 	row := q.QueryRow(ctx, `
-		INSERT INTO settlement_payments (id, garage_id, settlement_id, amount, method, note, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO settlement_payments (id, garage_id, settlement_id, amount, method, note, voucher_number, payer_name,
+			payer_address, reason, collector_name, issuer, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING created_at`,
-		payment.ID, garageID, settlementID, payment.Amount, string(payment.Method),
-		nullableString(payment.Note), payment.CreatedBy,
+		payment.ID, garageID, settlementID, payment.Amount, string(payment.Method), nullableString(payment.Note),
+		payment.VoucherNumber, payment.PayerName, nullableString(payment.PayerAddress), payment.Reason, payment.CollectorName,
+		issuer, payment.CreatedBy,
 	)
 	if err := row.Scan(&payment.CreatedAt); err != nil {
 		return nil, err

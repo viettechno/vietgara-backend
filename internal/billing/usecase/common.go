@@ -50,7 +50,7 @@ type Page[T any] struct {
 var (
 	notFoundErrors     = []error{domain.ErrSettlementNotFound}
 	conflictErrors     = []error{domain.ErrAlreadySettled}
-	invalidErrors      = []error{domain.ErrInvalidPaymentMethod, domain.ErrInvalidPaymentAmount}
+	invalidErrors      = []error{domain.ErrInvalidPaymentMethod, domain.ErrInvalidPaymentAmount, domain.ErrInvalidVoucher}
 	preconditionErrors = []error{domain.ErrRepairOrderNotClosed}
 )
 
@@ -127,5 +127,7 @@ func settlementAudit(s *domain.Settlement) map[string]any {
 }
 
 func paymentAudit(p *domain.Payment) map[string]any {
-	return map[string]any{"amount": p.Amount, "method": p.Method, "note": p.Note}
+	return map[string]any{
+		"voucher_number": p.VoucherNumber, "amount": p.Amount, "method": p.Method, "note": p.Note, "payer_name": p.PayerName,
+	}
 }

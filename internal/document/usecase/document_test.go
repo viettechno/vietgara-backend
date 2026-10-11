@@ -1,7 +1,10 @@
 package usecase_test
 
 import (
+	"bytes"
 	"errors"
+	"image"
+	"image/png"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -11,6 +14,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/document/usecase"
 	"github.com/viettechno/vietgara-backend/internal/mocks"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 const (
@@ -84,6 +88,7 @@ func TestDocumentUseCase_QuotePDF(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+		d.Quotes.EXPECT().Get(mock.Anything, garageID, quoteID).Return(usecase.QuoteInfo{Number: "QT-1"}, nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(usecase.GarageHeaderInfo{}, errBoom).Once()
 
 		_, err := uc.QuotePDF(t.Context(), garageID, quoteID)
@@ -94,7 +99,6 @@ func TestDocumentUseCase_QuotePDF(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
-		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 
 		notFound := apperror.Wrap(apperror.CodeNotFound, "quote not found", errBoom)
 		d.Quotes.EXPECT().Get(mock.Anything, garageID, quoteID).Return(usecase.QuoteInfo{}, notFound).Once()
@@ -128,7 +132,6 @@ func TestDocumentUseCase_RepairOrderPDF(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
-		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 
 		notFound := apperror.Wrap(apperror.CodeNotFound, "repair order not found", errBoom)
 		d.RepairOrders.EXPECT().Get(mock.Anything, garageID, repairOrderID).Return(usecase.RepairOrderInfo{}, notFound).Once()
@@ -162,7 +165,6 @@ func TestDocumentUseCase_SettlementReceiptPDF(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
-		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 
 		notFound := apperror.Wrap(apperror.CodeNotFound, "settlement not found", errBoom)
 		d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(usecase.SettlementInfo{}, notFound).Once()
@@ -198,4 +200,74 @@ func TestDocumentUseCase_StockMovementsExcel(t *testing.T) {
 		_, err := uc.StockMovementsExcel(t.Context(), garageID, itemID)
 		assertAppError(t, err, apperror.CodeInternal)
 	})
+}
+
+// TestDocumentUseCase_Letterhead covers FR-TEN-06: a document prints the
+// legal identity it was issued with, not the garage's current profile.
+func TestDocumentUseCase_Letterhead(t *testing.T) {
+	t.Parallel()
+
+	snapshot := issuer.Issuer{
+		Name: "Cong ty TNHH An Phat", Address: "12 Nguyen Hue", Phone: "0281234567", TaxCode: "0301234567",
+		Representative: "Nguyen Van An", BankName: "VCB", AccountNumber: "001", LogoKey: "garages/g/logo/g/l.png",
+	}
+	doc := usecase.QuoteInfo{Number: "BG-1", Status: "draft", Issuer: snapshot}
+
+	t.Run("a document with a snapshot ignores the garage's current profile", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Quotes.EXPECT().Get(mock.Anything, garageID, quoteID).Return(doc, nil).Once()
+		d.Garages.EXPECT().Logo(mock.Anything, snapshot.LogoKey).Return(logoPNG(t), nil).Once()
+
+		pdf, err := uc.QuotePDF(t.Context(), garageID, quoteID)
+		require.NoError(t, err)
+		require.Equal(t, "%PDF", string(pdf[:4]))
+	})
+
+	t.Run("a logo that cannot be read leaves the document without it", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Quotes.EXPECT().Get(mock.Anything, garageID, quoteID).Return(doc, nil).Once()
+		d.Garages.EXPECT().Logo(mock.Anything, snapshot.LogoKey).Return(nil, errBoom).Once()
+
+		pdf, err := uc.QuotePDF(t.Context(), garageID, quoteID)
+		require.NoError(t, err)
+		require.Equal(t, "%PDF", string(pdf[:4]))
+	})
+
+	t.Run("a snapshot without a logo reads none", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		noLogo := doc
+		noLogo.Issuer.LogoKey = ""
+		d.Quotes.EXPECT().Get(mock.Anything, garageID, quoteID).Return(noLogo, nil).Once()
+
+		_, err := uc.QuotePDF(t.Context(), garageID, quoteID)
+		require.NoError(t, err)
+	})
+
+	t.Run("a document without a snapshot falls back to the current profile", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Quotes.EXPECT().Get(mock.Anything, garageID, quoteID).Return(usecase.QuoteInfo{Number: "BG-1"}, nil).Once()
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+
+		_, err := uc.QuotePDF(t.Context(), garageID, quoteID)
+		require.NoError(t, err)
+	})
+}
+
+func logoPNG(t *testing.T) []byte {
+	t.Helper()
+
+	img := image.NewRGBA(image.Rect(0, 0, 8, 8))
+
+	var buf bytes.Buffer
+	require.NoError(t, png.Encode(&buf, img))
+
+	return buf.Bytes()
 }

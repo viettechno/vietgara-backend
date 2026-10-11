@@ -8,6 +8,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/jackc/pgx/v5"
@@ -32,21 +33,22 @@ func NewPostgresRepository(pool *platformdb.Pool) *PostgresRepository {
 }
 
 const repairOrderColumns = `id, garage_id, quote_id, vehicle_id, vehicle_license_plate, customer_name, number, status,
-	total_amount, closed_at, created_by, updated_by, created_at, updated_at`
+	total_amount, issuer, closed_at, created_by, updated_by, created_at, updated_at`
 
 // repairOrderListColumns is repairOrderColumns qualified by the "ro" alias
 // List's query joins repair_order_lines under.
 const repairOrderListColumns = `ro.id, ro.garage_id, ro.quote_id, ro.vehicle_id, ro.vehicle_license_plate, ro.customer_name,
-	ro.number, ro.status, ro.total_amount, ro.closed_at, ro.created_by, ro.updated_by, ro.created_at, ro.updated_at`
+	ro.number, ro.status, ro.total_amount, ro.issuer, ro.closed_at, ro.created_by, ro.updated_by, ro.created_at, ro.updated_at`
 
 func scanRepairOrder(row pgx.Row) (*domain.RepairOrder, error) {
 	var (
 		ro     domain.RepairOrder
 		status string
+		issuer []byte
 	)
 
 	err := row.Scan(&ro.ID, &ro.GarageID, &ro.QuoteID, &ro.VehicleID, &ro.VehicleLicensePlate, &ro.CustomerName, &ro.Number,
-		&status, &ro.TotalAmount, &ro.ClosedAt, &ro.CreatedBy, &ro.UpdatedBy, &ro.CreatedAt, &ro.UpdatedAt)
+		&status, &ro.TotalAmount, &issuer, &ro.ClosedAt, &ro.CreatedBy, &ro.UpdatedBy, &ro.CreatedAt, &ro.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrRepairOrderNotFound
@@ -56,6 +58,12 @@ func scanRepairOrder(row pgx.Row) (*domain.RepairOrder, error) {
 	}
 
 	ro.Status = domain.RepairOrderStatus(status)
+
+	if len(issuer) > 0 {
+		if err := json.Unmarshal(issuer, &ro.Issuer); err != nil {
+			return nil, err
+		}
+	}
 
 	return &ro, nil
 }
@@ -85,16 +93,21 @@ func scanLine(row pgx.Row) (domain.Line, error) {
 func (r *PostgresRepository) Create(ctx context.Context, ro *domain.RepairOrder) error {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
+	issuer, err := json.Marshal(ro.Issuer)
+	if err != nil {
+		return err
+	}
+
 	row := q.QueryRow(ctx, `
 		INSERT INTO repair_orders (id, garage_id, quote_id, vehicle_id, vehicle_license_plate, customer_name, number,
-			status, total_amount, created_by, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			status, total_amount, issuer, created_by, updated_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		RETURNING created_at, updated_at`,
 		ro.ID, ro.GarageID, ro.QuoteID, ro.VehicleID, ro.VehicleLicensePlate, ro.CustomerName, ro.Number,
-		string(ro.Status), ro.TotalAmount, ro.CreatedBy, ro.UpdatedBy,
+		string(ro.Status), ro.TotalAmount, issuer, ro.CreatedBy, ro.UpdatedBy,
 	)
 
-	err := row.Scan(&ro.CreatedAt, &ro.UpdatedAt)
+	err = row.Scan(&ro.CreatedAt, &ro.UpdatedAt)
 	if err != nil {
 		if isUniqueViolation(err, "repair_orders_quote_id_unique") {
 			return domain.ErrAlreadyConverted

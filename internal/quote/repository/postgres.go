@@ -8,6 +8,7 @@
 package repository
 
 import (
+	"encoding/json"
 	"errors"
 
 	"github.com/jackc/pgx/v5"
@@ -28,7 +29,7 @@ func NewPostgresRepository(pool *platformdb.Pool) *PostgresRepository {
 }
 
 const quoteColumns = `id, garage_id, customer_id, vehicle_id, customer_name, vehicle_license_plate, number, status,
-	approval_mode, notes, total_amount, public_token_hash, public_token_expires_at, sent_at, decided_at, converted_at,
+	approval_mode, notes, total_amount, issuer, public_token_hash, public_token_expires_at, sent_at, decided_at, converted_at,
 	created_by, updated_by, created_at, updated_at`
 
 func scanQuote(row pgx.Row) (*domain.Quote, error) {
@@ -36,10 +37,11 @@ func scanQuote(row pgx.Row) (*domain.Quote, error) {
 		q      domain.Quote
 		status string
 		mode   string
+		issuer []byte
 	)
 
 	err := row.Scan(&q.ID, &q.GarageID, &q.CustomerID, &q.VehicleID, &q.CustomerName, &q.VehicleLicensePlate, &q.Number,
-		&status, &mode, &q.Notes, &q.TotalAmount, &q.PublicTokenHash, &q.PublicTokenExpiresAt, &q.SentAt, &q.DecidedAt,
+		&status, &mode, &q.Notes, &q.TotalAmount, &issuer, &q.PublicTokenHash, &q.PublicTokenExpiresAt, &q.SentAt, &q.DecidedAt,
 		&q.ConvertedAt, &q.CreatedBy, &q.UpdatedBy, &q.CreatedAt, &q.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -50,6 +52,12 @@ func scanQuote(row pgx.Row) (*domain.Quote, error) {
 	}
 
 	q.Status, q.ApprovalMode = domain.Status(status), domain.ApprovalMode(mode)
+
+	if len(issuer) > 0 {
+		if err := json.Unmarshal(issuer, &q.Issuer); err != nil {
+			return nil, err
+		}
+	}
 
 	return &q, nil
 }

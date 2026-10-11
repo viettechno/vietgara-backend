@@ -281,29 +281,27 @@ func TestUseCase_Delete(t *testing.T) {
 	})
 }
 
-func TestUseCase_RemoveByKey(t *testing.T) {
+func TestUseCase_RetireByKey(t *testing.T) {
 	t.Parallel()
 
-	t.Run("a registered file is soft-deleted and its object removed", func(t *testing.T) {
+	t.Run("a registered file is deactivated and its object kept", func(t *testing.T) {
 		t.Parallel()
 
 		e := newEnv(t)
 		f := storedLogo()
 		e.files.EXPECT().FindByKey(mock.Anything, garageID, f.Key).Return(f, nil).Once()
-		e.files.EXPECT().SoftDelete(mock.Anything, garageID, fileID, actorID).Return(nil).Once()
-		e.storage.EXPECT().Delete(mock.Anything, f.Key).Return(nil).Once()
+		e.files.EXPECT().SetActive(mock.Anything, garageID, fileID, false, actorID).Return(nil).Once()
 
-		require.NoError(t, e.uc.RemoveByKey(t.Context(), garageID, actorID, f.Key))
+		require.NoError(t, e.uc.RetireByKey(t.Context(), garageID, actorID, f.Key), "no object is deleted")
 	})
 
-	t.Run("an unregistered key only has its object removed", func(t *testing.T) {
+	t.Run("an unregistered key is left alone", func(t *testing.T) {
 		t.Parallel()
 
 		e := newEnv(t)
 		e.files.EXPECT().FindByKey(mock.Anything, garageID, "garages/old.png").Return(nil, domain.ErrFileNotFound).Once()
-		e.storage.EXPECT().Delete(mock.Anything, "garages/old.png").Return(errBoom).Once()
 
-		require.NoError(t, e.uc.RemoveByKey(t.Context(), garageID, actorID, "garages/old.png"), "a failed object removal is only logged")
+		require.NoError(t, e.uc.RetireByKey(t.Context(), garageID, actorID, "garages/old.png"))
 	})
 
 	t.Run("a registry failure is returned", func(t *testing.T) {
@@ -312,18 +310,18 @@ func TestUseCase_RemoveByKey(t *testing.T) {
 		e := newEnv(t)
 		e.files.EXPECT().FindByKey(mock.Anything, garageID, "k").Return(nil, errBoom).Once()
 
-		assertAppError(t, e.uc.RemoveByKey(t.Context(), garageID, actorID, "k"), apperror.CodeInternal)
+		assertAppError(t, e.uc.RetireByKey(t.Context(), garageID, actorID, "k"), apperror.CodeInternal)
 	})
 
-	t.Run("a failing soft delete is returned", func(t *testing.T) {
+	t.Run("a failing update is returned", func(t *testing.T) {
 		t.Parallel()
 
 		e := newEnv(t)
 		f := storedLogo()
 		e.files.EXPECT().FindByKey(mock.Anything, garageID, f.Key).Return(f, nil).Once()
-		e.files.EXPECT().SoftDelete(mock.Anything, garageID, fileID, actorID).Return(errBoom).Once()
+		e.files.EXPECT().SetActive(mock.Anything, garageID, fileID, false, actorID).Return(errBoom).Once()
 
-		assertAppError(t, e.uc.RemoveByKey(t.Context(), garageID, actorID, f.Key), apperror.CodeInternal)
+		assertAppError(t, e.uc.RetireByKey(t.Context(), garageID, actorID, f.Key), apperror.CodeInternal)
 	})
 }
 

@@ -11,6 +11,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/repairorder/domain"
 	"github.com/viettechno/vietgara-backend/internal/repairorder/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 const (
@@ -57,6 +58,7 @@ func newUseCase(t *testing.T) (*usecase.RepairOrderUseCase, *deps) {
 func defaultGarage() usecase.GarageInfo {
 	return usecase.GarageInfo{
 		OwnerUserID: ownerID, Timezone: "Asia/Ho_Chi_Minh", RepairOrderNumberTemplate: "LSC-{YYYY}{MM}-{SEQ:4}",
+		Issuer: issuer.Issuer{Name: "Cong ty TNHH An Phat", TaxCode: "0301234567"},
 	}
 }
 

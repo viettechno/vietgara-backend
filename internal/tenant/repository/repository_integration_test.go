@@ -133,10 +133,31 @@ func TestRLS_TenantModel(t *testing.T) {
 			Currency: domain.DefaultCurrency, Status: domain.GarageStatusActive, OperatingHours: domain.DefaultOperatingHours(),
 			QuoteNumberTemplate: domain.DefaultQuoteNumberTemplate, RepairOrderNumberTemplate: domain.DefaultRepairOrderNumberTemplate,
 			SettlementNumberTemplate: domain.DefaultSettlementNumberTemplate, DefaultQuoteApprovalMode: domain.QuoteApprovalModeLink,
+			PaymentVoucherNumberTemplate: domain.DefaultPaymentVoucherNumberTemplate,
+			LegalName:                    new("Cong ty TNHH New"), LegalAddress: new("12 Nguyen Hue"), Representative: new("An"),
+			Bank: domain.BankDetails{BankName: new("VCB"), AccountNumber: new("001")},
 		}
 
 		err := tx.WithTransaction(ctx, owner.Garage(garage.ID), func(ctx context.Context) error {
 			require.NoError(t, garages.Create(ctx, garage))
+
+			// The legal profile round-trips (FR-TEN-06).
+			read, err := garages.FindByID(ctx, garage.ID)
+			require.NoError(t, err)
+			assert.Equal(t, "Cong ty TNHH New", *read.LegalName)
+			assert.Equal(t, "VCB", *read.Bank.BankName)
+			assert.Nil(t, read.Bank.AccountHolder)
+			assert.Equal(t, domain.DefaultPaymentVoucherNumberTemplate, read.PaymentVoucherNumberTemplate)
+
+			read.Bank = domain.BankDetails{AccountHolder: new("An Phat")}
+			read.LegalName = nil
+			require.NoError(t, garages.Update(ctx, read))
+
+			again, err := garages.FindByID(ctx, garage.ID)
+			require.NoError(t, err)
+			assert.Nil(t, again.LegalName)
+			assert.Nil(t, again.Bank.BankName)
+			assert.Equal(t, "An Phat", *again.Bank.AccountHolder)
 			require.NoError(t, staff.Create(ctx, &domain.Staff{GarageID: garage.ID, UserID: env.userID, Status: domain.StaffStatusActive}))
 
 			return nil

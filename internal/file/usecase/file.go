@@ -24,14 +24,15 @@ const SignedURLTTL = 5 * time.Minute
 
 // UseCase implements the file registry.
 type UseCase struct {
-	files   Repository
-	storage Storage
-	usage   UsageChecker
+	files    Repository
+	storage  Storage
+	usage    UsageChecker
+	entities EntityChecker
 }
 
 // New wires the use case.
-func New(files Repository, storage Storage, usage UsageChecker) *UseCase {
-	return &UseCase{files: files, storage: storage, usage: usage}
+func New(files Repository, storage Storage, usage UsageChecker, entities EntityChecker) *UseCase {
+	return &UseCase{files: files, storage: storage, usage: usage, entities: entities}
 }
 
 // UploadRequest is the input for UseCase.Upload.
@@ -122,8 +123,8 @@ func (uc *UseCase) store(ctx context.Context, req UploadRequest, rule domain.Rul
 		return nil, toAppError("store file", domain.ErrInvalidFile)
 	}
 
-	if req.EntityType != rule.EntityType || req.EntityID != req.GarageID {
-		return nil, toAppError("store file", domain.ErrInvalidEntity)
+	if err := uc.checkEntity(ctx, req, rule); err != nil {
+		return nil, err
 	}
 
 	sum := sha256.Sum256(req.Content)
@@ -156,6 +157,35 @@ func (uc *UseCase) store(ctx context.Context, req UploadRequest, rule domain.Rul
 	}
 
 	return &Result{File: f, URL: url}, nil
+}
+
+// checkEntity confirms the entity the file is for is of the kind's entity
+// type and belongs to the garage: the garage itself by id, any other entity
+// through the owning module. An entity type nobody can vouch for is
+// refused, so a new kind cannot skip the check.
+func (uc *UseCase) checkEntity(ctx context.Context, req UploadRequest, rule domain.Rule) error {
+	if req.EntityType != rule.EntityType || req.EntityID == "" {
+		return toAppError("store file", domain.ErrInvalidEntity)
+	}
+
+	if rule.EntityType == domain.EntityGarage {
+		if req.EntityID != req.GarageID {
+			return toAppError("store file", domain.ErrInvalidEntity)
+		}
+
+		return nil
+	}
+
+	exists, err := uc.entities.EntityExists(ctx, req.GarageID, req.EntityType, req.EntityID)
+	if err != nil {
+		return toAppError("check file entity", err)
+	}
+
+	if !exists {
+		return toAppError("store file", domain.ErrInvalidEntity)
+	}
+
+	return nil
 }
 
 // URL returns where a file is served from: the public URL, or a short-lived

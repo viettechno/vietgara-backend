@@ -380,6 +380,17 @@ func (u fileUsage) FileInUse(ctx context.Context, garageID string, f *fileDomain
 	return g.LogoKey != nil && *g.LogoKey == f.Key, nil
 }
 
+// fileEntities tells the File module whether the entity a file is uploaded
+// for exists in the garage. The garage's own files are checked by the use
+// case; no other entity has a file kind yet, so each future kind (a part
+// image, a repair photo, ...) adds its case here, over the module that
+// owns the entity.
+type fileEntities struct{}
+
+func (fileEntities) EntityExists(context.Context, string, string, string) (bool, error) {
+	return false, nil
+}
+
 // maxHistoryEntries bounds the vehicle history read (FR-CUS-03 shows the
 // "complete" history, but a single vehicle realistically never approaches
 // this many quotes).

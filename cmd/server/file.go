@@ -17,7 +17,7 @@ type fileModule struct {
 }
 
 func buildFiles(pool *platformdb.Pool, store storage.Store, garages *tenantRepo.PostgresGarageRepository) *fileModule {
-	uc := fileUsecase.New(fileRepository.NewPostgresRepository(pool), store, fileUsage{garages: garages})
+	uc := fileUsecase.New(fileRepository.NewPostgresRepository(pool), store, fileUsage{garages: garages}, fileEntities{})
 
 	return &fileModule{server: fileHandler.NewServer(uc), uc: uc}
 }

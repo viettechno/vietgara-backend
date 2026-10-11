@@ -21,6 +21,10 @@ const (
 	KindLogo Kind = "logo"
 )
 
+// EntityGarage is the entity type of a file that belongs to the garage
+// itself (its logo); its entity id is the garage's id.
+const EntityGarage = "garage"
+
 // Rule is what one kind of file allows.
 type Rule struct {
 	// Public files are served by URL; private ones only through signed
@@ -32,7 +36,8 @@ type Rule struct {
 	MaxBytes int
 	// ImageOnly additionally checks the content sniffs as its content type.
 	ImageOnly bool
-	// EntityType is what the file belongs to; its id must be the garage's.
+	// EntityType is what the file belongs to: EntityGarage (the entity id
+	// is the garage's own) or another type an EntityChecker vouches for.
 	EntityType string
 	// Write is the permission uploading or deleting needs; Read the one
 	// serving needs (empty: any active member).
@@ -50,7 +55,7 @@ var Rules = map[Kind]Rule{
 		ContentTypes:     map[string]string{"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"},
 		MaxBytes:         1 << 20,
 		ImageOnly:        true,
-		EntityType:       "garage",
+		EntityType:       EntityGarage,
 		Write:            access.GarageWrite,
 		AttachedByModule: true,
 	},

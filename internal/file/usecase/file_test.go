@@ -31,10 +31,11 @@ var (
 )
 
 type env struct {
-	uc      *usecase.UseCase
-	files   *mocks.MockFileRepository
-	storage *mocks.MockFileStorage
-	usage   *mocks.MockFileUsageChecker
+	uc       *usecase.UseCase
+	files    *mocks.MockFileRepository
+	storage  *mocks.MockFileStorage
+	usage    *mocks.MockFileUsageChecker
+	entities *mocks.MockFileEntityChecker
 }
 
 func newEnv(t *testing.T) *env {
@@ -42,8 +43,9 @@ func newEnv(t *testing.T) *env {
 
 	e := &env{
 		files: mocks.NewMockFileRepository(t), storage: mocks.NewMockFileStorage(t), usage: mocks.NewMockFileUsageChecker(t),
+		entities: mocks.NewMockFileEntityChecker(t),
 	}
-	e.uc = usecase.New(e.files, e.storage, e.usage)
+	e.uc = usecase.New(e.files, e.storage, e.usage, e.entities)
 
 	return e
 }
@@ -346,10 +348,15 @@ func TestUseCase_FutureKinds(t *testing.T) { //nolint:tparallel // mutates the s
 	domain.Rules["sign"] = domain.Rule{
 		Public: true, ContentTypes: map[string]string{"image/png": "png"}, MaxBytes: 1 << 20, ImageOnly: true, EntityType: "garage",
 	}
+	domain.Rules["part_image"] = domain.Rule{
+		Public: true, ContentTypes: map[string]string{"image/png": "png"}, MaxBytes: 1 << 20, ImageOnly: true, EntityType: "part",
+		Write: access.InventoryWrite,
+	}
 
 	t.Cleanup(func() {
 		delete(domain.Rules, "export")
 		delete(domain.Rules, "sign")
+		delete(domain.Rules, "part_image")
 	})
 
 	t.Run("a private file is stored without a URL and served signed", func(t *testing.T) {
@@ -388,19 +395,54 @@ func TestUseCase_FutureKinds(t *testing.T) { //nolint:tparallel // mutates the s
 		assertAppError(t, err, apperror.CodeFailedPrecondition)
 	})
 
-	t.Run("a file belongs to the garage's own entity", func(t *testing.T) {
-		_, err := newEnv(t).uc.Upload(as(true), usecase.UploadRequest{
+	t.Run("a garage entity must be the garage itself", func(t *testing.T) {
+		upload := usecase.UploadRequest{
 			GarageID: garageID, ActorID: actorID, Kind: "sign", EntityType: "garage", EntityID: "another-garage",
 			Content: png, ContentType: "image/png",
-		})
+		}
+
+		_, err := newEnv(t).uc.Upload(as(true), upload)
 		require.ErrorIs(t, err, domain.ErrInvalidEntity)
 		assertAppError(t, err, apperror.CodeInvalidArgument)
 
-		_, err = newEnv(t).uc.Upload(as(true), usecase.UploadRequest{
-			GarageID: garageID, ActorID: actorID, Kind: "sign", EntityType: "part", EntityID: garageID,
-			Content: png, ContentType: "image/png",
-		})
+		upload.EntityID = ""
+		_, err = newEnv(t).uc.Upload(as(true), upload)
 		require.ErrorIs(t, err, domain.ErrInvalidEntity)
+
+		upload.EntityID, upload.EntityType = garageID, "part"
+		_, err = newEnv(t).uc.Upload(as(true), upload)
+		require.ErrorIs(t, err, domain.ErrInvalidEntity, "not the kind's entity type")
+	})
+
+	t.Run("another entity is vouched for by its owning module", func(t *testing.T) {
+		const partID = "44444444-4444-4444-4444-444444444444"
+
+		upload := usecase.UploadRequest{
+			GarageID: garageID, ActorID: actorID, Kind: "part_image", EntityType: "part", EntityID: partID,
+			Content: png, ContentType: "image/png",
+		}
+
+		e := newEnv(t)
+		e.entities.EXPECT().EntityExists(mock.Anything, garageID, "part", partID).Return(true, nil).Once()
+		e.storage.EXPECT().Put(mock.Anything, mock.Anything, "image/png", png).Return("https://cdn/p.png", nil).Once()
+		e.files.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+
+		res, err := e.uc.Upload(as(false, access.InventoryWrite), upload)
+		require.NoError(t, err)
+		assert.Regexp(t, `^garages/`+garageID+`/part_image/`+partID+`/[0-9a-f-]{36}\.png$`, res.File.Key,
+			"the entity id is the part's, not the garage's")
+
+		e = newEnv(t)
+		e.entities.EXPECT().EntityExists(mock.Anything, garageID, "part", partID).Return(false, nil).Once()
+
+		_, err = e.uc.Upload(as(true), upload)
+		require.ErrorIs(t, err, domain.ErrInvalidEntity, "a part of another garage, or unknown")
+
+		e = newEnv(t)
+		e.entities.EXPECT().EntityExists(mock.Anything, garageID, "part", partID).Return(false, errBoom).Once()
+
+		_, err = e.uc.Upload(as(true), upload)
+		assertAppError(t, err, apperror.CodeInternal)
 	})
 
 	t.Run("a public file is stored with its URL", func(t *testing.T) {

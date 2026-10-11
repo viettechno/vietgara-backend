@@ -172,6 +172,11 @@ packages:
           filename: "file_usecase_usage_checker.go"
           dir: "./internal/mocks"
           structname: "MockFileUsageChecker"
+      EntityChecker:
+        config:
+          filename: "file_usecase_entity_checker.go"
+          dir: "./internal/mocks"
+          structname: "MockFileEntityChecker"
   github.com/viettechno/vietgara-backend/internal/supplier/usecase:
     interfaces:
       Repository:

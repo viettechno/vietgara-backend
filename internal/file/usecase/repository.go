@@ -35,6 +35,16 @@ type Storage interface {
 	SignedURL(ctx context.Context, key string, ttl time.Duration) (string, time.Time, error)
 }
 
+// EntityChecker tells whether the entity a file is uploaded for (a part, a
+// repair order, ...) exists in the garage. It is implemented in cmd/server
+// over the modules that own those entities, so this module imports none of
+// them. The garage itself needs no check: its id is the request's.
+type EntityChecker interface {
+	// EntityExists reports whether an entity of entityType with entityID is
+	// a live entity of the garage; an entity type nothing owns is false.
+	EntityExists(ctx context.Context, garageID, entityType, entityID string) (bool, error)
+}
+
 // UsageChecker tells whether a business row still refers to a file, which
 // decides between deleting and deactivating it (FR-CAT-07). It is
 // implemented in cmd/server over the modules that hold file keys (the

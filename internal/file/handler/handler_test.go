@@ -44,7 +44,7 @@ func newEnv(t *testing.T) *env {
 	e := &env{
 		files: mocks.NewMockFileRepository(t), storage: mocks.NewMockFileStorage(t), usage: mocks.NewMockFileUsageChecker(t),
 	}
-	e.srv = handler.NewServer(usecase.New(e.files, e.storage, e.usage))
+	e.srv = handler.NewServer(usecase.New(e.files, e.storage, e.usage, mocks.NewMockFileEntityChecker(t)))
 
 	return e
 }

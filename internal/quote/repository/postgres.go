@@ -54,7 +54,7 @@ func scanQuote(row pgx.Row) (*domain.Quote, error) {
 	return &q, nil
 }
 
-const lineColumns = `id, position, item_type, item_ref_id, description, quantity, unit_price, line_total, decision, decided_at`
+const lineColumns = `id, position, item_type, item_ref_id, description, trim_scale(quantity)::text, unit_price, line_total, decision, decided_at`
 
 func scanLine(row pgx.Row) (domain.Line, error) {
 	var (

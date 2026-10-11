@@ -30,8 +30,8 @@ func NewPostgresRepository(pool *platformdb.Pool) *PostgresRepository {
 	return &PostgresRepository{pool: pool}
 }
 
-const itemColumns = `i.id, i.garage_id, i.sku, i.name, i.unit, i.reorder_threshold, i.created_by, i.updated_by,
-	i.created_at, i.updated_at, COALESCE(sb.quantity_on_hand, 0)::text`
+const itemColumns = `i.id, i.garage_id, i.sku, i.name, i.unit, i.reorder_threshold::int, i.created_by, i.updated_by,
+	i.created_at, i.updated_at, trim_scale(COALESCE(sb.quantity_on_hand, 0))::text`
 
 const itemFrom = ` FROM items i LEFT JOIN stock_balance sb ON sb.garage_id = i.garage_id AND sb.item_id = i.id`
 
@@ -176,7 +176,7 @@ func (r *PostgresRepository) RecordTransaction(ctx context.Context, transaction 
 
 	_, err := q.Exec(ctx, `
 		INSERT INTO stock_transactions (id, garage_id, item_id, type, quantity, unit_cost, ref_type, ref_id, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		VALUES ($1, $2, $3, $4, $5::numeric, $6, $7, $8, $9)`,
 		transaction.ID, transaction.GarageID, transaction.ItemID, string(transaction.Type), transaction.Quantity,
 		transaction.UnitCost, string(transaction.RefType), transaction.RefID, transaction.CreatedBy,
 	)
@@ -204,7 +204,7 @@ func (r *PostgresRepository) RecordTransaction(ctx context.Context, transaction 
 	return err
 }
 
-const transactionColumns = `t.id, t.item_id, i.sku, i.name, t.type, t.quantity, t.unit_cost, t.ref_type, t.ref_id, t.created_by, t.created_at`
+const transactionColumns = `t.id, t.item_id, i.sku, i.name, t.type, trim_scale(t.quantity)::text, t.unit_cost::bigint, t.ref_type, t.ref_id, t.created_by, t.created_at`
 
 const transactionFrom = ` FROM stock_transactions t JOIN items i ON i.garage_id = t.garage_id AND i.id = t.item_id`
 

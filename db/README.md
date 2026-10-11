@@ -15,7 +15,7 @@ exists, schema changes must become new, forward-only migrations.)
 
 **Migration freeze.** The rule is to edit in place only while no non-test tenant exists. Staging counts as test data: after an in-place change, rebuild the local database (`make docker-clean`, then `make docker-up`) and wipe the staging database before deploying. From the first real tenant, every change is a new forward-only migration.
 
-Planned in-place changes (Release Plan, Phases 3-8): `users` and `user_id` everywhere (Phase 3, backend done in #20); `partners` becomes `suppliers` without the `partner_type` enum (done), the insurer columns, the allocation split and `payer_type` go from `settlements` and `settlement_payments` (done), voucher columns on `settlement_payments`, `stock_transactions.quantity` becomes `NUMERIC(14,3)` (Release 5.0); units, categories, jobs, goods receipts and the other tables listed in the Database Design, Section 11, arrive with their releases.
+Planned in-place changes (Release Plan, Phases 3-8): `users` and `user_id` everywhere (Phase 3, backend done in #20); `partners` becomes `suppliers` without the `partner_type` enum (done), the insurer columns, the allocation split and `payer_type` go from `settlements` and `settlement_payments` (done), voucher columns on `settlement_payments`, quantities become `NUMERIC(14,3)` and `stock_transactions.unit_cost` `NUMERIC(18,4)` (done, Release 5.0); units, categories, jobs, goods receipts and the other tables listed in the Database Design, Section 11, arrive with their releases.
 
 | Version | Module | Creates |
 | --- | --- | --- |

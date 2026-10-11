@@ -95,7 +95,10 @@ CREATE TABLE quote_lines (
     -- 1.3); not yet a foreign key.
     item_ref_id UUID,
     description TEXT NOT NULL,
-    quantity VARCHAR(12) NOT NULL DEFAULT '1',
+    -- NUMERIC(14,3): units and conversions (Release 6.0) need real decimals,
+    -- and reports aggregate quantities in SQL. The API still sends and
+    -- receives a decimal string ("1.5"); the query boundary casts.
+    quantity NUMERIC(14, 3) NOT NULL DEFAULT 1,
     unit_price BIGINT NOT NULL DEFAULT 0,
     line_total BIGINT NOT NULL DEFAULT 0,
     -- The customer's decision (FR-QUO-03): pending until SendQuote/

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strings"
 
 	billingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/billing/v1"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
@@ -55,6 +56,58 @@ func (c *Client) SignInWithGoogleIDToken(ctx context.Context, idToken string) (*
 // Me returns the signed-in user.
 func (c *Client) Me(ctx context.Context) (*identityv1.User, error) {
 	return call[identityv1.User](ctx, c, http.MethodGet, "/api/v1/me", nil)
+}
+
+// UpdateMe changes the signed-in user's full name, phone and/or locale.
+// Paths are proto field names ("full_name", "phone", "locale"); unknown
+// paths are refused. E-mail is not editable through this call.
+func (c *Client) UpdateMe(ctx context.Context, user *identityv1.User, paths ...string) (*identityv1.User, error) {
+	path := "/api/v1/me"
+	if len(paths) > 0 {
+		path += "?updateMask=" + url.QueryEscape(strings.Join(paths, ","))
+	}
+
+	return call[identityv1.User](ctx, c, http.MethodPatch, path, user)
+}
+
+// Logout revokes a refresh token. Revoking twice succeeds: revocation is
+// idempotent.
+func (c *Client) Logout(ctx context.Context, refreshToken string) error {
+	_, err := call[identityv1.LogoutResponse](ctx, c, http.MethodPost, "/api/v1/auth/logout",
+		&identityv1.LogoutRequest{RefreshToken: refreshToken})
+
+	return err
+}
+
+// RequestPasswordReset starts a password reset: it always succeeds (so
+// user existence is not revealed) and e-mails an OTP when the user exists.
+func (c *Client) RequestPasswordReset(ctx context.Context, email string) (*identityv1.OtpChallenge, error) {
+	return call[identityv1.OtpChallenge](ctx, c, http.MethodPost, "/api/v1/auth/password-reset/otp",
+		&identityv1.RequestPasswordResetRequest{Email: email})
+}
+
+// VerifyPasswordResetOtp checks the reset OTP and returns a single-use
+// reset token.
+func (c *Client) VerifyPasswordResetOtp(ctx context.Context, email, otp string) (*identityv1.VerifyPasswordResetOtpResponse, error) {
+	return call[identityv1.VerifyPasswordResetOtpResponse](ctx, c, http.MethodPost, "/api/v1/auth/password-reset/otp/verification",
+		&identityv1.VerifyPasswordResetOtpRequest{Email: email, OtpCode: otp})
+}
+
+// ResetPassword sets a new password with the reset token and revokes
+// every session of the user.
+func (c *Client) ResetPassword(ctx context.Context, resetToken, newPassword string) error {
+	_, err := call[identityv1.ResetPasswordResponse](ctx, c, http.MethodPost, "/api/v1/auth/password-reset",
+		&identityv1.ResetPasswordRequest{ResetToken: resetToken, NewPassword: newPassword})
+
+	return err
+}
+
+// SendVerificationOtp e-mails a fresh verification OTP to the signed-in
+// (unverified) user. Within the 30-second cooldown it fails with
+// OTP_RESEND_TOO_SOON.
+func (c *Client) SendVerificationOtp(ctx context.Context) (*identityv1.OtpChallenge, error) {
+	return call[identityv1.OtpChallenge](ctx, c, http.MethodPost, "/api/v1/auth/email-verification/otp",
+		&identityv1.SendEmailVerificationOtpRequest{})
 }
 
 // ---- Tenant ----------------------------------------------------------------

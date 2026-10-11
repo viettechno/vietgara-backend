@@ -7,6 +7,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/identity/domain"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/email"
 )
 
 // GoogleProfile is the caller's identity as returned by Google's userinfo
@@ -24,19 +25,19 @@ type GoogleProfile struct {
 // which links Google to an existing e-mail user -- else created. Google
 // verified the e-mail, so the user is marked verified.
 func (uc *IdentityUseCase) GoogleLogin(ctx context.Context, profile GoogleProfile) (*Session, error) {
-	email, ok := domain.NormalizeEmail(profile.Email)
-	if profile.Subject == "" || !ok || !profile.EmailVerified {
+	addr, err := email.Normalize(profile.Email)
+	if profile.Subject == "" || err != nil || !profile.EmailVerified {
 		return nil, apperror.New(apperror.CodeUnauthenticated, "Google did not provide a verified e-mail address").
 			WithReason(domain.ReasonInvalidCredentials)
 	}
 
-	user, err := uc.findGoogleUser(ctx, profile.Subject, email)
+	user, err := uc.findGoogleUser(ctx, profile.Subject, addr)
 	if err != nil {
 		return nil, err
 	}
 
 	if user == nil {
-		user, err = uc.createGoogleUser(ctx, profile, email)
+		user, err = uc.createGoogleUser(ctx, profile, addr)
 		if err != nil {
 			return nil, err
 		}

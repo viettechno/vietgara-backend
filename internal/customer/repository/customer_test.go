@@ -145,9 +145,9 @@ func TestPostgresCustomerRepository_List(t *testing.T) {
 		t.Parallel()
 
 		conn, pool := newPool(t)
-		conn.EXPECT().QueryRow(mock.Anything, sqlContaining("SELECT count(*)"), []any{garageID, `%51f\_1%`, "%51F1%"}).
+		conn.EXPECT().QueryRow(mock.Anything, sqlContaining("SELECT count(*)"), []any{garageID, `%51f\_1%`, "%51F1%", ""}).
 			Return(valuesRow(t, 3)).Once()
-		conn.EXPECT().Query(mock.Anything, sqlContaining("ORDER BY c.created_at DESC"), []any{garageID, `%51f\_1%`, "%51F1%", 2, 2}).
+		conn.EXPECT().Query(mock.Anything, sqlContaining("ORDER BY c.created_at DESC"), []any{garageID, `%51f\_1%`, "%51F1%", "", 2, 2}).
 			Return(resultRows(t, customerValues("[]")), nil).Once()
 
 		list, total, err := repository.NewPostgresCustomerRepository(pool).List(t.Context(), garageID, usecase.ListFilter{Query: "51f_1", Limit: 2, Offset: 2})
@@ -161,7 +161,7 @@ func TestPostgresCustomerRepository_List(t *testing.T) {
 		t.Parallel()
 
 		conn, pool := newPool(t)
-		conn.EXPECT().QueryRow(mock.Anything, sqlContaining("SELECT count(*)"), []any{garageID, "", ""}).Return(valuesRow(t, 0)).Once()
+		conn.EXPECT().QueryRow(mock.Anything, sqlContaining("SELECT count(*)"), []any{garageID, "", "", ""}).Return(valuesRow(t, 0)).Once()
 
 		list, total, err := repository.NewPostgresCustomerRepository(pool).List(t.Context(), garageID, usecase.ListFilter{Limit: 20})
 		require.NoError(t, err)

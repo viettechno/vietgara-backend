@@ -13,6 +13,8 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/customer/domain"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/email"
+	"github.com/viettechno/vietgara-backend/pkg/phone"
 )
 
 // Paging defaults from API Specification Section 1.1.
@@ -151,7 +153,7 @@ var (
 	conflictErrors = []error{domain.ErrPhoneTaken, domain.ErrLicensePlateTaken}
 	invalidErrors  = []error{
 		domain.ErrFullNameRequired, domain.ErrLicensePlateRequired, domain.ErrCustomerRequired,
-		domain.ErrInvalidPhone, domain.ErrInvalidEmail, domain.ErrInvalidLicensePlate, domain.ErrInvalidYear,
+		phone.ErrInvalid, email.ErrInvalid, domain.ErrInvalidLicensePlate, domain.ErrInvalidYear,
 		domain.ErrFieldTooLong,
 	}
 )

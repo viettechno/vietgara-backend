@@ -4,7 +4,6 @@
 package domain
 
 import (
-	"net/mail"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -104,50 +103,6 @@ const (
 	// MaxPasswordBytes is bcrypt's input limit.
 	MaxPasswordBytes = 72
 )
-
-// NormalizeEmail lower-cases and trims an e-mail address and reports
-// whether it is valid.
-func NormalizeEmail(raw string) (string, bool) {
-	email := strings.ToLower(strings.TrimSpace(raw))
-	if email == "" || len(email) > 255 {
-		return "", false
-	}
-
-	addr, err := mail.ParseAddress(email)
-	if err != nil || addr.Address != email || !strings.Contains(email[strings.LastIndex(email, "@"):], ".") {
-		return "", false
-	}
-
-	return email, true
-}
-
-var phoneFormatting = strings.NewReplacer(" ", "", "-", "", ".", "", "(", "", ")", "")
-
-// NormalizePhone reduces a Vietnamese phone number to its national form
-// ("+84 90 123 4567" -> "0901234567") and reports whether it is valid
-// (9-10 digits after the leading 0).
-func NormalizePhone(raw string) (string, bool) {
-	p := phoneFormatting.Replace(strings.TrimSpace(raw))
-
-	switch {
-	case strings.HasPrefix(p, "+84"):
-		p = "0" + strings.TrimPrefix(p, "+84")
-	case strings.HasPrefix(p, "84") && len(p) >= 11:
-		p = "0" + strings.TrimPrefix(p, "84")
-	}
-
-	if len(p) < 10 || len(p) > 11 || p[0] != '0' {
-		return "", false
-	}
-
-	for _, r := range p {
-		if r < '0' || r > '9' {
-			return "", false
-		}
-	}
-
-	return p, true
-}
 
 // NormalizeFullName trims a display name and reports whether it is valid.
 func NormalizeFullName(raw string) (string, bool) {

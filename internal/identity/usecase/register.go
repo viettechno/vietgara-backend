@@ -11,6 +11,8 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/identity/domain"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/email"
+	"github.com/viettechno/vietgara-backend/pkg/phone"
 )
 
 // RegisterRequest is the input for IdentityUseCase.Register (FR-IAM-01).
@@ -64,8 +66,8 @@ func (uc *IdentityUseCase) Register(ctx context.Context, req RegisterRequest) (*
 }
 
 func newUser(req RegisterRequest) (*domain.User, string, error) {
-	email, ok := domain.NormalizeEmail(req.Email)
-	if !ok {
+	addr, err := email.Normalize(req.Email)
+	if err != nil {
 		return nil, "", apperror.Validation("email", apperror.IssueInvalid, "email is invalid")
 	}
 
@@ -84,7 +86,7 @@ func newUser(req RegisterRequest) (*domain.User, string, error) {
 	}
 
 	return &domain.User{
-		Email:        email,
+		Email:        addr,
 		Phone:        phone,
 		AuthProvider: domain.AuthProviderEmail,
 		FullName:     fullName,
@@ -99,12 +101,12 @@ func normalizeOptionalPhone(raw *string) (*string, error) {
 		return nil, nil //nolint:nilnil // no phone is a valid answer
 	}
 
-	phone, ok := domain.NormalizePhone(*raw)
-	if !ok {
+	normalized, err := phone.Normalize(*raw)
+	if err != nil {
 		return nil, apperror.Validation("phone", apperror.IssueInvalid, "phone number is invalid")
 	}
 
-	return &phone, nil
+	return &normalized, nil
 }
 
 // ensureAvailable rejects an e-mail or phone that is already registered

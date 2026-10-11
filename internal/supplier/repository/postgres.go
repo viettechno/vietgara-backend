@@ -17,6 +17,7 @@ import (
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/supplier/domain"
 	"github.com/viettechno/vietgara-backend/internal/supplier/usecase"
+	"github.com/viettechno/vietgara-backend/pkg/phone"
 )
 
 const pgUniqueViolation = "23505"
@@ -26,8 +27,9 @@ const (
 		s.created_by, s.updated_by, s.created_at, s.updated_at`
 
 	// supplierSearch filters live suppliers of garage $1. $2 is an ILIKE
-	// pattern over name, tax code, contact person and email, $3 a compact
-	// pattern over the phone; "" disables either.
+	// pattern over name, tax code, contact person and email, $3 the digits
+	// to look for in the phone (stored as E.164, see pkg/phone); "" disables
+	// either.
 	supplierSearch = ` FROM suppliers s
 		WHERE s.garage_id = $1 AND s.deleted_at IS NULL
 		AND ($2::text = '' OR s.name ILIKE $2 OR s.tax_code ILIKE $2
@@ -47,18 +49,10 @@ func containsPattern(query string) string {
 	return "%" + likeEscaper.Replace(query) + "%"
 }
 
-// compactPattern is containsPattern over the query's ASCII letters and
-// digits only, for the phone number, which is stored without separators.
-func compactPattern(query string) string {
-	var b strings.Builder
-
-	for _, r := range strings.ToUpper(query) {
-		if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
-		}
-	}
-
-	return containsPattern(b.String())
+// phonePattern is containsPattern over the digits to look for inside stored
+// E.164 numbers, so "0912 345" finds "+84912345678".
+func phonePattern(query string) string {
+	return containsPattern(phone.SearchKey(query))
 }
 
 // PostgresRepository implements usecase.Repository over the shared pgx
@@ -186,7 +180,7 @@ func (r *PostgresRepository) Update(ctx context.Context, s *domain.Supplier) err
 // List returns one page of live suppliers ordered by name.
 func (r *PostgresRepository) List(ctx context.Context, garageID string, filter usecase.ListFilter) ([]*domain.Supplier, int, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
-	args := []any{garageID, containsPattern(filter.Query), compactPattern(filter.Query)}
+	args := []any{garageID, containsPattern(filter.Query), phonePattern(filter.Query)}
 
 	var total int
 	if err := q.QueryRow(ctx, `SELECT count(*)`+supplierSearch, args...).Scan(&total); err != nil {

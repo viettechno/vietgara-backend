@@ -26,7 +26,7 @@ func TestProfile(t *testing.T) {
 	updated, err := e.uc.UpdateMe(t.Context(), id, usecase.ProfileUpdate{FullName: new(" Lan  Anh "), Phone: new("+84901112222"), Locale: &en})
 	require.NoError(t, err)
 	assert.Equal(t, "Lan Anh", updated.FullName)
-	assert.Equal(t, "0901112222", *updated.Phone)
+	assert.Equal(t, "+84901112222", *updated.Phone)
 	assert.Equal(t, domain.LocaleEN, updated.Locale)
 
 	cleared, err := e.uc.UpdateMe(t.Context(), id, usecase.ProfileUpdate{Phone: new("")})

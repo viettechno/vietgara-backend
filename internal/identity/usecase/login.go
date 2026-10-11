@@ -8,6 +8,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/identity/domain"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/email"
 )
 
 // dummyHash is compared against when the user does not exist, so a
@@ -18,12 +19,12 @@ var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("vietgara-timing-equalizer
 // Unknown e-mails and wrong passwords return the same error, so the API
 // cannot be used to enumerate users.
 func (uc *IdentityUseCase) Login(ctx context.Context, rawEmail, password string) (*Session, error) {
-	email, ok := domain.NormalizeEmail(rawEmail)
-	if !ok || password == "" {
+	addr, err := email.Normalize(rawEmail)
+	if err != nil || password == "" {
 		return nil, invalidCredentials()
 	}
 
-	user, err := uc.users.FindByEmail(ctx, email)
+	user, err := uc.users.FindByEmail(ctx, addr)
 	if err != nil {
 		if errors.Is(err, domain.ErrUserNotFound) {
 			_ = bcrypt.CompareHashAndPassword(dummyHash, []byte(password))

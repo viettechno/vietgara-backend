@@ -178,15 +178,26 @@ func TestPostgresRepository_List(t *testing.T) {
 
 		tx := dbtest.New(t).
 			ExpectQueryRow("SELECT count(*)", dbtest.Row(1)).
-			WithArgs(func(args []any) { require.Equal(t, []any{garageID, "%sai 12%", "%SAI12%"}, args) }).
+			WithArgs(func(args []any) { require.Equal(t, []any{garageID, "%sai 12%", ""}, args) }).
 			ExpectQuery("ORDER BY lower(s.name)", dbtest.NewRows(supplierRow(`{}`, `{}`)), nil).
-			WithArgs(func(args []any) { require.Equal(t, []any{garageID, "%sai 12%", "%SAI12%", 20, 0}, args) })
+			WithArgs(func(args []any) { require.Equal(t, []any{garageID, "%sai 12%", "", 20, 0}, args) })
 
 		list, total, err := repo.List(tx.Context(t.Context()), garageID, usecase.ListFilter{Query: "sai 12", Limit: 20})
 		require.NoError(t, err)
 		assert.Equal(t, 1, total)
 		require.Len(t, list, 1)
 		assert.Equal(t, "Phu Tung Sai Gon", list[0].Name)
+	})
+
+	t.Run("a phone-like query also searches the E.164 number", func(t *testing.T) {
+		t.Parallel()
+
+		tx := dbtest.New(t).
+			ExpectQueryRow("SELECT count(*)", dbtest.Row(0)).
+			WithArgs(func(args []any) { require.Equal(t, []any{garageID, "%0912 345%", "%912345%"}, args) })
+
+		_, _, err := repo.List(tx.Context(t.Context()), garageID, usecase.ListFilter{Query: "0912 345", Limit: 20})
+		require.NoError(t, err)
 	})
 
 	t.Run("no matches", func(t *testing.T) {

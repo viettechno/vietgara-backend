@@ -80,9 +80,9 @@ func (r *PostgresUserRepository) FindByEmail(ctx context.Context, email string) 
 	return r.findOne(ctx, `lower(a.email) = lower($1)`, strings.TrimSpace(email))
 }
 
-// FindByPhone matches a phone in either its "0..." or "+84..." form.
+// FindByPhone matches a phone in its normalized E.164 form (pkg/phone).
 func (r *PostgresUserRepository) FindByPhone(ctx context.Context, phone string) (*domain.User, error) {
-	return r.findOne(ctx, `a.phone = ANY($1)`, PhoneVariants(phone))
+	return r.findOne(ctx, `a.phone = $1`, phone)
 }
 
 // FindByGoogleSubject returns the user linked to a Google user id.

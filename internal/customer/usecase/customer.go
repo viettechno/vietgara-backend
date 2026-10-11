@@ -6,6 +6,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/viettechno/vietgara-backend/internal/customer/domain"
+	"github.com/viettechno/vietgara-backend/pkg/email"
+	"github.com/viettechno/vietgara-backend/pkg/phone"
 )
 
 // CreateCustomerRequest is the input for CustomerUseCase.Create.
@@ -73,11 +75,11 @@ func (f customerFields) apply(c *domain.Customer) error {
 		c.FullName = name
 	}
 
-	if err := patch(&c.Phone, f.Phone, domain.NormalizePhone); err != nil {
+	if err := patch(&c.Phone, f.Phone, phone.Normalize); err != nil {
 		return err
 	}
 
-	if err := patch(&c.Email, f.Email, domain.NormalizeEmail); err != nil {
+	if err := patch(&c.Email, f.Email, email.Normalize); err != nil {
 		return err
 	}
 

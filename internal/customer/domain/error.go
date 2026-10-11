@@ -12,8 +12,6 @@ var (
 	ErrLicensePlateRequired = errors.New("license plate is required")
 	ErrCustomerRequired     = errors.New("customer is required")
 
-	ErrInvalidPhone        = errors.New("phone number must contain 8 to 15 digits")
-	ErrInvalidEmail        = errors.New("email address is invalid")
 	ErrInvalidLicensePlate = errors.New("license plate must contain 4 to 12 letters or digits")
 	ErrInvalidYear         = errors.New("model year is out of range")
 	ErrFieldTooLong        = errors.New("field is too long")

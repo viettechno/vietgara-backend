@@ -14,6 +14,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/email"
 )
 
 // IdentityUseCase implements every action of the Identity module:
@@ -141,8 +142,8 @@ func (uc *IdentityUseCase) GrantPlatformAdmins(ctx context.Context, emails []str
 	normalized := make([]string, 0, len(emails))
 
 	for _, raw := range emails {
-		if email, ok := domain.NormalizeEmail(raw); ok {
-			normalized = append(normalized, email)
+		if addr, err := email.Normalize(raw); err == nil {
+			normalized = append(normalized, addr)
 		}
 	}
 

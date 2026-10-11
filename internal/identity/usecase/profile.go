@@ -33,6 +33,10 @@ func (uc *IdentityUseCase) UpdateMe(ctx context.Context, userID string, update P
 			return nil, apperror.Validation("fullName", apperror.IssueRequired, "full name is required")
 		}
 
+		if name != user.FullName {
+			user.FullNameSource = domain.NameSourceUser
+		}
+
 		user.FullName = name
 	}
 

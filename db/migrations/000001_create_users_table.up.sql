@@ -6,6 +6,10 @@
 CREATE TYPE user_status AS ENUM ('active', 'suspended');
 CREATE TYPE user_auth_provider AS ENUM ('email', 'google');
 CREATE TYPE user_locale AS ENUM ('vi', 'en');
+-- Where a user's display name came from (FR-IAM-12): taken from Google at
+-- first sign-in, or typed by the user. A later Google sign-in refreshes a
+-- 'google' name but never overwrites one the user typed.
+CREATE TYPE user_name_source AS ENUM ('google', 'user');
 
 -- password_hash is only set for e-mail users (bcrypt, never plaintext).
 -- identity_platform_uid is the Google subject id of Google users.
@@ -19,12 +23,15 @@ CREATE TABLE users (
     auth_provider user_auth_provider NOT NULL DEFAULT 'email',
     identity_platform_uid VARCHAR(128) UNIQUE,
     full_name VARCHAR(255) NOT NULL,
+    full_name_source user_name_source NOT NULL DEFAULT 'user',
     password_hash VARCHAR(255),
     status user_status NOT NULL DEFAULT 'active',
     email_verified_at TIMESTAMP WITH TIME ZONE,
     locale user_locale NOT NULL DEFAULT 'vi',
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_by UUID,
+    updated_by UUID
 );
 
 -- E-mails are unique case-insensitively.
@@ -32,15 +39,3 @@ CREATE UNIQUE INDEX idx_users_email_lower_unique ON users (lower(email));
 CREATE INDEX idx_users_phone ON users (phone);
 CREATE INDEX idx_users_identity_platform_uid ON users (identity_platform_uid);
 
-CREATE OR REPLACE FUNCTION update_users_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trigger_users_updated_at
-BEFORE UPDATE ON users
-FOR EACH ROW
-EXECUTE FUNCTION update_users_updated_at();

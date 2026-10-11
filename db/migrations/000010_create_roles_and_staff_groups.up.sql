@@ -22,14 +22,6 @@ CREATE TYPE permission AS ENUM (
 
 CREATE TYPE default_role AS ENUM ('manager', 'accountant', 'service_advisor', 'technician', 'inventory_staff');
 
--- Shared updated_at trigger for the tables created from here on.
-CREATE OR REPLACE FUNCTION set_updated_at() RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
 -- roles: defined by an owner, shared by all their garages. default_key
 -- marks the roles the platform generated, which keeps that step idempotent.
 CREATE TABLE roles (
@@ -45,11 +37,11 @@ CREATE TABLE roles (
 );
 CREATE UNIQUE INDEX idx_roles_owner_name_unique ON roles (owner_user_id, lower(name));
 CREATE UNIQUE INDEX idx_roles_owner_default_unique ON roles (owner_user_id, default_key) WHERE default_key IS NOT NULL;
-CREATE TRIGGER trigger_roles_updated_at BEFORE UPDATE ON roles FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
 CREATE TABLE role_permissions (
     role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     permission permission NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_by UUID,
     PRIMARY KEY (role_id, permission)
 );
 
@@ -69,14 +61,13 @@ CREATE TABLE staff_groups (
 CREATE UNIQUE INDEX idx_staff_groups_garage_name_unique ON staff_groups (garage_id, lower(name));
 CREATE UNIQUE INDEX idx_staff_groups_garage_default_unique ON staff_groups (garage_id, default_key) WHERE default_key IS NOT NULL;
 CREATE INDEX idx_staff_groups_role_id ON staff_groups (role_id);
-CREATE TRIGGER trigger_staff_groups_updated_at BEFORE UPDATE ON staff_groups FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
 -- garage_id is repeated from the group so RLS can filter without a join.
 CREATE TABLE staff_group_members (
     group_id UUID NOT NULL REFERENCES staff_groups(id) ON DELETE CASCADE,
     staff_id UUID NOT NULL REFERENCES garage_staff(id) ON DELETE CASCADE,
     garage_id UUID NOT NULL REFERENCES garages(id) ON DELETE CASCADE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_by UUID,
     PRIMARY KEY (group_id, staff_id)
 );
 CREATE INDEX idx_staff_group_members_staff_id ON staff_group_members (staff_id);

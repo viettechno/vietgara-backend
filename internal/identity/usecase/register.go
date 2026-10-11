@@ -90,8 +90,10 @@ func newUser(req RegisterRequest) (*domain.User, string, error) {
 		Phone:        phone,
 		AuthProvider: domain.AuthProviderEmail,
 		FullName:     fullName,
-		Status:       domain.UserStatusActive,
-		Locale:       req.Locale.OrDefault(),
+		// A name typed at sign-up is the user's own (FR-IAM-12).
+		FullNameSource: domain.NameSourceUser,
+		Status:         domain.UserStatusActive,
+		Locale:         req.Locale.OrDefault(),
 	}, req.Password, nil
 }
 

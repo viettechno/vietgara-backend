@@ -41,8 +41,6 @@ CREATE TABLE settlements (
     CONSTRAINT settlements_garage_number_unique UNIQUE (garage_id, number)
 );
 
-CREATE TRIGGER trigger_settlements_updated_at BEFORE UPDATE ON settlements FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
 CREATE INDEX idx_settlements_garage_status_created_at ON settlements (garage_id, status, created_at DESC);
 
 ALTER TABLE settlements ENABLE ROW LEVEL SECURITY;

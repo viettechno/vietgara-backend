@@ -14,7 +14,8 @@ CREATE TABLE outbox_events (
     attempts INTEGER NOT NULL DEFAULT 0,
     last_error TEXT,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    published_at TIMESTAMP WITH TIME ZONE
+    published_at TIMESTAMP WITH TIME ZONE,
+    created_by UUID
 );
 
 -- The relay's polling loop: oldest pending events first

@@ -16,6 +16,10 @@ CREATE TABLE document_sequences (
     doc_type VARCHAR(30) NOT NULL,
     period VARCHAR(20) NOT NULL,
     next_seq INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_by UUID,
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_by UUID,
     PRIMARY KEY (garage_id, doc_type, period)
 );
 

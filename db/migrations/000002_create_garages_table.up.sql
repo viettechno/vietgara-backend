@@ -58,19 +58,6 @@ CREATE TABLE garages (
 CREATE INDEX idx_garages_user_id ON garages (user_id);
 CREATE INDEX idx_garages_status ON garages (status);
 
-CREATE OR REPLACE FUNCTION update_garages_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trigger_garages_updated_at
-BEFORE UPDATE ON garages
-FOR EACH ROW
-EXECUTE FUNCTION update_garages_updated_at();
-
 -- Row-Level Security. FORCE binds the table owner too. The policies also
 -- admit the caller's own memberships and invitations, so they are created
 -- in 000013 once every table they reference exists; until then no row is

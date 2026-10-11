@@ -42,21 +42,6 @@ CREATE INDEX idx_customers_full_name_trgm ON customers USING gin (full_name gin_
 CREATE INDEX idx_customers_phone_trgm ON customers USING gin (phone gin_trgm_ops);
 CREATE INDEX idx_customers_email_trgm ON customers USING gin (email gin_trgm_ops);
 
--- Create trigger function to automatically update updated_at
-CREATE OR REPLACE FUNCTION update_customers_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Create trigger
-CREATE TRIGGER trigger_customers_updated_at
-BEFORE UPDATE ON customers
-FOR EACH ROW
-EXECUTE FUNCTION update_customers_updated_at();
-
 -- Enable Row-Level Security
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 

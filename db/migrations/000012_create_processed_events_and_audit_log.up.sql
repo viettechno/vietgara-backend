@@ -23,7 +23,8 @@ CREATE TABLE audit_log (
     before JSONB,
     after JSONB,
     ip VARCHAR(64),
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_by UUID
 );
 CREATE INDEX idx_audit_log_entity ON audit_log (entity_type, entity_id, created_at DESC);
 CREATE INDEX idx_audit_log_garage ON audit_log (garage_id, created_at DESC) WHERE garage_id IS NOT NULL;

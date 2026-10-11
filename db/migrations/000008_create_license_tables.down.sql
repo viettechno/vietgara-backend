@@ -1,7 +1,5 @@
 DROP TABLE IF EXISTS entitlements;
 
-DROP TRIGGER IF EXISTS trigger_subscriptions_updated_at ON subscriptions;
-DROP FUNCTION IF EXISTS update_subscriptions_updated_at();
 DROP TABLE IF EXISTS subscriptions;
 
 DROP TABLE IF EXISTS plans;

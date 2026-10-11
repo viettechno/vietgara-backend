@@ -43,21 +43,6 @@ CREATE INDEX idx_vehicles_license_plate_key_trgm ON vehicles USING gin (license_
 -- One live vehicle per plate within a garage
 CREATE UNIQUE INDEX idx_vehicles_garage_plate_unique ON vehicles (garage_id, license_plate_key) WHERE deleted_at IS NULL;
 
--- Create trigger function to automatically update updated_at
-CREATE OR REPLACE FUNCTION update_vehicles_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Create trigger
-CREATE TRIGGER trigger_vehicles_updated_at
-BEFORE UPDATE ON vehicles
-FOR EACH ROW
-EXECUTE FUNCTION update_vehicles_updated_at();
-
 -- Enable Row-Level Security
 ALTER TABLE vehicles ENABLE ROW LEVEL SECURITY;
 

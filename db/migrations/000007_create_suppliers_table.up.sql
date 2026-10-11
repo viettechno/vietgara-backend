@@ -30,21 +30,6 @@ CREATE INDEX idx_suppliers_garage ON suppliers (garage_id) WHERE deleted_at IS N
 -- One live supplier per name within a garage (case-insensitive)
 CREATE UNIQUE INDEX idx_suppliers_garage_name_unique ON suppliers (garage_id, lower(name)) WHERE deleted_at IS NULL;
 
--- Create trigger function to automatically update updated_at
-CREATE OR REPLACE FUNCTION update_suppliers_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Create trigger
-CREATE TRIGGER trigger_suppliers_updated_at
-BEFORE UPDATE ON suppliers
-FOR EACH ROW
-EXECUTE FUNCTION update_suppliers_updated_at();
-
 -- Enable Row-Level Security
 ALTER TABLE suppliers ENABLE ROW LEVEL SECURITY;
 

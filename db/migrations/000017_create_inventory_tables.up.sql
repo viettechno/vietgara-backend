@@ -24,8 +24,6 @@ CREATE TABLE items (
     CONSTRAINT items_garage_id_id_key UNIQUE (garage_id, id)
 );
 
-CREATE TRIGGER trigger_items_updated_at BEFORE UPDATE ON items FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
 CREATE UNIQUE INDEX idx_items_garage_sku_unique ON items (garage_id, sku) WHERE deleted_at IS NULL;
 CREATE INDEX idx_items_garage_created_at ON items (garage_id, created_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_items_name_trgm ON items USING gin (name gin_trgm_ops);
@@ -57,6 +55,9 @@ CREATE TABLE stock_balance (
     item_id UUID NOT NULL,
     quantity_on_hand NUMERIC(14, 3) NOT NULL DEFAULT 0,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_by UUID,
+    updated_by UUID,
     PRIMARY KEY (garage_id, item_id),
     CONSTRAINT stock_balance_garage_item_fkey FOREIGN KEY (garage_id, item_id)
         REFERENCES items (garage_id, id) ON DELETE CASCADE

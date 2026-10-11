@@ -35,6 +35,34 @@ type GarageHeader struct {
 	Logo []byte
 }
 
+// BillTo is who a document is billed to (FR-CUS-07), printed under the
+// header when the document was billed to a tax profile.
+type BillTo struct {
+	Name    string
+	TaxID   string
+	Address string
+}
+
+// IsZero reports whether the document is a retail receipt.
+func (b BillTo) IsZero() bool { return b.Name == "" }
+
+// writeBillTo prints the party the document is billed to, if any.
+func writeBillTo(pdf *fpdf.Fpdf, b BillTo) {
+	if b.IsZero() {
+		return
+	}
+
+	writeKeyValue(pdf, "Bill to", b.Name)
+
+	if b.TaxID != "" {
+		writeKeyValue(pdf, "Tax ID", b.TaxID)
+	}
+
+	if b.Address != "" {
+		writeKeyValue(pdf, "Address", b.Address)
+	}
+}
+
 // DocumentLine is one line item row (a quote line, a repair order line).
 type DocumentLine struct {
 	Description string

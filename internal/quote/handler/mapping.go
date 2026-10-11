@@ -4,6 +4,8 @@ import (
 	"math"
 	"time"
 
+	"github.com/viettechno/vietgara-backend/internal/platform/httpapi"
+
 	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
 	quotev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/quote/v1"
 
@@ -25,6 +27,7 @@ func quoteToProto(q *domain.Quote) *quotev1.Quote {
 		SentAt: converter.TimeToProto(zeroTime(q.SentAt)), DecidedAt: converter.TimeToProto(zeroTime(q.DecidedAt)),
 		ConvertedAt: converter.TimeToProto(zeroTime(q.ConvertedAt)),
 		CreatedAt:   converter.TimeToProto(q.CreatedAt), UpdatedAt: converter.TimeToProto(q.UpdatedAt),
+		BillingParty: httpapi.BillingPartyToProto(q.BillingParty),
 	}
 }
 

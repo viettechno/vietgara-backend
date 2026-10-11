@@ -283,12 +283,21 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	customerRepo := customerRepository.NewPostgresCustomerRepository(pool)
 	vehicleRepo := customerRepository.NewPostgresVehicleRepository(pool)
 
+	// Tax profiles (FR-CUS-07): quotes and settlements resolve who they are
+	// billed to through them, and they in turn ask the two modules whether a
+	// document was billed to a profile (filled in below).
+	profileUsage := &taxProfileUsage{}
+	taxProfileUC := customerUsecase.NewTaxProfileUseCase(
+		customerRepository.NewPostgresTaxProfileRepository(pool), customerRepo, profileUsage,
+	)
+
 	// Repair Order (Release 1.3): the Kanban board, plus the
 	// draft-creation-from-quote use case Quote depends on (FR-QUO-04).
 	repairOrder := buildRepairOrder(pool, events, garages, license.entitlements, repairOrderVehicles{vehicles: vehicleRepo})
 
 	// Quote & Pricing (Release 1.2)
-	quote := buildQuote(pool, tx, events, mailer, garages, license.entitlements, customerRepo, vehicleRepo, repairOrder.uc)
+	quote := buildQuote(pool, tx, events, mailer, garages, license.entitlements, customerRepo, vehicleRepo, repairOrder.uc,
+		quoteBillingParties{profiles: taxProfileUC})
 
 	// Inventory (Release 1.3): items, stock receipts and the
 	// repair_order.closed consumer that deducts stock (FR-INV-02).
@@ -307,13 +316,13 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	customerLinks := buildCustomerLinks(pool, customerRepo, identityUC, garages, auditLog)
 	customerLinkSrv := customerHandler.NewLinkServer(customerLinks)
 
-	taxProfileSrv := customerHandler.NewTaxProfileServer(customerUsecase.NewTaxProfileUseCase(
-		customerRepository.NewPostgresTaxProfileRepository(pool), customerRepo, taxProfileUsage{},
-	))
+	taxProfileSrv := customerHandler.NewTaxProfileServer(taxProfileUC)
 
 	// Billing & Settlement (Release 1.4): settlements from a closed
 	// repair order, recorded payments.
-	billing := buildBilling(pool, events, garages, users, license.entitlements, repairOrder.uc, auditLog)
+	billing := buildBilling(pool, events, garages, users, license.entitlements, repairOrder.uc, auditLog,
+		billingBillingParties{profiles: taxProfileUC, vehicles: vehicleRepo})
+	profileUsage.quotes, profileUsage.settlements = quote.quotes, billing.settlements
 
 	// Document/Print (Release 1.4): quote, repair order and settlement
 	// receipt PDFs, the stock movement report as Excel.

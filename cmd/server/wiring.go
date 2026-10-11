@@ -37,6 +37,7 @@ import (
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 	tenantUsecase "github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
 	emailpkg "github.com/viettechno/vietgara-backend/pkg/email"
 	"github.com/viettechno/vietgara-backend/pkg/issuer"
 	"github.com/viettechno/vietgara-backend/pkg/lifecycle"
@@ -208,7 +209,7 @@ type quoteRepairOrders struct {
 
 func (r quoteRepairOrders) Create(
 	ctx context.Context, garageID, quoteID, vehicleID, customerName, vehiclePlate, number, actorID string,
-	lines []quoteDomain.Line,
+	billingParty billingparty.Party, lines []quoteDomain.Line,
 ) (string, error) {
 	roLines := make([]repairorderDomain.Line, 0, len(lines))
 	for _, l := range lines {
@@ -221,7 +222,7 @@ func (r quoteRepairOrders) Create(
 
 	ro, err := r.uc.CreateFromQuote(ctx, repairorderUsecase.CreateFromQuoteRequest{
 		GarageID: garageID, QuoteID: quoteID, ActorID: actorID, VehicleID: vehicleID, CustomerName: customerName,
-		VehiclePlate: vehiclePlate, Number: number, Lines: roLines,
+		VehiclePlate: vehiclePlate, Number: number, Lines: roLines, BillingParty: billingParty,
 	})
 	if err != nil {
 		return "", err
@@ -349,14 +350,50 @@ func (u customerUsage) VehicleInUse(ctx context.Context, garageID, vehicleID str
 	return u.CustomerInUse(ctx, garageID, "", []string{vehicleID})
 }
 
-// taxProfileUsage tells the Customer module whether a document was billed to
-// a tax profile (FR-CAT-07). Nothing refers to profiles until billing
-// parties arrive on quotes and settlements, so a profile is always deleted
-// for now; that check is added here.
-type taxProfileUsage struct{}
+// taxProfileUsage tells the Customer module whether a quote or settlement
+// was billed to a tax profile (the delete-or-deactivate rule, FR-CAT-07),
+// without Customer importing either module. It is filled in once the
+// modules are built, since they in turn resolve billing parties through the
+// Customer module.
+type taxProfileUsage struct {
+	quotes      *quoteRepository.PostgresRepository
+	settlements *billingRepository.PostgresRepository
+}
 
-func (taxProfileUsage) TaxProfileInUse(context.Context, string, string) (bool, error) {
-	return false, nil
+func (u *taxProfileUsage) TaxProfileInUse(ctx context.Context, garageID, profileID string) (bool, error) {
+	return lifecycle.AnyInUse(ctx,
+		func(ctx context.Context) (bool, error) { return u.quotes.BilledToTaxProfile(ctx, garageID, profileID) },
+		func(ctx context.Context) (bool, error) {
+			return u.settlements.BilledToTaxProfile(ctx, garageID, profileID)
+		},
+	)
+}
+
+// quoteBillingParties lets the Quote module resolve who a quote is billed
+// to from the customer's tax profiles (FR-CUS-07).
+type quoteBillingParties struct {
+	profiles *customerUsecase.TaxProfileUseCase
+}
+
+func (b quoteBillingParties) Resolve(ctx context.Context, garageID, customerID string, profileID *string) (billingparty.Party, error) {
+	return b.profiles.Resolve(ctx, garageID, customerID, profileID)
+}
+
+// billingBillingParties lets the Billing module resolve who a settlement is
+// billed to; a repair order knows its vehicle, whose customer owns the
+// profiles.
+type billingBillingParties struct {
+	profiles *customerUsecase.TaxProfileUseCase
+	vehicles *customerRepository.PostgresVehicleRepository
+}
+
+func (b billingBillingParties) Resolve(ctx context.Context, garageID, vehicleID string, profileID *string) (billingparty.Party, error) {
+	vehicle, err := b.vehicles.FindByID(ctx, garageID, vehicleID)
+	if err != nil {
+		return billingparty.Party{}, err
+	}
+
+	return b.profiles.Resolve(ctx, garageID, vehicle.CustomerID, profileID)
 }
 
 // supplierUsage tells the Supplier module whether documents refer to a
@@ -443,7 +480,7 @@ func (r billingRepairOrders) Get(ctx context.Context, garageID, repairOrderID st
 	}
 
 	return billingUsecase.RepairOrderInfo{
-		CustomerName: ro.CustomerName, VehicleLicensePlate: ro.VehicleLicensePlate, TotalAmount: ro.TotalAmount,
+		VehicleID: ro.VehicleID, BillingParty: ro.BillingParty, CustomerName: ro.CustomerName, VehicleLicensePlate: ro.VehicleLicensePlate, TotalAmount: ro.TotalAmount,
 		Closed: ro.Status == repairorderDomain.StatusClosed,
 	}, nil
 }
@@ -515,7 +552,7 @@ func (q documentQuotes) Get(ctx context.Context, garageID, quoteID string) (docu
 	return documentUsecase.QuoteInfo{
 		Number: quote.Number, Status: string(quote.Status), CustomerName: quote.CustomerName,
 		VehiclePlate: quote.VehicleLicensePlate, Notes: quote.Notes, Lines: lines, TotalAmount: quote.TotalAmount,
-		Issuer: quote.Issuer,
+		Issuer: quote.Issuer, BillingParty: quote.BillingParty,
 	}, nil
 }
 
@@ -544,7 +581,7 @@ func (r documentRepairOrders) Get(ctx context.Context, garageID, repairOrderID s
 
 	return documentUsecase.RepairOrderInfo{
 		Number: ro.Number, Status: string(ro.Status), CustomerName: ro.CustomerName, VehiclePlate: ro.VehicleLicensePlate,
-		Lines: lines, TotalAmount: ro.TotalAmount, Issuer: ro.Issuer,
+		Lines: lines, TotalAmount: ro.TotalAmount, Issuer: ro.Issuer, BillingParty: ro.BillingParty,
 	}, nil
 }
 
@@ -585,6 +622,7 @@ func (s documentSettlements) Get(ctx context.Context, garageID, settlementID str
 		Number: settlement.Number, Status: string(settlement.Status), CustomerName: settlement.CustomerName,
 		VehiclePlate: settlement.VehicleLicensePlate, TotalAmount: settlement.TotalAmount,
 		PaidAmount: settlement.PaidAmount, Payments: payments, Vouchers: vouchers, Issuer: settlement.Issuer,
+		BillingParty: settlement.BillingParty,
 	}, nil
 }
 

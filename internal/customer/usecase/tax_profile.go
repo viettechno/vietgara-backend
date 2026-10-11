@@ -2,11 +2,13 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/google/uuid"
 
 	"github.com/viettechno/vietgara-backend/internal/customer/domain"
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
 	"github.com/viettechno/vietgara-backend/pkg/email"
 	"github.com/viettechno/vietgara-backend/pkg/lifecycle"
 )
@@ -221,6 +223,62 @@ func (uc *TaxProfileUseCase) Update(ctx context.Context, req UpdateTaxProfileReq
 	}
 
 	return p, nil
+}
+
+// Resolve returns who a document of the customer is billed to, as the
+// snapshot the document keeps (FR-CUS-07). A nil profileID takes the
+// customer's default profile, or retail (the zero party) when there is
+// none; an empty one is retail explicitly; otherwise it must be an active
+// profile of the customer.
+func (uc *TaxProfileUseCase) Resolve(ctx context.Context, garageID, customerID string, profileID *string) (billingparty.Party, error) {
+	if profileID != nil && *profileID == "" {
+		return billingparty.Party{}, nil
+	}
+
+	if profileID == nil {
+		profiles, err := uc.profiles.List(ctx, garageID, customerID, false)
+		if err != nil {
+			return billingparty.Party{}, toAppError("resolve the billing party", err)
+		}
+
+		for _, p := range profiles {
+			if p.IsDefault {
+				return partyOf(p), nil
+			}
+		}
+
+		return billingparty.Party{}, nil
+	}
+
+	p, err := uc.profiles.FindByID(ctx, garageID, customerID, *profileID)
+	if errors.Is(err, domain.ErrTaxProfileNotFound) || (err == nil && !p.IsActive) {
+		return billingparty.Party{}, toAppError("resolve the billing party", domain.ErrBillingProfileUnusable)
+	}
+
+	if err != nil {
+		return billingparty.Party{}, toAppError("resolve the billing party", err)
+	}
+
+	return partyOf(p), nil
+}
+
+// partyOf takes the snapshot of a profile.
+func partyOf(p *domain.TaxProfile) billingparty.Party {
+	party := billingparty.Party{TaxProfileID: p.ID, Kind: string(p.Kind), LegalName: p.LegalName}
+
+	if p.TaxID != nil {
+		party.TaxID = *p.TaxID
+	}
+
+	if p.Address != nil {
+		party.Address = *p.Address
+	}
+
+	if p.InvoiceEmail != nil {
+		party.InvoiceEmail = *p.InvoiceEmail
+	}
+
+	return party
 }
 
 // Delete follows the delete-or-deactivate rule (FR-CAT-07): a profile that a

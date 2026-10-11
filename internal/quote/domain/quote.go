@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
 	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
@@ -134,6 +135,9 @@ type Quote struct {
 	// Issuer is the garage's legal identity when the quote was created or
 	// sent (FR-TEN-06); its PDF prints it.
 	Issuer issuer.Issuer
+	// BillingParty is who the quote is billed to (FR-CUS-07), a snapshot of
+	// the customer's tax profile; the zero value is a retail receipt.
+	BillingParty billingparty.Party
 	// PublicTokenHash/PublicTokenExpiresAt back the LINK-mode approval
 	// link (FR-QUO-02); the plaintext token is never stored, only its
 	// SHA-256 hash. Both are cleared once the quote is decided.

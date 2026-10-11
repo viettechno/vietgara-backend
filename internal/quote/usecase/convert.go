@@ -47,7 +47,7 @@ func (uc *QuoteUseCase) Convert(ctx context.Context, garageID, quoteID, actorID 
 	}
 
 	repairOrderID, err := uc.RepairOrders.Create(
-		ctx, garageID, q.ID, q.VehicleID, q.CustomerName, q.VehicleLicensePlate, number, actorID, approved,
+		ctx, garageID, q.ID, q.VehicleID, q.CustomerName, q.VehicleLicensePlate, number, actorID, q.BillingParty, approved,
 	)
 	if err != nil {
 		return ConvertQuoteResult{}, toAppError("convert quote", err)

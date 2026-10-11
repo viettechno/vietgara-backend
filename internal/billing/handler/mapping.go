@@ -9,6 +9,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/billing/domain"
 	"github.com/viettechno/vietgara-backend/internal/billing/usecase"
+	"github.com/viettechno/vietgara-backend/internal/platform/httpapi"
 	"github.com/viettechno/vietgara-backend/pkg/converter"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
@@ -17,8 +18,8 @@ func settlementToProto(s *domain.Settlement) *billingv1.Settlement {
 	out := &billingv1.Settlement{
 		Id: s.ID, GarageId: s.GarageID, RepairOrderId: s.RepairOrderID, VehicleLicensePlate: s.VehicleLicensePlate,
 		CustomerName: s.CustomerName, Number: s.Number, TotalAmount: s.TotalAmount,
-		PaidAmount: s.PaidAmount,
-		Status:     statusToProto(s.Status), Payments: make([]*billingv1.SettlementPayment, 0, len(s.Payments)),
+		PaidAmount: s.PaidAmount, BillingParty: httpapi.BillingPartyToProto(s.BillingParty), InvoiceRequested: s.InvoiceRequested,
+		Status: statusToProto(s.Status), Payments: make([]*billingv1.SettlementPayment, 0, len(s.Payments)),
 		CreatedAt: converter.TimeToProto(s.CreatedAt), UpdatedAt: converter.TimeToProto(s.UpdatedAt),
 	}
 

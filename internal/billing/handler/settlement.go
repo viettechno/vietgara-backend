@@ -7,6 +7,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/billing/usecase"
 	"github.com/viettechno/vietgara-backend/internal/platform/httpapi"
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
 // ListSettlements lists a garage's settlements, optionally filtered by
@@ -42,6 +43,7 @@ func (s *Server) CreateSettlement(
 	return run(ctx, func(actorID string) (*billingv1.CreateSettlementResponse, error) {
 		settlement, err := s.uc.Create(ctx, usecase.CreateSettlementRequest{
 			GarageID: req.GetGarageId(), ActorID: actorID, RepairOrderID: req.GetRepairOrderId(),
+			BillingTaxProfileID: httpapi.BillingTaxProfileID(req.GetBillingParty()), InvoiceRequested: req.GetInvoiceRequested(),
 		})
 		if err != nil {
 			return nil, err
@@ -50,6 +52,40 @@ func (s *Server) CreateSettlement(
 		httpapi.Created(ctx)
 
 		return &billingv1.CreateSettlementResponse{Settlement: settlementToProto(settlement)}, nil
+	})
+}
+
+// UpdateSettlement changes who the settlement is billed to and whether a VAT
+// invoice is requested (FR-CUS-07); nothing else can change.
+func (s *Server) UpdateSettlement(
+	ctx context.Context, req *billingv1.UpdateSettlementRequest,
+) (*billingv1.UpdateSettlementResponse, error) {
+	return run(ctx, func(actorID string) (*billingv1.UpdateSettlementResponse, error) {
+		in := req.GetSettlement()
+		update := usecase.UpdateSettlementRequest{GarageID: req.GetGarageId(), SettlementID: req.GetSettlementId(), ActorID: actorID}
+
+		paths := req.GetUpdateMask().GetPaths()
+		if len(paths) == 0 {
+			paths = []string{"billing_party", "invoice_requested"}
+		}
+
+		for _, path := range paths {
+			switch path {
+			case "billing_party":
+				update.BillingTaxProfileID = new(in.GetBillingParty().GetTaxProfileId())
+			case "invoice_requested":
+				update.InvoiceRequested = new(in.GetInvoiceRequested())
+			default:
+				return nil, apperror.Validation("updateMask", apperror.IssueInvalid, "field "+path+" cannot be updated")
+			}
+		}
+
+		settlement, err := s.uc.Update(ctx, update)
+		if err != nil {
+			return nil, err
+		}
+
+		return &billingv1.UpdateSettlementResponse{Settlement: settlementToProto(settlement)}, nil
 	})
 }
 

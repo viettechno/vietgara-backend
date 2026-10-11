@@ -295,3 +295,57 @@ func TestTaxProfile_DeleteOrDeactivate(t *testing.T) {
 		assertAppError(t, err, apperror.CodeNotFound)
 	})
 }
+
+func TestTaxProfile_Resolve(t *testing.T) {
+	t.Parallel()
+
+	uc, store := newProfileUseCase(t, false)
+
+	// No profile at all: retail.
+	party, err := uc.Resolve(t.Context(), garageID, customerID, nil)
+	require.NoError(t, err)
+	assert.True(t, party.IsZero())
+
+	plain := companyRequest()
+	plain.IsDefault = new(false)
+	other, err := uc.Create(t.Context(), plain)
+	require.NoError(t, err)
+
+	// Profiles but no default: still retail when none is chosen.
+	party, err = uc.Resolve(t.Context(), garageID, customerID, nil)
+	require.NoError(t, err)
+	assert.True(t, party.IsZero())
+
+	def, err := uc.Create(t.Context(), companyRequest())
+	require.NoError(t, err)
+
+	party, err = uc.Resolve(t.Context(), garageID, customerID, nil)
+	require.NoError(t, err)
+	assert.Equal(t, def.ID, party.TaxProfileID)
+	assert.Equal(t, "Cong ty An Phat", party.LegalName)
+	assert.Equal(t, "0301234567", party.TaxID)
+	assert.Equal(t, "12 Le Loi", party.Address)
+	assert.Equal(t, "ketoan@anphat.vn", party.InvoiceEmail)
+	assert.Equal(t, "company", party.Kind)
+	assert.True(t, party.InvoiceReady())
+
+	// Retail on purpose.
+	party, err = uc.Resolve(t.Context(), garageID, customerID, new(""))
+	require.NoError(t, err)
+	assert.True(t, party.IsZero())
+
+	// A named profile.
+	party, err = uc.Resolve(t.Context(), garageID, customerID, &other.ID)
+	require.NoError(t, err)
+	assert.Equal(t, other.ID, party.TaxProfileID)
+
+	// Not the customer's, or deactivated: unusable.
+	_, err = uc.Resolve(t.Context(), garageID, customerID, new("nobody"))
+	assertAppError(t, err, apperror.CodeInvalidArgument)
+
+	other.IsActive = false
+	_, err = uc.Resolve(t.Context(), garageID, customerID, &other.ID)
+	assertAppError(t, err, apperror.CodeInvalidArgument)
+
+	_ = store
+}

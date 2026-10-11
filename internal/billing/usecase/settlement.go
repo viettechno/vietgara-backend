@@ -9,6 +9,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/billing/domain"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
 	"github.com/viettechno/vietgara-backend/pkg/numbering"
 )
 
@@ -23,14 +24,15 @@ const EventSettlementCreated = "settlement.created"
 
 // Deps are the dependencies of SettlementUseCase.
 type Deps struct {
-	Settlements  Repository
-	RepairOrders RepairOrderReader
-	Garages      GarageReader
-	Collectors   CollectorReader
-	Limits       TransactionLimiter
-	Sequences    Sequencer
-	Events       EventPublisher
-	Audit        AuditLogger
+	Settlements    Repository
+	RepairOrders   RepairOrderReader
+	BillingParties BillingPartyResolver
+	Garages        GarageReader
+	Collectors     CollectorReader
+	Limits         TransactionLimiter
+	Sequences      Sequencer
+	Events         EventPublisher
+	Audit          AuditLogger
 	// Now defaults to time.Now.
 	Now clock
 }
@@ -55,6 +57,11 @@ type CreateSettlementRequest struct {
 	GarageID      string
 	ActorID       string
 	RepairOrderID string
+	// BillingTaxProfileID is the customer's tax profile to bill: nil takes
+	// the repair order's party, "" is a retail receipt.
+	BillingTaxProfileID *string
+	// InvoiceRequested asks for a VAT invoice, which needs a complete party.
+	InvoiceRequested bool
 }
 
 // Create creates a settlement from a closed repair order (FR-BIL-01),
@@ -77,6 +84,11 @@ func (uc *SettlementUseCase) Create(ctx context.Context, req CreateSettlementReq
 		return nil, toAppError("create settlement", domain.ErrRepairOrderNotClosed)
 	}
 
+	party, err := uc.billingParty(ctx, req, ro)
+	if err != nil {
+		return nil, err
+	}
+
 	garage, err := uc.garageInfo(ctx, req.GarageID)
 	if err != nil {
 		return nil, err
@@ -94,8 +106,9 @@ func (uc *SettlementUseCase) Create(ctx context.Context, req CreateSettlementReq
 	s := &domain.Settlement{
 		ID: uuid.NewString(), GarageID: req.GarageID, RepairOrderID: req.RepairOrderID,
 		VehicleLicensePlate: ro.VehicleLicensePlate, CustomerName: ro.CustomerName, Number: number,
-		TotalAmount: ro.TotalAmount, Status: domain.StatusPending, Issuer: garage.Issuer,
-		CreatedBy: actorRef(req.ActorID), UpdatedBy: actorRef(req.ActorID),
+		TotalAmount: ro.TotalAmount, Status: domain.StatusPending, Issuer: garage.Issuer, BillingParty: party,
+		InvoiceRequested: req.InvoiceRequested,
+		CreatedBy:        actorRef(req.ActorID), UpdatedBy: actorRef(req.ActorID),
 	}
 	s.DeriveStatus()
 
@@ -110,6 +123,102 @@ func (uc *SettlementUseCase) Create(ctx context.Context, req CreateSettlementReq
 	}
 
 	if err := uc.audit(ctx, req.ActorID, req.GarageID, ActionSettlementCreated, entitySettlement, s.ID, nil, settlementAudit(s)); err != nil {
+		return nil, err
+	}
+
+	return s, nil
+}
+
+// billingParty is who the new settlement is billed to: the profile the
+// request chose, else the repair order's party, else (an ad-hoc repair order
+// that was never billed to anyone) the customer's default profile.
+func (uc *SettlementUseCase) billingParty(
+	ctx context.Context, req CreateSettlementRequest, ro RepairOrderInfo,
+) (billingparty.Party, error) {
+	party, err := uc.chooseParty(ctx, req, ro)
+	if err != nil {
+		return billingparty.Party{}, err
+	}
+
+	return party, checkInvoice("create settlement", req.InvoiceRequested, party)
+}
+
+func (uc *SettlementUseCase) chooseParty(
+	ctx context.Context, req CreateSettlementRequest, ro RepairOrderInfo,
+) (billingparty.Party, error) {
+	if req.BillingTaxProfileID == nil && !ro.BillingParty.IsZero() {
+		return ro.BillingParty, nil
+	}
+
+	party, err := uc.BillingParties.Resolve(ctx, req.GarageID, ro.VehicleID, req.BillingTaxProfileID)
+	if err != nil {
+		return billingparty.Party{}, toAppError("create settlement", err)
+	}
+
+	return party, nil
+}
+
+// checkInvoice refuses a VAT invoice for a party without a legal name, tax
+// id and address.
+func checkInvoice(op string, requested bool, party billingparty.Party) error {
+	if requested && !party.InvoiceReady() {
+		return toAppError(op, domain.ErrInvoiceDataIncomplete)
+	}
+
+	return nil
+}
+
+// UpdateSettlementRequest is the input for SettlementUseCase.Update; only
+// who is billed and whether an invoice is requested can change.
+type UpdateSettlementRequest struct {
+	GarageID     string
+	SettlementID string
+	ActorID      string
+	// BillingTaxProfileID, when non-nil, changes the billing party ("" is a
+	// retail receipt).
+	BillingTaxProfileID *string
+	InvoiceRequested    *bool
+}
+
+// Update changes who the settlement is billed to and whether a VAT invoice
+// is requested (FR-CUS-07); the invoice needs a complete billing party.
+func (uc *SettlementUseCase) Update(ctx context.Context, req UpdateSettlementRequest) (*domain.Settlement, error) {
+	s, err := uc.Settlements.FindByID(ctx, req.GarageID, req.SettlementID)
+	if err != nil {
+		return nil, toAppError("update settlement", err)
+	}
+
+	before := settlementAudit(s)
+
+	if req.BillingTaxProfileID != nil {
+		ro, err := uc.RepairOrders.Get(ctx, req.GarageID, s.RepairOrderID)
+		if err != nil {
+			return nil, toAppError("update settlement", err)
+		}
+
+		party, err := uc.BillingParties.Resolve(ctx, req.GarageID, ro.VehicleID, req.BillingTaxProfileID)
+		if err != nil {
+			return nil, toAppError("update settlement", err)
+		}
+
+		s.BillingParty = party
+	}
+
+	if req.InvoiceRequested != nil {
+		s.InvoiceRequested = *req.InvoiceRequested
+	}
+
+	if err := checkInvoice("update settlement", s.InvoiceRequested, s.BillingParty); err != nil {
+		return nil, err
+	}
+
+	s.UpdatedBy = actorRef(req.ActorID)
+
+	if err := uc.Settlements.SaveBilling(ctx, s); err != nil {
+		return nil, toAppError("update settlement", err)
+	}
+
+	if err := uc.audit(ctx, req.ActorID, req.GarageID, ActionBillingUpdated, entitySettlement, s.ID, before, settlementAudit(s)); err != nil {
 		return nil, err
 	}
 

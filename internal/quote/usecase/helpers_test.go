@@ -6,6 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/mock"
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
+
 	"github.com/stretchr/testify/require"
 
 	"github.com/viettechno/vietgara-backend/internal/mocks"
@@ -49,6 +52,11 @@ type deps struct {
 	RepairOrders *mocks.MockRepairOrderCreator
 	Mailer       *mocks.MockQuoteMailer
 	Events       *mocks.MockQuoteEventPublisher
+	Parties      *mocks.MockQuoteBillingPartyResolver
+	// party answers the billing party resolver (retail by default); the
+	// profile ids it was asked for are recorded in resolved.
+	party    func(customerID string, profileID *string) (billingparty.Party, error)
+	resolved []*string
 }
 
 func newUseCase(t *testing.T) (*usecase.QuoteUseCase, *deps) {
@@ -59,12 +67,19 @@ func newUseCase(t *testing.T) (*usecase.QuoteUseCase, *deps) {
 		Customers: mocks.NewMockQuoteCustomerReader(t), Garages: mocks.NewMockGarageReader(t),
 		Limits: mocks.NewMockTransactionLimiter(t), Sequences: mocks.NewMockSequencer(t),
 		RepairOrders: mocks.NewMockRepairOrderCreator(t), Mailer: mocks.NewMockQuoteMailer(t),
-		Events: mocks.NewMockQuoteEventPublisher(t),
+		Events: mocks.NewMockQuoteEventPublisher(t), Parties: mocks.NewMockQuoteBillingPartyResolver(t),
 	}
+	d.party = func(string, *string) (billingparty.Party, error) { return billingparty.Party{}, nil }
+	d.Parties.EXPECT().Resolve(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, _, customerID string, profileID *string) (billingparty.Party, error) {
+			d.resolved = append(d.resolved, profileID)
+
+			return d.party(customerID, profileID)
+		}).Maybe()
 
 	uc := usecase.NewQuoteUseCase(usecase.Deps{
 		Quotes: d.Quotes, Vehicles: d.Vehicles, Customers: d.Customers, Garages: d.Garages, Limits: d.Limits,
-		Sequences: d.Sequences, RepairOrders: d.RepairOrders, Mailer: d.Mailer, Events: d.Events, Tx: passTx{},
+		Sequences: d.Sequences, RepairOrders: d.RepairOrders, BillingParties: d.Parties, Mailer: d.Mailer, Events: d.Events, Tx: passTx{},
 		AppBaseURL: "https://vietgara.viettechno.com/", Now: func() time.Time { return now },
 	})
 

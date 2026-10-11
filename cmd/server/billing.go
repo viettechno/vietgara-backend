@@ -31,11 +31,12 @@ func buildBilling(
 	entitlements *licenseUsecase.EntitlementUseCase,
 	repairOrders *repairorderUsecase.RepairOrderUseCase,
 	auditLog *audit.Logger,
+	billingParties billingUsecase.BillingPartyResolver,
 ) *billingModule {
 	settlementsRepo := billingRepository.NewPostgresRepository(pool)
 
 	uc := billingUsecase.NewSettlementUseCase(billingUsecase.Deps{
-		Settlements: settlementsRepo, RepairOrders: billingRepairOrders{uc: repairOrders},
+		Settlements: settlementsRepo, RepairOrders: billingRepairOrders{uc: repairOrders}, BillingParties: billingParties,
 		Garages: billingGarages{garages: garages}, Collectors: billingCollectors{users: users}, Limits: entitlements,
 		Sequences: numbering.NewSequencer(pool), Events: events, Audit: auditLog,
 	})

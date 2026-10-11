@@ -3,6 +3,7 @@ package render
 // QuotePDFData is everything a quote's PDF needs (FR-DOC-01).
 type QuotePDFData struct {
 	Garage       GarageHeader
+	BillTo       BillTo
 	Number       string
 	Status       string
 	CustomerName string
@@ -17,6 +18,7 @@ func QuotePDF(data QuotePDFData) ([]byte, error) {
 	pdf := newPDF()
 	writeHeader(pdf, data.Garage, "QUOTE", data.Number)
 
+	writeBillTo(pdf, data.BillTo)
 	writeKeyValue(pdf, "Customer", data.CustomerName)
 	writeKeyValue(pdf, "Vehicle", data.VehiclePlate)
 	writeKeyValue(pdf, "Status", data.Status)

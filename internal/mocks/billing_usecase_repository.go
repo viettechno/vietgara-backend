@@ -404,6 +404,63 @@ func (_c *MockBillingRepository_RecordPayment_Call) RunAndReturn(run func(ctx co
 	return _c
 }
 
+// SaveBilling provides a mock function for the type MockBillingRepository
+func (_mock *MockBillingRepository) SaveBilling(ctx context.Context, s *domain.Settlement) error {
+	ret := _mock.Called(ctx, s)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SaveBilling")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.Settlement) error); ok {
+		r0 = returnFunc(ctx, s)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockBillingRepository_SaveBilling_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SaveBilling'
+type MockBillingRepository_SaveBilling_Call struct {
+	*mock.Call
+}
+
+// SaveBilling is a helper method to define mock.On call
+//   - ctx context.Context
+//   - s *domain.Settlement
+func (_e *MockBillingRepository_Expecter) SaveBilling(ctx any, s any) *MockBillingRepository_SaveBilling_Call {
+	return &MockBillingRepository_SaveBilling_Call{Call: _e.mock.On("SaveBilling", ctx, s)}
+}
+
+func (_c *MockBillingRepository_SaveBilling_Call) Run(run func(ctx context.Context, s *domain.Settlement)) *MockBillingRepository_SaveBilling_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.Settlement
+		if args[1] != nil {
+			arg1 = args[1].(*domain.Settlement)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBillingRepository_SaveBilling_Call) Return(err error) *MockBillingRepository_SaveBilling_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockBillingRepository_SaveBilling_Call) RunAndReturn(run func(ctx context.Context, s *domain.Settlement) error) *MockBillingRepository_SaveBilling_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SaveStatus provides a mock function for the type MockBillingRepository
 func (_mock *MockBillingRepository) SaveStatus(ctx context.Context, garageID string, settlementID string, status domain.SettlementStatus) error {
 	ret := _mock.Called(ctx, garageID, settlementID, status)

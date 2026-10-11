@@ -10,17 +10,21 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	billingRepository "github.com/viettechno/vietgara-backend/internal/billing/repository"
 	customerDomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
 	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
 	dbpkg "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/platform/db/pgtest"
+	quoteRepository "github.com/viettechno/vietgara-backend/internal/quote/repository"
 )
 
 // TestTaxProfilePersistence runs the tax profile rules through the real
 // schema: one personal profile and one default per customer, a tax id
 // format check, garage isolation, and a default mark that follows the
 // profile that last took it.
+//
+//nolint:funlen // one scenario through the real schema, read top to bottom
 func TestTaxProfilePersistence(t *testing.T) {
 	pg := pgtest.StartMigrated(t)
 	userID, garageID, otherGarageID, customerID := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
@@ -39,7 +43,10 @@ func TestTaxProfilePersistence(t *testing.T) {
 	pool := pg.AppPool(t)
 	txm := dbpkg.NewTxManager(pool)
 	customers := customerRepository.NewPostgresCustomerRepository(pool)
-	uc := customerUsecase.NewTaxProfileUseCase(customerRepository.NewPostgresTaxProfileRepository(pool), customers, taxProfileUsage{})
+	usage := &taxProfileUsage{
+		quotes: quoteRepository.NewPostgresRepository(pool), settlements: billingRepository.NewPostgresRepository(pool),
+	}
+	uc := customerUsecase.NewTaxProfileUseCase(customerRepository.NewPostgresTaxProfileRepository(pool), customers, usage)
 
 	in := func(garage string, fn func(ctx context.Context) error) error {
 		return txm.WithTransaction(t.Context(), dbpkg.Scope{GarageID: garage, UserID: userID}, fn)
@@ -108,6 +115,33 @@ func TestTaxProfilePersistence(t *testing.T) {
 		got, err := uc.Get(ctx, garageID, customerID, first.ID)
 		require.NoError(t, err)
 		assert.Equal(t, "0301234567", *got.TaxID)
+
+		return nil
+	}))
+
+	// A quote billed to a profile keeps it from being deleted: it is
+	// deactivated, and loses its default mark.
+	vehicleID := uuid.NewString()
+	exec(`INSERT INTO vehicles (id, garage_id, customer_id, license_plate) VALUES ($1, $2, $3, '51F-111.11')`, vehicleID, garageID, customerID)
+	exec(`INSERT INTO quotes (id, garage_id, customer_id, vehicle_id, customer_name, vehicle_license_plate, number, billing_party)
+		VALUES ($1, $2, $3, $4, 'Binh', '51F-111.11', 'BG-1', $5::jsonb)`,
+		uuid.NewString(), garageID, customerID, vehicleID, `{"tax_profile_id":"`+first.ID+`","legal_name":"Cong ty A"}`)
+
+	require.NoError(t, in(garageID, func(ctx context.Context) error {
+		outcome, err := uc.Delete(ctx, customerUsecase.DeleteTaxProfileRequest{
+			GarageID: garageID, CustomerID: customerID, TaxProfileID: first.ID,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "deactivated", string(outcome))
+
+		got, err := uc.Get(ctx, garageID, customerID, first.ID)
+		require.NoError(t, err)
+		assert.False(t, got.IsActive)
+		assert.False(t, got.IsDefault)
+
+		// It cannot be billed to any more, but the snapshots stay.
+		_, err = uc.Resolve(ctx, garageID, customerID, &first.ID)
+		require.Error(t, err)
 
 		return nil
 	}))

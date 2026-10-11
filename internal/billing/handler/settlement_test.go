@@ -5,6 +5,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
+	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -29,7 +33,7 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 5)
+	assert.Len(t, p, 6)
 	assert.NotNil(t, p[billingv1.SettlementService_CreateSettlement_FullMethodName].Garage)
 }
 
@@ -171,4 +175,47 @@ func TestVoidSettlementPayment(t *testing.T) {
 	})
 	require.Error(t, err)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestUpdateSettlement(t *testing.T) {
+	t.Parallel()
+
+	party := billingparty.Party{TaxProfileID: "tp-1", Kind: "company", LegalName: "Cong ty A", TaxID: "0301234567", Address: "12 Le Loi"}
+
+	e := newEnv(t)
+	e.parties.ExpectedCalls = nil
+	e.parties.EXPECT().Resolve(anyArg, garageID, "vehicle-1", new("tp-1")).Return(party, nil).Once()
+	e.settlements.EXPECT().FindByID(anyArg, garageID, settlementID).Return(openSettlement(), nil).Once()
+	e.repairOrders.EXPECT().Get(anyArg, garageID, repairOrderID).Return(usecase.RepairOrderInfo{VehicleID: "vehicle-1"}, nil).Once()
+	e.settlements.EXPECT().SaveBilling(anyArg, anyArg).Return(nil).Once()
+
+	resp, err := e.srv.UpdateSettlement(signedIn(t), &billingv1.UpdateSettlementRequest{
+		GarageId: garageID, SettlementId: settlementID,
+		Settlement: &billingv1.Settlement{
+			BillingParty: &commonv1.BillingParty{TaxProfileId: "tp-1"}, InvoiceRequested: true,
+		},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"billing_party", "invoice_requested"}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Cong ty A", resp.GetSettlement().GetBillingParty().GetLegalName())
+	assert.Equal(t, commonv1.TaxProfileKind_TAX_PROFILE_KIND_COMPANY, resp.GetSettlement().GetBillingParty().GetKind())
+	assert.True(t, resp.GetSettlement().GetInvoiceRequested())
+
+	_, err = e.srv.UpdateSettlement(signedIn(t), &billingv1.UpdateSettlementRequest{
+		GarageId: garageID, SettlementId: settlementID, Settlement: &billingv1.Settlement{},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"total_amount"}},
+	})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+
+	// An invoice for a retail receipt is refused with its own reason.
+	e = newEnv(t)
+	e.settlements.EXPECT().FindByID(anyArg, garageID, settlementID).Return(openSettlement(), nil).Once()
+
+	_, err = e.srv.UpdateSettlement(signedIn(t), &billingv1.UpdateSettlementRequest{
+		GarageId: garageID, SettlementId: settlementID,
+		Settlement: &billingv1.Settlement{InvoiceRequested: true},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"invoice_requested"}},
+	})
+	require.Error(t, err)
+	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 }

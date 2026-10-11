@@ -31,12 +31,13 @@ func buildQuote(
 	customers *customerRepository.PostgresCustomerRepository,
 	vehicles *customerRepository.PostgresVehicleRepository,
 	repairOrders *repairorderUsecase.RepairOrderUseCase,
+	billingParties quoteUsecase.BillingPartyResolver,
 ) *quoteModule {
 	quotesRepo := quoteRepository.NewPostgresRepository(pool)
 	customerAdapter := quoteCustomers{customers: customers, vehicles: vehicles}
 
 	quotes := quoteUsecase.NewQuoteUseCase(quoteUsecase.Deps{
-		Quotes: quotesRepo, Vehicles: customerAdapter, Customers: customerAdapter,
+		Quotes: quotesRepo, Vehicles: customerAdapter, Customers: customerAdapter, BillingParties: billingParties,
 		Garages: quoteGarages{garages: garages}, Limits: entitlements, Sequences: numbering.NewSequencer(pool),
 		RepairOrders: quoteRepairOrders{uc: repairOrders}, Mailer: mailer, Events: events, Tx: tx,
 		AppBaseURL: appBaseURL(),

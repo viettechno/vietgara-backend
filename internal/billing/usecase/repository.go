@@ -13,6 +13,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/billing/domain"
 
 	"github.com/viettechno/vietgara-backend/internal/platform/audit"
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
 	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
@@ -53,6 +54,9 @@ type Repository interface {
 	// settlement has no such payment, domain.ErrPaymentAlreadyVoided when
 	// it is already void.
 	VoidPayment(ctx context.Context, garageID, settlementID, paymentID, reason string) (*domain.Settlement, error)
+	// SaveBilling persists who the settlement is billed to and whether an
+	// invoice was requested.
+	SaveBilling(ctx context.Context, s *domain.Settlement) error
 	// SaveStatus persists a settlement's status alone, after RecordPayment.
 	SaveStatus(ctx context.Context, garageID, settlementID string, status domain.SettlementStatus) error
 }
@@ -60,6 +64,11 @@ type Repository interface {
 // RepairOrderInfo is the Repair Order module's view of a closed repair
 // order that Billing & Settlement needs to create a settlement from.
 type RepairOrderInfo struct {
+	// VehicleID is the vehicle the billing party is resolved through.
+	VehicleID string
+	// BillingParty is who the repair order was billed to, which the
+	// settlement starts from.
+	BillingParty        billingparty.Party
 	CustomerName        string
 	VehicleLicensePlate string
 	TotalAmount         int64
@@ -73,6 +82,17 @@ type RepairOrderInfo struct {
 // unchanged, so the adapter needs no error translation of its own.
 type RepairOrderReader interface {
 	Get(ctx context.Context, garageID, repairOrderID string) (RepairOrderInfo, error)
+}
+
+// BillingPartyResolver resolves who a settlement is billed to from the
+// customer's tax profiles (FR-CUS-07), through the vehicle's customer, as
+// the snapshot the settlement keeps; implemented by an adapter over the
+// Customer module in cmd/server.
+type BillingPartyResolver interface {
+	// Resolve takes the customer's default profile when profileID is nil
+	// (retail when there is none), retail when it is empty, and otherwise
+	// the named active profile of the customer.
+	Resolve(ctx context.Context, garageID, vehicleID string, profileID *string) (billingparty.Party, error)
 }
 
 // GarageInfo is the Tenant module's view of a garage that Billing &

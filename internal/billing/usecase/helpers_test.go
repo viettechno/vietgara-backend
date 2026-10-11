@@ -6,6 +6,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
+
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
@@ -40,6 +42,11 @@ type deps struct {
 	Sequences    *mocks.MockBillingSequencer
 	Events       *mocks.MockBillingEventPublisher
 	Audit        *mocks.MockBillingAuditLogger
+	Parties      *mocks.MockBillingPartyResolver
+	// party answers the billing party resolver (retail by default); the
+	// profile ids it was asked for are recorded in resolved.
+	party    func(profileID *string) (billingparty.Party, error)
+	resolved []*string
 }
 
 func newUseCase(t *testing.T) (*usecase.SettlementUseCase, *deps) {
@@ -51,11 +58,19 @@ func newUseCase(t *testing.T) (*usecase.SettlementUseCase, *deps) {
 		Collectors: mocks.NewMockBillingCollectorReader(t),
 		Limits:     mocks.NewMockBillingTransactionLimiter(t), Sequences: mocks.NewMockBillingSequencer(t),
 		Events: mocks.NewMockBillingEventPublisher(t), Audit: mocks.NewMockBillingAuditLogger(t),
+		Parties: mocks.NewMockBillingPartyResolver(t),
 	}
+	d.party = func(*string) (billingparty.Party, error) { return billingparty.Party{}, nil }
+	d.Parties.EXPECT().Resolve(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		RunAndReturn(func(_ context.Context, _, _ string, profileID *string) (billingparty.Party, error) {
+			d.resolved = append(d.resolved, profileID)
+
+			return d.party(profileID)
+		}).Maybe()
 
 	uc := usecase.NewSettlementUseCase(usecase.Deps{
 		Settlements: d.Settlements, RepairOrders: d.RepairOrders, Garages: d.Garages, Collectors: d.Collectors,
-		Limits: d.Limits, Sequences: d.Sequences, Events: d.Events, Audit: d.Audit, Now: func() time.Time { return now },
+		BillingParties: d.Parties, Limits: d.Limits, Sequences: d.Sequences, Events: d.Events, Audit: d.Audit, Now: func() time.Time { return now },
 	})
 
 	return uc, d

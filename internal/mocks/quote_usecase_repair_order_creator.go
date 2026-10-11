@@ -9,6 +9,7 @@ import (
 
 	mock "github.com/stretchr/testify/mock"
 	"github.com/viettechno/vietgara-backend/internal/quote/domain"
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
 )
 
 // NewMockRepairOrderCreator creates a new instance of MockRepairOrderCreator. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
@@ -39,8 +40,8 @@ func (_m *MockRepairOrderCreator) EXPECT() *MockRepairOrderCreator_Expecter {
 }
 
 // Create provides a mock function for the type MockRepairOrderCreator
-func (_mock *MockRepairOrderCreator) Create(ctx context.Context, garageID string, quoteID string, vehicleID string, customerName string, vehiclePlate string, number string, actorID string, lines []domain.Line) (string, error) {
-	ret := _mock.Called(ctx, garageID, quoteID, vehicleID, customerName, vehiclePlate, number, actorID, lines)
+func (_mock *MockRepairOrderCreator) Create(ctx context.Context, garageID string, quoteID string, vehicleID string, customerName string, vehiclePlate string, number string, actorID string, billingParty billingparty.Party, lines []domain.Line) (string, error) {
+	ret := _mock.Called(ctx, garageID, quoteID, vehicleID, customerName, vehiclePlate, number, actorID, billingParty, lines)
 
 	if len(ret) == 0 {
 		panic("no return value specified for Create")
@@ -48,16 +49,16 @@ func (_mock *MockRepairOrderCreator) Create(ctx context.Context, garageID string
 
 	var r0 string
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, string, string, string, []domain.Line) (string, error)); ok {
-		return returnFunc(ctx, garageID, quoteID, vehicleID, customerName, vehiclePlate, number, actorID, lines)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, string, string, string, billingparty.Party, []domain.Line) (string, error)); ok {
+		return returnFunc(ctx, garageID, quoteID, vehicleID, customerName, vehiclePlate, number, actorID, billingParty, lines)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, string, string, string, []domain.Line) string); ok {
-		r0 = returnFunc(ctx, garageID, quoteID, vehicleID, customerName, vehiclePlate, number, actorID, lines)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, string, string, string, string, billingparty.Party, []domain.Line) string); ok {
+		r0 = returnFunc(ctx, garageID, quoteID, vehicleID, customerName, vehiclePlate, number, actorID, billingParty, lines)
 	} else {
 		r0 = ret.Get(0).(string)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, string, string, string, string, string, []domain.Line) error); ok {
-		r1 = returnFunc(ctx, garageID, quoteID, vehicleID, customerName, vehiclePlate, number, actorID, lines)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, string, string, string, string, string, billingparty.Party, []domain.Line) error); ok {
+		r1 = returnFunc(ctx, garageID, quoteID, vehicleID, customerName, vehiclePlate, number, actorID, billingParty, lines)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -78,12 +79,13 @@ type MockRepairOrderCreator_Create_Call struct {
 //   - vehiclePlate string
 //   - number string
 //   - actorID string
+//   - billingParty billingparty.Party
 //   - lines []domain.Line
-func (_e *MockRepairOrderCreator_Expecter) Create(ctx any, garageID any, quoteID any, vehicleID any, customerName any, vehiclePlate any, number any, actorID any, lines any) *MockRepairOrderCreator_Create_Call {
-	return &MockRepairOrderCreator_Create_Call{Call: _e.mock.On("Create", ctx, garageID, quoteID, vehicleID, customerName, vehiclePlate, number, actorID, lines)}
+func (_e *MockRepairOrderCreator_Expecter) Create(ctx any, garageID any, quoteID any, vehicleID any, customerName any, vehiclePlate any, number any, actorID any, billingParty any, lines any) *MockRepairOrderCreator_Create_Call {
+	return &MockRepairOrderCreator_Create_Call{Call: _e.mock.On("Create", ctx, garageID, quoteID, vehicleID, customerName, vehiclePlate, number, actorID, billingParty, lines)}
 }
 
-func (_c *MockRepairOrderCreator_Create_Call) Run(run func(ctx context.Context, garageID string, quoteID string, vehicleID string, customerName string, vehiclePlate string, number string, actorID string, lines []domain.Line)) *MockRepairOrderCreator_Create_Call {
+func (_c *MockRepairOrderCreator_Create_Call) Run(run func(ctx context.Context, garageID string, quoteID string, vehicleID string, customerName string, vehiclePlate string, number string, actorID string, billingParty billingparty.Party, lines []domain.Line)) *MockRepairOrderCreator_Create_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -117,9 +119,13 @@ func (_c *MockRepairOrderCreator_Create_Call) Run(run func(ctx context.Context, 
 		if args[7] != nil {
 			arg7 = args[7].(string)
 		}
-		var arg8 []domain.Line
+		var arg8 billingparty.Party
 		if args[8] != nil {
-			arg8 = args[8].([]domain.Line)
+			arg8 = args[8].(billingparty.Party)
+		}
+		var arg9 []domain.Line
+		if args[9] != nil {
+			arg9 = args[9].([]domain.Line)
 		}
 		run(
 			arg0,
@@ -131,6 +137,7 @@ func (_c *MockRepairOrderCreator_Create_Call) Run(run func(ctx context.Context, 
 			arg6,
 			arg7,
 			arg8,
+			arg9,
 		)
 	})
 	return _c
@@ -141,7 +148,7 @@ func (_c *MockRepairOrderCreator_Create_Call) Return(repairOrderID string, err e
 	return _c
 }
 
-func (_c *MockRepairOrderCreator_Create_Call) RunAndReturn(run func(ctx context.Context, garageID string, quoteID string, vehicleID string, customerName string, vehiclePlate string, number string, actorID string, lines []domain.Line) (string, error)) *MockRepairOrderCreator_Create_Call {
+func (_c *MockRepairOrderCreator_Create_Call) RunAndReturn(run func(ctx context.Context, garageID string, quoteID string, vehicleID string, customerName string, vehiclePlate string, number string, actorID string, billingParty billingparty.Party, lines []domain.Line) (string, error)) *MockRepairOrderCreator_Create_Call {
 	_c.Call.Return(run)
 	return _c
 }

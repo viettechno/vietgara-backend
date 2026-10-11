@@ -88,3 +88,34 @@ func TestLetterhead(t *testing.T) {
 	require.NoError(t, err)
 	assert.Less(t, len(minimal), len(withoutLogo), "a header without a legal profile is shorter")
 }
+
+// TestBillTo covers FR-CUS-07: a document billed to a tax profile prints it,
+// and a retail receipt prints nothing extra.
+func TestBillTo(t *testing.T) {
+	t.Parallel()
+
+	billed := quote(render.GarageHeader{Name: "Gara"})
+	billed.BillTo = render.BillTo{Name: "Cong ty Van Tai A", TaxID: "0301234567", Address: "12 Le Loi"}
+
+	withParty, err := render.QuotePDF(billed)
+	require.NoError(t, err)
+
+	retail, err := render.QuotePDF(quote(render.GarageHeader{Name: "Gara"}))
+	require.NoError(t, err)
+
+	assert.NotEqual(t, len(withParty), len(retail), "the billed document carries the party's lines")
+	assert.True(t, render.BillTo{}.IsZero())
+
+	for name, render := range map[string]func() ([]byte, error){
+		"repair order": func() ([]byte, error) {
+			return render.RepairOrderPDF(render.RepairOrderPDFData{BillTo: billed.BillTo, Number: "LSC-1"})
+		},
+		"receipt": func() ([]byte, error) {
+			return render.SettlementReceiptPDF(render.SettlementReceiptData{BillTo: billed.BillTo, Number: "QT-1"})
+		},
+	} {
+		pdf, err := render()
+		require.NoError(t, err, name)
+		assert.Equal(t, "%PDF", string(pdf[:4]), name)
+	}
+}

@@ -156,7 +156,7 @@ var (
 		domain.ErrFullNameRequired, domain.ErrLicensePlateRequired, domain.ErrCustomerRequired,
 		phone.ErrInvalid, email.ErrInvalid, domain.ErrInvalidLicensePlate, domain.ErrInvalidYear,
 		domain.ErrFieldTooLong, domain.ErrLegalNameRequired, domain.ErrInvalidTaxProfile, domain.ErrInvalidTaxID,
-		domain.ErrPersonalProfileTaken,
+		domain.ErrPersonalProfileTaken, domain.ErrBillingProfileUnusable,
 	}
 )
 

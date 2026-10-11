@@ -262,6 +262,11 @@ packages:
         config:
           filename: "quote_usecase_repair_order_creator.go"
           dir: "./internal/mocks"
+      BillingPartyResolver:
+        config:
+          filename: "quote_usecase_billing_party_resolver.go"
+          dir: "./internal/mocks"
+          structname: "MockQuoteBillingPartyResolver"
       Mailer:
         config:
           filename: "quote_usecase_mailer.go"
@@ -333,6 +338,11 @@ packages:
           filename: "billing_usecase_repair_order_reader.go"
           dir: "./internal/mocks"
           structname: "MockBillingRepairOrderReader"
+      BillingPartyResolver:
+        config:
+          filename: "billing_usecase_billing_party_resolver.go"
+          dir: "./internal/mocks"
+          structname: "MockBillingPartyResolver"
       GarageReader:
         config:
           filename: "billing_usecase_garage_reader.go"

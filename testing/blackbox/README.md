@@ -129,12 +129,14 @@ seeding is not supported by this command.
 
 With the stubbed stack running, `make purge` immediately deletes every user
 whose e-mail is on `TEST_USERS_EMAIL_DOMAIN`; foreign-key cascades remove
-their database records. The command runs inside the backend container and
-requires `--confirm-domain` to exactly match the configured domain. It refuses
-to run if the domain is unset or is not under a reserved testing TLD. Staging
-can run the same binary from its Compose network with the backend container's
-database configuration; no public purge endpoint is exposed. This command
-does not delete Mailpit messages or files from local object storage yet.
+their database records, and the command deletes their Mailpit messages by
+exact recipient. The command runs inside the backend container and requires
+`--confirm-domain` to exactly match the configured domain. It refuses to run
+if the test domain or Mailpit API URL is unset, or if the domain is not under a
+reserved testing TLD. Staging can run the same binary from its Compose network
+with the backend container's database and Mailpit configuration; no public
+purge endpoint is exposed. Uploaded files in local object storage are not
+deleted by this command yet.
 
 ## Layout
 

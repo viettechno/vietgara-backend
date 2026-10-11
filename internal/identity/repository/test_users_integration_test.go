@@ -51,8 +51,13 @@ func TestDeleteTestUsersCascades(t *testing.T) {
 	lookalike, _ := seed("x@notblackbox.vietgara.test", old)
 
 	repo := repository.NewPostgresUserRepository(pg.AppPool(t))
+	cutoff := time.Now().Add(-24 * time.Hour)
 
-	deleted, err := repo.DeleteTestUsers(ctx, "blackbox.vietgara.test", time.Now().Add(-24*time.Hour))
+	emails, err := repo.ListTestUserEmails(ctx, "blackbox.vietgara.test", cutoff)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"bb.old@blackbox.vietgara.test"}, emails)
+
+	deleted, err := repo.DeleteTestUsers(ctx, "blackbox.vietgara.test", cutoff)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, deleted)
 

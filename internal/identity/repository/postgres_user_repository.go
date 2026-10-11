@@ -221,3 +221,28 @@ func (r *PostgresUserRepository) DeleteTestUsers(ctx context.Context, emailDomai
 
 	return deleted, errors.Join(errs...)
 }
+
+// ListTestUserEmails returns the recipients of test users eligible for purge.
+func (r *PostgresUserRepository) ListTestUserEmails(ctx context.Context, emailDomain string, createdBefore time.Time) ([]string, error) {
+	if emailDomain == "" {
+		return nil, errors.New("list test user e-mails: empty e-mail domain")
+	}
+
+	q := platformdb.QuerierFromContext(ctx, r.pool)
+
+	rows, err := q.Query(ctx, `
+		SELECT email FROM users
+		WHERE right(lower(email), length($1) + 1) = '@' || $1 AND created_at < $2
+		ORDER BY email`,
+		strings.ToLower(emailDomain), createdBefore)
+	if err != nil {
+		return nil, fmt.Errorf("list test user e-mails: %w", err)
+	}
+
+	emails, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	if err != nil {
+		return nil, fmt.Errorf("list test user e-mails: %w", err)
+	}
+
+	return emails, nil
+}

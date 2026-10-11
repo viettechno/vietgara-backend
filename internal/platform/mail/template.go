@@ -13,6 +13,7 @@ import (
 const (
 	TemplateEmailVerification        = "email_verification"
 	TemplatePasswordReset            = "password_reset"
+	TemplateCustomerLink             = "customer_link"
 	TemplateStaffInvitation          = "staff_invitation"
 	TemplateQuoteReadyForApproval    = "quote_ready_for_approval"
 	TemplateRegistrationConfirmation = "registration_confirmation"

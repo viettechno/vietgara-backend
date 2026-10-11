@@ -28,6 +28,9 @@ type OTPPurpose string
 const (
 	OTPEmailVerification OTPPurpose = "email_verification"
 	OTPPasswordReset     OTPPurpose = "password_reset"
+	// OTPCustomerLink confirms a garage's request to link a customer
+	// profile with the user (FR-CUS-06); its subject is the link request.
+	OTPCustomerLink OTPPurpose = "customer_link"
 )
 
 // OTP is an issued one-time password. Only a hash of the code is kept.

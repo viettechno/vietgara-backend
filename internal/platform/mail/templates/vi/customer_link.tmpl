@@ -1,0 +1,16 @@
+{{define "subject"}}{{.GarageName}} đề nghị liên kết tài khoản VietGara của bạn: {{.Code}}{{end}}
+{{define "text"}}Xin chào {{.Name}},
+
+{{.GarageName}} muốn liên kết hồ sơ khách hàng của gara với tài khoản VietGara của bạn, để bạn theo dõi xe và các lần sửa chữa trong ứng dụng VietGara dành cho khách hàng.
+
+Nếu đồng ý, hãy đọc mã này cho gara: {{.Code}}
+
+Mã có hiệu lực trong {{.Minutes}} phút. Bạn cũng có thể chấp nhận hoặc từ chối yêu cầu ngay trong ứng dụng. Nếu không biết gara này, hãy bỏ qua email này.
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.Name}},</p>
+<p><strong>{{.GarageName}}</strong> muốn liên kết hồ sơ khách hàng của gara với tài khoản VietGara của bạn, để bạn theo dõi xe và các lần sửa chữa trong ứng dụng VietGara dành cho khách hàng.</p>
+<p>Nếu đồng ý, hãy đọc mã này cho gara:</p>
+<p style="font-size:28px;font-weight:700;letter-spacing:6px">{{.Code}}</p>
+<p>Mã có hiệu lực trong {{.Minutes}} phút. Bạn cũng có thể chấp nhận hoặc từ chối yêu cầu ngay trong ứng dụng. Nếu không biết gara này, hãy bỏ qua email này.</p>
+<p>VietGara</p>{{end}}

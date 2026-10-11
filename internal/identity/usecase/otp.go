@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"maps"
 
 	"github.com/viettechno/vietgara-backend/internal/identity/domain"
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
@@ -12,6 +13,7 @@ import (
 var otpTemplates = map[domain.OTPPurpose]string{
 	domain.OTPEmailVerification: mail.TemplateEmailVerification,
 	domain.OTPPasswordReset:     mail.TemplatePasswordReset,
+	domain.OTPCustomerLink:      mail.TemplateCustomerLink,
 }
 
 // resendTooSoonError carries the challenge still running.
@@ -24,7 +26,16 @@ func (e *resendTooSoonError) Unwrap() error { return domain.ErrOTPResendTooSoon 
 // user's language. Within the resend cooldown it returns
 // *resendTooSoonError with the running challenge.
 func (uc *IdentityUseCase) sendOTP(ctx context.Context, purpose domain.OTPPurpose, user *domain.User) (Challenge, error) {
-	key := domain.OTPKey(purpose, user.ID)
+	return uc.sendOTPFor(ctx, purpose, user.ID, user, nil)
+}
+
+// sendOTPFor is sendOTP for an OTP that belongs to subjectID -- the user
+// themselves, or another entity the user is asked about, such as a link
+// request -- with extra values for the mail template.
+func (uc *IdentityUseCase) sendOTPFor(
+	ctx context.Context, purpose domain.OTPPurpose, subjectID string, user *domain.User, extra map[string]any,
+) (Challenge, error) {
+	key := domain.OTPKey(purpose, subjectID)
 	now := uc.now().UTC()
 
 	existing, err := uc.otps.Get(ctx, key)
@@ -39,9 +50,10 @@ func (uc *IdentityUseCase) sendOTP(ctx context.Context, purpose domain.OTPPurpos
 	code := domain.NewOTPCode()
 	otp := domain.NewOTP(key, code, now)
 
-	msg, err := mail.Render(otpTemplates[purpose], string(user.Locale.OrDefault()), user.Email, user.FullName, map[string]any{
-		"Name": user.FullName, "Code": code, "Minutes": int(domain.OTPTTL.Minutes()),
-	})
+	data := map[string]any{"Name": user.FullName, "Code": code, "Minutes": int(domain.OTPTTL.Minutes())}
+	maps.Copy(data, extra)
+
+	msg, err := mail.Render(otpTemplates[purpose], string(user.Locale.OrDefault()), user.Email, user.FullName, data)
 	if err != nil {
 		return Challenge{}, err
 	}

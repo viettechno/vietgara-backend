@@ -40,6 +40,11 @@ type world struct {
 	readErr   error
 	scope     platformdb.Scope
 	scopes    []platformdb.Scope
+	// links are the user's open links; newWorld links every ref.
+	links       []*customerdomain.UserLink
+	linkErr     error
+	autoLinked  []string
+	autoLinkErr error
 }
 
 func (w *world) FindByEmail(_ context.Context, email string) ([]usecase.CustomerRef, error) {
@@ -109,6 +114,64 @@ func (v vehicles) History(_ context.Context, garageID, vehicleID string) ([]cust
 	}, nil
 }
 
+// Links of the fake world: the customer records the user is linked to, and
+// the calls that changed them.
+func (w *world) ListForUser(_ context.Context, userID string) ([]*customerdomain.UserLink, error) {
+	if w.linkErr != nil {
+		return nil, w.linkErr
+	}
+
+	return w.links, nil
+}
+
+func (w *world) FindForUser(_ context.Context, _, linkID string) (*customerdomain.UserLink, error) {
+	for _, l := range w.links {
+		if l.ID == linkID {
+			return l, nil
+		}
+	}
+
+	return nil, customerdomain.ErrLinkNotFound
+}
+
+func (w *world) Accept(_ context.Context, _, linkID string) (*customerdomain.UserLink, error) {
+	return w.answer(linkID, customerdomain.LinkLinked)
+}
+
+func (w *world) Decline(_ context.Context, _, linkID string) (*customerdomain.UserLink, error) {
+	return w.answer(linkID, customerdomain.LinkDeclined)
+}
+
+func (w *world) UnlinkByUser(_ context.Context, _, linkID string) (*customerdomain.UserLink, error) {
+	return w.answer(linkID, customerdomain.LinkUnlinked)
+}
+
+func (w *world) answer(linkID string, status customerdomain.LinkStatus) (*customerdomain.UserLink, error) {
+	for _, l := range w.links {
+		if l.ID == linkID {
+			if l.GarageID != w.scope.GarageID {
+				return nil, errReadOutsideGarageScope
+			}
+
+			l.Status = status
+
+			return l, nil
+		}
+	}
+
+	return nil, customerdomain.ErrLinkNotFound
+}
+
+func (w *world) AutoLink(_ context.Context, _, garageID, customerID string) error {
+	if w.scope.GarageID != garageID {
+		return errReadOutsideGarageScope
+	}
+
+	w.autoLinked = append(w.autoLinked, customerID)
+
+	return w.autoLinkErr
+}
+
 type garages struct{ *world }
 
 func (g garages) Get(_ context.Context, garageID string) (usecase.GarageInfo, error) {
@@ -131,6 +194,18 @@ func (t tx) WithTransaction(ctx context.Context, scope platformdb.Scope, fn func
 }
 
 func newWorld() *world {
+	w := newWorldWithoutLinks()
+
+	for _, ref := range w.refs {
+		w.links = append(w.links, &customerdomain.UserLink{
+			ID: "l-" + ref.ID, GarageID: ref.GarageID, CustomerID: ref.ID, Status: customerdomain.LinkLinked,
+		})
+	}
+
+	return w
+}
+
+func newWorldWithoutLinks() *world {
 	return &world{
 		refs: []usecase.CustomerRef{{ID: "c-1", GarageID: "g-1"}, {ID: "c-2", GarageID: "g-2"}},
 		customers: map[string]*customerdomain.Customer{
@@ -151,7 +226,7 @@ func newWorld() *world {
 
 func portal(w *world, user users) *usecase.PortalUseCase {
 	return usecase.NewPortalUseCase(usecase.Deps{
-		Users: user, Customers: w, Vehicles: vehicles{w}, Garages: garages{w}, Tx: tx{w},
+		Users: user, Customers: w, Vehicles: vehicles{w}, Garages: garages{w}, Links: w, Tx: tx{w},
 	})
 }
 
@@ -170,12 +245,16 @@ func TestListMyVehicles_GroupsByGarageReadingEachInItsScope(t *testing.T) {
 	assert.Equal(t, "c-1", mine[1].CustomerID)
 	require.Len(t, mine[1].Vehicles, 1, "never another customer's vehicle")
 	assert.Equal(t, "51A-12345", mine[1].Vehicles[0].LicensePlate)
-	assert.Equal(t, []platformdb.Scope{{GarageID: "g-1", UserID: me}, {GarageID: "g-2", UserID: me}}, w.scopes)
+	assert.Equal(t, []string{"c-1", "c-2"}, w.autoLinked, "records with the user's e-mail are linked")
+	assert.Equal(t, []platformdb.Scope{
+		{GarageID: "g-1", UserID: me}, {GarageID: "g-2", UserID: me}, // linking
+		{GarageID: "g-1", UserID: me}, {GarageID: "g-2", UserID: me}, // reading
+	}, w.scopes)
 }
 
 func TestListMyVehicles_EmptyWithoutCustomerRecords(t *testing.T) {
 	w := newWorld()
-	w.refs = nil
+	w.refs, w.links = nil, nil
 
 	mine, err := portal(w, users{}).ListMyVehicles(context.Background(), me)
 
@@ -212,7 +291,9 @@ func TestGetMyVehicleHistory(t *testing.T) {
 	}
 
 	assert.Equal(t, []string{"q-v-1", "ro-v-1"}, ids)
-	assert.Equal(t, []platformdb.Scope{{GarageID: "g-1", UserID: me}}, w.scopes)
+	assert.Equal(t, []platformdb.Scope{
+		{GarageID: "g-1", UserID: me}, {GarageID: "g-2", UserID: me}, {GarageID: "g-1", UserID: me},
+	}, w.scopes)
 }
 
 func TestGetMyVehicleHistory_IsNotFoundOutsideTheirRecords(t *testing.T) {
@@ -242,4 +323,76 @@ func TestGetMyVehicleHistory_Errors(t *testing.T) {
 	w.readErr = errBoom
 	_, err = portal(w, users{}).GetMyVehicleHistory(context.Background(), me, "g-1", "v-1")
 	assert.ErrorIs(t, err, errBoom)
+}
+
+func TestListMyVehicles_OnlyLinkedRecords(t *testing.T) {
+	w := newWorld()
+	w.links[0].Status = customerdomain.LinkRequested // g-1 still waits for the user's answer
+
+	mine, err := portal(w, users{}).ListMyVehicles(context.Background(), me)
+
+	require.NoError(t, err)
+	require.Len(t, mine, 1)
+	assert.Equal(t, "g-2", mine[0].GarageID)
+}
+
+func TestListMyVehicles_LinkErrors(t *testing.T) {
+	w := newWorld()
+	w.autoLinkErr = errBoom
+	_, err := portal(w, users{}).ListMyVehicles(context.Background(), me)
+	require.ErrorIs(t, err, errBoom)
+
+	w = newWorld()
+	w.linkErr = errBoom
+	_, err = portal(w, users{}).ListMyVehicles(context.Background(), me)
+	require.ErrorIs(t, err, errBoom)
+}
+
+func TestGarageLinks(t *testing.T) {
+	w := newWorld()
+	w.links[0].Status = customerdomain.LinkRequested
+	uc := portal(w, users{})
+
+	list, err := uc.ListMyGarageLinks(context.Background(), me)
+	require.NoError(t, err)
+	require.Len(t, list, 2)
+	assert.Equal(t, "Gara Zeta", list[0].Garage.Name)
+	assert.Equal(t, "Tran Thi Binh", list[0].CustomerName)
+
+	w.scopes = nil
+	accepted, err := uc.AcceptGarageLink(context.Background(), me, "l-c-1")
+	require.NoError(t, err)
+	assert.Equal(t, customerdomain.LinkLinked, accepted.Link.Status)
+	assert.Equal(t, "Gara Zeta", accepted.Garage.Name)
+	assert.Equal(t, platformdb.Scope{GarageID: "g-1", UserID: me}, w.scopes[0], "answered in the link's garage")
+
+	declined, err := uc.DeclineGarageLink(context.Background(), me, "l-c-2")
+	require.NoError(t, err)
+	assert.Equal(t, customerdomain.LinkDeclined, declined.Link.Status)
+
+	unlinked, err := uc.UnlinkGarageLink(context.Background(), me, "l-c-1")
+	require.NoError(t, err)
+	assert.Equal(t, customerdomain.LinkUnlinked, unlinked.Link.Status)
+
+	_, err = uc.AcceptGarageLink(context.Background(), me, "missing")
+	require.ErrorIs(t, err, customerdomain.ErrLinkNotFound)
+
+	w.readErr = errBoom
+	_, err = uc.AcceptGarageLink(context.Background(), me, "l-c-1")
+	assertAppError(t, err)
+
+	_, err = uc.ListMyGarageLinks(context.Background(), me)
+	assertAppError(t, err)
+
+	w.readErr, w.linkErr = nil, errBoom
+	_, err = uc.ListMyGarageLinks(context.Background(), me)
+	require.ErrorIs(t, err, errBoom)
+}
+
+func assertAppError(t *testing.T, err error) {
+	t.Helper()
+
+	var appErr *apperror.AppError
+
+	require.ErrorAs(t, err, &appErr)
 }

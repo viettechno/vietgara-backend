@@ -35,6 +35,10 @@ func Policies() middleware.Policies {
 	return middleware.Policies{
 		customerportalv1.CustomerPortalService_ListMyVehicles_FullMethodName:      middleware.UserMethod(),
 		customerportalv1.CustomerPortalService_GetMyVehicleHistory_FullMethodName: middleware.UserMethod(),
+		customerportalv1.CustomerPortalService_ListMyGarageLinks_FullMethodName:   middleware.UserMethod(),
+		customerportalv1.CustomerPortalService_AcceptGarageLink_FullMethodName:    middleware.UserMethod(),
+		customerportalv1.CustomerPortalService_DeclineGarageLink_FullMethodName:   middleware.UserMethod(),
+		customerportalv1.CustomerPortalService_UnlinkGarageLink_FullMethodName:    middleware.UserMethod(),
 	}
 }
 
@@ -79,4 +83,68 @@ func (s *Server) GetMyVehicleHistory(
 	}
 
 	return resp, nil
+}
+
+// ListMyGarageLinks lists the link requests waiting for an answer and the
+// garages already linked (FR-CAPP-05).
+func (s *Server) ListMyGarageLinks(
+	ctx context.Context, _ *customerportalv1.ListMyGarageLinksRequest,
+) (*customerportalv1.ListMyGarageLinksResponse, error) {
+	links, err := s.uc.ListMyGarageLinks(ctx, middleware.UserID(ctx))
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	resp := &customerportalv1.ListMyGarageLinksResponse{Data: make([]*customerportalv1.GarageLink, 0, len(links))}
+	for _, l := range links {
+		resp.Data = append(resp.Data, garageLinkToProto(l))
+	}
+
+	return resp, nil
+}
+
+// AcceptGarageLink accepts a garage's link request.
+func (s *Server) AcceptGarageLink(
+	ctx context.Context, req *customerportalv1.AcceptGarageLinkRequest,
+) (*customerportalv1.AcceptGarageLinkResponse, error) {
+	link, err := s.uc.AcceptGarageLink(ctx, middleware.UserID(ctx), req.GetLinkId())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return &customerportalv1.AcceptGarageLinkResponse{Link: garageLinkToProto(link)}, nil
+}
+
+// DeclineGarageLink declines a garage's link request.
+func (s *Server) DeclineGarageLink(
+	ctx context.Context, req *customerportalv1.DeclineGarageLinkRequest,
+) (*customerportalv1.DeclineGarageLinkResponse, error) {
+	link, err := s.uc.DeclineGarageLink(ctx, middleware.UserID(ctx), req.GetLinkId())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return &customerportalv1.DeclineGarageLinkResponse{Link: garageLinkToProto(link)}, nil
+}
+
+// UnlinkGarageLink ends a link from the user's side.
+func (s *Server) UnlinkGarageLink(
+	ctx context.Context, req *customerportalv1.UnlinkGarageLinkRequest,
+) (*customerportalv1.UnlinkGarageLinkResponse, error) {
+	link, err := s.uc.UnlinkGarageLink(ctx, middleware.UserID(ctx), req.GetLinkId())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return &customerportalv1.UnlinkGarageLinkResponse{Link: garageLinkToProto(link)}, nil
+}
+
+func garageLinkToProto(l usecase.GarageLink) *customerportalv1.GarageLink {
+	link := customerHandler.LinkToProto(l.Link)
+
+	return &customerportalv1.GarageLink{
+		Id: link.GetId(), GarageId: l.Link.GarageID, GarageName: l.Garage.Name, GarageAddress: l.Garage.Address,
+		GaragePhone: l.Garage.Phone, CustomerId: l.Link.CustomerID, CustomerName: l.CustomerName,
+		Status: link.GetStatus(), RequestedAt: link.GetRequestedAt(), LinkedAt: link.GetLinkedAt(),
+	}
 }

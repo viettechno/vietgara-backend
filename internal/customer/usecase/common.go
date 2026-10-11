@@ -149,9 +149,10 @@ func actorRef(userID string) *string {
 }
 
 var (
-	notFoundErrors = []error{domain.ErrCustomerNotFound, domain.ErrVehicleNotFound}
-	conflictErrors = []error{domain.ErrPhoneTaken, domain.ErrLicensePlateTaken}
-	invalidErrors  = []error{
+	notFoundErrors     = []error{domain.ErrCustomerNotFound, domain.ErrVehicleNotFound, domain.ErrLinkNotFound}
+	conflictErrors     = []error{domain.ErrPhoneTaken, domain.ErrLicensePlateTaken, domain.ErrAlreadyLinked}
+	preconditionErrors = []error{domain.ErrNoMatchingUser, domain.ErrNoPendingRequest, domain.ErrLinkNotOpen}
+	invalidErrors      = []error{
 		domain.ErrFullNameRequired, domain.ErrLicensePlateRequired, domain.ErrCustomerRequired,
 		phone.ErrInvalid, email.ErrInvalid, domain.ErrInvalidLicensePlate, domain.ErrInvalidYear,
 		domain.ErrFieldTooLong,
@@ -172,6 +173,8 @@ func toAppError(op string, err error) error {
 		return apperror.Wrap(apperror.CodeAlreadyExists, err.Error(), err)
 	case isAny(err, invalidErrors):
 		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err)
+	case isAny(err, preconditionErrors):
+		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err)
 	default:
 		return apperror.Wrap(apperror.CodeInternal, op, err)
 	}

@@ -1,0 +1,16 @@
+{{define "subject"}}{{.GarageName}} asks to link your VietGara account: {{.Code}}{{end}}
+{{define "text"}}Hello {{.Name}},
+
+{{.GarageName}} would like to link its customer profile with your VietGara account, so you can follow your vehicles and repairs in the VietGara Customer app.
+
+If you agree, give the garage this code: {{.Code}}
+
+The code is valid for {{.Minutes}} minutes. You can also accept or decline the request in the app. If you do not know this garage, ignore this e-mail.
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p><strong>{{.GarageName}}</strong> would like to link its customer profile with your VietGara account, so you can follow your vehicles and repairs in the VietGara Customer app.</p>
+<p>If you agree, give the garage this code:</p>
+<p style="font-size:28px;font-weight:700;letter-spacing:6px">{{.Code}}</p>
+<p>The code is valid for {{.Minutes}} minutes. You can also accept or decline the request in the app. If you do not know this garage, ignore this e-mail.</p>
+<p>VietGara</p>{{end}}

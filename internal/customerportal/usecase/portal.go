@@ -61,12 +61,25 @@ type Transactor interface {
 	WithTransaction(ctx context.Context, scope platformdb.Scope, fn func(ctx context.Context) error) error
 }
 
+// Links reads and answers the customer-user links (Customer & Vehicle),
+// the subset of its link use case the Customer App needs. Every method but
+// AutoLink and the listing runs inside the link's garage scope.
+type Links interface {
+	ListForUser(ctx context.Context, userID string) ([]*customerdomain.UserLink, error)
+	FindForUser(ctx context.Context, userID, linkID string) (*customerdomain.UserLink, error)
+	Accept(ctx context.Context, userID, linkID string) (*customerdomain.UserLink, error)
+	Decline(ctx context.Context, userID, linkID string) (*customerdomain.UserLink, error)
+	UnlinkByUser(ctx context.Context, userID, linkID string) (*customerdomain.UserLink, error)
+	AutoLink(ctx context.Context, userID, garageID, customerID string) error
+}
+
 // Deps are the use case's collaborators.
 type Deps struct {
 	Users     Users
 	Customers Customers
 	Vehicles  Vehicles
 	Garages   Garages
+	Links     Links
 	Tx        Transactor
 }
 
@@ -199,16 +212,41 @@ func isDraftQuote(e customerusecase.HistoryEntry) bool {
 	return e.Type == customerusecase.HistoryEntryQuote && e.Status == string(quotedomain.StatusDraft)
 }
 
-// myRecords returns the customer records carrying the user's e-mail.
+// myRecords returns the customer records linked to the user. A record
+// carrying the user's verified e-mail is linked on the spot unless it has
+// a link with them already: a refusal or an unlink stays respected, and a
+// request still waiting is answered in the app, not assumed.
 func (uc *PortalUseCase) myRecords(ctx context.Context, userID string) ([]CustomerRef, error) {
 	email, err := uc.Users.Email(ctx, userID)
 	if err != nil {
 		return nil, apperror.Internal("read the user's e-mail", err)
 	}
 
-	refs, err := uc.Customers.FindByEmail(ctx, email)
+	found, err := uc.Customers.FindByEmail(ctx, email)
 	if err != nil {
 		return nil, apperror.Internal("find the user's customer records", err)
+	}
+
+	for _, ref := range found {
+		err := uc.Tx.WithTransaction(ctx, scope(ref.GarageID, userID), func(ctx context.Context) error {
+			return uc.Links.AutoLink(ctx, userID, ref.GarageID, ref.ID)
+		})
+		if err != nil {
+			return nil, apperror.Internal("link the user's customer record", err)
+		}
+	}
+
+	links, err := uc.Links.ListForUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	refs := make([]CustomerRef, 0, len(links))
+
+	for _, link := range links {
+		if link.Status == customerdomain.LinkLinked {
+			refs = append(refs, CustomerRef{ID: link.CustomerID, GarageID: link.GarageID})
+		}
 	}
 
 	return refs, nil
@@ -220,4 +258,108 @@ func scope(garageID, userID string) platformdb.Scope {
 
 func notFound() error {
 	return apperror.New(apperror.CodeNotFound, ErrVehicleNotFound.Error())
+}
+
+// GarageLink is a link with the garage and profile it is about.
+type GarageLink struct {
+	Link         *customerdomain.UserLink
+	Garage       GarageInfo
+	CustomerName string
+}
+
+// ListMyGarageLinks returns the link requests waiting for an answer and the
+// garages already linked (FR-CAPP-05), newest request first.
+func (uc *PortalUseCase) ListMyGarageLinks(ctx context.Context, userID string) ([]GarageLink, error) {
+	links, err := uc.Links.ListForUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]GarageLink, 0, len(links))
+
+	for _, link := range links {
+		view, err := uc.describe(ctx, userID, link)
+		if err != nil {
+			return nil, err
+		}
+
+		result = append(result, view)
+	}
+
+	return result, nil
+}
+
+// AcceptGarageLink links the user with the garage's customer profile.
+func (uc *PortalUseCase) AcceptGarageLink(ctx context.Context, userID, linkID string) (GarageLink, error) {
+	return uc.answer(ctx, userID, linkID, uc.Links.Accept)
+}
+
+// DeclineGarageLink turns a garage's request down.
+func (uc *PortalUseCase) DeclineGarageLink(ctx context.Context, userID, linkID string) (GarageLink, error) {
+	return uc.answer(ctx, userID, linkID, uc.Links.Decline)
+}
+
+// UnlinkGarageLink ends an established link from the user's side.
+func (uc *PortalUseCase) UnlinkGarageLink(ctx context.Context, userID, linkID string) (GarageLink, error) {
+	return uc.answer(ctx, userID, linkID, uc.Links.UnlinkByUser)
+}
+
+// answer finds the user's own link, applies change in the link's garage
+// scope and describes the result.
+func (uc *PortalUseCase) answer(
+	ctx context.Context, userID, linkID string,
+	change func(ctx context.Context, userID, linkID string) (*customerdomain.UserLink, error),
+) (GarageLink, error) {
+	link, err := uc.Links.FindForUser(ctx, userID, linkID)
+	if err != nil {
+		return GarageLink{}, err
+	}
+
+	var view GarageLink
+
+	err = uc.Tx.WithTransaction(ctx, scope(link.GarageID, userID), func(ctx context.Context) error {
+		changed, err := change(ctx, userID, linkID)
+		if err != nil {
+			return err
+		}
+
+		view, err = uc.describe(ctx, userID, changed)
+
+		return err
+	})
+	if err != nil {
+		if _, ok := apperror.As(err); ok {
+			return GarageLink{}, err
+		}
+
+		return GarageLink{}, apperror.Internal("answer the garage link", err)
+	}
+
+	return view, nil
+}
+
+// describe reads the garage and customer name of a link in its garage scope.
+func (uc *PortalUseCase) describe(ctx context.Context, userID string, link *customerdomain.UserLink) (GarageLink, error) {
+	view := GarageLink{Link: link}
+
+	err := uc.Tx.WithTransaction(ctx, scope(link.GarageID, userID), func(ctx context.Context) error {
+		garage, err := uc.Garages.Get(ctx, link.GarageID)
+		if err != nil {
+			return err
+		}
+
+		customer, err := uc.Customers.Get(ctx, link.GarageID, link.CustomerID)
+		if err != nil {
+			return err
+		}
+
+		view.Garage, view.CustomerName = garage, customer.FullName
+
+		return nil
+	})
+	if err != nil {
+		return GarageLink{}, apperror.Internal("describe the garage link", err)
+	}
+
+	return view, nil
 }

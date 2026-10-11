@@ -304,6 +304,9 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		vehicleUC,
 	)
 
+	customerLinks := buildCustomerLinks(pool, customerRepo, identityUC, garages, auditLog)
+	customerLinkSrv := customerHandler.NewLinkServer(customerLinks)
+
 	// Billing & Settlement (Release 1.4): settlements from a closed
 	// repair order, recorded payments.
 	billing := buildBilling(pool, events, garages, users, license.entitlements, repairOrder.uc, auditLog)
@@ -324,7 +327,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// Mobile BFFs (Phase 2): the Technician App's work list (Release 2.2)
 	// and the Customer App's vehicles and history (Release 2.4).
 	technicianSrv := buildTechnician(tx, tenantUC, repairOrder.uc)
-	customerPortalSrv := buildCustomerPortal(tx, identityUC, customerRepo, vehicleUC, garages)
+	customerPortalSrv := buildCustomerPortal(tx, identityUC, customerRepo, vehicleUC, garages, customerLinks)
 
 	// Events: Kafka when brokers are configured, otherwise in-process.
 	if err := wireEvents(app, pool, tx, tenantUC, license, inventory, notification); err != nil {
@@ -354,7 +357,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 
 	// gRPC server with the request pipeline of internal/middleware.
 	policies := middleware.Merge(
-		identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
+		identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(), customerHandler.LinkPolicies(),
 		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
 		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(), fileHandler.Policies(),
 		technicianHandler.Policies(), customerportalHandler.Policies(),
@@ -381,6 +384,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	licensev1.RegisterLicenseAdminServiceServer(app.grpcServer, license.server)
 	customerv1.RegisterCustomerServiceServer(app.grpcServer, customerSrv)
 	customerv1.RegisterVehicleServiceServer(app.grpcServer, customerSrv)
+	customerv1.RegisterCustomerLinkServiceServer(app.grpcServer, customerLinkSrv)
 	supplierv1.RegisterSupplierServiceServer(app.grpcServer, supplierSrv)
 	filev1.RegisterFileServiceServer(app.grpcServer, fileModule.server)
 	quotev1.RegisterQuoteServiceServer(app.grpcServer, quote.server)
@@ -485,6 +489,7 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 		tenantv1.RegisterStaffGroupServiceHandler,
 		licensev1.RegisterLicenseServiceHandler, licensev1.RegisterLicenseAdminServiceHandler,
 		customerv1.RegisterCustomerServiceHandler, customerv1.RegisterVehicleServiceHandler,
+		customerv1.RegisterCustomerLinkServiceHandler,
 		supplierv1.RegisterSupplierServiceHandler, filev1.RegisterFileServiceHandler,
 		quotev1.RegisterQuoteServiceHandler, quotev1.RegisterPublicQuoteServiceHandler,
 		repairorderv1.RegisterRepairOrderServiceHandler, inventoryv1.RegisterInventoryServiceHandler,

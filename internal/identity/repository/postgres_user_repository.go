@@ -38,17 +38,18 @@ func NewPostgresUserRepository(pool *platformdb.Pool) *PostgresUserRepository {
 }
 
 const userColumns = `a.id, COALESCE(a.email, ''), a.phone, a.auth_provider, a.identity_platform_uid, a.full_name,
-	a.password_hash, a.status, a.email_verified_at, a.locale,
+	a.full_name_source, a.password_hash, a.status, a.email_verified_at, a.locale,
 	EXISTS (SELECT 1 FROM platform_admins pa WHERE pa.user_id = a.id), a.created_at, a.updated_at`
 
 func scanUser(row pgx.Row) (*domain.User, error) {
 	var (
 		user                         domain.User
 		authProvider, status, locale string
+		nameSource                   string
 	)
 
 	err := row.Scan(&user.ID, &user.Email, &user.Phone, &authProvider, &user.GoogleSubject, &user.FullName,
-		&user.PasswordHash, &status, &user.EmailVerifiedAt, &locale, &user.PlatformAdmin, &user.CreatedAt, &user.UpdatedAt)
+		&nameSource, &user.PasswordHash, &status, &user.EmailVerifiedAt, &locale, &user.PlatformAdmin, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrUserNotFound
@@ -58,6 +59,7 @@ func scanUser(row pgx.Row) (*domain.User, error) {
 	}
 
 	user.AuthProvider = domain.AuthProvider(authProvider)
+	user.FullNameSource = domain.NameSource(nameSource)
 	user.Status = domain.UserStatus(status)
 	user.Locale = domain.Locale(locale)
 
@@ -124,11 +126,12 @@ func (r *PostgresUserRepository) Create(ctx context.Context, user *domain.User) 
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
 	err := q.QueryRow(ctx, `
-		INSERT INTO users (email, phone, auth_provider, identity_platform_uid, full_name, password_hash, status, email_verified_at, locale)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO users (email, phone, auth_provider, identity_platform_uid, full_name, full_name_source, password_hash,
+			status, email_verified_at, locale)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING id, created_at, updated_at`,
-		user.Email, user.Phone, string(user.AuthProvider), user.GoogleSubject, user.FullName, user.PasswordHash,
-		string(user.Status), user.EmailVerifiedAt, string(user.Locale.OrDefault()),
+		user.Email, user.Phone, string(user.AuthProvider), user.GoogleSubject, user.FullName, string(user.FullNameSource.OrDefault()),
+		user.PasswordHash, string(user.Status), user.EmailVerifiedAt, string(user.Locale.OrDefault()),
 	).Scan(&user.ID, &user.CreatedAt, &user.UpdatedAt)
 
 	return mapUniqueViolation(err)
@@ -140,10 +143,12 @@ func (r *PostgresUserRepository) Update(ctx context.Context, user *domain.User) 
 
 	err := q.QueryRow(ctx, `
 		UPDATE users
-		SET full_name = $2, phone = $3, locale = $4, password_hash = $5, email_verified_at = $6, identity_platform_uid = $7
+		SET full_name = $2, full_name_source = $8, phone = $3, locale = $4, password_hash = $5, email_verified_at = $6,
+			identity_platform_uid = $7
 		WHERE id = $1
 		RETURNING updated_at`,
 		user.ID, user.FullName, user.Phone, string(user.Locale.OrDefault()), user.PasswordHash, user.EmailVerifiedAt, user.GoogleSubject,
+		string(user.FullNameSource.OrDefault()),
 	).Scan(&user.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.ErrUserNotFound

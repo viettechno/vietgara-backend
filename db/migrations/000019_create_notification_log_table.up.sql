@@ -17,7 +17,8 @@ CREATE TABLE notification_log (
     recipient VARCHAR(255) NOT NULL,
     status notification_status NOT NULL,
     error TEXT,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_by UUID
 );
 
 CREATE INDEX idx_notification_log_user ON notification_log (user_id, created_at DESC) WHERE user_id IS NOT NULL;

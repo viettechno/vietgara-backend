@@ -28,7 +28,9 @@ CREATE TABLE plans (
     is_active BOOLEAN NOT NULL DEFAULT true,
     sort_order INTEGER NOT NULL DEFAULT 0,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_by UUID,
+    updated_by UUID
 );
 
 -- Initial catalogue (garages / staff / transactions per day). Prices are
@@ -61,24 +63,13 @@ CREATE TABLE subscriptions (
     auto_renew BOOLEAN NOT NULL DEFAULT true,
     reminder_period_end TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_by UUID,
+    updated_by UUID
 );
 
 -- The expiry job's scan: live subscriptions by period end
 CREATE INDEX idx_subscriptions_period_end ON subscriptions (current_period_end) WHERE status IN ('trial', 'active', 'past_due');
-
-CREATE OR REPLACE FUNCTION update_subscriptions_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trigger_subscriptions_updated_at
-BEFORE UPDATE ON subscriptions
-FOR EACH ROW
-EXECUTE FUNCTION update_subscriptions_updated_at();
 
 -- ---------------------------------------------------------------------------
 -- entitlements: per-user feature switches derived from the
@@ -89,5 +80,8 @@ CREATE TABLE entitlements (
     feature plan_feature NOT NULL,
     enabled BOOLEAN NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_by UUID,
+    updated_by UUID,
     PRIMARY KEY (user_id, feature)
 );

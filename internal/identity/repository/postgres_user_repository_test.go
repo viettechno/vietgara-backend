@@ -20,7 +20,7 @@ var (
 )
 
 func userRow() []any {
-	return []any{"user-1", "owner@example.com", "+84901234567", "google", "g-sub", "Minh", nil, "active", now, "en", true, now, now}
+	return []any{"user-1", "owner@example.com", "+84901234567", "google", "g-sub", "Minh", "google", nil, "active", now, "en", true, now, now}
 }
 
 func TestFinders(t *testing.T) {
@@ -90,7 +90,8 @@ func TestCreateAndUpdate(t *testing.T) {
 
 	tx := dbtest.New(t).
 		ExpectQueryRow("INSERT INTO users", dbtest.Row("user-9", now, now)).WithArgs(func(args []any) {
-		assert.Equal(t, "vi", args[8], "default locale")
+		assert.Equal(t, "user", args[5], "a name typed by the user is the default source")
+		assert.Equal(t, "vi", args[9], "default locale")
 	}).
 		ExpectQueryRow("INSERT INTO users", dbtest.ErrRow(dbtest.UniqueViolation("idx_users_email_lower_unique"))).
 		ExpectQueryRow("INSERT INTO users", dbtest.ErrRow(dbtest.UniqueViolation("users_phone_key"))).

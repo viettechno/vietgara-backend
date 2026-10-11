@@ -22,19 +22,6 @@ CREATE INDEX idx_garage_staff_status ON garage_staff (status);
 -- One membership per user and garage
 CREATE UNIQUE INDEX idx_garage_staff_garage_user_unique ON garage_staff (garage_id, user_id);
 
-CREATE OR REPLACE FUNCTION update_garage_staff_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trigger_garage_staff_updated_at
-BEFORE UPDATE ON garage_staff
-FOR EACH ROW
-EXECUTE FUNCTION update_garage_staff_updated_at();
-
 -- Row-Level Security; the policies are created in 000013.
 ALTER TABLE garage_staff ENABLE ROW LEVEL SECURITY;
 ALTER TABLE garage_staff FORCE ROW LEVEL SECURITY;

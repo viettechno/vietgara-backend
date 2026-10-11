@@ -42,8 +42,6 @@ CREATE TABLE repair_orders (
     CONSTRAINT repair_orders_quote_id_unique UNIQUE (quote_id)
 );
 
-CREATE TRIGGER trigger_repair_orders_updated_at BEFORE UPDATE ON repair_orders FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
 CREATE UNIQUE INDEX idx_repair_orders_garage_number_unique ON repair_orders (garage_id, number) WHERE deleted_at IS NULL;
 CREATE INDEX idx_repair_orders_garage_status_created_at ON repair_orders (garage_id, status, created_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_repair_orders_vehicle_id ON repair_orders (garage_id, vehicle_id, created_at DESC) WHERE deleted_at IS NULL;
@@ -91,11 +89,11 @@ CREATE TABLE repair_order_lines (
     assigned_technicians UUID[] NOT NULL DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_by UUID,
+    updated_by UUID,
     CONSTRAINT repair_order_lines_garage_ro_fkey FOREIGN KEY (garage_id, repair_order_id)
         REFERENCES repair_orders (garage_id, id) ON DELETE CASCADE
 );
-
-CREATE TRIGGER trigger_repair_order_lines_updated_at BEFORE UPDATE ON repair_order_lines FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE INDEX idx_repair_order_lines_ro_id ON repair_order_lines (garage_id, repair_order_id, position);
 -- Supports the Kanban board's "Filter: Technician" (UI Design Spec 3.3).

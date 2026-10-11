@@ -51,8 +51,6 @@ CREATE TABLE quotes (
     CONSTRAINT quotes_garage_id_id_key UNIQUE (garage_id, id)
 );
 
-CREATE TRIGGER trigger_quotes_updated_at BEFORE UPDATE ON quotes FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
 -- One live quote per number within a garage (Database Design Section 8).
 CREATE UNIQUE INDEX idx_quotes_garage_number_unique ON quotes (garage_id, number) WHERE deleted_at IS NULL;
 
@@ -107,11 +105,11 @@ CREATE TABLE quote_lines (
     decided_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_by UUID,
+    updated_by UUID,
     CONSTRAINT quote_lines_garage_quote_fkey FOREIGN KEY (garage_id, quote_id)
         REFERENCES quotes (garage_id, id) ON DELETE CASCADE
 );
-
-CREATE TRIGGER trigger_quote_lines_updated_at BEFORE UPDATE ON quote_lines FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
 CREATE INDEX idx_quote_lines_quote_id ON quote_lines (garage_id, quote_id, position);
 

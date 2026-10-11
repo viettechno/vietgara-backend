@@ -72,3 +72,64 @@ func TestGoogleLoginFailures(t *testing.T) {
 	_, err = e3.uc.GoogleLogin(t.Context(), usecase.GoogleProfile{Subject: "g", Email: "z@b.vn", EmailVerified: true})
 	requireReason(t, err, apperror.ReasonInternal)
 }
+
+// TestGoogleNameSource covers FR-IAM-12: a name taken from Google is
+// refreshed by a later sign-in, a name the user typed never is.
+func TestGoogleNameSource(t *testing.T) {
+	t.Parallel()
+
+	t.Run("a Google name is refreshed until the user edits it", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+		profile := usecase.GoogleProfile{Subject: "g-3", Email: "an@gmail.com", EmailVerified: true, FullName: "An Nguyen"}
+
+		session, err := e.uc.GoogleLogin(t.Context(), profile)
+		require.NoError(t, err)
+
+		id := session.User.ID
+		assert.Equal(t, domain.NameSourceGoogle, e.users.get(id).FullNameSource)
+		assert.Equal(t, "An Nguyen", e.users.get(id).FullName)
+
+		profile.FullName = "An Van Nguyen"
+		_, err = e.uc.GoogleLogin(t.Context(), profile)
+		require.NoError(t, err)
+		assert.Equal(t, "An Van Nguyen", e.users.get(id).FullName, "refreshed from Google")
+		assert.Equal(t, domain.NameSourceGoogle, e.users.get(id).FullNameSource)
+
+		_, err = e.uc.UpdateMe(t.Context(), id, usecase.ProfileUpdate{FullName: new("Nguyen Van An")})
+		require.NoError(t, err)
+		assert.Equal(t, domain.NameSourceUser, e.users.get(id).FullNameSource)
+
+		profile.FullName = "Someone Else"
+		_, err = e.uc.GoogleLogin(t.Context(), profile)
+		require.NoError(t, err)
+		assert.Equal(t, "Nguyen Van An", e.users.get(id).FullName, "an edited name is never overwritten")
+	})
+
+	t.Run("a typed name survives linking Google", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+		registered := e.register(t)
+		assert.Equal(t, domain.NameSourceUser, e.users.get(registered.User.ID).FullNameSource)
+
+		_, err := e.uc.GoogleLogin(t.Context(), usecase.GoogleProfile{
+			Subject: "g-4", Email: "owner@example.com", EmailVerified: true, FullName: "Google Name",
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "Minh", e.users.get(registered.User.ID).FullName)
+	})
+
+	t.Run("a blank edit keeps the source", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+		session, err := e.uc.GoogleLogin(t.Context(), usecase.GoogleProfile{Subject: "g-5", Email: "b@gmail.com", EmailVerified: true, FullName: "Binh"})
+		require.NoError(t, err)
+
+		_, err = e.uc.UpdateMe(t.Context(), session.User.ID, usecase.ProfileUpdate{FullName: new("Binh")})
+		require.NoError(t, err)
+		assert.Equal(t, domain.NameSourceGoogle, e.users.get(session.User.ID).FullNameSource, "same name is not an edit")
+	})
+}

@@ -14,13 +14,13 @@ CREATE TABLE staff_invitations (
     expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
     responded_at TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    created_by UUID,
+    updated_by UUID
 );
 CREATE UNIQUE INDEX idx_staff_invitations_pending_unique ON staff_invitations (garage_id, user_id) WHERE status = 'pending';
 CREATE INDEX idx_staff_invitations_user_id ON staff_invitations (user_id, created_at DESC);
 CREATE INDEX idx_staff_invitations_garage_id ON staff_invitations (garage_id, created_at DESC);
-CREATE TRIGGER trigger_staff_invitations_updated_at BEFORE UPDATE ON staff_invitations FOR EACH ROW EXECUTE FUNCTION set_updated_at();
-
 -- Row-Level Security; the policies are created in 000013.
 ALTER TABLE staff_invitations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE staff_invitations FORCE ROW LEVEL SECURITY;

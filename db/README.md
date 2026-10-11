@@ -15,7 +15,7 @@ exists, schema changes must become new, forward-only migrations.)
 
 **Migration freeze.** The rule is to edit in place only while no non-test tenant exists. Staging counts as test data: after an in-place change, rebuild the local database (`make docker-clean`, then `make docker-up`) and wipe the staging database before deploying. From the first real tenant, every change is a new forward-only migration.
 
-Planned in-place changes (Release Plan, Phases 3-8): `users` and `user_id` everywhere (Phase 3, backend done in #20); `partners` becomes `suppliers` without the `partner_type` enum (done), the insurer columns, the allocation split and `payer_type` go from `settlements` and `settlement_payments` (done), voucher columns on `settlement_payments`, quantities become `NUMERIC(14,3)` and `stock_transactions.unit_cost` `NUMERIC(18,4)` (done, Release 5.0); units, categories, jobs, goods receipts and the other tables listed in the Database Design, Section 11, arrive with their releases.
+Planned in-place changes (Release Plan, Phases 3-8; the audit columns and `full_name_source` of Release 5.0 are done): `users` and `user_id` everywhere (Phase 3, backend done in #20); `partners` becomes `suppliers` without the `partner_type` enum (done), the insurer columns, the allocation split and `payer_type` go from `settlements` and `settlement_payments` (done), voucher columns on `settlement_payments`, quantities become `NUMERIC(14,3)` and `stock_transactions.unit_cost` `NUMERIC(18,4)` (done, Release 5.0); units, categories, jobs, goods receipts and the other tables listed in the Database Design, Section 11, arrive with their releases.
 
 | Version | Module | Creates |
 | --- | --- | --- |
@@ -36,6 +36,9 @@ Planned in-place changes (Release Plan, Phases 3-8): `users` and `user_id` every
 | 000017 | Inventory | `items` (trigram search), `stock_balance` (per-item running total), `stock_transactions` (append-only, `stock_transaction_type`, `stock_transaction_ref_type`) -- FR-INV-01..03/05 |
 | 000018 | Billing & Settlement | `settlements` (`settlement_status`, paid total), `settlement_payments` (append-only, `payment_method`) -- FR-BIL-01..03, FR-REC-01 |
 | 000019 | Notification | `notification_log` (append-only, `notification_channel`, `notification_status`): what was sent, for visibility -- not a dedup mechanism, the Outbox Pattern's `processed_events` already gives exactly-once delivery -- FR-NOT-04 |
+| 000020 | Customer | `find_customers_by_email()`: the Customer BFF's `SECURITY DEFINER` lookup of a person's customer records across garages (ids only) |
+| 000021 | Platform | `idempotency_keys`: the stored answer of a financial request, kept 24 hours (API Specification 1.3) |
+| 000022 | Platform | Row audit (NFR-MT-07): `set_row_audit()` and `set_created_audit()` and their triggers fill `created_by` / `updated_by` from `app.current_user_id` (NULL for a system job) on every business table; `created_at` / `created_by` never change; `db/audit_columns_test.go` fails when a table has neither the columns nor an allowlist entry |
 
 Tables from 000002, 000003, 000010 and 000011 enable `FORCE ROW LEVEL
 SECURITY` when created; their policies are created together in 000013,

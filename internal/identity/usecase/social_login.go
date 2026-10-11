@@ -41,13 +41,8 @@ func (uc *IdentityUseCase) GoogleLogin(ctx context.Context, profile GoogleProfil
 		if err != nil {
 			return nil, err
 		}
-	} else if user.GoogleSubject == nil {
-		subject := profile.Subject
-		user.GoogleSubject = &subject
-
-		if err := uc.users.Update(ctx, user); err != nil {
-			return nil, apperror.Internal("link google user", err)
-		}
+	} else if err := uc.syncGoogleUser(ctx, user, profile); err != nil {
+		return nil, err
 	}
 
 	if err := uc.markVerified(ctx, user); err != nil {
@@ -79,6 +74,34 @@ func (uc *IdentityUseCase) findGoogleUser(ctx context.Context, subject, email st
 	return nil, nil //nolint:nilnil // no user yet
 }
 
+// syncGoogleUser links Google to an existing user and refreshes a display
+// name that came from Google; a name the user typed is never overwritten
+// (FR-IAM-12).
+func (uc *IdentityUseCase) syncGoogleUser(ctx context.Context, user *domain.User, profile GoogleProfile) error {
+	changed := false
+
+	if user.GoogleSubject == nil {
+		subject := profile.Subject
+		user.GoogleSubject = &subject
+		changed = true
+	}
+
+	if name, ok := domain.NormalizeFullName(profile.FullName); ok && user.FullNameSource == domain.NameSourceGoogle && name != user.FullName {
+		user.FullName = name
+		changed = true
+	}
+
+	if !changed {
+		return nil
+	}
+
+	if err := uc.users.Update(ctx, user); err != nil {
+		return apperror.Internal("link google user", err)
+	}
+
+	return nil
+}
+
 func (uc *IdentityUseCase) createGoogleUser(ctx context.Context, profile GoogleProfile, email string) (*domain.User, error) {
 	fullName, ok := domain.NormalizeFullName(profile.FullName)
 	if !ok {
@@ -91,8 +114,11 @@ func (uc *IdentityUseCase) createGoogleUser(ctx context.Context, profile GoogleP
 		GoogleSubject: &subject,
 		AuthProvider:  domain.AuthProviderGoogle,
 		FullName:      fullName,
-		Status:        domain.UserStatusActive,
-		Locale:        profile.Locale.OrDefault(),
+		// Taken from Google: a later sign-in may refresh it, an edit by the
+		// user (UpdateMe) makes it theirs.
+		FullNameSource: domain.NameSourceGoogle,
+		Status:         domain.UserStatusActive,
+		Locale:         profile.Locale.OrDefault(),
 	}
 
 	err := uc.tx.WithTransaction(ctx, platformdb.Scope{}, func(ctx context.Context) error {

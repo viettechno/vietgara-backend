@@ -56,6 +56,27 @@ func (l Locale) OrDefault() Locale {
 	return LocaleVI
 }
 
+// NameSource says where a user's display name came from (FR-IAM-12).
+type NameSource string
+
+// Valid NameSource values.
+const (
+	// NameSourceGoogle: taken from the Google profile; a later Google sign-in
+	// may refresh it.
+	NameSourceGoogle NameSource = "google"
+	// NameSourceUser: typed by the user; Google sign-in never overwrites it.
+	NameSourceUser NameSource = "user"
+)
+
+// OrDefault returns s, or NameSourceUser when s is not a valid source.
+func (s NameSource) OrDefault() NameSource {
+	if s == NameSourceGoogle {
+		return NameSourceGoogle
+	}
+
+	return NameSourceUser
+}
+
 // User is the login identity. It may own multiple garages and be staff
 // of others (see the Tenant module) -- User itself carries no garage_id
 // and is not subject to Row-Level Security, since it sits above the tenant
@@ -66,9 +87,12 @@ type User struct {
 	Phone *string
 	// GoogleSubject is Google's stable user id (the identity_platform_uid
 	// column), set for users that signed in with Google.
-	GoogleSubject   *string
-	AuthProvider    AuthProvider
-	FullName        string
+	GoogleSubject *string
+	AuthProvider  AuthProvider
+	FullName      string
+	// FullNameSource is where FullName came from: Google at first sign-in,
+	// or the user (FR-IAM-12).
+	FullNameSource  NameSource
 	PasswordHash    *string // only set for users with a password
 	Status          UserStatus
 	EmailVerifiedAt *time.Time

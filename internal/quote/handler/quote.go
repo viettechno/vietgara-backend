@@ -47,6 +47,7 @@ func (s *Server) CreateQuote(ctx context.Context, req *quotev1.CreateQuoteReques
 		q, err := s.uc.Create(ctx, usecase.CreateQuoteRequest{
 			GarageID: req.GetGarageId(), ActorID: actorID, CustomerID: in.GetCustomerId(), VehicleID: in.GetVehicleId(),
 			ApprovalMode: mode, Notes: in.GetNotes(), Lines: linesFromProto(in.GetLines()),
+			BillingTaxProfileID: httpapi.BillingTaxProfileID(in.GetBillingParty()),
 		})
 		if err != nil {
 			return nil, err
@@ -70,6 +71,9 @@ func (s *Server) GetQuote(ctx context.Context, req *quotev1.GetQuoteRequest) (*q
 	})
 }
 
+// quoteSettable are the fields an update without a mask changes; the
+// billing party is only changed when the mask names it, so an update of the
+// lines never resets who the quote is billed to.
 var quoteSettable = []string{"customer_id", "vehicle_id", "approval_mode", "notes", "lines"}
 
 // UpdateQuote changes the fields named by the update mask; only while the
@@ -96,6 +100,8 @@ func (s *Server) UpdateQuote(ctx context.Context, req *quotev1.UpdateQuoteReques
 			case "lines":
 				lines := linesFromProto(in.GetLines())
 				update.Lines = &lines
+			case "billing_party":
+				update.BillingTaxProfileID = new(in.GetBillingParty().GetTaxProfileId())
 			default:
 				return nil, badMask(path)
 			}

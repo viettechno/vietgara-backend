@@ -7,6 +7,7 @@ import (
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 	"github.com/viettechno/vietgara-backend/internal/quote/domain"
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
 	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
@@ -104,6 +105,16 @@ type Sequencer interface {
 	Next(ctx context.Context, garageID, docType, period string) (int, error)
 }
 
+// BillingPartyResolver resolves who a quote is billed to from the
+// customer's tax profiles (FR-CUS-07), as the snapshot the quote keeps;
+// implemented by an adapter over the Customer module in cmd/server.
+type BillingPartyResolver interface {
+	// Resolve takes the customer's default profile when profileID is nil
+	// (retail when there is none), retail when it is empty, and otherwise
+	// the named active profile of the customer.
+	Resolve(ctx context.Context, garageID, customerID string, profileID *string) (billingparty.Party, error)
+}
+
 // RepairOrderCreator converts an approved quote into a draft repair order
 // (FR-QUO-04); implemented by an adapter over the Repair Order module's
 // use case in cmd/server (a narrow view, so Quote never imports it).
@@ -111,7 +122,8 @@ type RepairOrderCreator interface {
 	// Create returns the new repair order's id, or
 	// repairorder domain.ErrAlreadyConverted (the caller maps it).
 	Create(
-		ctx context.Context, garageID, quoteID, vehicleID, customerName, vehiclePlate, number, actorID string, lines []domain.Line,
+		ctx context.Context, garageID, quoteID, vehicleID, customerName, vehiclePlate, number, actorID string,
+		billingParty billingparty.Party, lines []domain.Line,
 	) (repairOrderID string, err error)
 }
 

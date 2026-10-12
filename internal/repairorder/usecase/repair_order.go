@@ -9,6 +9,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/repairorder/domain"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
 	"github.com/viettechno/vietgara-backend/pkg/numbering"
 )
 
@@ -121,6 +122,8 @@ type CreateFromQuoteRequest struct {
 	// Lines are the quote's approved lines (FR-QUO-04); their own line
 	// ids are replaced with new ones.
 	Lines []domain.Line
+	// BillingParty is who the quote was billed to.
+	BillingParty billingparty.Party
 }
 
 // CreateFromQuote creates a draft repair order (status Open) from a
@@ -137,7 +140,7 @@ func (uc *RepairOrderUseCase) CreateFromQuote(ctx context.Context, req CreateFro
 	ro := &domain.RepairOrder{
 		ID: uuid.NewString(), GarageID: req.GarageID, QuoteID: &req.QuoteID, VehicleID: req.VehicleID,
 		VehicleLicensePlate: req.VehiclePlate, CustomerName: req.CustomerName, Number: req.Number, Status: domain.StatusOpen,
-		Issuer: garage.Issuer, CreatedBy: actorRef(req.ActorID), UpdatedBy: actorRef(req.ActorID),
+		Issuer: garage.Issuer, BillingParty: req.BillingParty, CreatedBy: actorRef(req.ActorID), UpdatedBy: actorRef(req.ActorID),
 	}
 
 	for _, line := range req.Lines {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
+
 	"github.com/stretchr/testify/mock"
 
 	"github.com/viettechno/vietgara-backend/internal/middleware"
@@ -36,6 +38,7 @@ type env struct {
 	repairs   *mocks.MockRepairOrderCreator
 	mailer    *mocks.MockQuoteMailer
 	events    *mocks.MockQuoteEventPublisher
+	parties   *mocks.MockQuoteBillingPartyResolver
 }
 
 func newEnv(t *testing.T) *env {
@@ -46,12 +49,14 @@ func newEnv(t *testing.T) *env {
 		customers: mocks.NewMockQuoteCustomerReader(t), garages: mocks.NewMockGarageReader(t),
 		limits: mocks.NewMockTransactionLimiter(t), sequences: mocks.NewMockSequencer(t),
 		repairs: mocks.NewMockRepairOrderCreator(t), mailer: mocks.NewMockQuoteMailer(t),
-		events: mocks.NewMockQuoteEventPublisher(t),
+		events: mocks.NewMockQuoteEventPublisher(t), parties: mocks.NewMockQuoteBillingPartyResolver(t),
 	}
+	e.parties.EXPECT().Resolve(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(billingparty.Party{}, nil).Maybe()
 
 	uc := usecase.NewQuoteUseCase(usecase.Deps{
 		Quotes: e.quotes, Vehicles: e.vehicles, Customers: e.customers, Garages: e.garages, Limits: e.limits,
-		Sequences: e.sequences, RepairOrders: e.repairs, Mailer: e.mailer, Events: e.events, Tx: passTx{},
+		Sequences: e.sequences, RepairOrders: e.repairs, BillingParties: e.parties, Mailer: e.mailer, Events: e.events, Tx: passTx{},
 		AppBaseURL: "https://vietgara.viettechno.com",
 	})
 	e.srv = handler.NewServer(uc)

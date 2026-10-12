@@ -29,6 +29,9 @@ CREATE TABLE repair_orders (
     -- The garage's legal identity (FR-TEN-06) when the repair order was
     -- created.
     issuer JSONB NOT NULL DEFAULT '{}'::jsonb,
+    -- Who the repair order is billed to (FR-CUS-07): the quote's billing
+    -- party, which the settlement starts from.
+    billing_party JSONB NOT NULL DEFAULT '{}'::jsonb,
     closed_at TIMESTAMP WITH TIME ZONE,
     created_by UUID,
     updated_by UUID,

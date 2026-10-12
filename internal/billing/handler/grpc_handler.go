@@ -34,6 +34,7 @@ func Policies() middleware.Policies {
 		billingv1.SettlementService_ListSettlements_FullMethodName:         middleware.GarageMethod(read),
 		billingv1.SettlementService_CreateSettlement_FullMethodName:        middleware.IdempotentGarageMethod(write),
 		billingv1.SettlementService_GetSettlement_FullMethodName:           middleware.GarageMethod(read),
+		billingv1.SettlementService_UpdateSettlement_FullMethodName:        middleware.GarageMethod(write),
 		billingv1.SettlementService_RecordSettlementPayment_FullMethodName: middleware.IdempotentGarageMethod(write),
 		billingv1.SettlementService_VoidSettlementPayment_FullMethodName:   middleware.GarageMethod(write),
 	}

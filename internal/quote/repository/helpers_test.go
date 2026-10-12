@@ -23,7 +23,8 @@ var (
 func quoteRow() []any {
 	return []any{
 		quoteID, garageID, customerID, vehicleID, "An Nguyen", "51F-123.45", "BG-202609-0001", "draft", "link",
-		"", int64(0), []byte(`{"name":"Cong ty An Phat","tax_code":"0301234567"}`), nil, nil, nil, nil, nil, actorID, actorID, now, now,
+		"", int64(0), []byte(`{"name":"Cong ty An Phat","tax_code":"0301234567"}`), []byte(`{"tax_profile_id":"tp-1","legal_name":"Cong ty Van Tai A"}`),
+		nil, nil, nil, nil, nil, actorID, actorID, now, now,
 	}
 }
 

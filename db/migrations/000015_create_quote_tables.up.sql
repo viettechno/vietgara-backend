@@ -35,6 +35,9 @@ CREATE TABLE quotes (
     -- The garage's legal identity (FR-TEN-06) when the quote was created or
     -- sent: a later change of the profile never rewrites it.
     issuer JSONB NOT NULL DEFAULT '{}'::jsonb,
+    -- Who the quote is billed to (FR-CUS-07), a snapshot of the customer's
+    -- tax profile; empty is a retail receipt.
+    billing_party JSONB NOT NULL DEFAULT '{}'::jsonb,
     public_token_hash CHAR(64),
     public_token_expires_at TIMESTAMP WITH TIME ZONE,
     sent_at TIMESTAMP WITH TIME ZONE,
@@ -64,6 +67,9 @@ CREATE INDEX idx_quotes_garage_status_created_at ON quotes (garage_id, status, c
 -- (FR-CUS-03), newest first.
 CREATE INDEX idx_quotes_customer_id ON quotes (garage_id, customer_id, created_at DESC) WHERE deleted_at IS NULL;
 CREATE INDEX idx_quotes_vehicle_id ON quotes (garage_id, vehicle_id, created_at DESC) WHERE deleted_at IS NULL;
+-- Which documents were billed to a tax profile (the delete-or-deactivate check).
+CREATE INDEX idx_quotes_billing_profile ON quotes (garage_id, (billing_party->>'tax_profile_id'))
+    WHERE deleted_at IS NULL AND billing_party->>'tax_profile_id' IS NOT NULL;
 
 -- The public approval link looks a quote up by token alone (no garage_id
 -- known yet); see find_quote_by_public_token() below.

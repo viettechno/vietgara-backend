@@ -62,4 +62,7 @@ var (
 	ErrInvalidTaxProfile    = errors.New("tax profile kind must be personal or company")
 	ErrInvalidTaxID         = errors.New("tax id must be 10 digits, or 13 with the branch suffix")
 	ErrPersonalProfileTaken = errors.New("this customer already has a personal tax profile")
+	// ErrBillingProfileUnusable is returned when a document is billed to a
+	// profile that is not the customer's or is deactivated.
+	ErrBillingProfileUnusable = errors.New("the tax profile is not an active profile of this customer")
 )

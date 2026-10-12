@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
+
 	"github.com/stretchr/testify/mock"
 
 	"github.com/viettechno/vietgara-backend/internal/billing/handler"
@@ -32,6 +34,7 @@ type env struct {
 	limits       *mocks.MockBillingTransactionLimiter
 	sequences    *mocks.MockBillingSequencer
 	events       *mocks.MockBillingEventPublisher
+	parties      *mocks.MockBillingPartyResolver
 }
 
 func newEnv(t *testing.T) *env {
@@ -41,8 +44,10 @@ func newEnv(t *testing.T) *env {
 		settlements: mocks.NewMockBillingRepository(t), repairOrders: mocks.NewMockBillingRepairOrderReader(t),
 		garages: mocks.NewMockBillingGarageReader(t), collectors: mocks.NewMockBillingCollectorReader(t),
 		limits: mocks.NewMockBillingTransactionLimiter(t), sequences: mocks.NewMockBillingSequencer(t),
-		events: mocks.NewMockBillingEventPublisher(t),
+		events: mocks.NewMockBillingEventPublisher(t), parties: mocks.NewMockBillingPartyResolver(t),
 	}
+	e.parties.EXPECT().Resolve(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(billingparty.Party{}, nil).Maybe()
 
 	// Auditing is the use case's concern (its own tests check the entries).
 	auditLog := mocks.NewMockBillingAuditLogger(t)
@@ -50,7 +55,7 @@ func newEnv(t *testing.T) *env {
 
 	uc := usecase.NewSettlementUseCase(usecase.Deps{
 		Settlements: e.settlements, RepairOrders: e.repairOrders, Garages: e.garages, Collectors: e.collectors,
-		Limits: e.limits, Sequences: e.sequences, Events: e.events, Audit: auditLog,
+		BillingParties: e.parties, Limits: e.limits, Sequences: e.sequences, Events: e.events, Audit: auditLog,
 	})
 	e.srv = handler.NewServer(uc)
 

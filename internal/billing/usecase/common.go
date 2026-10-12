@@ -62,6 +62,8 @@ func toAppError(op string, err error) error {
 	}
 
 	switch {
+	case errors.Is(err, domain.ErrInvoiceDataIncomplete):
+		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err).WithReason(ReasonInvoiceDataIncomplete)
 	case isAny(err, notFoundErrors):
 		return apperror.Wrap(apperror.CodeNotFound, err.Error(), err)
 	case isAny(err, conflictErrors):
@@ -94,11 +96,16 @@ func actorRef(userID string) *string {
 	return &userID
 }
 
+// ReasonInvoiceDataIncomplete is the error reason of a VAT invoice asked
+// for without a complete billing party (FR-CUS-07).
+const ReasonInvoiceDataIncomplete = "INVOICE_DATA_INCOMPLETE"
+
 // Audited actions (Security Architecture Section 7).
 const (
 	ActionSettlementCreated = "settlement.created"
 	ActionPaymentRecorded   = "settlement.payment_recorded"
 	ActionPaymentVoided     = "settlement.payment_voided"
+	ActionBillingUpdated    = "settlement.billing_updated"
 
 	entitySettlement = "settlement"
 	entityPayment    = "settlement_payment"
@@ -123,7 +130,8 @@ func (uc *SettlementUseCase) audit(ctx context.Context, actorID, garageID, actio
 func settlementAudit(s *domain.Settlement) map[string]any {
 	return map[string]any{
 		"number": s.Number, "repair_order_id": s.RepairOrderID, "total_amount": s.TotalAmount,
-		"paid_amount": s.PaidAmount, "status": s.Status,
+		"paid_amount": s.PaidAmount, "status": s.Status, "billing_tax_profile_id": s.BillingParty.TaxProfileID,
+		"invoice_requested": s.InvoiceRequested,
 	}
 }
 

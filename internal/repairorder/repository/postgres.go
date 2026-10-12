@@ -33,22 +33,23 @@ func NewPostgresRepository(pool *platformdb.Pool) *PostgresRepository {
 }
 
 const repairOrderColumns = `id, garage_id, quote_id, vehicle_id, vehicle_license_plate, customer_name, number, status,
-	total_amount, issuer, closed_at, created_by, updated_by, created_at, updated_at`
+	total_amount, issuer, billing_party, closed_at, created_by, updated_by, created_at, updated_at`
 
 // repairOrderListColumns is repairOrderColumns qualified by the "ro" alias
 // List's query joins repair_order_lines under.
 const repairOrderListColumns = `ro.id, ro.garage_id, ro.quote_id, ro.vehicle_id, ro.vehicle_license_plate, ro.customer_name,
-	ro.number, ro.status, ro.total_amount, ro.issuer, ro.closed_at, ro.created_by, ro.updated_by, ro.created_at, ro.updated_at`
+	ro.number, ro.status, ro.total_amount, ro.issuer, ro.billing_party, ro.closed_at, ro.created_by, ro.updated_by, ro.created_at, ro.updated_at`
 
 func scanRepairOrder(row pgx.Row) (*domain.RepairOrder, error) {
 	var (
 		ro     domain.RepairOrder
 		status string
 		issuer []byte
+		party  []byte
 	)
 
 	err := row.Scan(&ro.ID, &ro.GarageID, &ro.QuoteID, &ro.VehicleID, &ro.VehicleLicensePlate, &ro.CustomerName, &ro.Number,
-		&status, &ro.TotalAmount, &issuer, &ro.ClosedAt, &ro.CreatedBy, &ro.UpdatedBy, &ro.CreatedAt, &ro.UpdatedAt)
+		&status, &ro.TotalAmount, &issuer, &party, &ro.ClosedAt, &ro.CreatedBy, &ro.UpdatedBy, &ro.CreatedAt, &ro.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrRepairOrderNotFound
@@ -61,6 +62,12 @@ func scanRepairOrder(row pgx.Row) (*domain.RepairOrder, error) {
 
 	if len(issuer) > 0 {
 		if err := json.Unmarshal(issuer, &ro.Issuer); err != nil {
+			return nil, err
+		}
+	}
+
+	if len(party) > 0 {
+		if err := json.Unmarshal(party, &ro.BillingParty); err != nil {
 			return nil, err
 		}
 	}
@@ -98,13 +105,18 @@ func (r *PostgresRepository) Create(ctx context.Context, ro *domain.RepairOrder)
 		return err
 	}
 
+	party, err := json.Marshal(ro.BillingParty)
+	if err != nil {
+		return err
+	}
+
 	row := q.QueryRow(ctx, `
 		INSERT INTO repair_orders (id, garage_id, quote_id, vehicle_id, vehicle_license_plate, customer_name, number,
-			status, total_amount, issuer, created_by, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+			status, total_amount, issuer, billing_party, created_by, updated_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING created_at, updated_at`,
 		ro.ID, ro.GarageID, ro.QuoteID, ro.VehicleID, ro.VehicleLicensePlate, ro.CustomerName, ro.Number,
-		string(ro.Status), ro.TotalAmount, issuer, ro.CreatedBy, ro.UpdatedBy,
+		string(ro.Status), ro.TotalAmount, issuer, party, ro.CreatedBy, ro.UpdatedBy,
 	)
 
 	err = row.Scan(&ro.CreatedAt, &ro.UpdatedAt)

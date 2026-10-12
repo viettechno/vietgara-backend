@@ -30,6 +30,11 @@ CREATE TABLE settlements (
     -- The garage's legal identity (FR-TEN-06) when the settlement was
     -- created: the receipt prints it.
     issuer JSONB NOT NULL DEFAULT '{}'::jsonb,
+    -- Who the settlement is billed to (FR-CUS-07), a snapshot of the
+    -- customer's tax profile; empty is a retail receipt. A VAT invoice is
+    -- requested only while the party is complete.
+    billing_party JSONB NOT NULL DEFAULT '{}'::jsonb,
+    invoice_requested BOOLEAN NOT NULL DEFAULT FALSE,
     status settlement_status NOT NULL DEFAULT 'pending',
     created_by UUID,
     updated_by UUID,
@@ -45,6 +50,8 @@ CREATE TABLE settlements (
 );
 
 CREATE INDEX idx_settlements_garage_status_created_at ON settlements (garage_id, status, created_at DESC);
+CREATE INDEX idx_settlements_billing_profile ON settlements (garage_id, (billing_party->>'tax_profile_id'))
+    WHERE billing_party->>'tax_profile_id' IS NOT NULL;
 
 ALTER TABLE settlements ENABLE ROW LEVEL SECURITY;
 ALTER TABLE settlements FORCE ROW LEVEL SECURITY;

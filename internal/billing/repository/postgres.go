@@ -36,17 +36,18 @@ func NewPostgresRepository(pool *platformdb.Pool) *PostgresRepository {
 }
 
 const settlementColumns = `id, garage_id, repair_order_id, vehicle_license_plate, customer_name, number, total_amount,
-	paid_amount, issuer, status, created_by, updated_by, created_at, updated_at`
+	paid_amount, issuer, billing_party, invoice_requested, status, created_by, updated_by, created_at, updated_at`
 
 func scanSettlement(row pgx.Row) (*domain.Settlement, error) {
 	var (
 		s      domain.Settlement
 		status string
 		issuer []byte
+		party  []byte
 	)
 
 	err := row.Scan(&s.ID, &s.GarageID, &s.RepairOrderID, &s.VehicleLicensePlate, &s.CustomerName, &s.Number,
-		&s.TotalAmount, &s.PaidAmount, &issuer, &status, &s.CreatedBy, &s.UpdatedBy, &s.CreatedAt, &s.UpdatedAt)
+		&s.TotalAmount, &s.PaidAmount, &issuer, &party, &s.InvoiceRequested, &status, &s.CreatedBy, &s.UpdatedBy, &s.CreatedAt, &s.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrSettlementNotFound
@@ -59,6 +60,12 @@ func scanSettlement(row pgx.Row) (*domain.Settlement, error) {
 
 	if len(issuer) > 0 {
 		if err := json.Unmarshal(issuer, &s.Issuer); err != nil {
+			return nil, err
+		}
+	}
+
+	if len(party) > 0 {
+		if err := json.Unmarshal(party, &s.BillingParty); err != nil {
 			return nil, err
 		}
 	}
@@ -117,13 +124,18 @@ func (r *PostgresRepository) Create(ctx context.Context, s *domain.Settlement) e
 		return err
 	}
 
+	party, err := json.Marshal(s.BillingParty)
+	if err != nil {
+		return err
+	}
+
 	row := q.QueryRow(ctx, `
 		INSERT INTO settlements (id, garage_id, repair_order_id, vehicle_license_plate, customer_name, number,
-			total_amount, issuer, status, created_by, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			total_amount, issuer, billing_party, invoice_requested, status, created_by, updated_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING created_at, updated_at`,
 		s.ID, s.GarageID, s.RepairOrderID, s.VehicleLicensePlate, s.CustomerName, s.Number, s.TotalAmount,
-		issuer, string(s.Status), s.CreatedBy, s.UpdatedBy,
+		issuer, party, s.InvoiceRequested, string(s.Status), s.CreatedBy, s.UpdatedBy,
 	)
 
 	err = row.Scan(&s.CreatedAt, &s.UpdatedAt)
@@ -190,6 +202,31 @@ func (r *PostgresRepository) FindByRepairOrderID(ctx context.Context, garageID, 
 	return scanSettlement(q.QueryRow(ctx, `
 		SELECT `+settlementColumns+` FROM settlements WHERE garage_id = $1 AND repair_order_id = $2`,
 		garageID, repairOrderID))
+}
+
+// SaveBilling persists who the settlement is billed to and whether an
+// invoice was requested.
+func (r *PostgresRepository) SaveBilling(ctx context.Context, s *domain.Settlement) error {
+	q := platformdb.QuerierFromContext(ctx, r.pool)
+
+	party, err := json.Marshal(s.BillingParty)
+	if err != nil {
+		return err
+	}
+
+	tag, err := q.Exec(ctx, `
+		UPDATE settlements SET billing_party = $3, invoice_requested = $4, updated_by = $5
+		WHERE garage_id = $1 AND id = $2`,
+		s.GarageID, s.ID, party, s.InvoiceRequested, s.UpdatedBy)
+	if err != nil {
+		return err
+	}
+
+	if tag.RowsAffected() == 0 {
+		return domain.ErrSettlementNotFound
+	}
+
+	return nil
 }
 
 // SaveStatus persists a settlement's status alone, after RecordPayment.
@@ -338,6 +375,20 @@ func (r *PostgresRepository) whyNotVoided(ctx context.Context, q platformdb.Quer
 	}
 
 	return domain.ErrPaymentAlreadyVoided
+}
+
+// BilledToTaxProfile reports whether a settlement was billed to the tax
+// profile, which keeps the profile from being deleted instead of
+// deactivated (FR-CAT-07).
+func (r *PostgresRepository) BilledToTaxProfile(ctx context.Context, garageID, profileID string) (bool, error) {
+	var exists bool
+
+	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM settlements WHERE garage_id = $1 AND billing_party->>'tax_profile_id' = $2)`,
+		garageID, profileID).Scan(&exists)
+
+	return exists, err
 }
 
 // RevenueBucket is one period's total settlement value.

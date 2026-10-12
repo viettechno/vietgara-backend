@@ -13,6 +13,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/document/render"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
 	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
@@ -25,6 +26,8 @@ type QuoteInfo struct {
 	// Issuer is the garage's legal identity when the quote was issued
 	// (FR-TEN-06).
 	Issuer issuer.Issuer
+	// BillingParty is who the quote is billed to (FR-CUS-07).
+	BillingParty billingparty.Party
 }
 
 // QuoteReader reads a quote for PDF export; implemented by an adapter
@@ -45,6 +48,8 @@ type RepairOrderInfo struct {
 	// Issuer is the garage's legal identity when the repair order was
 	// created (FR-TEN-06).
 	Issuer issuer.Issuer
+	// BillingParty is who the repair order is billed to (FR-CUS-07).
+	BillingParty billingparty.Party
 }
 
 // RepairOrderReader reads a repair order for PDF export; implemented by
@@ -66,6 +71,8 @@ type SettlementInfo struct {
 	// Issuer is the garage's legal identity when the settlement was
 	// created (FR-TEN-06).
 	Issuer issuer.Issuer
+	// BillingParty is who the settlement is billed to (FR-CUS-07).
+	BillingParty billingparty.Party
 }
 
 // VoucherInfo is one payment voucher (phiếu thu) of a settlement.
@@ -148,7 +155,7 @@ func (uc *DocumentUseCase) QuotePDF(ctx context.Context, garageID, quoteID strin
 	}
 
 	pdf, err := render.QuotePDF(render.QuotePDFData{
-		Garage: garage, Number: quote.Number, Status: quote.Status, CustomerName: quote.CustomerName,
+		Garage: garage, BillTo: billTo(quote.BillingParty), Number: quote.Number, Status: quote.Status, CustomerName: quote.CustomerName,
 		VehiclePlate: quote.VehiclePlate, Notes: quote.Notes, Lines: quote.Lines, TotalAmount: quote.TotalAmount,
 	})
 	if err != nil {
@@ -171,7 +178,7 @@ func (uc *DocumentUseCase) RepairOrderPDF(ctx context.Context, garageID, repairO
 	}
 
 	pdf, err := render.RepairOrderPDF(render.RepairOrderPDFData{
-		Garage: garage, Number: ro.Number, Status: ro.Status, CustomerName: ro.CustomerName,
+		Garage: garage, BillTo: billTo(ro.BillingParty), Number: ro.Number, Status: ro.Status, CustomerName: ro.CustomerName,
 		VehiclePlate: ro.VehiclePlate, Lines: ro.Lines, TotalAmount: ro.TotalAmount,
 	})
 	if err != nil {
@@ -196,7 +203,8 @@ func (uc *DocumentUseCase) SettlementReceiptPDF(ctx context.Context, garageID, s
 	}
 
 	pdf, err := render.SettlementReceiptPDF(render.SettlementReceiptData{
-		Garage: garage, Number: settlement.Number, Status: settlement.Status, CustomerName: settlement.CustomerName,
+		Garage: garage, BillTo: billTo(settlement.BillingParty), Number: settlement.Number, Status: settlement.Status,
+		CustomerName: settlement.CustomerName,
 		VehiclePlate: settlement.VehiclePlate, TotalAmount: settlement.TotalAmount,
 		PaidAmount: settlement.PaidAmount, Payments: settlement.Payments,
 	})
@@ -297,6 +305,11 @@ func (uc *DocumentUseCase) letterhead(ctx context.Context, garageID string, snap
 	}
 
 	return header, nil
+}
+
+// billTo is the party a document prints under its header.
+func billTo(p billingparty.Party) render.BillTo {
+	return render.BillTo{Name: p.LegalName, TaxID: p.TaxID, Address: p.Address}
 }
 
 // toAppError passes an already-classified error (from a reader adapter)

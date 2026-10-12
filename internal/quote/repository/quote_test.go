@@ -319,3 +319,20 @@ func TestPostgresRepository_ExistsLive(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, exists, "nothing to look for")
 }
+
+func TestPostgresRepository_BilledToTaxProfile(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+	tx := dbtest.New(t).
+		ExpectQueryRow("billing_party->>'tax_profile_id'", dbtest.Row(true)).
+		ExpectQueryRow("billing_party->>'tax_profile_id'", dbtest.ErrRow(errBoom))
+	ctx := tx.Context(t.Context())
+
+	used, err := repo.BilledToTaxProfile(ctx, garageID, "tp-1")
+	require.NoError(t, err)
+	require.True(t, used)
+
+	_, err = repo.BilledToTaxProfile(ctx, garageID, "tp-1")
+	require.ErrorIs(t, err, errBoom)
+}

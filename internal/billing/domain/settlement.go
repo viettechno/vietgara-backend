@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
 	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
@@ -110,6 +111,12 @@ type Settlement struct {
 	// Issuer is the garage's legal identity when the settlement was created
 	// (FR-TEN-06); the receipt prints it.
 	Issuer issuer.Issuer
+	// BillingParty is who the settlement is billed to (FR-CUS-07), a snapshot
+	// of the customer's tax profile; the zero value is a retail receipt.
+	BillingParty billingparty.Party
+	// InvoiceRequested: the customer asked for a VAT invoice, which needs a
+	// complete billing party (ErrInvoiceDataIncomplete).
+	InvoiceRequested bool
 	// PaidAmount is the running total of Payments.
 	PaidAmount int64
 	Status     SettlementStatus
@@ -159,6 +166,9 @@ var (
 	// ErrInvalidVoidReason is returned when the reason for voiding a
 	// voucher is empty or too long.
 	ErrInvalidVoidReason = errors.New("a reason of at most 500 characters is required to void a payment voucher")
+	// ErrInvoiceDataIncomplete is returned when a VAT invoice is requested
+	// and the billing party lacks a legal name, tax id or address.
+	ErrInvoiceDataIncomplete = errors.New("an invoice needs a billing party with a legal name, tax id and address")
 	// ErrInvalidPaymentAmount is returned when a payment is not positive,
 	// or would collect more than the amount still due.
 	ErrInvalidPaymentAmount = errors.New("payment amount must be positive and not exceed the amount still due")

@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/viettechno/vietgara-backend/pkg/billingparty"
 	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
@@ -121,12 +122,15 @@ type RepairOrder struct {
 	Lines               []Line
 	// Issuer is the garage's legal identity when the repair order was
 	// created (FR-TEN-06); its PDF prints it.
-	Issuer    issuer.Issuer
-	ClosedAt  *time.Time
-	CreatedBy *string
-	UpdatedBy *string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Issuer issuer.Issuer
+	// BillingParty is who the repair order is billed to (FR-CUS-07): the
+	// quote's, which the settlement starts from. Zero is retail.
+	BillingParty billingparty.Party
+	ClosedAt     *time.Time
+	CreatedBy    *string
+	UpdatedBy    *string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 // Recalculate sums ro.Lines into ro.TotalAmount.

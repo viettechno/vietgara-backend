@@ -14,16 +14,17 @@ import (
 
 // Deps are the dependencies of QuoteUseCase.
 type Deps struct {
-	Quotes       Repository
-	Vehicles     VehicleReader
-	Customers    CustomerReader
-	Garages      GarageReader
-	Limits       TransactionLimiter
-	Sequences    Sequencer
-	RepairOrders RepairOrderCreator
-	Mailer       Mailer
-	Events       EventPublisher
-	Tx           Transactor
+	Quotes         Repository
+	Vehicles       VehicleReader
+	Customers      CustomerReader
+	BillingParties BillingPartyResolver
+	Garages        GarageReader
+	Limits         TransactionLimiter
+	Sequences      Sequencer
+	RepairOrders   RepairOrderCreator
+	Mailer         Mailer
+	Events         EventPublisher
+	Tx             Transactor
 	// AppBaseURL is the web admin origin the public approval link is
 	// built on, e.g. "https://vietgara.viettechno.com".
 	AppBaseURL string
@@ -65,6 +66,10 @@ type CreateQuoteRequest struct {
 	ApprovalMode *domain.ApprovalMode
 	Notes        string
 	Lines        []LineInput
+	// BillingTaxProfileID is the customer's tax profile the quote is billed
+	// to (FR-CUS-07): nil takes the customer's default profile, "" is a
+	// retail receipt.
+	BillingTaxProfileID *string
 }
 
 // Create creates a draft quote (FR-QUO-01), numbered from the garage's
@@ -100,6 +105,11 @@ func (uc *QuoteUseCase) Create(ctx context.Context, req CreateQuoteRequest) (*do
 		return nil, toAppError("create quote", err)
 	}
 
+	party, err := uc.BillingParties.Resolve(ctx, req.GarageID, req.CustomerID, req.BillingTaxProfileID)
+	if err != nil {
+		return nil, toAppError("create quote", err)
+	}
+
 	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID); err != nil {
 		return nil, err
 	}
@@ -112,7 +122,7 @@ func (uc *QuoteUseCase) Create(ctx context.Context, req CreateQuoteRequest) (*do
 	q := &domain.Quote{
 		ID: uuid.NewString(), GarageID: req.GarageID, CustomerID: req.CustomerID, CustomerName: customerName,
 		VehicleID: req.VehicleID, VehicleLicensePlate: plate, Number: number, Status: domain.StatusDraft,
-		ApprovalMode: mode, Lines: lines, Notes: strings.TrimSpace(req.Notes), Issuer: garage.Issuer,
+		ApprovalMode: mode, Lines: lines, Notes: strings.TrimSpace(req.Notes), Issuer: garage.Issuer, BillingParty: party,
 		CreatedBy: actorRef(req.ActorID), UpdatedBy: actorRef(req.ActorID),
 	}
 	q.Recalculate()
@@ -145,6 +155,10 @@ type UpdateQuoteRequest struct {
 	ApprovalMode *domain.ApprovalMode
 	Notes        *string
 	Lines        *[]LineInput
+	// BillingTaxProfileID, when non-nil, changes who the quote is billed to
+	// ("" is a retail receipt). Changing the customer without it takes the
+	// new customer's default profile.
+	BillingTaxProfileID *string
 }
 
 // Update applies the partial updates in req to a quote (FR-QUO-01); only
@@ -160,6 +174,10 @@ func (uc *QuoteUseCase) Update(ctx context.Context, req UpdateQuoteRequest) (*do
 	}
 
 	if err := uc.applyCustomerVehicle(ctx, q, req); err != nil {
+		return nil, err
+	}
+
+	if err := uc.applyBillingParty(ctx, q, req); err != nil {
 		return nil, err
 	}
 
@@ -218,6 +236,24 @@ func (uc *QuoteUseCase) applyCustomerVehicle(ctx context.Context, q *domain.Quot
 	}
 
 	q.CustomerID, q.CustomerName, q.VehicleID, q.VehicleLicensePlate = customerID, name, vehicleID, plate
+
+	return nil
+}
+
+// applyBillingParty re-resolves who the quote is billed to when the request
+// names a profile, or when the customer changed (the old profile is not the
+// new customer's).
+func (uc *QuoteUseCase) applyBillingParty(ctx context.Context, q *domain.Quote, req UpdateQuoteRequest) error {
+	if req.BillingTaxProfileID == nil && req.CustomerID == nil {
+		return nil
+	}
+
+	party, err := uc.BillingParties.Resolve(ctx, q.GarageID, q.CustomerID, req.BillingTaxProfileID)
+	if err != nil {
+		return toAppError("update quote", err)
+	}
+
+	q.BillingParty = party
 
 	return nil
 }

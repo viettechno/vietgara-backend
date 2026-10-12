@@ -37,7 +37,8 @@ func newSettlement() *domain.Settlement {
 func settlementRow() []any {
 	return []any{
 		settlementID, garageID, repairOrderID, "51F-123.45", "An Nguyen", "QT-202609-0001", int64(1_000_000),
-		int64(0), []byte(`{"name":"Cong ty An Phat","tax_code":"0301234567"}`), "pending", nil, nil, now, now,
+		int64(0), []byte(`{"name":"Cong ty An Phat","tax_code":"0301234567"}`), []byte(`{"tax_profile_id":"tp-1","legal_name":"Cong ty Van Tai A","tax_id":"0301234567"}`), true,
+		"pending", nil, nil, now, now,
 	}
 }
 
@@ -110,6 +111,8 @@ func TestPostgresRepository_FindByID(t *testing.T) {
 		require.Equal(t, "5 Le Loi", s.Payments[0].PayerAddress)
 		require.Equal(t, "Le Thu Ngan", s.Payments[0].CollectorName)
 		require.Equal(t, "Cong ty An Phat", s.Payments[0].Issuer.Name)
+		require.Equal(t, "Cong ty Van Tai A", s.BillingParty.LegalName)
+		require.True(t, s.InvoiceRequested)
 	})
 
 	t.Run("a voided payment", func(t *testing.T) {
@@ -468,4 +471,45 @@ func TestPostgresRepository_RevenueByPeriod(t *testing.T) {
 		_, err := repo.RevenueByPeriod(ctx, garageID, "day", from, to)
 		require.ErrorIs(t, err, errBoom)
 	})
+}
+
+func TestPostgresRepository_SaveBilling(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+	s := &domain.Settlement{ID: settlementID, GarageID: garageID, InvoiceRequested: true}
+	s.BillingParty.TaxProfileID = "tp-1"
+
+	tx := dbtest.New(t).
+		ExpectExec("UPDATE settlements SET billing_party", dbtest.Tag(1), nil).
+		WithArgs(func(args []any) {
+			party, ok := args[2].([]byte)
+			require.True(t, ok)
+			require.JSONEq(t, `{"tax_profile_id":"tp-1"}`, string(party))
+			require.Equal(t, true, args[3])
+		}).
+		ExpectExec("UPDATE settlements SET billing_party", dbtest.Tag(0), nil).
+		ExpectExec("UPDATE settlements SET billing_party", dbtest.Tag(0), errBoom)
+	ctx := tx.Context(t.Context())
+
+	require.NoError(t, repo.SaveBilling(ctx, s))
+	require.ErrorIs(t, repo.SaveBilling(ctx, s), domain.ErrSettlementNotFound)
+	require.ErrorIs(t, repo.SaveBilling(ctx, s), errBoom)
+}
+
+func TestPostgresRepository_BilledToTaxProfile(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+	tx := dbtest.New(t).
+		ExpectQueryRow("FROM settlements WHERE garage_id = $1 AND billing_party", dbtest.Row(true)).
+		ExpectQueryRow("FROM settlements WHERE garage_id = $1 AND billing_party", dbtest.ErrRow(errBoom))
+	ctx := tx.Context(t.Context())
+
+	used, err := repo.BilledToTaxProfile(ctx, garageID, "tp-1")
+	require.NoError(t, err)
+	require.True(t, used)
+
+	_, err = repo.BilledToTaxProfile(ctx, garageID, "tp-1")
+	require.ErrorIs(t, err, errBoom)
 }

@@ -90,7 +90,7 @@ func TestConvertQuote(t *testing.T) {
 	e.limits.EXPECT().ConsumeTransaction(anyArg, ownerID).Return(nil).Once()
 	e.sequences.EXPECT().Next(anyArg, garageID, "repair_order", "LSC-{SEQ:4}").Return(1, nil).Once()
 	e.repairs.EXPECT().
-		Create(anyArg, garageID, quoteID, vehicleID, "An Nguyen", "51F-123.45", "LSC-0001", actorID, anyArg).
+		Create(anyArg, garageID, quoteID, vehicleID, "An Nguyen", "51F-123.45", "LSC-0001", actorID, anyArg, anyArg).
 		Return("ro-1", nil).Once()
 	e.quotes.EXPECT().Save(anyArg, anyArg).Return(nil).Once()
 

@@ -19,7 +19,8 @@ type RecordPaymentRequest struct {
 	Method       domain.PaymentMethod
 	Note         string
 	// PayerName, PayerAddress and Reason are the voucher's; each defaults
-	// to the customer's name, no address and a standard reason.
+	// to the billing party's (else the customer's) name, its address and a
+	// standard reason.
 	PayerName    string
 	PayerAddress string
 	Reason       string
@@ -138,8 +139,8 @@ func findPayment(s *domain.Settlement, paymentID string) *domain.Payment {
 // next number from the garage's template, who paid and why, who collected,
 // and the garage's legal identity as it is now.
 func (uc *SettlementUseCase) issueVoucher(ctx context.Context, s *domain.Settlement, req RecordPaymentRequest) (*domain.Payment, error) {
-	payerName := firstNonBlank(req.PayerName, s.CustomerName)
-	payerAddress := strings.TrimSpace(req.PayerAddress)
+	payerName := firstNonBlank(req.PayerName, s.BillingParty.LegalName, s.CustomerName)
+	payerAddress := firstNonBlank(req.PayerAddress, s.BillingParty.Address)
 	reason := firstNonBlank(req.Reason, "Thanh toán quyết toán "+s.Number)
 
 	if utf8.RuneCountInString(payerName) > domain.MaxPayerNameLength ||

@@ -129,6 +129,166 @@ func (c *Client) ListGarages(ctx context.Context) ([]*tenantv1.Garage, error) {
 	return resp.GetData(), err
 }
 
+// UpdateGarage patches the garage's masked fields (mask paths are proto
+// field names: "phone", "tax_code", "status", "operating_hours",
+// "numbering", ...).
+func (c *Client) UpdateGarage(ctx context.Context, garageID string, garage *tenantv1.Garage, paths ...string) (*tenantv1.Garage, error) {
+	path := garagePath(garageID)
+	if len(paths) > 0 {
+		path += "?updateMask=" + url.QueryEscape(strings.Join(paths, ","))
+	}
+
+	return call[tenantv1.Garage](ctx, c, http.MethodPatch, path, garage)
+}
+
+// UploadGarageLogo replaces the garage logo; content is the raw image
+// bytes and must be a PNG, JPEG or WebP image of at most 1 MB.
+func (c *Client) UploadGarageLogo(ctx context.Context, garageID string, content []byte, contentType string) (*tenantv1.Garage, error) {
+	return call[tenantv1.Garage](ctx, c, http.MethodPut, garagePath(garageID)+"/logo",
+		&tenantv1.UploadGarageLogoRequest{GarageId: garageID, Content: content, ContentType: contentType})
+}
+
+// DeleteGarageLogo removes the garage logo.
+func (c *Client) DeleteGarageLogo(ctx context.Context, garageID string) (*tenantv1.Garage, error) {
+	return call[tenantv1.Garage](ctx, c, http.MethodDelete, garagePath(garageID)+"/logo", nil)
+}
+
+// ---- Invitations ------------------------------------------------------------
+
+// LookupStaffCandidate finds an existing user by exact e-mail or phone to
+// invite. Unknown users fail with USER_NOT_FOUND; the candidate carries
+// its current membership (none, member, invited).
+func (c *Client) LookupStaffCandidate(ctx context.Context, garageID, query string) (*tenantv1.StaffCandidate, error) {
+	return call[tenantv1.StaffCandidate](ctx, c, http.MethodGet,
+		garagePath(garageID)+"/staff-candidates?query="+url.QueryEscape(query), nil)
+}
+
+// CreateInvitation invites userID to garageID with the given groups. The
+// invitation starts pending and expires in 7 days.
+func (c *Client) CreateInvitation(ctx context.Context, garageID, userID string, groupIDs []string) (*tenantv1.Invitation, error) {
+	return call[tenantv1.Invitation](ctx, c, http.MethodPost, garagePath(garageID)+"/invitations",
+		&tenantv1.CreateInvitationRequest{GarageId: garageID, UserId: userID, GroupIds: groupIDs})
+}
+
+// ListInvitations returns the garage's invitations.
+func (c *Client) ListInvitations(ctx context.Context, garageID string) ([]*tenantv1.Invitation, error) {
+	resp, err := call[tenantv1.ListInvitationsResponse](ctx, c, http.MethodGet, garagePath(garageID)+"/invitations", nil)
+
+	return resp.GetData(), err
+}
+
+// RevokeInvitation revokes a pending invitation; accepting it afterwards
+// fails with INVITATION_NOT_PENDING.
+func (c *Client) RevokeInvitation(ctx context.Context, garageID, invitationID string) (*tenantv1.Invitation, error) {
+	return call[tenantv1.Invitation](ctx, c, http.MethodPost,
+		garagePath(garageID)+"/invitations/"+url.PathEscape(invitationID)+"/revoke",
+		&tenantv1.RevokeInvitationRequest{GarageId: garageID, InvitationId: invitationID})
+}
+
+// ListMyInvitations returns the signed-in user's pending invitations.
+func (c *Client) ListMyInvitations(ctx context.Context) ([]*tenantv1.Invitation, error) {
+	resp, err := call[tenantv1.ListMyInvitationsResponse](ctx, c, http.MethodGet, "/api/v1/me/invitations", nil)
+
+	return resp.GetData(), err
+}
+
+// AcceptInvitation accepts the signed-in user's invitation and joins the
+// garage with its groups.
+func (c *Client) AcceptInvitation(ctx context.Context, invitationID string) (*tenantv1.Invitation, error) {
+	return call[tenantv1.Invitation](ctx, c, http.MethodPost,
+		"/api/v1/me/invitations/"+url.PathEscape(invitationID)+"/accept",
+		&tenantv1.AcceptInvitationRequest{InvitationId: invitationID})
+}
+
+// DeclineInvitation declines the signed-in user's invitation.
+func (c *Client) DeclineInvitation(ctx context.Context, invitationID string) (*tenantv1.Invitation, error) {
+	return call[tenantv1.Invitation](ctx, c, http.MethodPost,
+		"/api/v1/me/invitations/"+url.PathEscape(invitationID)+"/decline",
+		&tenantv1.DeclineInvitationRequest{InvitationId: invitationID})
+}
+
+// ---- Staff ------------------------------------------------------------------
+
+// ListStaff returns the garage's members, owners first.
+func (c *Client) ListStaff(ctx context.Context, garageID string) ([]*tenantv1.Staff, error) {
+	resp, err := call[tenantv1.ListStaffResponse](ctx, c, http.MethodGet, garagePath(garageID)+"/staff", nil)
+
+	return resp.GetData(), err
+}
+
+// UpdateStaff changes a member's status or groups (mask paths "status",
+// "group_ids"). The owner's own row is protected.
+func (c *Client) UpdateStaff(ctx context.Context, garageID, staffID string, staff *tenantv1.Staff, paths ...string) (*tenantv1.Staff, error) {
+	path := garagePath(garageID) + "/staff/" + url.PathEscape(staffID)
+	if len(paths) > 0 {
+		path += "?updateMask=" + url.QueryEscape(strings.Join(paths, ","))
+	}
+
+	return call[tenantv1.Staff](ctx, c, http.MethodPatch, path, staff)
+}
+
+// DeleteStaff removes a member from the garage at once.
+func (c *Client) DeleteStaff(ctx context.Context, garageID, staffID string) error {
+	_, err := call[tenantv1.DeleteStaffResponse](ctx, c, http.MethodDelete,
+		garagePath(garageID)+"/staff/"+url.PathEscape(staffID), nil)
+
+	return err
+}
+
+// ---- Roles and groups -------------------------------------------------------
+
+// ListRoles returns the owner's roles, defaults first.
+func (c *Client) ListRoles(ctx context.Context) ([]*tenantv1.Role, error) {
+	resp, err := call[tenantv1.ListRolesResponse](ctx, c, http.MethodGet, "/api/v1/roles", nil)
+
+	return resp.GetData(), err
+}
+
+// CreateRole creates a custom role; write permissions imply their reads.
+func (c *Client) CreateRole(ctx context.Context, role *tenantv1.Role) (*tenantv1.Role, error) {
+	return call[tenantv1.Role](ctx, c, http.MethodPost, "/api/v1/roles", role)
+}
+
+// DeleteRole deletes a custom role no group uses; in-use roles fail with
+// ROLE_IN_USE.
+func (c *Client) DeleteRole(ctx context.Context, roleID string) error {
+	_, err := call[tenantv1.DeleteRoleResponse](ctx, c, http.MethodDelete,
+		"/api/v1/roles/"+url.PathEscape(roleID), nil)
+
+	return err
+}
+
+// ListStaffGroups returns the garage's groups.
+func (c *Client) ListStaffGroups(ctx context.Context, garageID string) ([]*tenantv1.StaffGroup, error) {
+	resp, err := call[tenantv1.ListStaffGroupsResponse](ctx, c, http.MethodGet, garagePath(garageID)+"/staff-groups", nil)
+
+	return resp.GetData(), err
+}
+
+// CreateStaffGroup creates a group in the garage with an existing role.
+func (c *Client) CreateStaffGroup(ctx context.Context, garageID string, group *tenantv1.StaffGroup) (*tenantv1.StaffGroup, error) {
+	return call[tenantv1.StaffGroup](ctx, c, http.MethodPost, garagePath(garageID)+"/staff-groups", group)
+}
+
+// UpdateStaffGroup changes a group's name, description or role (mask
+// paths "name", "description", "role_id").
+func (c *Client) UpdateStaffGroup(ctx context.Context, garageID, groupID string, group *tenantv1.StaffGroup, paths ...string) (*tenantv1.StaffGroup, error) {
+	path := garagePath(garageID) + "/staff-groups/" + url.PathEscape(groupID)
+	if len(paths) > 0 {
+		path += "?updateMask=" + url.QueryEscape(strings.Join(paths, ","))
+	}
+
+	return call[tenantv1.StaffGroup](ctx, c, http.MethodPatch, path, group)
+}
+
+// DeleteStaffGroup deletes a group; members keep their other groups.
+func (c *Client) DeleteStaffGroup(ctx context.Context, garageID, groupID string) error {
+	_, err := call[tenantv1.DeleteStaffGroupResponse](ctx, c, http.MethodDelete,
+		garagePath(garageID)+"/staff-groups/"+url.PathEscape(groupID), nil)
+
+	return err
+}
+
 // ---- License ---------------------------------------------------------------
 
 // MySubscription returns the signed-in owner's subscription and usage.

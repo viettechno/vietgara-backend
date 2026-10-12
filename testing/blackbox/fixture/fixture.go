@@ -162,6 +162,84 @@ func Owner(tb testing.TB) *Actor {
 	return &Actor{Email: cfg.OwnerEmail, Password: cfg.OwnerPassword, Session: session, API: api.WithToken(session.GetAccessToken())}
 }
 
+// PlatformAdmin returns the pre-provisioned platform admin user
+// (BLACKBOX_ADMIN_EMAIL and BLACKBOX_ADMIN_PASSWORD must be set for
+// targets without a test inbox). On the stubbed target with a test inbox,
+// it registers and verifies the admin user from the shared dataset.
+func PlatformAdmin(tb testing.TB) *Actor {
+	tb.Helper()
+
+	cfg := env.Get(tb)
+
+	// On stubbed target with test inbox, register the admin from the shared dataset
+	if cfg.MailpitURL != "" {
+		dataset := Dataset(tb)
+		mail := Mailpit(tb)
+		api := Anonymous(tb)
+
+		// Find the platform admin user in the dataset
+		var adminUser *testdata.User
+		for i := range dataset.Users {
+			if dataset.Users[i].PlatformAdmin {
+				adminUser = &dataset.Users[i]
+				break
+			}
+		}
+		if adminUser == nil {
+			tb.Fatalf("shared dataset has no platform admin user")
+		}
+
+		email := adminUser.Key + "@" + cfg.EmailDomain
+		password := env.Get(tb).AdminPassword
+		if password == "" {
+			tb.Fatalf("BLACKBOX_ADMIN_PASSWORD is not set for stubbed target")
+		}
+
+		// Try to log in first
+		session, err := api.Login(tb.Context(), email, password)
+		if err == nil {
+			return &Actor{Email: email, Password: password, Session: session, API: api.WithToken(session.GetAccessToken())}
+		}
+
+		// Register if not exists
+		registered, err := api.Register(tb.Context(), &identityv1.RegisterRequest{
+			Email: email, Password: password, FullName: adminUser.Name, Locale: identityv1.Locale_LOCALE_UNSPECIFIED,
+		})
+		if err != nil {
+			tb.Fatalf("register admin %s: %v", email, err)
+		}
+
+		msg, err := mail.WaitForMessage(tb.Context(), email)
+		if err != nil {
+			tb.Fatalf("verification e-mail for admin: %v", err)
+		}
+		otp, err := msg.OTP()
+		if err != nil {
+			tb.Fatal(err)
+		}
+
+		verified, err := api.WithToken(registered.GetAccessToken()).VerifyEmail(tb.Context(), otp, registered.GetRefreshToken())
+		if err != nil {
+			tb.Fatalf("verify admin %s: %v", email, err)
+		}
+
+		return &Actor{Email: email, Password: password, Session: verified, API: api.WithToken(verified.GetAccessToken())}
+	}
+
+	// For targets without test inbox (staging), use pre-provisioned credentials
+	if cfg.AdminEmail == "" || cfg.AdminPassword == "" {
+		tb.Skipf("BLACKBOX_ADMIN_EMAIL and BLACKBOX_ADMIN_PASSWORD are not set for target %s", cfg.Target)
+	}
+
+	api := Anonymous(tb)
+	session, err := api.Login(tb.Context(), cfg.AdminEmail, cfg.AdminPassword)
+	if err != nil {
+		tb.Fatalf("sign in platform admin %s: %v", cfg.AdminEmail, err)
+	}
+
+	return &Actor{Email: cfg.AdminEmail, Password: cfg.AdminPassword, Session: session, API: api.WithToken(session.GetAccessToken())}
+}
+
 // RequireAPIError fails t unless err is an API error with status and
 // code (the body's error.code; empty to accept any).
 func RequireAPIError(tb testing.TB, err error, status int, code string) {

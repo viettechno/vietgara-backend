@@ -13,7 +13,6 @@ import (
 	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
-	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
@@ -36,7 +35,10 @@ func TestBillingPermissions(t *testing.T) {
 	order, err := owner.API.CreateRepairOrder(ctx, garageID, &repairorderv1.RepairOrder{
 		VehicleId: vehicle.GetId(),
 		Lines: []*repairorderv1.RepairOrderLine{{
-			ItemType: repairorderv1.RepairOrderItemType_REPAIR_ORDER_ITEM_TYPE_LABOR, Description: "Service", Quantity: "1", UnitPrice: "1000000",
+			ItemType:    repairorderv1.RepairOrderItemType_REPAIR_ORDER_ITEM_TYPE_LABOR,
+			Description: "Service",
+			Quantity:    "1",
+			UnitPrice:   1000000,
 		}},
 	})
 	require.NoError(t, err)
@@ -76,16 +78,7 @@ func TestBillingPermissions(t *testing.T) {
 	_, err = tech.API.GetSettlement(ctx, garageID, "")
 	require.Error(t, err)
 
-	// --- Test 2: Staff with BILLING VIEW only can read but not create/pay ---
-	billingView := fixture.NewVerifiedOwner(t, "bil-billing-view")
-	cand2, err := owner.API.LookupStaffCandidate(ctx, garageID, billingView.Email)
-	require.NoError(t, err)
-
-	// Find a group with billing view permission (if exists in baseline)
-	// For now, skip if no such group exists
-	billingViewGroups := groups // placeholder
-
-	// --- Test 3: Owner (billing write) can create, list, get, pay, void ---
+	// --- Test 2: Owner (billing write) can create, list, get, pay, void ---
 	// Create settlement
 	settlement, err := owner.API.WithIdempotencyKey("test-key-1").CreateSettlement(ctx, garageID, closed.GetId())
 	require.NoError(t, err)
@@ -102,7 +95,7 @@ func TestBillingPermissions(t *testing.T) {
 	assert.Equal(t, settlement.GetId(), got.GetId())
 
 	// Record payment
-	paid, err := owner.API.WithIdempotencyKey("pay-key-1").RecordPayment(ctx, garageID, settlement.GetId(), cash(500000))
+	paid, err := owner.API.WithIdempotencyKey("pay-key-1").RecordPayment(ctx, garageID, settlement.GetId(), &billingv1.RecordSettlementPaymentRequest{Amount: 500000, Method: billingv1.PaymentMethod_PAYMENT_METHOD_CASH})
 	require.NoError(t, err)
 	assert.Equal(t, billingv1.SettlementStatus_SETTLEMENT_STATUS_PAID, paid.GetStatus())
 
@@ -111,6 +104,6 @@ func TestBillingPermissions(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, billingv1.SettlementStatus_SETTLEMENT_STATUS_PARTIALLY_PAID, voided.GetStatus())
 
-	// --- Test 4: Staff with billing write can do everything owner can ---
+	// --- Test 3: Staff with billing write can do everything owner can ---
 	// (would need a custom role with billing write - skip for now as baseline may not have it)
 }

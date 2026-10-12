@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
 
-	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
@@ -34,8 +33,9 @@ func TestAdminFindAndExtendSubscription(t *testing.T) {
 	subscriptions, err := admin.API.ListSubscriptions(ctx, owner.Email)
 	require.NoError(t, err)
 	require.NotEmpty(t, subscriptions, "admin should find owner by email")
-	assert.Equal(t, "trial", subscriptions[0].GetPlan().GetCode())
-	assert.Equal(t, licensev1.SubscriptionStatus_SUBSCRIPTION_STATUS_TRIAL, subscriptions[0].GetStatus())
+	// SubscriptionSummary has a nested subscription field
+	assert.Equal(t, "trial", subscriptions[0].GetSubscription().GetPlan().GetCode())
+	assert.Equal(t, licensev1.SubscriptionStatus_SUBSCRIPTION_STATUS_TRIAL, subscriptions[0].GetSubscription().GetStatus())
 
 	// Filter by Trial status
 	trialSubs, err := admin.API.ListSubscriptions(ctx, "status:trial")
@@ -43,7 +43,7 @@ func TestAdminFindAndExtendSubscription(t *testing.T) {
 	require.NotEmpty(t, trialSubs)
 
 	// Extend subscription by 30 days
-	subscriptionID := subscriptions[0].GetId()
+	subscriptionID := subscriptions[0].GetSubscription().GetId()
 	require.NotEmpty(t, subscriptionID)
 
 	// Invalid extensions: 0 and 400 days
@@ -58,7 +58,8 @@ func TestAdminFindAndExtendSubscription(t *testing.T) {
 	// Valid extension: 30 days
 	extendedSub, err := admin.API.ExtendSubscription(ctx, subscriptionID, 30)
 	require.NoError(t, err)
-	assert.Equal(t, "Subscription extended.", extendedSub.GetExtensionReason())
+	// ExtendSubscriptionResponse returns the updated subscription directly
+	assert.Equal(t, licensev1.SubscriptionStatus_SUBSCRIPTION_STATUS_TRIAL, extendedSub.GetStatus())
 
 	// Verify owner sees extended trial
 	subAfter, err := owner.API.MySubscription(ctx)
@@ -72,5 +73,6 @@ func TestAdminFindAndExtendSubscription(t *testing.T) {
 	// Admin list should show updated subscription
 	updatedSubs, err := admin.API.ListSubscriptions(ctx, owner.Email)
 	require.NoError(t, err)
-	assert.Equal(t, 30, updatedSubs[0].GetExtensionDays(), "admin list should show extension days")
+	// The extended subscription has updated trial_end_at
+	assert.True(t, updatedSubs[0].GetSubscription().GetTrialEndAt().AsTime().After(oldTrialEnd))
 }

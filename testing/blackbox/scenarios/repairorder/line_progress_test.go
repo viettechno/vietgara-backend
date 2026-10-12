@@ -7,11 +7,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
+	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
-	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
@@ -35,11 +34,15 @@ func TestLineProgressDrivesOrderStatus(t *testing.T) {
 	order, err := owner.API.CreateRepairOrder(ctx, garageID, &repairorderv1.RepairOrder{
 		VehicleId: vehicle.GetId(),
 		Lines: []*repairorderv1.RepairOrderLine{{
-			ItemType: repairorderv1.RepairOrderItemType_REPAIR_ORDER_ITEM_TYPE_LABOR,
-			Description: "Line A", Quantity: "1", UnitPrice: "100000",
+			ItemType:    repairorderv1.RepairOrderItemType_REPAIR_ORDER_ITEM_TYPE_LABOR,
+			Description: "Line A",
+			Quantity:    "1",
+			UnitPrice:   100000,
 		}, {
-			ItemType: repairorderv1.RepairOrderItemType_REPAIR_ORDER_ITEM_TYPE_LABOR,
-			Description: "Line B", Quantity: "1", UnitPrice: "100000",
+			ItemType:    repairorderv1.RepairOrderItemType_REPAIR_ORDER_ITEM_TYPE_LABOR,
+			Description: "Line B",
+			Quantity:    "1",
+			UnitPrice:   100000,
 		}},
 	})
 	require.NoError(t, err)
@@ -61,7 +64,7 @@ func TestLineProgressDrivesOrderStatus(t *testing.T) {
 
 	// Step 2: Line A -> In progress -> In Progress
 	lineA.Status = repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_IN_PROGRESS
-	updated, err := owner.API.UpdateRepairOrderLine(ctx, garageID, orderID, lineA.GetId(), lineA)
+	_, err = owner.API.UpdateRepairOrderLine(ctx, garageID, orderID, lineA.GetId(), lineA)
 	require.NoError(t, err)
 
 	ro, err = owner.API.GetRepairOrder(ctx, garageID, orderID)
@@ -122,8 +125,10 @@ func TestLineProgressDrivesOrderStatus(t *testing.T) {
 	order2, err := owner.API.CreateRepairOrder(ctx, garageID, &repairorderv1.RepairOrder{
 		VehicleId: vehicle.GetId(),
 		Lines: []*repairorderv1.RepairOrderLine{{
-			ItemType: repairorderv1.RepairOrderItemType_REPAIR_ORDER_ITEM_TYPE_LABOR,
-			Description: "Tech Line", Quantity: "1", UnitPrice: "100000",
+			ItemType:    repairorderv1.RepairOrderItemType_REPAIR_ORDER_ITEM_TYPE_LABOR,
+			Description: "Tech Line",
+			Quantity:    "1",
+			UnitPrice:   100000,
 		}},
 	})
 	require.NoError(t, err)
@@ -141,7 +146,7 @@ func TestLineProgressDrivesOrderStatus(t *testing.T) {
 	// Now change status only (should not clear technician)
 	techLine.Status = repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_COMPLETED
 	techLine.AssignedTechnicianIds = nil // empty in request = don't change
-	updated, err := owner.API.UpdateRepairOrderLine(ctx, garageID, order2.GetId(), techLine.GetId(), techLine)
+	_, err = owner.API.UpdateRepairOrderLine(ctx, garageID, order2.GetId(), techLine.GetId(), techLine)
 	require.NoError(t, err)
 
 	// Verify technician assignment preserved

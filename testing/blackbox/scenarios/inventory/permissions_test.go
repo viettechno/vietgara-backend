@@ -11,7 +11,6 @@ import (
 	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
-	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
@@ -141,7 +140,7 @@ func TestInventoryPermissions(t *testing.T) {
 	assert.False(t, found, "deleted item should not appear in list")
 
 	// But past transactions are kept
-	movements, err := owner.API.ListStockTransactions(ctx, garageID)
+	movements, err = owner.API.ListStockTransactions(ctx, garageID)
 	require.NoError(t, err)
 	hasReceipt := false
 	for _, m := range movements {

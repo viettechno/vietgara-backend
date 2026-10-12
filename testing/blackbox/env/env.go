@@ -55,8 +55,8 @@ type Config struct {
 	// TestdataDir contains the YAML files from the pinned shared dataset.
 	TestdataDir string
 
-// OwnerEmail and OwnerPassword sign in a pre-provisioned, verified
-// user for the read-only checks when there is no test inbox.
+	// OwnerEmail and OwnerPassword sign in a pre-provisioned, verified
+	// user for the read-only checks when there is no test inbox.
 	OwnerEmail    string
 	OwnerPassword string
 	// AdminEmail and AdminPassword sign in a pre-provisioned platform

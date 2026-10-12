@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
 
-	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
@@ -22,15 +21,18 @@ func TestAdminCreatePlans(t *testing.T) {
 
 	// Create QA Hidden plan
 	hiddenPlan := &licensev1.Plan{
-		Code:             "qa-hidden",
-		Name:             "QA Hidden",
-		Price:            "50000",
-		BillingCycle:     licensev1.BillingCycle_BILLING_CYCLE_MONTHLY,
-		MaxGarages:       1,
-		MaxStaff:         1,
-		MaxTransactionsPerDay: 5,
-		IsPublic:         false,
-		IsActive:         true,
+		Code:         "qa-hidden",
+		Name:         "QA Hidden",
+		Price:        50000,
+		Currency:     "VND",
+		BillingCycle: licensev1.BillingCycle_BILLING_CYCLE_MONTHLY,
+		Limits: &licensev1.PlanLimits{
+			MaxGarages:            1,
+			MaxStaff:              1,
+			MaxTransactionsPerDay: 5,
+		},
+		IsPublic: false,
+		IsActive: true,
 	}
 	createdHidden, err := admin.API.CreatePlan(ctx, hiddenPlan)
 	require.NoError(t, err)
@@ -39,15 +41,18 @@ func TestAdminCreatePlans(t *testing.T) {
 
 	// Create QA Yearly plan
 	yearlyPlan := &licensev1.Plan{
-		Code:             "qa-yearly",
-		Name:             "QA Yearly",
-		Price:            "5000000",
-		BillingCycle:     licensev1.BillingCycle_BILLING_CYCLE_YEARLY,
-		MaxGarages:       3,
-		MaxStaff:         30,
-		MaxTransactionsPerDay: 300,
-		IsPublic:         true,
-		IsActive:         true,
+		Code:         "qa-yearly",
+		Name:         "QA Yearly",
+		Price:        5000000,
+		Currency:     "VND",
+		BillingCycle: licensev1.BillingCycle_BILLING_CYCLE_YEARLY,
+		Limits: &licensev1.PlanLimits{
+			MaxGarages:            3,
+			MaxStaff:              30,
+			MaxTransactionsPerDay: 300,
+		},
+		IsPublic: true,
+		IsActive: true,
 	}
 	createdYearly, err := admin.API.CreatePlan(ctx, yearlyPlan)
 	require.NoError(t, err)
@@ -56,15 +61,18 @@ func TestAdminCreatePlans(t *testing.T) {
 
 	// Try to create duplicate code qa-small (assuming it exists in baseline)
 	duplicatePlan := &licensev1.Plan{
-		Code:             "qa-small",
-		Name:             "QA Duplicate",
-		Price:            "1",
-		BillingCycle:     licensev1.BillingCycle_BILLING_CYCLE_MONTHLY,
-		MaxGarages:       1,
-		MaxStaff:         1,
-		MaxTransactionsPerDay: 1,
-		IsPublic:         true,
-		IsActive:         true,
+		Code:         "qa-small",
+		Name:         "QA Duplicate",
+		Price:        1,
+		Currency:     "VND",
+		BillingCycle: licensev1.BillingCycle_BILLING_CYCLE_MONTHLY,
+		Limits: &licensev1.PlanLimits{
+			MaxGarages:            1,
+			MaxStaff:              1,
+			MaxTransactionsPerDay: 1,
+		},
+		IsPublic: true,
+		IsActive: true,
 	}
 	_, err = admin.API.CreatePlan(ctx, duplicatePlan)
 	require.Error(t, err)
@@ -87,6 +95,7 @@ func TestAdminCreatePlans(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "qa-yearly", updatedYearly.GetCode(), "plan code must be immutable")
 }
+
 func TestAdminListAllPlans(t *testing.T) {
 	t.Parallel()
 

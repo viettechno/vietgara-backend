@@ -11,7 +11,6 @@ import (
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
-	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
@@ -23,15 +22,18 @@ func TestAdminChangePlanLimits(t *testing.T) {
 
 	// Create a test plan
 	plan := &licensev1.Plan{
-		Code:                      "qa-limit-test",
-		Name:                      "QA Limit Test",
-		Price:                     "100000",
-		BillingCycle:              licensev1.BillingCycle_BILLING_CYCLE_MONTHLY,
-		MaxGarages:                1,
-		MaxStaff:                  2,
-		MaxTransactionsPerDay:     10,
-		IsPublic:                  true,
-		IsActive:                  true,
+		Code:         "qa-limit-test",
+		Name:         "QA Limit Test",
+		Price:        100000,
+		Currency:     "VND",
+		BillingCycle: licensev1.BillingCycle_BILLING_CYCLE_MONTHLY,
+		Limits: &licensev1.PlanLimits{
+			MaxGarages:            1,
+			MaxStaff:              2,
+			MaxTransactionsPerDay: 10,
+		},
+		IsPublic: true,
+		IsActive: true,
 	}
 	createdPlan, err := admin.API.CreatePlan(ctx, plan)
 	require.NoError(t, err)
@@ -48,9 +50,11 @@ func TestAdminChangePlanLimits(t *testing.T) {
 	assert.EqualValues(t, 2, sub.GetUsage().GetStaff(), "initial staff limit should be 2")
 
 	// Admin changes max staff from 2 to 3
-	updatedPlan, err := admin.API.UpdatePlan(ctx, createdPlan.GetId(), &licensev1.Plan{MaxStaff: 3}, "max_staff")
+	updatedPlan, err := admin.API.UpdatePlan(ctx, createdPlan.GetId(), &licensev1.Plan{
+		Limits: &licensev1.PlanLimits{MaxStaff: 3},
+	}, "limits.max_staff")
 	require.NoError(t, err)
-	assert.EqualValues(t, 3, updatedPlan.GetMaxStaff())
+	assert.EqualValues(t, 3, updatedPlan.GetLimits().GetMaxStaff())
 
 	// Owner should see the new limit immediately
 	subAfter, err := owner.API.MySubscription(ctx)
@@ -87,7 +91,9 @@ func TestAdminChangePlanLimits(t *testing.T) {
 	assert.EqualValues(t, 3, usage.GetUsage().GetStaff(), "usage should reflect 3 staff (1 member + 2 pending)")
 
 	// Admin sets max staff back to 2
-	_, err = admin.API.UpdatePlan(ctx, createdPlan.GetId(), &licensev1.Plan{MaxStaff: 2}, "max_staff")
+	_, err = admin.API.UpdatePlan(ctx, createdPlan.GetId(), &licensev1.Plan{
+		Limits: &licensev1.PlanLimits{MaxStaff: 2},
+	}, "limits.max_staff")
 	require.NoError(t, err)
 
 	// Owner sees 3/2: existing staff and invitations are kept, but new ones refused

@@ -8,12 +8,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	quotev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/quote/v1"
+	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
-	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
+	quotev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/quote/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
-	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
@@ -35,12 +34,14 @@ func TestQuotePermissions(t *testing.T) {
 
 	// Create a draft quote as owner
 	draft, err := owner.API.CreateQuote(ctx, garageID, &quotev1.Quote{
-		CustomerId: customer.GetId(),
-		VehicleId:  vehicle.GetId(),
-		ApprovalMode: quotev1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_LINK,
+		CustomerId:   customer.GetId(),
+		VehicleId:    vehicle.GetId(),
+		ApprovalMode: commonv1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_LINK,
 		Lines: []*quotev1.QuoteLine{{
-			ItemType: quotev1.QuoteItemType_QUOTE_ITEM_TYPE_LABOR,
-			Description: "Labor", Quantity: "1", UnitPrice: "500000",
+			ItemType:    quotev1.QuoteItemType_QUOTE_ITEM_TYPE_LABOR,
+			Description: "Labor",
+			Quantity:    "1",
+			UnitPrice:   500000,
 		}},
 	})
 	require.NoError(t, err)
@@ -85,7 +86,7 @@ func TestQuotePermissions(t *testing.T) {
 	// Find a group with quote permission (e.g., Service Advisor)
 	var advisorGroup *tenantv1.StaffGroup
 	for _, g := range groups {
-		if g.GetName() == "Service Advisor" || g.GetRole().GetName() == "Service Advisor" {
+		if g.GetName() == "Service Advisor" {
 			advisorGroup = g
 			break
 		}
@@ -112,12 +113,14 @@ func TestQuotePermissions(t *testing.T) {
 
 		// Advisor can create quote
 		advisorQuote, err := advisor.API.CreateQuote(ctx, garageID, &quotev1.Quote{
-			CustomerId: customer.GetId(),
-			VehicleId:  vehicle.GetId(),
-			ApprovalMode: quotev1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_LINK,
+			CustomerId:   customer.GetId(),
+			VehicleId:    vehicle.GetId(),
+			ApprovalMode: commonv1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_LINK,
 			Lines: []*quotev1.QuoteLine{{
-				ItemType: quotev1.QuoteItemType_QUOTE_ITEM_TYPE_LABOR,
-				Description: "Advisor Labor", Quantity: "1", UnitPrice: "300000",
+				ItemType:    quotev1.QuoteItemType_QUOTE_ITEM_TYPE_LABOR,
+				Description: "Advisor Labor",
+				Quantity:    "1",
+				UnitPrice:   300000,
 			}},
 		})
 		require.NoError(t, err)
@@ -130,18 +133,21 @@ func TestQuotePermissions(t *testing.T) {
 
 		// Advisor can record decision (MANUAL mode)
 		manualQuote, err := advisor.API.CreateQuote(ctx, garageID, &quotev1.Quote{
-			CustomerId: customer.GetId(),
-			VehicleId:  vehicle.GetId(),
-			ApprovalMode: quotev1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_MANUAL,
+			CustomerId:   customer.GetId(),
+			VehicleId:    vehicle.GetId(),
+			ApprovalMode: commonv1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_MANUAL,
 			Lines: []*quotev1.QuoteLine{{
-				ItemType: quotev1.QuoteItemType_QUOTE_ITEM_TYPE_LABOR,
-				Description: "Manual Labor", Quantity: "1", UnitPrice: "200000",
+				ItemType:    quotev1.QuoteItemType_QUOTE_ITEM_TYPE_LABOR,
+				Description: "Manual Labor",
+				Quantity:    "1",
+				UnitPrice:   200000,
 			}},
 		})
 		require.NoError(t, err)
 
 		decided, err := advisor.API.RecordQuoteDecision(ctx, garageID, manualQuote.GetId(), &quotev1.QuoteLineDecisionInput{
-			LineId: manualQuote.GetLines()[0].GetId(), Decision: quotev1.QuoteLineDecision_QUOTE_LINE_DECISION_APPROVED,
+			LineId:   manualQuote.GetLines()[0].GetId(),
+			Approved: true,
 		})
 		require.NoError(t, err)
 		assert.Equal(t, quotev1.QuoteStatus_QUOTE_STATUS_APPROVED, decided.GetStatus())

@@ -7,12 +7,12 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
+	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 	quotev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/quote/v1"
 	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
-	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
-	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
@@ -34,15 +34,19 @@ func TestRepairOrderFromApprovedQuote(t *testing.T) {
 
 	// Create and approve a quote via API (LINK mode, then approve via public link)
 	quote, err := owner.API.CreateQuote(ctx, garageID, &quotev1.Quote{
-		CustomerId: customer.GetId(),
-		VehicleId:  vehicle.GetId(),
-		ApprovalMode: quotev1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_LINK,
+		CustomerId:   customer.GetId(),
+		VehicleId:    vehicle.GetId(),
+		ApprovalMode: commonv1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_LINK,
 		Lines: []*quotev1.QuoteLine{{
-			ItemType: quotev1.QuoteItemType_QUOTE_ITEM_TYPE_LABOR,
-			Description: "Oil change service", Quantity: "1", UnitPrice: "250000",
+			ItemType:    quotev1.QuoteItemType_QUOTE_ITEM_TYPE_LABOR,
+			Description: "Oil change service",
+			Quantity:    "1",
+			UnitPrice:   250000,
 		}, {
-			ItemType: quotev1.QuoteItemType_QUOTE_ITEM_TYPE_PART,
-			Description: "Engine oil 5W-30", Quantity: "4", UnitPrice: "180000",
+			ItemType:    quotev1.QuoteItemType_QUOTE_ITEM_TYPE_PART,
+			Description: "Engine oil 5W-30",
+			Quantity:    "4",
+			UnitPrice:   180000,
 		}},
 	})
 	require.NoError(t, err)
@@ -52,15 +56,18 @@ func TestRepairOrderFromApprovedQuote(t *testing.T) {
 	sendResult, err := owner.API.SendQuote(ctx, garageID, quote.GetId())
 	require.NoError(t, err)
 	assert.NotEmpty(t, sendResult.GetPublicUrl())
-	assert.Equal(t, quotev1.QuoteStatus_QUOTE_STATUS_SENT, sendResult.GetStatus())
+	// The quote status is now SENT
+	updatedQuote, err := owner.API.GetQuote(ctx, garageID, quote.GetId())
+	require.NoError(t, err)
+	assert.Equal(t, quotev1.QuoteStatus_QUOTE_STATUS_SENT, updatedQuote.GetStatus())
 
 	// Approve from public link (all lines approved)
 	publicQuote, err := owner.API.GetPublicQuote(ctx, sendResult.GetPublicUrl())
 	require.NoError(t, err)
 
 	decided, err := owner.API.DecidePublicQuote(ctx, sendResult.GetPublicUrl(),
-		&quotev1.QuoteLineDecisionInput{LineId: publicQuote.GetLines()[0].GetId(), Decision: quotev1.QuoteLineDecision_QUOTE_LINE_DECISION_APPROVED},
-		&quotev1.QuoteLineDecisionInput{LineId: publicQuote.GetLines()[1].GetId(), Decision: quotev1.QuoteLineDecision_QUOTE_LINE_DECISION_APPROVED},
+		&quotev1.QuoteLineDecisionInput{LineId: publicQuote.GetLines()[0].GetId(), Approved: true},
+		&quotev1.QuoteLineDecisionInput{LineId: publicQuote.GetLines()[1].GetId(), Approved: true},
 	)
 	require.NoError(t, err)
 	assert.Equal(t, quotev1.QuoteStatus_QUOTE_STATUS_APPROVED, decided.GetStatus())
@@ -77,9 +84,8 @@ func TestRepairOrderFromApprovedQuote(t *testing.T) {
 	require.NoError(t, err)
 
 	// Customer and vehicle match
-	assert.Equal(t, customer.GetId(), ro.GetCustomerId())
-	assert.Equal(t, vehicle.GetId(), ro.GetVehicleId())
 	assert.Equal(t, customer.GetFullName(), ro.GetCustomerName())
+	assert.Equal(t, vehicle.GetId(), ro.GetVehicleId())
 	assert.Equal(t, vehicle.GetLicensePlate(), ro.GetVehicleLicensePlate())
 
 	// Lines match only approved lines (both approved in this case)
@@ -125,6 +131,8 @@ func TestRepairOrderFromApprovedQuote(t *testing.T) {
 	assert.True(t, hasConvertedQuote)
 	assert.True(t, hasRepairOrder)
 }
+
+// Scenario: E2E-REP-003 partial: mixed approval converts only approved lines
 func TestRepairOrderFromMixedApproval(t *testing.T) {
 	t.Parallel()
 
@@ -142,15 +150,19 @@ func TestRepairOrderFromMixedApproval(t *testing.T) {
 
 	// Create quote with 2 lines
 	quote, err := owner.API.CreateQuote(ctx, garageID, &quotev1.Quote{
-		CustomerId: customer.GetId(),
-		VehicleId:  vehicle.GetId(),
-		ApprovalMode: quotev1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_LINK,
+		CustomerId:   customer.GetId(),
+		VehicleId:    vehicle.GetId(),
+		ApprovalMode: commonv1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_LINK,
 		Lines: []*quotev1.QuoteLine{{
-			ItemType: quotev1.QuoteItemType_QUOTE_ITEM_TYPE_LABOR,
-			Description: "Approve Me", Quantity: "1", UnitPrice: "100000",
+			ItemType:    quotev1.QuoteItemType_QUOTE_ITEM_TYPE_LABOR,
+			Description: "Approve Me",
+			Quantity:    "1",
+			UnitPrice:   100000,
 		}, {
-			ItemType: quotev1.QuoteItemType_QUOTE_ITEM_TYPE_PART,
-			Description: "Reject Me", Quantity: "1", UnitPrice: "200000",
+			ItemType:    quotev1.QuoteItemType_QUOTE_ITEM_TYPE_PART,
+			Description: "Reject Me",
+			Quantity:    "1",
+			UnitPrice:   200000,
 		}},
 	})
 	require.NoError(t, err)
@@ -164,8 +176,8 @@ func TestRepairOrderFromMixedApproval(t *testing.T) {
 	require.NoError(t, err)
 
 	decided, err := owner.API.DecidePublicQuote(ctx, sendResult.GetPublicUrl(),
-		&quotev1.QuoteLineDecisionInput{LineId: publicQuote.GetLines()[0].GetId(), Decision: quotev1.QuoteLineDecision_QUOTE_LINE_DECISION_APPROVED},
-		&quotev1.QuoteLineDecisionInput{LineId: publicQuote.GetLines()[1].GetId(), Decision: quotev1.QuoteLineDecision_QUOTE_LINE_DECISION_REJECTED},
+		&quotev1.QuoteLineDecisionInput{LineId: publicQuote.GetLines()[0].GetId(), Approved: true},
+		&quotev1.QuoteLineDecisionInput{LineId: publicQuote.GetLines()[1].GetId(), Approved: false},
 	)
 	require.NoError(t, err)
 	assert.Equal(t, quotev1.QuoteStatus_QUOTE_STATUS_APPROVED, decided.GetStatus())

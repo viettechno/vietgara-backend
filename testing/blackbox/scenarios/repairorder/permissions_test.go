@@ -8,11 +8,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
+	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
-	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
@@ -36,8 +35,10 @@ func TestRepairOrderPermissions(t *testing.T) {
 	order, err := owner.API.CreateRepairOrder(ctx, garageID, &repairorderv1.RepairOrder{
 		VehicleId: vehicle.GetId(),
 		Lines: []*repairorderv1.RepairOrderLine{{
-			ItemType: repairorderv1.RepairOrderItemType_REPAIR_ORDER_ITEM_TYPE_LABOR,
-			Description: "Brake repair", Quantity: "1", UnitPrice: "200000",
+			ItemType:    repairorderv1.RepairOrderItemType_REPAIR_ORDER_ITEM_TYPE_LABOR,
+			Description: "Brake repair",
+			Quantity:    "1",
+			UnitPrice:   200000,
 		}},
 	})
 	require.NoError(t, err)
@@ -87,7 +88,7 @@ func TestRepairOrderPermissions(t *testing.T) {
 	// Find Inventory Staff group (view repair orders, no write)
 	var viewerGroup *tenantv1.StaffGroup
 	for _, g := range groups {
-		if g.GetName() == "Inventory Staff" || g.GetRole().GetName() == "Inventory Staff" {
+		if g.GetName() == "Inventory Staff" {
 			viewerGroup = g
 			break
 		}
@@ -135,7 +136,7 @@ func TestRepairOrderPermissions(t *testing.T) {
 
 	var techGroup *tenantv1.StaffGroup
 	for _, g := range groups {
-		if g.GetName() == "Technician" || g.GetRole().GetName() == "Technician" {
+		if g.GetName() == "Technician" {
 			techGroup = g
 			break
 		}
@@ -187,8 +188,10 @@ func TestRepairOrderPermissions(t *testing.T) {
 	order2, err := owner.API.CreateRepairOrder(ctx, garageID, &repairorderv1.RepairOrder{
 		VehicleId: vehicle.GetId(),
 		Lines: []*repairorderv1.RepairOrderLine{{
-			ItemType: repairorderv1.RepairOrderItemType_REPAIR_ORDER_ITEM_TYPE_LABOR,
-			Description: "Owner Close", Quantity: "1", UnitPrice: "100000",
+			ItemType:    repairorderv1.RepairOrderItemType_REPAIR_ORDER_ITEM_TYPE_LABOR,
+			Description: "Owner Close",
+			Quantity:    "1",
+			UnitPrice:   100000,
 		}},
 	})
 	require.NoError(t, err)

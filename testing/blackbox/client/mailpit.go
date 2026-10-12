@@ -53,6 +53,9 @@ var ErrNoMessage = errors.New("no e-mail arrived")
 // WaitForMessage returns the newest e-mail to address, polling until one
 // arrives or ctx ends. Every user the suite creates has a unique
 // address, so the newest message is the one the step under test sent.
+// Absence proofs pass a timeout ctx and expect ErrNoMessage: when the
+// deadline outlives a poll round, nothing arrived in time. A failed poll
+// with ctx still alive is a real Mailpit failure and surfaces as such.
 func (m *Mailpit) WaitForMessage(ctx context.Context, address string) (*Message, error) {
 	ticker := time.NewTicker(250 * time.Millisecond)
 	defer ticker.Stop()
@@ -60,6 +63,10 @@ func (m *Mailpit) WaitForMessage(ctx context.Context, address string) (*Message,
 	for {
 		id, err := m.newestID(ctx, address)
 		if err != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return nil, fmt.Errorf("%w for %s: %w", ErrNoMessage, address, ctx.Err())
+			}
+
 			return nil, err
 		}
 

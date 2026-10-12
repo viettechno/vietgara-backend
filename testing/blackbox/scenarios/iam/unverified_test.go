@@ -28,6 +28,7 @@ func TestUnverifiedCapabilities(t *testing.T) {
 		Email: email, Password: fixture.Password, FullName: "Blackbox Unverified",
 	})
 	require.NoError(t, err)
+
 	unverified := api.WithToken(registered.GetAccessToken())
 
 	// The account surface works: profile, profile edits and the public

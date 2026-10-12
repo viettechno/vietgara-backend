@@ -56,6 +56,7 @@ func TestWrongCodesLockout(t *testing.T) {
 		Email: email, Password: fixture.Password, FullName: "Blackbox IAM004",
 	})
 	require.NoError(t, err)
+
 	authed := api.WithToken(registered.GetAccessToken())
 
 	first, err := mail.WaitForMessage(ctx, email)
@@ -83,6 +84,7 @@ func TestWrongCodesLockout(t *testing.T) {
 
 	// Past the resend cooldown a resend replaces the locked code.
 	time.Sleep(time.Until(started.Add(35 * time.Second)))
+
 	_, err = authed.SendVerificationOtp(ctx)
 	require.NoError(t, err)
 
@@ -111,6 +113,7 @@ func TestResendCooldown(t *testing.T) {
 		Email: email, Password: fixture.Password, FullName: "Blackbox IAM006",
 	})
 	require.NoError(t, err)
+
 	authed := api.WithToken(registered.GetAccessToken())
 
 	first, err := mail.WaitForMessage(ctx, email)
@@ -122,6 +125,7 @@ func TestResendCooldown(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusTooManyRequests, "OTP_RESEND_TOO_SOON")
 
 	time.Sleep(time.Until(started.Add(35 * time.Second)))
+
 	_, err = authed.SendVerificationOtp(ctx)
 	require.NoError(t, err)
 

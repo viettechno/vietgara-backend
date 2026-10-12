@@ -22,6 +22,7 @@ func TestPasswordReset(t *testing.T) {
 	api := fixture.Anonymous(t)
 
 	owner := fixture.NewVerifiedOwner(t, "reset")
+
 	const newPassword = "Blackbox#2027"
 
 	// A second session stands in for the second browser.
@@ -46,6 +47,7 @@ func TestPasswordReset(t *testing.T) {
 	if code == wrong {
 		wrong = "111111"
 	}
+
 	_, err = api.VerifyPasswordResetOtp(ctx, owner.Email, wrong)
 	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "OTP_INVALID")
 

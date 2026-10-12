@@ -1,0 +1,17 @@
+{{define "subject"}}Your VietGara plan has ended: read-only until {{.GracePeriodEnd}}{{end}}
+{{define "text"}}Hello {{.Name}},
+
+{{if .Trial}}Your VietGara trial has ended.{{else}}Your {{.PlanCode}} plan has ended.{{end}} Your garages are now read-only: you can still view everything, but you cannot create or change anything. They will be locked on {{.GracePeriodEnd}} unless you pay before then.
+
+To restore full access, choose a plan in the app, transfer the amount shown and send us the proof of your transfer. We activate it as soon as we have checked the payment.
+{{if .BankName}}
+Amount: {{.AmountDue}} VND
+Bank: {{.BankName}}{{if .Branch}} ({{.Branch}}){{end}}
+Account: {{.AccountNumber}} - {{.AccountHolder}}
+{{end}}
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p>{{if .Trial}}Your VietGara trial has ended.{{else}}Your <strong>{{.PlanCode}}</strong> plan has ended.{{end}} Your garages are now <strong>read-only</strong>: you can still view everything, but you cannot create or change anything. They will be locked on <strong>{{.GracePeriodEnd}}</strong> unless you pay before then.</p>
+<p>To restore full access, choose a plan in the app, transfer the amount shown and send us the proof of your transfer. We activate it as soon as we have checked the payment.</p>
+{{if .BankName}}<p>Amount: <strong>{{.AmountDue}} VND</strong><br>Bank: {{.BankName}}{{if .Branch}} ({{.Branch}}){{end}}<br>Account: {{.AccountNumber}} - {{.AccountHolder}}</p>{{end}}
+<p>VietGara</p>{{end}}

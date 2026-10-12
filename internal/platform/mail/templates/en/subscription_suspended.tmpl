@@ -1,0 +1,17 @@
+{{define "subject"}}Your VietGara subscription is suspended{{end}}
+{{define "text"}}Hello {{.Name}},
+
+The grace period of your {{if .Trial}}trial{{else}}{{.PlanCode}} plan{{end}} has ended and your subscription is suspended: your garages are locked and nobody on your team can use them.
+
+To reactivate it, choose a plan in the app, transfer the amount shown and send us the proof of your transfer. Access returns as soon as we have checked the payment.
+{{if .BankName}}
+Amount: {{.AmountDue}} VND
+Bank: {{.BankName}}{{if .Branch}} ({{.Branch}}){{end}}
+Account: {{.AccountNumber}} - {{.AccountHolder}}
+{{end}}
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p>The grace period of your {{if .Trial}}trial{{else}}<strong>{{.PlanCode}}</strong> plan{{end}} has ended and your subscription is <strong>suspended</strong>: your garages are locked and nobody on your team can use them.</p>
+<p>To reactivate it, choose a plan in the app, transfer the amount shown and send us the proof of your transfer. Access returns as soon as we have checked the payment.</p>
+{{if .BankName}}<p>Amount: <strong>{{.AmountDue}} VND</strong><br>Bank: {{.BankName}}{{if .Branch}} ({{.Branch}}){{end}}<br>Account: {{.AccountNumber}} - {{.AccountHolder}}</p>{{end}}
+<p>VietGara</p>{{end}}

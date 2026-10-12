@@ -176,6 +176,30 @@ func TestLicenseMode(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestExpiryJobAnnouncesALapse(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+
+	lapsed := func() *licensetest.Env {
+		e := licensetest.NewEnv()
+		require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "a"))
+		e.Now = e.Now.Add(domain.TrialPeriod + time.Hour)
+
+		return e
+	}
+
+	e := lapsed()
+	require.NoError(t, e.Expiry.Run(ctx))
+	assert.Contains(t, e.Store.Events, usecase.EventSubscriptionStatusChanged)
+
+	// The e-mail of a lapse carries what to pay and where, so reading the
+	// payment details is part of the transition.
+	e = lapsed()
+	e.Store.Fail["payments.settings"] = errBoom
+	require.Error(t, e.Expiry.Run(ctx))
+}
+
 func TestExpiryJob(t *testing.T) {
 	t.Parallel()
 

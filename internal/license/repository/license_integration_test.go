@@ -93,4 +93,75 @@ func TestLicenseRepositoriesOnPostgres(t *testing.T) {
 	var enabled int
 	require.NoError(t, admin.QueryRowContext(ctx, `SELECT count(*) FROM entitlements WHERE user_id = $1 AND enabled`, userID).Scan(&enabled))
 	assert.Equal(t, 7, enabled, "the trial enables every feature")
+
+	checkPlanChanges(t, pool, admin, userID, locked.ID, locked.CurrentPeriodEnd)
+}
+
+// checkPlanChanges runs a plan change through its states on Postgres: one
+// pending per subscription, loaded with the subscription and its plan, and
+// found by the expiry job's scan.
+func checkPlanChanges(t *testing.T, pool *dbpkg.Pool, admin *sql.DB, userID, subscriptionID string, periodEnd time.Time) {
+	t.Helper()
+
+	ctx := t.Context()
+	plans := repository.NewPostgresPlanRepository(pool)
+	subs := repository.NewPostgresRepository(pool)
+
+	starter, err := plans.FindByCode(ctx, "starter")
+	require.NoError(t, err)
+
+	change := &domain.PlanChange{
+		SubscriptionID: subscriptionID, PlanID: starter.ID, Status: domain.PlanChangeScheduled,
+		EffectiveAt: periodEnd, RequestedAt: time.Now().UTC(),
+	}
+	require.NoError(t, subs.CreateChange(ctx, change))
+	require.NotEmpty(t, change.ID)
+
+	second := *change
+	second.ID = ""
+	require.Error(t, subs.CreateChange(ctx, &second), "only one change is pending per subscription")
+
+	withChange, err := subs.FindByUserID(ctx, userID)
+	require.NoError(t, err)
+	require.NotNil(t, withChange.PendingChange)
+	assert.Equal(t, "starter", withChange.PendingChange.Plan.Code)
+	assert.Equal(t, domain.PlanChangeScheduled, withChange.PendingChange.Status)
+
+	page, err := subs.Search(ctx, usecase.SubscriptionFilter{Page: 1, PageSize: 10})
+	require.NoError(t, err)
+	require.NotNil(t, page.Items[0].Subscription.PendingChange)
+
+	// Due once its date passed, even when the subscription is no longer live.
+	_, err = admin.ExecContext(ctx, `UPDATE subscriptions SET status = 'suspended', current_period_end = now() - interval '1 day' WHERE user_id = $1`, userID)
+	require.NoError(t, err)
+	_, err = admin.ExecContext(ctx, `UPDATE subscription_changes SET effective_at = now() - interval '1 day' WHERE id = $1`, change.ID)
+	require.NoError(t, err)
+
+	due, err := subs.ListUserIDsDueBefore(ctx, time.Now())
+	require.NoError(t, err)
+	assert.Contains(t, due, userID)
+
+	// Moving it, postponing it and cancelling it.
+	postponed := time.Now().UTC()
+	change.Status, change.PostponedAt = domain.PlanChangePostponed, &postponed
+	require.NoError(t, subs.SaveChange(ctx, change))
+
+	again, err := subs.FindByUserID(ctx, userID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.PlanChangePostponed, again.PendingChange.Status)
+
+	cancelled := time.Now().UTC()
+	change.Status, change.CancelledAt = domain.PlanChangeCancelled, &cancelled
+	require.NoError(t, subs.SaveChange(ctx, change))
+
+	gone, err := subs.FindByUserID(ctx, userID)
+	require.NoError(t, err)
+	assert.Nil(t, gone.PendingChange)
+
+	// A new one can be scheduled again after the cancellation.
+	next := &domain.PlanChange{
+		SubscriptionID: subscriptionID, PlanID: starter.ID, Status: domain.PlanChangeScheduled,
+		EffectiveAt: time.Now().Add(time.Hour), RequestedAt: time.Now().UTC(),
+	}
+	require.NoError(t, subs.CreateChange(ctx, next))
 }

@@ -125,6 +125,13 @@ func limitsToProto(garages, staff, transactions int) *licensev1.PlanLimits {
 	}
 }
 
+var planChangeStatuses = map[domain.PlanChangeStatus]licensev1.PlanChangeStatus{
+	domain.PlanChangeScheduled: licensev1.PlanChangeStatus_PLAN_CHANGE_STATUS_SCHEDULED,
+	domain.PlanChangePostponed: licensev1.PlanChangeStatus_PLAN_CHANGE_STATUS_POSTPONED,
+	domain.PlanChangeApplied:   licensev1.PlanChangeStatus_PLAN_CHANGE_STATUS_APPLIED,
+	domain.PlanChangeCancelled: licensev1.PlanChangeStatus_PLAN_CHANGE_STATUS_CANCELLED,
+}
+
 func subscriptionToProto(s *domain.Subscription, usage *usecase.Usage) *licensev1.Subscription {
 	out := &licensev1.Subscription{
 		Id:                 s.ID,
@@ -144,6 +151,13 @@ func subscriptionToProto(s *domain.Subscription, usage *usecase.Usage) *licensev
 
 	if s.GracePeriodEnd != nil {
 		out.GracePeriodEnd = converter.TimeToProto(*s.GracePeriodEnd)
+	}
+
+	if c := s.PendingChange; c != nil {
+		out.PendingChange = &licensev1.PendingPlanChange{
+			Plan: planToProto(c.Plan), EffectiveAt: converter.TimeToProto(c.EffectiveAt), Status: planChangeStatuses[c.Status],
+			RequestedAt: converter.TimeToProto(c.RequestedAt),
+		}
 	}
 
 	if usage != nil {

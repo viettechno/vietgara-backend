@@ -122,3 +122,51 @@ func TestNotificationUseCase_HandleSubscriptionExpiringSoon(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
+
+func TestNotificationUseCase_HandlePlanChangePostponed(t *testing.T) {
+	t.Parallel()
+
+	payload := []byte(`{"user_id":"` + userID + `","plan_code":"starter","max_garages":1,"max_staff":5,"garages":1,"staff":8}`)
+
+	t.Run("tells the owner why the plan change is on hold", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Users.EXPECT().Get(mock.Anything, userID).
+			Return(usecase.UserInfo{Email: "owner@example.com", FullName: "Owner", Locale: "en"}, nil).Once()
+		d.Mailer.EXPECT().Send(mock.Anything, mock.MatchedBy(func(msg mail.Message) bool {
+			return msg.ToEmail == "owner@example.com" && msg.Tag == mail.TemplatePlanChangePostponed &&
+				strings.Contains(msg.Text, "8 staff") && strings.Contains(msg.Text, "5 staff")
+		})).Return(nil).Once()
+		d.Log.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+
+		require.NoError(t, uc.HandlePlanChangePostponed(t.Context(), outbox.Event{UserID: userID, Data: payload}))
+	})
+
+	t.Run("in Vietnamese by default", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Users.EXPECT().Get(mock.Anything, userID).
+			Return(usecase.UserInfo{Email: "owner@example.com", FullName: "Owner"}, nil).Once()
+		d.Mailer.EXPECT().Send(mock.Anything, mock.MatchedBy(func(msg mail.Message) bool {
+			return strings.Contains(msg.Subject, "tạm hoãn")
+		})).Return(nil).Once()
+		d.Log.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+
+		require.NoError(t, uc.HandlePlanChangePostponed(t.Context(), outbox.Event{UserID: userID, Data: payload}))
+	})
+
+	t.Run("drops it when the user is gone, a malformed event, and retries a failure", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Users.EXPECT().Get(mock.Anything, userID).Return(usecase.UserInfo{}, usecase.ErrUserNotFound).Once()
+		require.NoError(t, uc.HandlePlanChangePostponed(t.Context(), outbox.Event{UserID: userID, Data: payload}))
+
+		require.NoError(t, uc.HandlePlanChangePostponed(t.Context(), outbox.Event{Data: []byte(`{`)}))
+
+		d.Users.EXPECT().Get(mock.Anything, userID).Return(usecase.UserInfo{}, errBoom).Once()
+		require.ErrorIs(t, uc.HandlePlanChangePostponed(t.Context(), outbox.Event{UserID: userID, Data: payload}), errBoom)
+	})
+}

@@ -87,6 +87,41 @@ func (uc *NotificationUseCase) HandleSubscriptionExpiringSoon(ctx context.Contex
 		})
 }
 
+type planChangePostponedPayload struct {
+	UserID     string `json:"user_id"`
+	PlanCode   string `json:"plan_code"`
+	MaxGarages int    `json:"max_garages"`
+	MaxStaff   int    `json:"max_staff"`
+	Garages    int    `json:"garages"`
+	Staff      int    `json:"staff"`
+}
+
+// HandlePlanChangePostponed tells the owner that the plan they chose is on
+// hold because they use more than it allows (FR-LIC-02).
+func (uc *NotificationUseCase) HandlePlanChangePostponed(ctx context.Context, event outbox.Event) error {
+	var payload planChangePostponedPayload
+	if err := json.Unmarshal(event.Data, &payload); err != nil || payload.UserID == "" {
+		return nil //nolint:nilerr // a malformed event cannot succeed on retry: drop it
+	}
+
+	user, err := uc.Users.Get(ctx, payload.UserID)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			slog.Warn("notification: user no longer exists, dropping its plan change notice", "user_id", payload.UserID)
+
+			return nil
+		}
+
+		return err
+	}
+
+	return uc.send(ctx, payload.UserID, mail.TemplatePlanChangePostponed, user.Locale, user.Email, user.FullName,
+		map[string]any{
+			"Name": user.FullName, "PlanCode": payload.PlanCode, "MaxGarages": payload.MaxGarages,
+			"MaxStaff": payload.MaxStaff, "Garages": payload.Garages, "Staff": payload.Staff,
+		})
+}
+
 // formatPeriodEnd renders an RFC3339 instant as a plain date in the
 // user's language, the same locale-aware convention
 // tenant/usecase/invitation.go's sendInvitation already uses. Falls back

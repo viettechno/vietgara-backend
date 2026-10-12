@@ -57,6 +57,6 @@ func buildLicense(
 		enforcement:   licenseHandler.NewEnforcement(entitlements),
 		subscriptions: subscriptions,
 		entitlements:  entitlements,
-		expiryJob:     licenseUsecase.NewExpiryJob(subscriptionRepo, subscriptionRepo, events, cache, tx),
+		expiryJob:     licenseUsecase.NewExpiryJob(subscriptionRepo, subscriptionRepo, events, cache, accessReader, tx),
 	}
 }

@@ -25,8 +25,8 @@ func (s syncer) entitlementsChanged(ctx context.Context, sub *domain.Subscriptio
 
 	err := s.events.Publish(ctx, EventEntitlementUpdated, "", sub.UserID, map[string]any{
 		keyUserID:   sub.UserID,
-		"status":    sub.Status,
-		"plan_code": sub.Plan.Code,
+		keyStatus:   sub.Status,
+		keyPlanCode: sub.Plan.Code,
 	})
 	if err != nil {
 		return err
@@ -41,11 +41,11 @@ func (s syncer) entitlementsChanged(ctx context.Context, sub *domain.Subscriptio
 
 func (s syncer) statusChanged(ctx context.Context, sub *domain.Subscription, from domain.SubscriptionStatus) error {
 	return s.events.Publish(ctx, EventSubscriptionStatusChanged, "", sub.UserID, map[string]any{
-		"subscription_id":    sub.ID,
-		keyUserID:            sub.UserID,
-		"from":               from,
-		"to":                 sub.Status,
-		"current_period_end": sub.CurrentPeriodEnd.Format(time.RFC3339),
+		keySubscriptionID:   sub.ID,
+		keyUserID:           sub.UserID,
+		"from":              from,
+		"to":                sub.Status,
+		keyCurrentPeriodEnd: sub.CurrentPeriodEnd.Format(time.RFC3339),
 	})
 }
 

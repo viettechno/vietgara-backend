@@ -25,6 +25,7 @@ var (
 	ErrSubscriptionCancelled = errors.New("the subscription is cancelled")
 	ErrLimitReached          = errors.New("the plan limit is reached")
 	ErrInvalidExtension      = errors.New("extensions must be between 1 and 366 days")
+	ErrNoPendingPlanChange   = errors.New("there is no pending plan change")
 )
 
 // InvalidPlanError reports an invalid plan field.
@@ -81,8 +82,11 @@ type Subscription struct {
 	// ReminderPeriodEnd is the period end an expiring-soon reminder was
 	// already sent for.
 	ReminderPeriodEnd *time.Time
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	// PendingChange is the plan chosen to take effect at the end of the
+	// period (FR-LIC-02), loaded alongside the subscription; nil when none.
+	PendingChange *PlanChange
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // NewTrial starts a TrialPeriod-long trial on the trial plan at start.
@@ -158,9 +162,18 @@ func (s *Subscription) Expire(now time.Time, grace time.Duration) bool {
 	return changed
 }
 
-// ChangePlan upgrades, downgrades or renews to plan, starting a new billing
-// period at now (FR-LIC-02). Payment collection arrives in Phase 2, so the
-// plan takes effect immediately.
+// HoldsPeriod reports whether the current period is still running or being
+// waited for, so a plan chosen now takes effect at its end (FR-LIC-02): a
+// trial or paid subscription. A past-due or suspended one has no period
+// left to wait for and switches at once.
+func (s *Subscription) HoldsPeriod() bool {
+	return s.Status == StatusTrial || s.Status == StatusActive
+}
+
+// ChangePlan switches to plan at once, starting a new billing period at
+// now (FR-LIC-02). Payment collection arrives in Phase 2, so there is
+// nothing to wait for: it is how a past-due or suspended owner recovers,
+// and how a scheduled change takes effect.
 func (s *Subscription) ChangePlan(plan *Plan, now time.Time) error {
 	if !plan.Selectable() {
 		return ErrPlanNotAvailable
@@ -210,4 +223,43 @@ func (s *Subscription) Extend(days int, now time.Time) error {
 	}
 
 	return nil
+}
+
+// PlanChangeStatus is the state of a plan change (FR-LIC-02).
+type PlanChangeStatus string
+
+// Valid PlanChangeStatus values.
+const (
+	// PlanChangeScheduled takes effect when the current period ends.
+	PlanChangeScheduled PlanChangeStatus = "scheduled"
+	// PlanChangePostponed is due, but the new plan's limits are exceeded:
+	// it stays pending and the owner is told.
+	PlanChangePostponed PlanChangeStatus = "postponed"
+	PlanChangeApplied   PlanChangeStatus = "applied"
+	PlanChangeCancelled PlanChangeStatus = "cancelled"
+)
+
+// Pending reports whether the change has not taken effect or been cancelled.
+func (s PlanChangeStatus) Pending() bool {
+	return s == PlanChangeScheduled || s == PlanChangePostponed
+}
+
+// PlanChange is a plan an owner chose that has not taken effect yet.
+type PlanChange struct {
+	ID             string
+	SubscriptionID string
+	PlanID         string
+	// Plan is loaded alongside the change when reading.
+	Plan        *Plan
+	Status      PlanChangeStatus
+	EffectiveAt time.Time
+	RequestedAt time.Time
+	PostponedAt *time.Time
+	AppliedAt   *time.Time
+	CancelledAt *time.Time
+}
+
+// Due reports whether the change should take effect at now.
+func (c *PlanChange) Due(now time.Time) bool {
+	return c.Status.Pending() && !now.Before(c.EffectiveAt)
 }

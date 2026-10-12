@@ -1,0 +1,12 @@
+{{define "subject"}}Your VietGara plan change is on hold{{end}}
+{{define "text"}}Hello {{.Name}},
+
+You chose the {{.PlanCode}} plan, which should have taken effect now. It is on hold because your account currently uses more than that plan allows ({{.Garages}} garage(s) and {{.Staff}} staff, while {{.PlanCode}} allows {{.MaxGarages}} garage(s) and {{.MaxStaff}} staff).
+
+Reduce your garages or staff to fit the plan and the change will be applied automatically, or choose another plan in the app.
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p>You chose the <strong>{{.PlanCode}}</strong> plan, which should have taken effect now. It is on hold because your account currently uses more than that plan allows ({{.Garages}} garage(s) and {{.Staff}} staff, while {{.PlanCode}} allows {{.MaxGarages}} garage(s) and {{.MaxStaff}} staff).</p>
+<p>Reduce your garages or staff to fit the plan and the change will be applied automatically, or choose another plan in the app.</p>
+<p>VietGara</p>{{end}}

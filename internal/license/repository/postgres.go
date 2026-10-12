@@ -29,6 +29,9 @@ const (
 		s.reminder_period_end, s.created_at, s.updated_at, ` + planColumns
 
 	subscriptionFrom = ` FROM subscriptions s JOIN plans p ON p.id = s.plan_id`
+
+	changeColumns = `c.id, c.subscription_id, c.plan_id, c.status::text, c.effective_at, c.requested_at, c.postponed_at,
+		c.applied_at, c.cancelled_at, ` + planColumns
 )
 
 // PostgresRepository implements the usecase Subscription and Entitlement
@@ -233,22 +236,111 @@ func (r *PostgresRepository) CreateIfAbsent(ctx context.Context, s *domain.Subsc
 	return err == nil, err
 }
 
-// FindByUserID returns the user's subscription with its plan.
+// FindByUserID returns the user's subscription with its plan and pending
+// plan change.
 func (r *PostgresRepository) FindByUserID(ctx context.Context, userID string) (*domain.Subscription, error) {
-	return scanSubscription(platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx,
+	return r.readSubscription(ctx, platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx,
 		`SELECT `+subscriptionColumns+subscriptionFrom+` WHERE s.user_id = $1`, userID))
 }
 
 // LockByUserID reads the subscription holding a row lock.
 func (r *PostgresRepository) LockByUserID(ctx context.Context, userID string) (*domain.Subscription, error) {
-	return scanSubscription(platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx,
+	return r.readSubscription(ctx, platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx,
 		`SELECT `+subscriptionColumns+subscriptionFrom+` WHERE s.user_id = $1 FOR UPDATE OF s`, userID))
 }
 
 // LockByID reads a subscription by id holding a row lock.
 func (r *PostgresRepository) LockByID(ctx context.Context, id string) (*domain.Subscription, error) {
-	return scanSubscription(platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx,
+	return r.readSubscription(ctx, platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx,
 		`SELECT `+subscriptionColumns+subscriptionFrom+` WHERE s.id = $1 FOR UPDATE OF s`, id))
+}
+
+// readSubscription scans a subscription row and loads its pending plan
+// change.
+func (r *PostgresRepository) readSubscription(ctx context.Context, row pgx.Row) (*domain.Subscription, error) {
+	s, err := scanSubscription(row)
+	if err != nil {
+		return nil, err
+	}
+
+	changes, err := r.pendingChanges(ctx, []string{s.ID})
+	if err != nil {
+		return nil, err
+	}
+
+	s.PendingChange = changes[s.ID]
+
+	return s, nil
+}
+
+// pendingChanges returns the pending plan change, with its plan, of each of
+// the subscriptions, by subscription id.
+func (r *PostgresRepository) pendingChanges(ctx context.Context, subscriptionIDs []string) (map[string]*domain.PlanChange, error) {
+	out := map[string]*domain.PlanChange{}
+	if len(subscriptionIDs) == 0 {
+		return out, nil
+	}
+
+	rows, err := platformdb.QuerierFromContext(ctx, r.pool).Query(ctx, `
+		SELECT `+changeColumns+` FROM subscription_changes c JOIN plans p ON p.id = c.plan_id
+		WHERE c.subscription_id = ANY($1::uuid[]) AND c.status IN ('scheduled', 'postponed')`, subscriptionIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			c      domain.PlanChange
+			plan   domain.Plan
+			status string
+		)
+
+		planFields, finish := planDest(&plan)
+		dest := append([]any{
+			&c.ID, &c.SubscriptionID, &c.PlanID, &status, &c.EffectiveAt, &c.RequestedAt, &c.PostponedAt,
+			&c.AppliedAt, &c.CancelledAt,
+		}, planFields...)
+
+		if err := rows.Scan(dest...); err != nil {
+			return nil, err
+		}
+
+		finish()
+
+		c.Status, c.Plan = domain.PlanChangeStatus(status), &plan
+		out[c.SubscriptionID] = &c
+	}
+
+	return out, rows.Err()
+}
+
+// CreateChange inserts a pending plan change.
+func (r *PostgresRepository) CreateChange(ctx context.Context, c *domain.PlanChange) error {
+	return platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
+		INSERT INTO subscription_changes (subscription_id, plan_id, status, effective_at, requested_at)
+		VALUES ($1, $2, $3::plan_change_status, $4, $5)
+		RETURNING id`,
+		c.SubscriptionID, c.PlanID, string(c.Status), c.EffectiveAt, c.RequestedAt,
+	).Scan(&c.ID)
+}
+
+// SaveChange persists a change's status, timestamps and effective date.
+func (r *PostgresRepository) SaveChange(ctx context.Context, c *domain.PlanChange) error {
+	tag, err := platformdb.QuerierFromContext(ctx, r.pool).Exec(ctx, `
+		UPDATE subscription_changes
+		SET status = $2::plan_change_status, effective_at = $3, postponed_at = $4, applied_at = $5, cancelled_at = $6
+		WHERE id = $1`,
+		c.ID, string(c.Status), c.EffectiveAt, c.PostponedAt, c.AppliedAt, c.CancelledAt)
+	if err != nil {
+		return err
+	}
+
+	if tag.RowsAffected() == 0 {
+		return domain.ErrNoPendingPlanChange
+	}
+
+	return nil
 }
 
 // Update persists the mutable fields of s.
@@ -267,9 +359,12 @@ func (r *PostgresRepository) Update(ctx context.Context, s *domain.Subscription)
 // before t.
 func (r *PostgresRepository) ListUserIDsDueBefore(ctx context.Context, t time.Time) ([]string, error) {
 	rows, err := platformdb.QuerierFromContext(ctx, r.pool).Query(ctx, `
-		SELECT user_id FROM subscriptions
-		WHERE status IN ('trial', 'active', 'past_due') AND current_period_end < $1
-		ORDER BY current_period_end`, t)
+		SELECT user_id FROM subscriptions s
+		WHERE (s.status IN ('trial', 'active', 'past_due') AND s.current_period_end < $1)
+			OR EXISTS (
+				SELECT 1 FROM subscription_changes c
+				WHERE c.subscription_id = s.id AND c.status IN ('scheduled', 'postponed') AND c.effective_at < $1)
+		ORDER BY s.current_period_end`, t)
 	if err != nil {
 		return nil, err
 	}
@@ -336,7 +431,25 @@ func (r *PostgresRepository) Search(ctx context.Context, f usecase.SubscriptionF
 		page.Items = append(page.Items, summary)
 	}
 
-	return page, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, 0, len(page.Items))
+	for _, item := range page.Items {
+		ids = append(ids, item.Subscription.ID)
+	}
+
+	changes, err := r.pendingChanges(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, item := range page.Items {
+		item.Subscription.PendingChange = changes[item.Subscription.ID]
+	}
+
+	return page, nil
 }
 
 // Replace sets the user's feature switches to flags.

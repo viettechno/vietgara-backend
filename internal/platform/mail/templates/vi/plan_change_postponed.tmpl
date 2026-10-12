@@ -1,0 +1,12 @@
+{{define "subject"}}Việc đổi gói VietGara của bạn đang tạm hoãn{{end}}
+{{define "text"}}Xin chào {{.Name}},
+
+Bạn đã chọn gói {{.PlanCode}}, đáng lẽ có hiệu lực từ bây giờ. Việc đổi gói đang tạm hoãn vì tài khoản của bạn đang dùng nhiều hơn mức gói cho phép ({{.Garages}} gara và {{.Staff}} nhân viên, trong khi gói {{.PlanCode}} cho phép {{.MaxGarages}} gara và {{.MaxStaff}} nhân viên).
+
+Hãy giảm số gara hoặc nhân viên cho phù hợp với gói, việc đổi gói sẽ tự động được áp dụng; hoặc chọn một gói khác trong ứng dụng.
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.Name}},</p>
+<p>Bạn đã chọn gói <strong>{{.PlanCode}}</strong>, đáng lẽ có hiệu lực từ bây giờ. Việc đổi gói đang tạm hoãn vì tài khoản của bạn đang dùng nhiều hơn mức gói cho phép ({{.Garages}} gara và {{.Staff}} nhân viên, trong khi gói {{.PlanCode}} cho phép {{.MaxGarages}} gara và {{.MaxStaff}} nhân viên).</p>
+<p>Hãy giảm số gara hoặc nhân viên cho phù hợp với gói, việc đổi gói sẽ tự động được áp dụng; hoặc chọn một gói khác trong ứng dụng.</p>
+<p>VietGara</p>{{end}}

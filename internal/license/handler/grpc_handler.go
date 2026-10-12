@@ -45,10 +45,11 @@ func Policies() middleware.Policies {
 	entitlements.SkipLicense = true
 
 	return middleware.Policies{
-		licensev1.LicenseService_ListPlans_FullMethodName:             middleware.UnverifiedMethod(),
-		licensev1.LicenseService_GetMySubscription_FullMethodName:     middleware.UserMethod(),
-		licensev1.LicenseService_ChangeMyPlan_FullMethodName:          middleware.UserMethod(),
-		licensev1.LicenseService_GetGarageEntitlements_FullMethodName: entitlements,
+		licensev1.LicenseService_ListPlans_FullMethodName:                 middleware.UnverifiedMethod(),
+		licensev1.LicenseService_GetMySubscription_FullMethodName:         middleware.UserMethod(),
+		licensev1.LicenseService_ChangeMyPlan_FullMethodName:              middleware.UserMethod(),
+		licensev1.LicenseService_CancelMyPendingPlanChange_FullMethodName: middleware.UserMethod(),
+		licensev1.LicenseService_GetGarageEntitlements_FullMethodName:     entitlements,
 
 		licensev1.LicenseAdminService_ListAllPlans_FullMethodName:       middleware.AdminMethod(),
 		licensev1.LicenseAdminService_CreatePlan_FullMethodName:         middleware.AdminMethod(),
@@ -86,6 +87,18 @@ func (s *Server) ChangeMyPlan(ctx context.Context, req *licensev1.ChangeMyPlanRe
 	}
 
 	return &licensev1.ChangeMyPlanResponse{Subscription: subscriptionToProto(sub, &usage)}, nil
+}
+
+// CancelMyPendingPlanChange cancels the caller's pending plan change.
+func (s *Server) CancelMyPendingPlanChange(
+	ctx context.Context, _ *licensev1.CancelMyPendingPlanChangeRequest,
+) (*licensev1.CancelMyPendingPlanChangeResponse, error) {
+	sub, usage, err := s.subscriptions.CancelMyPendingPlanChange(ctx, middleware.UserID(ctx))
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return &licensev1.CancelMyPendingPlanChangeResponse{Subscription: subscriptionToProto(sub, &usage)}, nil
 }
 
 // GetGarageEntitlements returns what the garage may use.

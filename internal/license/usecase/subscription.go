@@ -145,9 +145,15 @@ func (uc *SubscriptionUseCase) Usage(ctx context.Context, userID string) (Usage,
 	return Usage{Garages: garages, Staff: staff, TransactionsToday: transactions}, nil
 }
 
-// ChangeMyPlan switches the owner to another plan (FR-LIC-02); choosing the
-// current plan renews it, which is how a past-due or suspended owner
-// recovers. A downgrade below current usage is refused.
+// ChangeMyPlan chooses another plan (FR-LIC-02). An upgrade and a downgrade
+// both take effect when the current period ends (when the trial ends,
+// during the trial), so the plan is scheduled and the answer carries it as
+// the pending change; choosing again replaces it, and choosing the plan the
+// owner already has cancels it. A past-due or suspended owner has no period
+// left to wait for: the plan, the current one included, takes effect at
+// once, which is how they recover. A plan whose limits the current usage
+// already exceeds is refused; the limits are checked again on the
+// effective date.
 func (uc *SubscriptionUseCase) ChangeMyPlan(ctx context.Context, userID, planID string) (*domain.Subscription, Usage, error) {
 	if _, _, err := uc.GetMine(ctx, userID); err != nil {
 		return nil, Usage{}, err
@@ -172,15 +178,29 @@ func (uc *SubscriptionUseCase) ChangeMyPlan(ctx context.Context, userID, planID 
 		return nil, Usage{}, err
 	}
 
-	switch {
-	case usage.Garages > plan.MaxGarages:
-		return nil, Usage{}, limitReached(domain.LimitGarages, plan.MaxGarages)
-	case usage.Staff > plan.MaxStaff:
-		return nil, Usage{}, limitReached(domain.LimitStaff, plan.MaxStaff)
+	if err := checkLimits(usage, plan); err != nil {
+		return nil, Usage{}, err
+	}
+
+	if sub.Status == domain.StatusCancelled {
+		return nil, Usage{}, toAppError("change plan", domain.ErrSubscriptionCancelled)
+	}
+
+	if sub.HoldsPeriod() {
+		sub, err = uc.schedule(ctx, sub, plan)
+		if err != nil {
+			return nil, Usage{}, err
+		}
+
+		return sub, usage, nil
 	}
 
 	before := *sub
 	from := sub.Status
+
+	if err := uc.cancelPending(ctx, sub); err != nil {
+		return nil, Usage{}, err
+	}
 
 	if err := sub.ChangePlan(plan, uc.opts.now().UTC()); err != nil {
 		return nil, Usage{}, toAppError("change plan", err)
@@ -191,6 +211,117 @@ func (uc *SubscriptionUseCase) ChangeMyPlan(ctx context.Context, userID, planID 
 	}
 
 	return sub, usage, nil
+}
+
+// checkLimits refuses a plan whose limits the current usage already exceeds.
+func checkLimits(usage Usage, plan *domain.Plan) error {
+	switch {
+	case usage.Garages > plan.MaxGarages:
+		return limitReached(domain.LimitGarages, plan.MaxGarages)
+	case usage.Staff > plan.MaxStaff:
+		return limitReached(domain.LimitStaff, plan.MaxStaff)
+	default:
+		return nil
+	}
+}
+
+// schedule makes plan the pending change of a subscription that holds its
+// period: it replaces an earlier pending change, and the current plan
+// cancels it.
+func (uc *SubscriptionUseCase) schedule(ctx context.Context, sub *domain.Subscription, plan *domain.Plan) (*domain.Subscription, error) {
+	before := sub.PendingChange
+
+	if err := uc.cancelPending(ctx, sub); err != nil {
+		return nil, err
+	}
+
+	if plan.ID == sub.PlanID {
+		return sub, uc.auditChange(ctx, sub, "subscription.plan_change_cancelled", before)
+	}
+
+	now := uc.opts.now().UTC()
+	change := &domain.PlanChange{
+		SubscriptionID: sub.ID, PlanID: plan.ID, Plan: plan, Status: domain.PlanChangeScheduled,
+		EffectiveAt: sub.CurrentPeriodEnd, RequestedAt: now,
+	}
+
+	if err := uc.subscriptions.CreateChange(ctx, change); err != nil {
+		return nil, toAppError("schedule plan change", err)
+	}
+
+	sub.PendingChange = change
+
+	return sub, uc.auditChange(ctx, sub, "subscription.plan_change_scheduled", before)
+}
+
+// cancelPending cancels the subscription's pending change, if any.
+func (uc *SubscriptionUseCase) cancelPending(ctx context.Context, sub *domain.Subscription) error {
+	change := sub.PendingChange
+	if change == nil {
+		return nil
+	}
+
+	now := uc.opts.now().UTC()
+	change.Status, change.CancelledAt = domain.PlanChangeCancelled, &now
+
+	if err := uc.subscriptions.SaveChange(ctx, change); err != nil {
+		return toAppError("cancel plan change", err)
+	}
+
+	sub.PendingChange = nil
+
+	return nil
+}
+
+// CancelMyPendingPlanChange cancels the owner's pending plan change
+// (FR-LIC-02); ErrNoPendingPlanChange (not found) when there is none.
+func (uc *SubscriptionUseCase) CancelMyPendingPlanChange(ctx context.Context, userID string) (*domain.Subscription, Usage, error) {
+	sub, err := uc.subscriptions.LockByUserID(ctx, userID)
+	if err != nil {
+		return nil, Usage{}, toAppError("cancel plan change", err)
+	}
+
+	before := sub.PendingChange
+	if before == nil {
+		return nil, Usage{}, toAppError("cancel plan change", domain.ErrNoPendingPlanChange)
+	}
+
+	if err := uc.cancelPending(ctx, sub); err != nil {
+		return nil, Usage{}, err
+	}
+
+	if err := uc.auditChange(ctx, sub, "subscription.plan_change_cancelled", before); err != nil {
+		return nil, Usage{}, err
+	}
+
+	usage, err := uc.Usage(ctx, userID)
+	if err != nil {
+		return nil, Usage{}, err
+	}
+
+	return sub, usage, nil
+}
+
+// auditChange records a plan change being scheduled or cancelled: the
+// pending plan before and after.
+func (uc *SubscriptionUseCase) auditChange(ctx context.Context, sub *domain.Subscription, action string, before *domain.PlanChange) error {
+	err := uc.audit.Record(ctx, audit.Entry{
+		Actor: middleware.UserID(ctx), Action: action, EntityType: "subscription", EntityID: sub.ID,
+		Before: pendingAudit(before), After: pendingAudit(sub.PendingChange), IP: middleware.ClientIP(ctx),
+	})
+	if err != nil {
+		return toAppError("audit subscription", err)
+	}
+
+	return nil
+}
+
+func pendingAudit(c *domain.PlanChange) map[string]any {
+	if c == nil {
+		return map[string]any{}
+	}
+
+	return map[string]any{"plan_id": c.PlanID, "status": c.Status, "effective_at": c.EffectiveAt}
 }
 
 // persistChange saves sub, publishes the resulting events and audits it.

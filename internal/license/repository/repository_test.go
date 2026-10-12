@@ -83,6 +83,7 @@ func TestSubscriptionRepository(t *testing.T) {
 		ExpectQueryRow("ON CONFLICT (user_id) DO NOTHING", dbtest.ErrRow(pgx.ErrNoRows)).
 		ExpectQueryRow("ON CONFLICT (user_id) DO NOTHING", dbtest.ErrRow(errBoom)).
 		ExpectQueryRow("s.user_id = $1", dbtest.Row(subRow()...)).
+		ExpectQuery("FROM subscription_changes c", dbtest.NewRows(changeRow()), nil).
 		ExpectQueryRow("FOR UPDATE OF s", dbtest.ErrRow(pgx.ErrNoRows)).
 		ExpectQueryRow("s.id = $1 FOR UPDATE", dbtest.ErrRow(errBoom)).
 		ExpectQueryRow("UPDATE subscriptions", dbtest.Row(now)).
@@ -106,6 +107,9 @@ func TestSubscriptionRepository(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, domain.StatusTrial, got.Status)
 	assert.Equal(t, "pro", got.Plan.Code)
+	require.NotNil(t, got.PendingChange)
+	assert.Equal(t, domain.PlanChangeScheduled, got.PendingChange.Status)
+	assert.Equal(t, "pro", got.PendingChange.Plan.Code)
 
 	_, err = repo.LockByUserID(ctx, "user-1")
 	require.ErrorIs(t, err, domain.ErrSubscriptionNotFound)
@@ -126,6 +130,52 @@ func TestSubscriptionRepository(t *testing.T) {
 	require.NoError(t, repo.Replace(ctx, "user-1", map[domain.Feature]bool{domain.FeatureQuotes: true}))
 }
 
+func changeRow() []any {
+	return append([]any{"c-1", "s-1", "p-1", "scheduled", now, now, nil, nil, nil}, planRow()...)
+}
+
+func TestPlanChangeRepository(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+	change := &domain.PlanChange{SubscriptionID: "s-1", PlanID: "p-1", Status: domain.PlanChangeScheduled, EffectiveAt: now, RequestedAt: now}
+
+	tx := dbtest.New(t).
+		ExpectQueryRow("INSERT INTO subscription_changes", dbtest.Row("c-1")).
+		ExpectQueryRow("INSERT INTO subscription_changes", dbtest.ErrRow(errBoom)).
+		ExpectExec("UPDATE subscription_changes", dbtest.Tag(1), nil).
+		ExpectExec("UPDATE subscription_changes", dbtest.Tag(0), nil).
+		ExpectExec("UPDATE subscription_changes", dbtest.Tag(0), errBoom)
+	ctx := tx.Context(t.Context())
+
+	require.NoError(t, repo.CreateChange(ctx, change))
+	assert.Equal(t, "c-1", change.ID)
+	require.ErrorIs(t, repo.CreateChange(ctx, change), errBoom)
+
+	require.NoError(t, repo.SaveChange(ctx, change))
+	require.ErrorIs(t, repo.SaveChange(ctx, change), domain.ErrNoPendingPlanChange)
+	require.ErrorIs(t, repo.SaveChange(ctx, change), errBoom)
+}
+
+func TestPendingChangeLoadFailures(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+
+	tx := dbtest.New(t).
+		ExpectQueryRow("s.user_id = $1", dbtest.Row(subRow()...)).
+		ExpectQuery("FROM subscription_changes c", nil, errBoom).
+		ExpectQueryRow("s.user_id = $1", dbtest.Row(subRow()...)).
+		ExpectQuery("FROM subscription_changes c", dbtest.NewRows([]any{errBoom}), nil)
+	ctx := tx.Context(t.Context())
+
+	_, err := repo.FindByUserID(ctx, "user-1")
+	require.ErrorIs(t, err, errBoom)
+
+	_, err = repo.FindByUserID(ctx, "user-1")
+	require.Error(t, err)
+}
+
 func TestSearch(t *testing.T) {
 	t.Parallel()
 
@@ -140,6 +190,7 @@ func TestSearch(t *testing.T) {
 		assert.Equal(t, 10, args[2])
 		assert.Equal(t, 10, args[3])
 	}).
+		ExpectQuery("FROM subscription_changes c", dbtest.NewRows(changeRow()), nil).
 		ExpectQueryRow("SELECT count(*)", dbtest.ErrRow(errBoom)).
 		ExpectQueryRow("SELECT count(*)", dbtest.Row(1)).
 		ExpectQuery("LIMIT $3 OFFSET $4", nil, errBoom).
@@ -152,6 +203,7 @@ func TestSearch(t *testing.T) {
 	assert.Equal(t, 1, page.Total)
 	require.Len(t, page.Items, 1)
 	assert.Equal(t, "owner@example.com", page.Items[0].Email)
+	require.NotNil(t, page.Items[0].Subscription.PendingChange)
 
 	for range 3 {
 		_, err = repo.Search(ctx, usecase.SubscriptionFilter{Page: 1, PageSize: 10})

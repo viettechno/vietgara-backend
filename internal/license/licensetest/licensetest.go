@@ -23,6 +23,7 @@ type Store struct {
 	mu       sync.Mutex
 	plans    map[string]*domain.Plan
 	subs     map[string]*domain.Subscription // by user
+	changes  map[string]*domain.PlanChange   // pending change by subscription id
 	Flags    map[string]map[domain.Feature]bool
 	Emails   map[string]string // user -> e-mail for Search
 	Fail     map[string]error
@@ -38,7 +39,7 @@ type Store struct {
 // pro (2 garages, 20 staff, 100/day) and a hidden legacy plan.
 func NewStore() *Store {
 	s := &Store{
-		plans: map[string]*domain.Plan{}, subs: map[string]*domain.Subscription{}, Flags: map[string]map[domain.Feature]bool{},
+		plans: map[string]*domain.Plan{}, subs: map[string]*domain.Subscription{}, changes: map[string]*domain.PlanChange{}, Flags: map[string]map[domain.Feature]bool{},
 		Emails: map[string]string{}, Fail: map[string]error{}, Garages: map[string]int{}, Staff: map[string]int{}, Owners: map[string]string{},
 	}
 
@@ -196,11 +197,77 @@ func (s *Store) FindByUserID(_ context.Context, userID string) (*domain.Subscrip
 		return nil, domain.ErrSubscriptionNotFound
 	}
 
+	return s.withPlan(sub), nil
+}
+
+// withPlan returns a copy of sub with its plan and pending change loaded.
+func (s *Store) withPlan(sub *domain.Subscription) *domain.Subscription {
 	copied := *sub
 	plan := *s.plans[sub.PlanID]
 	copied.Plan = &plan
+	copied.PendingChange = nil
 
-	return &copied, nil
+	if c, ok := s.changes[sub.ID]; ok {
+		change := *c
+		target := *s.plans[c.PlanID]
+		change.Plan = &target
+		copied.PendingChange = &change
+	}
+
+	return &copied
+}
+
+// PendingChangeOf returns a copy of the user's pending plan change, or nil.
+func (s *Store) PendingChangeOf(userID string) *domain.PlanChange {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	sub, ok := s.subs[userID]
+	if !ok {
+		return nil
+	}
+
+	return s.withPlan(sub).PendingChange
+}
+
+// CreateChange implements usecase.SubscriptionRepository.
+func (s *Store) CreateChange(_ context.Context, c *domain.PlanChange) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("subs.change.create"); err != nil {
+		return err
+	}
+
+	c.ID = uuid.NewString()
+	copied := *c
+	s.changes[c.SubscriptionID] = &copied
+
+	return nil
+}
+
+// SaveChange implements usecase.SubscriptionRepository.
+func (s *Store) SaveChange(_ context.Context, c *domain.PlanChange) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("subs.change.save"); err != nil {
+		return err
+	}
+
+	current, ok := s.changes[c.SubscriptionID]
+	if !ok || current.ID != c.ID {
+		return domain.ErrNoPendingPlanChange
+	}
+
+	if c.Status.Pending() {
+		copied := *c
+		s.changes[c.SubscriptionID] = &copied
+	} else {
+		delete(s.changes, c.SubscriptionID)
+	}
+
+	return nil
 }
 
 // LockByUserID implements usecase.SubscriptionRepository.
@@ -261,7 +328,9 @@ func (s *Store) ListUserIDsDueBefore(_ context.Context, t time.Time) ([]string, 
 
 	for user, sub := range s.subs {
 		live := sub.Status == domain.StatusTrial || sub.Status == domain.StatusActive || sub.Status == domain.StatusPastDue
-		if live && sub.CurrentPeriodEnd.Before(t) {
+		change, pending := s.changes[sub.ID]
+
+		if (live && sub.CurrentPeriodEnd.Before(t)) || (pending && change.EffectiveAt.Before(t)) {
 			ids = append(ids, user)
 		}
 	}
@@ -284,10 +353,7 @@ func (s *Store) Search(_ context.Context, f usecase.SubscriptionFilter) (*usecas
 
 	for user, sub := range s.subs {
 		if (f.Query == "" || strings.Contains(s.Emails[user], f.Query)) && (f.Status == "" || sub.Status == f.Status) {
-			copied := *sub
-			plan := *s.plans[sub.PlanID]
-			copied.Plan = &plan
-			page.Items = append(page.Items, usecase.SubscriptionSummary{Subscription: &copied, Email: s.Emails[user]})
+			page.Items = append(page.Items, usecase.SubscriptionSummary{Subscription: s.withPlan(sub), Email: s.Emails[user]})
 		}
 	}
 
@@ -383,7 +449,7 @@ func NewEnv() *Env {
 		Events: e.Store, Cache: e.Cache, Audit: e.Store,
 	}, clock)
 	e.Entitlements = usecase.NewEntitlementUseCase(e.Store, e.Cache, e.Store, e.Counter, e.Subscriptions, clock)
-	e.Expiry = usecase.NewExpiryJob(e.Store, e.Store, e.Store, e.Cache, e.Store, clock, usecase.WithGracePeriod(domain.GracePeriod))
+	e.Expiry = usecase.NewExpiryJob(e.Store, e.Store, e.Store, e.Cache, e.Store, e.Store, clock, usecase.WithGracePeriod(domain.GracePeriod))
 
 	return e
 }

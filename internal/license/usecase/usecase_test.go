@@ -60,13 +60,18 @@ func TestTrialAndPlanChange(t *testing.T) {
 	_, _, err = e.Subscriptions.ChangeMyPlan(ctx, "user-1", "p-starter")
 	requireReason(t, err, domain.ReasonPlanLimitReached)
 
-	changed, usage, err := e.Subscriptions.ChangeMyPlan(ctx, "user-1", "p-pro")
+	// The plan is scheduled for the end of the trial, not switched.
+	scheduled, usage, err := e.Subscriptions.ChangeMyPlan(ctx, "user-1", "p-pro")
 	require.NoError(t, err)
-	assert.Equal(t, domain.StatusActive, changed.Status)
+	assert.Equal(t, domain.StatusTrial, scheduled.Status)
+	assert.Equal(t, domain.TrialPlanCode, scheduled.Plan.Code)
 	assert.Equal(t, 6, usage.Staff)
-	assert.Equal(t, e.Now.AddDate(1, 0, 0), changed.CurrentPeriodEnd)
-	assert.Contains(t, e.Store.Events, usecase.EventSubscriptionStatusChanged)
-	assert.Contains(t, e.Store.Audits, "subscription.plan_changed")
+	require.NotNil(t, scheduled.PendingChange)
+	assert.Equal(t, "pro", scheduled.PendingChange.Plan.Code)
+	assert.Equal(t, domain.PlanChangeScheduled, scheduled.PendingChange.Status)
+	assert.Equal(t, scheduled.CurrentPeriodEnd, scheduled.PendingChange.EffectiveAt)
+	assert.Contains(t, e.Store.Audits, "subscription.plan_change_scheduled")
+	assert.NotContains(t, e.Store.Events, usecase.EventSubscriptionStatusChanged)
 
 	_, _, err = e.Subscriptions.ChangeMyPlan(ctx, "user-1", "p-legacy")
 	requireReason(t, err, domain.ReasonPlanNotAvailable)
@@ -118,6 +123,12 @@ func TestSubscriptionFailures(t *testing.T) {
 			require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "a"))
 		}
 
+		if op == "subs.update" || op == "events" {
+			// Only a past-due owner switches at once and so saves the subscription.
+			e.Now = e.Now.Add(domain.TrialPeriod + time.Hour)
+			require.NoError(t, e.Expiry.Run(ctx))
+		}
+
 		e.Store.Fail[op] = errBoom
 		require.Error(t, call(e), op)
 	}
@@ -130,6 +141,8 @@ func TestSubscriptionFailures(t *testing.T) {
 
 	e2 := licensetest.NewEnv()
 	require.NoError(t, e2.Subscriptions.EnsureTrial(ctx, "a"))
+	e2.Now = e2.Now.Add(domain.TrialPeriod + time.Hour)
+	require.NoError(t, e2.Expiry.Run(ctx))
 	e2.Store.Fail["entitlements"] = errBoom
 	_, _, err = e2.Subscriptions.ChangeMyPlan(ctx, "a", "p-starter")
 	requireReason(t, err, apperror.ReasonInternal)
@@ -332,4 +345,253 @@ func TestAdmin(t *testing.T) {
 	e.Store.AuditErr = errBoom
 	_, err = e.Subscriptions.CreatePlan(ctx, usecase.PlanFields{Code: new("x1"), Name: new("X"), MaxGarages: new(1), MaxTransactionsPerDay: new(1)})
 	requireReason(t, err, apperror.ReasonInternal)
+}
+
+func TestPlanChangeScheduling(t *testing.T) {
+	t.Parallel()
+
+	e := licensetest.NewEnv()
+	ctx := t.Context()
+	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "a"))
+
+	// Nothing to cancel yet.
+	_, _, err := e.Subscriptions.CancelMyPendingPlanChange(ctx, "a")
+	requireReason(t, err, apperror.ReasonNotFound)
+
+	sub, _, err := e.Subscriptions.ChangeMyPlan(ctx, "a", "p-pro")
+	require.NoError(t, err)
+	require.NotNil(t, sub.PendingChange)
+	assert.Equal(t, "pro", sub.PendingChange.Plan.Code)
+
+	// Choosing another plan replaces it.
+	sub, _, err = e.Subscriptions.ChangeMyPlan(ctx, "a", "p-starter")
+	require.NoError(t, err)
+	assert.Equal(t, "starter", sub.PendingChange.Plan.Code)
+	assert.Equal(t, "starter", e.Store.PendingChangeOf("a").Plan.Code, "one change is pending")
+
+	// The reads carry it.
+	got, _, err := e.Subscriptions.GetMine(ctx, "a")
+	require.NoError(t, err)
+	require.NotNil(t, got.PendingChange)
+
+	// Choosing the plan the owner has cancels it.
+	sub, _, err = e.Subscriptions.ChangeMyPlan(ctx, "a", "p-trial")
+	requireReason(t, err, domain.ReasonPlanNotAvailable)
+	assert.Nil(t, sub)
+
+	cancelled, _, err := e.Subscriptions.CancelMyPendingPlanChange(ctx, "a")
+	require.NoError(t, err)
+	assert.Nil(t, cancelled.PendingChange)
+	assert.Nil(t, e.Store.PendingChangeOf("a"))
+	assert.Contains(t, e.Store.Audits, "subscription.plan_change_cancelled")
+
+	_, _, err = e.Subscriptions.CancelMyPendingPlanChange(ctx, "a")
+	requireReason(t, err, apperror.ReasonNotFound)
+}
+
+func TestChoosingTheCurrentPlanCancelsTheChange(t *testing.T) {
+	t.Parallel()
+
+	e := licensetest.NewEnv()
+	ctx := t.Context()
+	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "a"))
+
+	// Move to the starter plan for good, then schedule pro and take it back.
+	_, _, err := e.Subscriptions.ChangeMyPlan(ctx, "a", "p-starter")
+	require.NoError(t, err)
+
+	e.Now = e.Now.Add(domain.TrialPeriod + time.Hour)
+	require.NoError(t, e.Expiry.Run(ctx))
+
+	active, _, err := e.Subscriptions.GetMine(ctx, "a")
+	require.NoError(t, err)
+	require.Equal(t, domain.StatusActive, active.Status)
+	require.Equal(t, "starter", active.Plan.Code)
+
+	_, _, err = e.Subscriptions.ChangeMyPlan(ctx, "a", "p-pro")
+	require.NoError(t, err)
+	require.NotNil(t, e.Store.PendingChangeOf("a"))
+
+	sub, _, err := e.Subscriptions.ChangeMyPlan(ctx, "a", "p-starter")
+	require.NoError(t, err)
+	assert.Nil(t, sub.PendingChange)
+	assert.Nil(t, e.Store.PendingChangeOf("a"))
+
+	// Without a pending change, choosing the current plan changes nothing.
+	again, _, err := e.Subscriptions.ChangeMyPlan(ctx, "a", "p-starter")
+	require.NoError(t, err)
+	assert.Equal(t, active.CurrentPeriodEnd, again.CurrentPeriodEnd)
+	assert.Equal(t, domain.StatusActive, again.Status)
+}
+
+func TestPastDueOwnerSwitchesAtOnce(t *testing.T) {
+	t.Parallel()
+
+	e := licensetest.NewEnv()
+	ctx := t.Context()
+	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "a"))
+
+	_, _, err := e.Subscriptions.ChangeMyPlan(ctx, "a", "p-pro")
+	require.NoError(t, err)
+
+	// The period ends with the change due: the job applies it. A second
+	// owner who chose nothing falls into the grace period.
+	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "b"))
+
+	e.Now = e.Now.Add(domain.TrialPeriod + time.Hour)
+	require.NoError(t, e.Expiry.Run(ctx))
+
+	b, _, err := e.Subscriptions.GetMine(ctx, "b")
+	require.NoError(t, err)
+	require.Equal(t, domain.StatusPastDue, b.Status)
+
+	switched, _, err := e.Subscriptions.ChangeMyPlan(ctx, "b", "p-starter")
+	require.NoError(t, err)
+	assert.Equal(t, domain.StatusActive, switched.Status)
+	assert.Equal(t, "starter", switched.Plan.Code)
+	assert.Nil(t, switched.PendingChange)
+	assert.Contains(t, e.Store.Audits, "subscription.plan_changed")
+}
+
+func TestExpiryJobAppliesDueChange(t *testing.T) {
+	t.Parallel()
+
+	e := licensetest.NewEnv()
+	ctx := t.Context()
+	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "a"))
+
+	_, _, err := e.Subscriptions.ChangeMyPlan(ctx, "a", "p-pro")
+	require.NoError(t, err)
+
+	// Not due yet: nothing changes.
+	trialEnd := e.Now.Add(domain.TrialPeriod)
+	e.Now = e.Now.Add(time.Hour)
+	require.NoError(t, e.Expiry.Run(ctx))
+	require.NotNil(t, e.Store.PendingChangeOf("a"))
+
+	e.Now = trialEnd.Add(time.Minute)
+	require.NoError(t, e.Expiry.Run(ctx))
+
+	sub, _, err := e.Subscriptions.GetMine(ctx, "a")
+	require.NoError(t, err)
+	assert.Equal(t, domain.StatusActive, sub.Status)
+	assert.Equal(t, "pro", sub.Plan.Code)
+	assert.Equal(t, trialEnd, sub.CurrentPeriodStart, "the new period starts when the old one ended")
+	assert.Equal(t, trialEnd.AddDate(1, 0, 0), sub.CurrentPeriodEnd)
+	assert.Nil(t, sub.PendingChange)
+	assert.Contains(t, e.Store.Events, usecase.EventPlanChangeApplied)
+	assert.Contains(t, e.Store.Events, usecase.EventSubscriptionStatusChanged)
+	assert.True(t, e.Store.Flags["a"][domain.FeatureReports], "the entitlements follow the new plan")
+
+	// It is applied once.
+	events := len(e.Store.Events)
+	require.NoError(t, e.Expiry.Run(ctx))
+	assert.Len(t, e.Store.Events, events)
+}
+
+func TestExpiryJobPostponesWhenUsageExceedsThePlan(t *testing.T) {
+	t.Parallel()
+
+	e := licensetest.NewEnv()
+	ctx := t.Context()
+	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "a"))
+
+	_, _, err := e.Subscriptions.ChangeMyPlan(ctx, "a", "p-starter")
+	require.NoError(t, err)
+
+	// The owner grows past the starter plan before the change is due.
+	e.Store.Staff["a"] = 8
+	trialEnd := e.Now.Add(domain.TrialPeriod)
+
+	e.Now = trialEnd.Add(time.Minute)
+	require.NoError(t, e.Expiry.Run(ctx))
+
+	change := e.Store.PendingChangeOf("a")
+	require.NotNil(t, change)
+	assert.Equal(t, domain.PlanChangePostponed, change.Status)
+	assert.Equal(t, 1, countOf(e.Store.Events, usecase.EventPlanChangePostponed))
+	assert.NotContains(t, e.Store.Events, usecase.EventPlanChangeApplied)
+
+	sub, _, err := e.Subscriptions.GetMine(ctx, "a")
+	require.NoError(t, err)
+	assert.Equal(t, domain.StatusPastDue, sub.Status, "the period still ended")
+	assert.Equal(t, domain.TrialPlanCode, sub.Plan.Code)
+
+	// Still exceeded: held back, and the owner is not told again.
+	e.Now = e.Now.Add(time.Hour)
+	require.NoError(t, e.Expiry.Run(ctx))
+	assert.Equal(t, 1, countOf(e.Store.Events, usecase.EventPlanChangePostponed))
+
+	// Once the usage fits, the next run applies it, from now.
+	e.Store.Staff["a"] = 3
+	e.Now = e.Now.Add(time.Hour)
+	require.NoError(t, e.Expiry.Run(ctx))
+
+	sub, _, err = e.Subscriptions.GetMine(ctx, "a")
+	require.NoError(t, err)
+	assert.Equal(t, domain.StatusActive, sub.Status)
+	assert.Equal(t, "starter", sub.Plan.Code)
+	assert.Equal(t, e.Now, sub.CurrentPeriodStart)
+	assert.Nil(t, sub.PendingChange)
+}
+
+func TestExtensionMovesThePlanChange(t *testing.T) {
+	t.Parallel()
+
+	e := licensetest.NewEnv()
+	ctx := t.Context()
+	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "a"))
+	e.Store.Emails["a"] = "a@example.com"
+
+	_, _, err := e.Subscriptions.ChangeMyPlan(ctx, "a", "p-pro")
+	require.NoError(t, err)
+
+	page, err := e.Subscriptions.ListSubscriptions(ctx, usecase.SubscriptionFilter{Page: 1, PageSize: 10})
+	require.NoError(t, err)
+	require.Len(t, page.Items, 1)
+	require.NotNil(t, page.Items[0].Subscription.PendingChange, "the admin list carries it")
+
+	extended, err := e.Subscriptions.ExtendSubscription(ctx, page.Items[0].Subscription.ID, 10)
+	require.NoError(t, err)
+
+	change := e.Store.PendingChangeOf("a")
+	require.NotNil(t, change)
+	assert.Equal(t, extended.CurrentPeriodEnd, change.EffectiveAt)
+
+	// Not due at the old date any more.
+	e.Now = e.Now.Add(domain.TrialPeriod + time.Hour)
+	require.NoError(t, e.Expiry.Run(ctx))
+
+	sub, _, err := e.Subscriptions.GetMine(ctx, "a")
+	require.NoError(t, err)
+	assert.Equal(t, domain.StatusTrial, sub.Status)
+	assert.NotNil(t, sub.PendingChange)
+}
+
+func TestExpiryJobPlanChangeFailures(t *testing.T) {
+	t.Parallel()
+
+	for _, op := range []string{"usage", "subs.change.save", "subs.update", "events"} {
+		e := licensetest.NewEnv()
+		ctx := t.Context()
+		require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "a"))
+		_, _, err := e.Subscriptions.ChangeMyPlan(ctx, "a", "p-pro")
+		require.NoError(t, err)
+
+		e.Now = e.Now.Add(domain.TrialPeriod + time.Hour)
+		e.Store.Fail[op] = errBoom
+		require.Error(t, e.Expiry.Run(ctx), op)
+	}
+}
+
+func countOf(events []string, event string) int {
+	n := 0
+
+	for _, e := range events {
+		if e == event {
+			n++
+		}
+	}
+
+	return n
 }

@@ -48,7 +48,7 @@ func TestPoliciesAndWiring(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 9)
+	assert.Len(t, p, 10)
 	assert.True(t, p[licensev1.LicenseAdminService_CreatePlan_FullMethodName].PlatformAdmin)
 	assert.True(t, p[licensev1.LicenseService_GetGarageEntitlements_FullMethodName].SkipLicense)
 	assert.True(t, p[licensev1.LicenseService_ListPlans_FullMethodName].AllowUnverified)
@@ -85,8 +85,26 @@ func TestLicenseService(t *testing.T) {
 
 	changed, err := srv.ChangeMyPlan(ctx, &licensev1.ChangeMyPlanRequest{PlanId: "p-pro"})
 	require.NoError(t, err)
-	assert.Equal(t, "pro", changed.GetSubscription().GetPlan().GetCode())
-	assert.Len(t, changed.GetSubscription().GetPlan().GetFeatures(), 7)
+	assert.Equal(t, "trial", changed.GetSubscription().GetPlan().GetCode(), "the plan is scheduled, not switched")
+
+	pending := changed.GetSubscription().GetPendingChange()
+	require.NotNil(t, pending)
+	assert.Equal(t, "pro", pending.GetPlan().GetCode())
+	assert.Len(t, pending.GetPlan().GetFeatures(), 7)
+	assert.Equal(t, licensev1.PlanChangeStatus_PLAN_CHANGE_STATUS_SCHEDULED, pending.GetStatus())
+	assert.NotNil(t, pending.GetEffectiveAt())
+	assert.NotNil(t, pending.GetRequestedAt())
+
+	read, err := srv.GetMySubscription(ctx, &licensev1.GetMySubscriptionRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, "pro", read.GetSubscription().GetPendingChange().GetPlan().GetCode())
+
+	cancelled, err := srv.CancelMyPendingPlanChange(ctx, &licensev1.CancelMyPendingPlanChangeRequest{})
+	require.NoError(t, err)
+	assert.Nil(t, cancelled.GetSubscription().GetPendingChange())
+
+	_, err = srv.CancelMyPendingPlanChange(ctx, &licensev1.CancelMyPendingPlanChangeRequest{})
+	assert.Equal(t, "NOT_FOUND", reason(err))
 
 	_, err = srv.ChangeMyPlan(ctx, &licensev1.ChangeMyPlanRequest{PlanId: "p-legacy"})
 	assert.Equal(t, "PLAN_NOT_AVAILABLE", reason(err))

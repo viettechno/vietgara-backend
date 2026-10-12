@@ -22,10 +22,23 @@ const (
 	EventEntitlementUpdated        = "entitlement.updated"
 	EventSubscriptionExpiringSoon  = "subscription.expiring_soon"
 	EventSubscriptionStatusChanged = "subscription.status_changed"
+	// EventPlanChangeApplied is published when a scheduled plan change takes
+	// effect (FR-LIC-02).
+	EventPlanChangeApplied = "subscription.plan_change_applied"
+	// EventPlanChangePostponed is published, once, when a due plan change is
+	// held back because the new plan's limits are exceeded; it tells the
+	// owner.
+	EventPlanChangePostponed = "subscription.plan_change_postponed"
 )
 
-// keyUserID is the user key of event and audit payloads.
-const keyUserID = "user_id"
+// Keys of event and audit payloads.
+const (
+	keyUserID           = "user_id"
+	keySubscriptionID   = "subscription_id"
+	keyStatus           = "status"
+	keyPlanCode         = "plan_code"
+	keyCurrentPeriodEnd = "current_period_end"
+)
 
 // PlanRepository persists the plan catalogue. Finders return
 // domain.ErrPlanNotFound.
@@ -77,8 +90,14 @@ type SubscriptionRepository interface {
 	// Update persists the mutable fields of s.
 	Update(ctx context.Context, s *domain.Subscription) error
 	// ListUserIDsDueBefore returns the users whose trial/active/past_due
-	// subscription period ends before t.
+	// subscription period ends before t, and those with a plan change
+	// pending that is due before t.
 	ListUserIDsDueBefore(ctx context.Context, t time.Time) ([]string, error)
+	// CreateChange inserts a pending plan change (FR-LIC-02); the caller
+	// holds the subscription's lock and has cancelled any earlier one.
+	CreateChange(ctx context.Context, c *domain.PlanChange) error
+	// SaveChange persists a change's status, timestamps and effective date.
+	SaveChange(ctx context.Context, c *domain.PlanChange) error
 	// Search lists subscriptions for platform admins.
 	Search(ctx context.Context, filter SubscriptionFilter) (*SubscriptionPage, error)
 }
@@ -184,7 +203,8 @@ func toAppError(op string, err error) error {
 	switch {
 	case isAppError(err):
 		return err
-	case errors.Is(err, domain.ErrSubscriptionNotFound), errors.Is(err, domain.ErrPlanNotFound):
+	case errors.Is(err, domain.ErrSubscriptionNotFound), errors.Is(err, domain.ErrPlanNotFound),
+		errors.Is(err, domain.ErrNoPendingPlanChange):
 		return apperror.Wrap(apperror.CodeNotFound, err.Error(), err)
 	case errors.Is(err, domain.ErrPlanNotAvailable):
 		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err).WithReason(domain.ReasonPlanNotAvailable)

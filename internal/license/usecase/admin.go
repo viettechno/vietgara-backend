@@ -108,6 +108,21 @@ func (uc *SubscriptionUseCase) ExtendSubscription(ctx context.Context, subscript
 		return nil, toAppError("extend subscription", err)
 	}
 
+	// A plan change takes effect when the period ends, so an extension
+	// moves it with the period.
+	if change := sub.PendingChange; change != nil && !change.EffectiveAt.Equal(sub.CurrentPeriodEnd) {
+		change.EffectiveAt = sub.CurrentPeriodEnd
+
+		// A change held back for the owner's usage is due again later.
+		if change.Status == domain.PlanChangePostponed {
+			change.Status, change.PostponedAt = domain.PlanChangeScheduled, nil
+		}
+
+		if err := uc.subscriptions.SaveChange(ctx, change); err != nil {
+			return nil, toAppError("move plan change", err)
+		}
+	}
+
 	if err := uc.persistChange(ctx, sub, from, "subscription.extended", before); err != nil {
 		return nil, err
 	}

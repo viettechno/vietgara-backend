@@ -18,6 +18,7 @@ const (
 	TemplateQuoteReadyForApproval    = "quote_ready_for_approval"
 	TemplateRegistrationConfirmation = "registration_confirmation"
 	TemplateSubscriptionExpiringSoon = "subscription_expiring_soon"
+	TemplatePlanChangePostponed      = "plan_change_postponed"
 )
 
 // Supported locales; Vietnamese is the default.

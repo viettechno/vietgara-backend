@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"slices"
 	"strings"
 	"time"
 )
@@ -32,10 +33,14 @@ type Vehicle struct {
 	IsActive bool
 	// CustomerName is derived when reading and never persisted.
 	CustomerName string
-	CreatedBy    *string
-	UpdatedBy    *string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// Editable is false while a live document refers to the vehicle, which
+	// locks its identity fields (FR-CUS-02); derived when reading and never
+	// persisted.
+	Editable  bool
+	CreatedBy *string
+	UpdatedBy *string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // NormalizeLicensePlate upper-cases a plate and collapses inner whitespace,
@@ -77,4 +82,37 @@ func ValidateYear(year int, now time.Time) error {
 	}
 
 	return nil
+}
+
+// IdentityField names a vehicle field that identifies it (FR-CUS-02): locked
+// while a live document refers to the vehicle, changed by a correction
+// (FR-CUS-09). Colour, notes and odometer are never locked.
+type IdentityField string
+
+// The identity fields.
+const (
+	FieldLicensePlate IdentityField = "license_plate"
+	FieldVIN          IdentityField = "vin"
+	FieldEngineNumber IdentityField = "engine_number"
+	FieldMake         IdentityField = "make"
+	FieldModel        IdentityField = "model"
+	FieldYear         IdentityField = "year"
+)
+
+// IdentityFields lists every identity field.
+var IdentityFields = []IdentityField{FieldLicensePlate, FieldVIN, FieldEngineNumber, FieldMake, FieldModel, FieldYear}
+
+// IsValid reports whether f is an identity field.
+func (f IdentityField) IsValid() bool {
+	return slices.Contains(IdentityFields, f)
+}
+
+// LockedFields returns the identity fields that cannot be edited now: all
+// of them while the vehicle is not editable, none otherwise.
+func (v *Vehicle) LockedFields() []IdentityField {
+	if v.Editable {
+		return nil
+	}
+
+	return IdentityFields
 }

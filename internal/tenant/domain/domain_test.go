@@ -79,7 +79,7 @@ func TestDefaultRoles(t *testing.T) {
 	t.Parallel()
 
 	assert.Len(t, domain.DefaultRoleTemplates, 5)
-	assert.Len(t, domain.DefaultRoleTemplates[0].Permissions, 17)
+	assert.Len(t, domain.DefaultRoleTemplates[0].Permissions, 18)
 
 	name, desc := domain.DefaultRoleTemplates[1].Localized("en")
 	assert.Equal(t, "Accountant", name)

@@ -182,6 +182,36 @@ func (r *PostgresRepository) BilledToTaxProfile(ctx context.Context, garageID, p
 	return exists, err
 }
 
+// LiveVehicleIDs returns which of the vehicles a live quote refers to, in
+// one query, so a page of vehicles can tell which identities are locked
+// (FR-CUS-02).
+func (r *PostgresRepository) LiveVehicleIDs(ctx context.Context, garageID string, vehicleIDs []string) ([]string, error) {
+	if len(vehicleIDs) == 0 {
+		return nil, nil
+	}
+
+	rows, err := platformdb.QuerierFromContext(ctx, r.pool).Query(ctx, `
+		SELECT DISTINCT vehicle_id FROM quotes
+		WHERE garage_id = $1 AND deleted_at IS NULL AND vehicle_id = ANY($2::uuid[])`, garageID, vehicleIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+
+		ids = append(ids, id)
+	}
+
+	return ids, rows.Err()
+}
+
 func scanWrite(row pgx.Row, notFound error, dest ...any) error {
 	err := row.Scan(dest...)
 	if err != nil {

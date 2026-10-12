@@ -53,7 +53,10 @@ func (s *Server) UpdateVehicle(ctx context.Context, req *customerv1.UpdateVehicl
 		in := req.GetVehicle()
 		update := usecase.UpdateVehicleRequest{GarageID: req.GetGarageId(), VehicleID: req.GetVehicleId(), ActorID: actorID}
 
-		settable := []string{"customer_id", "license_plate", "make", "model", "year", "vin", "engine_number"}
+		// The owner is never changed here (ChangeVehicleOwner does), so an
+		// update without a mask leaves it alone; naming it in the mask is
+		// accepted only when it is the current owner.
+		settable := []string{"license_plate", "make", "model", "year", "vin", "engine_number"}
 		for _, path := range maskPaths(req.GetUpdateMask().GetPaths(), settable...) {
 			switch path {
 			case "customer_id":
@@ -84,6 +87,40 @@ func (s *Server) UpdateVehicle(ctx context.Context, req *customerv1.UpdateVehicl
 		}
 
 		return &customerv1.UpdateVehicleResponse{Vehicle: vehicleToProto(v)}, nil
+	})
+}
+
+// CorrectVehicle corrects one identity field with a mandatory reason
+// (FR-CUS-09).
+func (s *Server) CorrectVehicle(ctx context.Context, req *customerv1.CorrectVehicleRequest) (*customerv1.CorrectVehicleResponse, error) {
+	return run(ctx, func(actorID string) (*customerv1.CorrectVehicleResponse, error) {
+		v, err := s.vehicles.Correct(ctx, usecase.CorrectVehicleRequest{
+			GarageID: req.GetGarageId(), VehicleID: req.GetVehicleId(), ActorID: actorID,
+			Field: identityFieldFromProto(req.GetField()), Value: req.GetValue(), Reason: req.GetReason(),
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		return &customerv1.CorrectVehicleResponse{Vehicle: vehicleToProto(v)}, nil
+	})
+}
+
+// ChangeVehicleOwner moves a vehicle to another customer of the garage
+// (FR-CUS-09).
+func (s *Server) ChangeVehicleOwner(
+	ctx context.Context, req *customerv1.ChangeVehicleOwnerRequest,
+) (*customerv1.ChangeVehicleOwnerResponse, error) {
+	return run(ctx, func(actorID string) (*customerv1.ChangeVehicleOwnerResponse, error) {
+		v, err := s.vehicles.ChangeOwner(ctx, usecase.ChangeVehicleOwnerRequest{
+			GarageID: req.GetGarageId(), VehicleID: req.GetVehicleId(), ActorID: actorID,
+			CustomerID: req.GetCustomerId(), Reason: req.GetReason(),
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		return &customerv1.ChangeVehicleOwnerResponse{Vehicle: vehicleToProto(v)}, nil
 	})
 }
 

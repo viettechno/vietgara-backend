@@ -396,6 +396,80 @@ func (_c *MockRepairOrderRepository_ListForVehicle_Call) RunAndReturn(run func(c
 	return _c
 }
 
+// LiveVehicleIDs provides a mock function for the type MockRepairOrderRepository
+func (_mock *MockRepairOrderRepository) LiveVehicleIDs(ctx context.Context, garageID string, vehicleIDs []string) ([]string, error) {
+	ret := _mock.Called(ctx, garageID, vehicleIDs)
+
+	if len(ret) == 0 {
+		panic("no return value specified for LiveVehicleIDs")
+	}
+
+	var r0 []string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) ([]string, error)); ok {
+		return returnFunc(ctx, garageID, vehicleIDs)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) []string); ok {
+		r0 = returnFunc(ctx, garageID, vehicleIDs)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, []string) error); ok {
+		r1 = returnFunc(ctx, garageID, vehicleIDs)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockRepairOrderRepository_LiveVehicleIDs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LiveVehicleIDs'
+type MockRepairOrderRepository_LiveVehicleIDs_Call struct {
+	*mock.Call
+}
+
+// LiveVehicleIDs is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - vehicleIDs []string
+func (_e *MockRepairOrderRepository_Expecter) LiveVehicleIDs(ctx any, garageID any, vehicleIDs any) *MockRepairOrderRepository_LiveVehicleIDs_Call {
+	return &MockRepairOrderRepository_LiveVehicleIDs_Call{Call: _e.mock.On("LiveVehicleIDs", ctx, garageID, vehicleIDs)}
+}
+
+func (_c *MockRepairOrderRepository_LiveVehicleIDs_Call) Run(run func(ctx context.Context, garageID string, vehicleIDs []string)) *MockRepairOrderRepository_LiveVehicleIDs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepairOrderRepository_LiveVehicleIDs_Call) Return(strings []string, err error) *MockRepairOrderRepository_LiveVehicleIDs_Call {
+	_c.Call.Return(strings, err)
+	return _c
+}
+
+func (_c *MockRepairOrderRepository_LiveVehicleIDs_Call) RunAndReturn(run func(ctx context.Context, garageID string, vehicleIDs []string) ([]string, error)) *MockRepairOrderRepository_LiveVehicleIDs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Save provides a mock function for the type MockRepairOrderRepository
 func (_mock *MockRepairOrderRepository) Save(ctx context.Context, ro *domain.RepairOrder) error {
 	ret := _mock.Called(ctx, ro)

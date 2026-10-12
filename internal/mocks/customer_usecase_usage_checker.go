@@ -186,3 +186,77 @@ func (_c *MockCustomerUsageChecker_VehicleInUse_Call) RunAndReturn(run func(ctx 
 	_c.Call.Return(run)
 	return _c
 }
+
+// VehiclesInUse provides a mock function for the type MockCustomerUsageChecker
+func (_mock *MockCustomerUsageChecker) VehiclesInUse(ctx context.Context, garageID string, vehicleIDs []string) (map[string]bool, error) {
+	ret := _mock.Called(ctx, garageID, vehicleIDs)
+
+	if len(ret) == 0 {
+		panic("no return value specified for VehiclesInUse")
+	}
+
+	var r0 map[string]bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) (map[string]bool, error)); ok {
+		return returnFunc(ctx, garageID, vehicleIDs)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) map[string]bool); ok {
+		r0 = returnFunc(ctx, garageID, vehicleIDs)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[string]bool)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, []string) error); ok {
+		r1 = returnFunc(ctx, garageID, vehicleIDs)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockCustomerUsageChecker_VehiclesInUse_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'VehiclesInUse'
+type MockCustomerUsageChecker_VehiclesInUse_Call struct {
+	*mock.Call
+}
+
+// VehiclesInUse is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - vehicleIDs []string
+func (_e *MockCustomerUsageChecker_Expecter) VehiclesInUse(ctx any, garageID any, vehicleIDs any) *MockCustomerUsageChecker_VehiclesInUse_Call {
+	return &MockCustomerUsageChecker_VehiclesInUse_Call{Call: _e.mock.On("VehiclesInUse", ctx, garageID, vehicleIDs)}
+}
+
+func (_c *MockCustomerUsageChecker_VehiclesInUse_Call) Run(run func(ctx context.Context, garageID string, vehicleIDs []string)) *MockCustomerUsageChecker_VehiclesInUse_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCustomerUsageChecker_VehiclesInUse_Call) Return(stringToBool map[string]bool, err error) *MockCustomerUsageChecker_VehiclesInUse_Call {
+	_c.Call.Return(stringToBool, err)
+	return _c
+}
+
+func (_c *MockCustomerUsageChecker_VehiclesInUse_Call) RunAndReturn(run func(ctx context.Context, garageID string, vehicleIDs []string) (map[string]bool, error)) *MockCustomerUsageChecker_VehiclesInUse_Call {
+	_c.Call.Return(run)
+	return _c
+}

@@ -32,6 +32,7 @@ func newEnv(t *testing.T) *env {
 		vehicles:  mocks.NewMockVehicleRepository(t),
 		usage:     mocks.NewMockCustomerUsageChecker(t),
 	}
+	e.usage.EXPECT().VehiclesInUse(mock.Anything, mock.Anything, mock.Anything).Return(map[string]bool{}, nil).Maybe()
 	e.srv = handler.NewServer(
 		usecase.NewCustomerUseCase(e.customers, e.vehicles, e.usage),
 		usecase.NewVehicleUseCase(e.vehicles, e.customers, nil, e.usage),

@@ -51,6 +51,9 @@ type Repository interface {
 	// ExistsForVehicles reports whether any live repair order belongs to
 	// one of the vehicles (the delete-or-deactivate rule, FR-CAT-07).
 	ExistsForVehicles(ctx context.Context, garageID string, vehicleIDs []string) (bool, error)
+	// LiveVehicleIDs returns which of the vehicles a live repair order
+	// belongs to.
+	LiveVehicleIDs(ctx context.Context, garageID string, vehicleIDs []string) ([]string, error)
 }
 
 // VehicleReader confirms a vehicle belongs to the garage and reports the

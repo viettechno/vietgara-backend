@@ -208,6 +208,12 @@ func (uc *RepairOrderUseCase) HasLiveForVehicles(ctx context.Context, garageID s
 	return uc.RepairOrders.ExistsForVehicles(ctx, garageID, vehicleIDs)
 }
 
+// LiveVehicleIDs returns which of the vehicles a live repair order belongs
+// to, which locks their identity (FR-CUS-02).
+func (uc *RepairOrderUseCase) LiveVehicleIDs(ctx context.Context, garageID string, vehicleIDs []string) ([]string, error) {
+	return uc.RepairOrders.LiveVehicleIDs(ctx, garageID, vehicleIDs)
+}
+
 // garageInfo reads the garage's numbering and owner configuration.
 func (uc *RepairOrderUseCase) garageInfo(ctx context.Context, garageID string) (GarageInfo, error) {
 	garage, err := uc.Garages.Get(ctx, garageID)

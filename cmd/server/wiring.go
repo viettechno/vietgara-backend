@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -348,6 +349,33 @@ func (u customerUsage) CustomerInUse(ctx context.Context, garageID, customerID s
 
 func (u customerUsage) VehicleInUse(ctx context.Context, garageID, vehicleID string) (bool, error) {
 	return u.CustomerInUse(ctx, garageID, "", []string{vehicleID})
+}
+
+// VehiclesInUse answers VehicleInUse for a page of vehicles in two queries:
+// the vehicle ids a live quote or repair order refers to (a settlement
+// belongs to a repair order).
+func (u customerUsage) VehiclesInUse(ctx context.Context, garageID string, vehicleIDs []string) (map[string]bool, error) {
+	used := map[string]bool{}
+
+	if len(vehicleIDs) == 0 {
+		return used, nil
+	}
+
+	quoted, err := u.quotes.LiveVehicleIDs(ctx, garageID, vehicleIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	ordered, err := u.repairOrders.LiveVehicleIDs(ctx, garageID, vehicleIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, id := range slices.Concat(quoted, ordered) {
+		used[id] = true
+	}
+
+	return used, nil
 }
 
 // taxProfileUsage tells the Customer module whether a quote or settlement

@@ -60,7 +60,16 @@ type Page[T any] struct {
 type Option func(*options)
 
 type options struct {
-	now func() time.Time
+	now   func() time.Time
+	audit LinkAuditor
+}
+
+// WithAuditor records corrections and owner changes in the audit log
+// (FR-CUS-09, Security Architecture Section 7).
+func WithAuditor(a LinkAuditor) Option {
+	return func(o *options) {
+		o.audit = a
+	}
 }
 
 // WithClock replaces time.Now, e.g. to make consent timestamps
@@ -155,8 +164,9 @@ var (
 	invalidErrors      = []error{
 		domain.ErrFullNameRequired, domain.ErrLicensePlateRequired, domain.ErrCustomerRequired,
 		phone.ErrInvalid, email.ErrInvalid, domain.ErrInvalidLicensePlate, domain.ErrInvalidYear,
-		domain.ErrFieldTooLong, domain.ErrLegalNameRequired, domain.ErrInvalidTaxProfile, domain.ErrInvalidTaxID,
-		domain.ErrPersonalProfileTaken, domain.ErrBillingProfileUnusable,
+		domain.ErrFieldTooLong, domain.ErrInvalidIdentityField, domain.ErrCorrectionReasonRequired,
+		domain.ErrOwnerChangeOnUpdate, domain.ErrOwnerNotChanged, domain.ErrLegalNameRequired, domain.ErrInvalidTaxProfile,
+		domain.ErrInvalidTaxID, domain.ErrPersonalProfileTaken, domain.ErrBillingProfileUnusable,
 	}
 )
 
@@ -168,6 +178,8 @@ func toAppError(op string, err error) error {
 	}
 
 	switch {
+	case errors.Is(err, domain.ErrVehicleFieldLocked):
+		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err).WithReason(domain.ReasonVehicleFieldLocked)
 	case isAny(err, notFoundErrors):
 		return apperror.Wrap(apperror.CodeNotFound, err.Error(), err)
 	case isAny(err, conflictErrors):

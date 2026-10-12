@@ -207,7 +207,7 @@ func (uc *PaymentUseCase) publishApproval(
 	ctx context.Context, sub *domain.Subscription, req *domain.PlanPaymentRequest, from domain.SubscriptionStatus, fromPlan string,
 ) error {
 	if from != sub.Status {
-		if err := uc.sync.statusChanged(ctx, sub, from); err != nil {
+		if err := uc.sync.statusChanged(ctx, sub, from, nil); err != nil {
 			return toAppError("publish status change", err)
 		}
 	}

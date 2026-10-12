@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"time"
 
 	"github.com/viettechno/vietgara-backend/internal/license/domain"
@@ -39,14 +40,23 @@ func (s syncer) entitlementsChanged(ctx context.Context, sub *domain.Subscriptio
 	return nil
 }
 
-func (s syncer) statusChanged(ctx context.Context, sub *domain.Subscription, from domain.SubscriptionStatus) error {
-	return s.events.Publish(ctx, EventSubscriptionStatusChanged, "", sub.UserID, map[string]any{
+// statusChanged publishes subscription.status_changed; extra adds fields to
+// the payload (the expiry job adds the payment details of the e-mail the
+// owner gets when the subscription lapses).
+func (s syncer) statusChanged(
+	ctx context.Context, sub *domain.Subscription, from domain.SubscriptionStatus, extra map[string]any,
+) error {
+	payload := map[string]any{
 		"subscription_id":    sub.ID,
 		keyUserID:            sub.UserID,
 		"from":               from,
 		"to":                 sub.Status,
 		"current_period_end": sub.CurrentPeriodEnd.Format(time.RFC3339),
-	})
+	}
+
+	maps.Copy(payload, extra)
+
+	return s.events.Publish(ctx, EventSubscriptionStatusChanged, "", sub.UserID, payload)
 }
 
 // invalidate drops a cache entry. A failure only delays the change until

@@ -133,7 +133,12 @@ func (j *ExpiryJob) process(ctx context.Context, userID string, now time.Time) e
 			return nil
 		}
 
-		if err := j.sync.statusChanged(ctx, sub, from); err != nil {
+		extra, err := j.lapseDetails(ctx, sub)
+		if err != nil {
+			return err
+		}
+
+		if err := j.sync.statusChanged(ctx, sub, from, extra); err != nil {
 			return err
 		}
 
@@ -144,22 +149,54 @@ func (j *ExpiryJob) process(ctx context.Context, userID string, now time.Time) e
 // expiringSoon is the payload of the renewal reminder: what to pay and
 // where, so the owner can transfer straight away (FR-LIC-04, FR-LIC-07).
 func (j *ExpiryJob) expiringSoon(ctx context.Context, sub *domain.Subscription) (map[string]any, error) {
+	payload, err := j.paymentDetails(ctx, sub)
+	if err != nil {
+		return nil, err
+	}
+
+	payload["subscription_id"] = sub.ID
+	payload[keyUserID] = sub.UserID
+	payload[keyStatus] = sub.Status
+	payload["current_period_end"] = sub.CurrentPeriodEnd.Format(time.RFC3339)
+
+	return payload, nil
+}
+
+// lapseDetails is what the e-mail of a subscription that has just become
+// past due or suspended needs: what to pay and where, and when the grace
+// period ends (FR-LIC-04). Other transitions carry nothing extra.
+func (j *ExpiryJob) lapseDetails(ctx context.Context, sub *domain.Subscription) (map[string]any, error) {
+	if sub.Status != domain.StatusPastDue && sub.Status != domain.StatusSuspended {
+		return nil, nil //nolint:nilnil // no extra fields
+	}
+
+	payload, err := j.paymentDetails(ctx, sub)
+	if err != nil {
+		return nil, err
+	}
+
+	if sub.GracePeriodEnd != nil {
+		payload["grace_period_end"] = sub.GracePeriodEnd.Format(time.RFC3339)
+	}
+
+	return payload, nil
+}
+
+// paymentDetails is the plan, the amount to renew it and the platform's
+// bank details, so the owner can transfer straight away (FR-LIC-07).
+func (j *ExpiryJob) paymentDetails(ctx context.Context, sub *domain.Subscription) (map[string]any, error) {
 	settings, err := j.payments.Settings(ctx)
 	if err != nil {
 		return nil, err
 	}
 
 	return map[string]any{
-		"subscription_id":    sub.ID,
-		keyUserID:            sub.UserID,
-		keyStatus:            sub.Status,
-		"plan_code":          sub.Plan.Code,
-		"current_period_end": sub.CurrentPeriodEnd.Format(time.RFC3339),
-		keyAmountDue:         sub.Plan.Price - min(sub.CreditBalance, sub.Plan.Price),
-		"bank_name":          settings.BankName,
-		"account_number":     settings.AccountNumber,
-		"account_holder":     settings.AccountHolder,
-		"branch":             settings.Branch,
+		"plan_code":      sub.Plan.Code,
+		keyAmountDue:     sub.Plan.Price - min(sub.CreditBalance, sub.Plan.Price),
+		"bank_name":      settings.BankName,
+		"account_number": settings.AccountNumber,
+		"account_holder": settings.AccountHolder,
+		"branch":         settings.Branch,
 	}, nil
 }
 

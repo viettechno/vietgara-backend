@@ -15,8 +15,11 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
 )
 
-// keyName is the template variable holding the recipient's name.
-const keyName = "Name"
+// Template variables used by several e-mails.
+const (
+	keyName     = "Name"
+	keyPlanCode = "PlanCode"
+)
 
 // Deps are the dependencies of NotificationUseCase.
 type Deps struct {
@@ -91,11 +94,64 @@ func (uc *NotificationUseCase) HandleSubscriptionExpiringSoon(ctx context.Contex
 
 	return uc.send(ctx, payload.UserID, mail.TemplateSubscriptionExpiringSoon, user.Locale, user.Email, user.FullName,
 		map[string]any{
-			keyName: user.FullName, "PlanCode": payload.PlanCode,
+			keyName: user.FullName, keyPlanCode: payload.PlanCode,
 			"CurrentPeriodEnd": formatPeriodEnd(payload.CurrentPeriodEnd, user.Locale),
 			"AmountDue":        payload.AmountDue, "BankName": payload.BankName, "AccountNumber": payload.AccountNumber,
 			"AccountHolder": payload.AccountHolder, "Branch": payload.Branch,
 		})
+}
+
+type statusChangedPayload struct {
+	UserID         string `json:"user_id"`
+	From           string `json:"from"`
+	To             string `json:"to"`
+	PlanCode       string `json:"plan_code"`
+	GracePeriodEnd string `json:"grace_period_end"`
+	AmountDue      int64  `json:"amount_due"`
+	BankName       string `json:"bank_name"`
+	AccountNumber  string `json:"account_number"`
+	AccountHolder  string `json:"account_holder"`
+	Branch         string `json:"branch"`
+}
+
+// HandleSubscriptionStatusChanged tells the owner when the subscription
+// becomes past due (read-only until the end of the grace period) or
+// suspended, with what to pay and where (FR-LIC-04, FR-NOT-04). Other
+// transitions are not e-mailed: a payment's own e-mail covers them.
+func (uc *NotificationUseCase) HandleSubscriptionStatusChanged(ctx context.Context, event outbox.Event) error {
+	var p statusChangedPayload
+	if err := json.Unmarshal(event.Data, &p); err != nil || p.UserID == "" {
+		return nil //nolint:nilerr // a malformed event cannot succeed on retry: drop it
+	}
+
+	var template string
+
+	switch p.To {
+	case "past_due":
+		template = mail.TemplateSubscriptionPastDue
+	case "suspended":
+		template = mail.TemplateSubscriptionSuspended
+	default:
+		return nil
+	}
+
+	user, err := uc.Users.Get(ctx, p.UserID)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			slog.Warn("notification: user no longer exists, dropping its subscription e-mail", "user_id", p.UserID)
+
+			return nil
+		}
+
+		return err
+	}
+
+	return uc.send(ctx, p.UserID, template, user.Locale, user.Email, user.FullName, map[string]any{
+		keyName: user.FullName, keyPlanCode: p.PlanCode, "Trial": p.From == "trial",
+		"GracePeriodEnd": formatPeriodEnd(p.GracePeriodEnd, user.Locale),
+		"AmountDue":      p.AmountDue, "BankName": p.BankName, "AccountNumber": p.AccountNumber,
+		"AccountHolder": p.AccountHolder, "Branch": p.Branch,
+	})
 }
 
 type paymentPayload struct {
@@ -119,7 +175,7 @@ func (uc *NotificationUseCase) HandlePaymentSubmitted(ctx context.Context, event
 	}
 
 	return uc.tellAdmins(ctx, mail.TemplatePaymentSubmitted, map[string]any{
-		"Reference": p.Reference, "PlanCode": p.PlanCode, "AmountDue": p.AmountDue, "TransferredAmount": p.TransferredAmount,
+		"Reference": p.Reference, keyPlanCode: p.PlanCode, "AmountDue": p.AmountDue, "TransferredAmount": p.TransferredAmount,
 		"Mismatch": p.AmountMismatch,
 	})
 }
@@ -186,7 +242,7 @@ func (uc *NotificationUseCase) tellOwner(ctx context.Context, event outbox.Event
 	}
 
 	return uc.send(ctx, p.UserID, template, user.Locale, user.Email, user.FullName, map[string]any{
-		keyName: user.FullName, "PlanCode": p.PlanCode, "Reference": p.Reference, "Reason": p.Reason,
+		keyName: user.FullName, keyPlanCode: p.PlanCode, "Reference": p.Reference, "Reason": p.Reason,
 	})
 }
 

@@ -1,0 +1,17 @@
+{{define "subject"}}Gói VietGara của bạn đã hết hạn: chỉ xem được đến {{.GracePeriodEnd}}{{end}}
+{{define "text"}}Xin chào {{.Name}},
+
+{{if .Trial}}Thời gian dùng thử VietGara của bạn đã kết thúc.{{else}}Gói {{.PlanCode}} của bạn đã hết hạn.{{end}} Các gara của bạn hiện ở chế độ chỉ đọc: bạn vẫn xem được mọi dữ liệu nhưng không thể tạo hay thay đổi. Các gara sẽ bị khoá vào ngày {{.GracePeriodEnd}} nếu bạn chưa thanh toán trước đó.
+
+Để dùng lại đầy đủ, hãy chọn gói trong ứng dụng, chuyển khoản số tiền hiển thị và gửi chứng từ chuyển khoản cho chúng tôi. Chúng tôi sẽ kích hoạt ngay khi kiểm tra xong khoản thanh toán.
+{{if .BankName}}
+Số tiền: {{.AmountDue}} VND
+Ngân hàng: {{.BankName}}{{if .Branch}} ({{.Branch}}){{end}}
+Tài khoản: {{.AccountNumber}} - {{.AccountHolder}}
+{{end}}
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.Name}},</p>
+<p>{{if .Trial}}Thời gian dùng thử VietGara của bạn đã kết thúc.{{else}}Gói <strong>{{.PlanCode}}</strong> của bạn đã hết hạn.{{end}} Các gara của bạn hiện ở chế độ <strong>chỉ đọc</strong>: bạn vẫn xem được mọi dữ liệu nhưng không thể tạo hay thay đổi. Các gara sẽ bị khoá vào ngày <strong>{{.GracePeriodEnd}}</strong> nếu bạn chưa thanh toán trước đó.</p>
+<p>Để dùng lại đầy đủ, hãy chọn gói trong ứng dụng, chuyển khoản số tiền hiển thị và gửi chứng từ chuyển khoản cho chúng tôi. Chúng tôi sẽ kích hoạt ngay khi kiểm tra xong khoản thanh toán.</p>
+{{if .BankName}}<p>Số tiền: <strong>{{.AmountDue}} VND</strong><br>Ngân hàng: {{.BankName}}{{if .Branch}} ({{.Branch}}){{end}}<br>Tài khoản: {{.AccountNumber}} - {{.AccountHolder}}</p>{{end}}
+<p>VietGara</p>{{end}}

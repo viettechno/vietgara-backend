@@ -122,3 +122,65 @@ func TestNotificationUseCase_HandleSubscriptionExpiringSoon(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
+
+func TestNotificationUseCase_HandleSubscriptionStatusChanged(t *testing.T) {
+	t.Parallel()
+
+	send := func(t *testing.T, to, from, tag, contains string) {
+		t.Helper()
+
+		uc, d := newUseCase(t)
+		d.Users.EXPECT().Get(mock.Anything, userID).
+			Return(usecase.UserInfo{Email: "owner@example.com", FullName: "Owner", Locale: "en"}, nil).Once()
+		d.Mailer.EXPECT().Send(mock.Anything, mock.MatchedBy(func(msg mail.Message) bool {
+			return msg.ToEmail == "owner@example.com" && msg.Tag == tag && strings.Contains(msg.Text, contains)
+		})).Return(nil).Once()
+		d.Log.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+
+		payload := []byte(`{"user_id":"` + userID + `","from":"` + from + `","to":"` + to + `","plan_code":"pro",` +
+			`"grace_period_end":"2026-11-08T00:00:00Z","amount_due":599000,"bank_name":"VCB","account_number":"0123","account_holder":"VietGara"}`)
+
+		require.NoError(t, uc.HandleSubscriptionStatusChanged(t.Context(), outbox.Event{UserID: userID, Data: payload}))
+	}
+
+	t.Run("a lapsed plan tells the owner it is read-only until the end of the grace period", func(t *testing.T) {
+		t.Parallel()
+		send(t, "past_due", "active", mail.TemplateSubscriptionPastDue, "Nov 8, 2026")
+	})
+
+	t.Run("a lapsed trial says so", func(t *testing.T) {
+		t.Parallel()
+		send(t, "past_due", "trial", mail.TemplateSubscriptionPastDue, "trial has ended")
+	})
+
+	t.Run("a suspension is e-mailed with the payment details", func(t *testing.T) {
+		t.Parallel()
+		send(t, "suspended", "past_due", mail.TemplateSubscriptionSuspended, "599000 VND")
+	})
+
+	t.Run("other transitions send nothing", func(t *testing.T) {
+		t.Parallel()
+
+		uc, _ := newUseCase(t)
+
+		payload := []byte(`{"user_id":"` + userID + `","from":"past_due","to":"active"}`)
+		require.NoError(t, uc.HandleSubscriptionStatusChanged(t.Context(), outbox.Event{Data: payload}))
+	})
+
+	t.Run("drops a missing user and a malformed event, propagates a read failure", func(t *testing.T) {
+		t.Parallel()
+
+		payload := []byte(`{"user_id":"` + userID + `","to":"past_due"}`)
+
+		uc, d := newUseCase(t)
+		d.Users.EXPECT().Get(mock.Anything, userID).Return(usecase.UserInfo{}, usecase.ErrUserNotFound).Once()
+		require.NoError(t, uc.HandleSubscriptionStatusChanged(t.Context(), outbox.Event{Data: payload}))
+
+		uc, _ = newUseCase(t)
+		require.NoError(t, uc.HandleSubscriptionStatusChanged(t.Context(), outbox.Event{Data: []byte(`{`)}))
+
+		uc, d = newUseCase(t)
+		d.Users.EXPECT().Get(mock.Anything, userID).Return(usecase.UserInfo{}, errBoom).Once()
+		require.ErrorIs(t, uc.HandleSubscriptionStatusChanged(t.Context(), outbox.Event{Data: payload}), errBoom)
+	})
+}

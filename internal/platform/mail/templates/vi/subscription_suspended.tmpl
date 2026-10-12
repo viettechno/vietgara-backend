@@ -1,0 +1,17 @@
+{{define "subject"}}Thuê bao VietGara của bạn đã bị tạm khoá{{end}}
+{{define "text"}}Xin chào {{.Name}},
+
+Thời gian ân hạn của {{if .Trial}}gói dùng thử{{else}}gói {{.PlanCode}}{{end}} đã kết thúc và thuê bao của bạn đã bị tạm khoá: các gara bị khoá và không ai trong đội ngũ của bạn dùng được.
+
+Để kích hoạt lại, hãy chọn gói trong ứng dụng, chuyển khoản số tiền hiển thị và gửi chứng từ chuyển khoản cho chúng tôi. Bạn sẽ dùng lại được ngay khi chúng tôi kiểm tra xong khoản thanh toán.
+{{if .BankName}}
+Số tiền: {{.AmountDue}} VND
+Ngân hàng: {{.BankName}}{{if .Branch}} ({{.Branch}}){{end}}
+Tài khoản: {{.AccountNumber}} - {{.AccountHolder}}
+{{end}}
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.Name}},</p>
+<p>Thời gian ân hạn của {{if .Trial}}gói dùng thử{{else}}gói <strong>{{.PlanCode}}</strong>{{end}} đã kết thúc và thuê bao của bạn đã bị <strong>tạm khoá</strong>: các gara bị khoá và không ai trong đội ngũ của bạn dùng được.</p>
+<p>Để kích hoạt lại, hãy chọn gói trong ứng dụng, chuyển khoản số tiền hiển thị và gửi chứng từ chuyển khoản cho chúng tôi. Bạn sẽ dùng lại được ngay khi chúng tôi kiểm tra xong khoản thanh toán.</p>
+{{if .BankName}}<p>Số tiền: <strong>{{.AmountDue}} VND</strong><br>Ngân hàng: {{.BankName}}{{if .Branch}} ({{.Branch}}){{end}}<br>Tài khoản: {{.AccountNumber}} - {{.AccountHolder}}</p>{{end}}
+<p>VietGara</p>{{end}}

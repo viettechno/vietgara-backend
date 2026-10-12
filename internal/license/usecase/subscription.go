@@ -152,7 +152,7 @@ func (uc *SubscriptionUseCase) persistChange(ctx context.Context, sub *domain.Su
 	}
 
 	if from != sub.Status {
-		if err := uc.sync.statusChanged(ctx, sub, from); err != nil {
+		if err := uc.sync.statusChanged(ctx, sub, from, nil); err != nil {
 			return toAppError("publish status change", err)
 		}
 	}

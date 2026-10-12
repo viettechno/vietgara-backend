@@ -26,7 +26,7 @@ const (
 
 	subscriptionColumns = `s.id, s.user_id, s.plan_id, s.status, s.trial_end_at,
 		s.current_period_start, s.current_period_end, s.grace_period_end, s.auto_renew,
-		s.reminder_period_end, s.created_at, s.updated_at, ` + planColumns
+		s.reminder_period_end, s.period_paid_amount, s.credit_balance, s.created_at, s.updated_at, ` + planColumns
 
 	subscriptionFrom = ` FROM subscriptions s JOIN plans p ON p.id = s.plan_id`
 )
@@ -99,7 +99,7 @@ func subscriptionDest(s *domain.Subscription, plan *domain.Plan, status *string)
 	return append([]any{
 		&s.ID, &s.UserID, &s.PlanID, status, &s.TrialEndAt,
 		&s.CurrentPeriodStart, &s.CurrentPeriodEnd, &s.GracePeriodEnd, &s.AutoRenew,
-		&s.ReminderPeriodEnd, &s.CreatedAt, &s.UpdatedAt,
+		&s.ReminderPeriodEnd, &s.PeriodPaidAmount, &s.CreditBalance, &s.CreatedAt, &s.UpdatedAt,
 	}, planFields...), finish
 }
 
@@ -255,11 +255,12 @@ func (r *PostgresRepository) LockByID(ctx context.Context, id string) (*domain.S
 func (r *PostgresRepository) Update(ctx context.Context, s *domain.Subscription) error {
 	return platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
 		UPDATE subscriptions SET plan_id = $2, status = $3, trial_end_at = $4, current_period_start = $5,
-			current_period_end = $6, grace_period_end = $7, auto_renew = $8, reminder_period_end = $9
+			current_period_end = $6, grace_period_end = $7, auto_renew = $8, reminder_period_end = $9,
+			period_paid_amount = $10, credit_balance = $11
 		WHERE id = $1
 		RETURNING updated_at`,
 		s.ID, s.PlanID, string(s.Status), s.TrialEndAt, s.CurrentPeriodStart, s.CurrentPeriodEnd,
-		s.GracePeriodEnd, s.AutoRenew, s.ReminderPeriodEnd,
+		s.GracePeriodEnd, s.AutoRenew, s.ReminderPeriodEnd, s.PeriodPaidAmount, s.CreditBalance,
 	).Scan(&s.UpdatedAt)
 }
 

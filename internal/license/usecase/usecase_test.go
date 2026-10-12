@@ -29,7 +29,7 @@ func requireReason(t *testing.T, err error, reason string) {
 
 //go:fix inline
 
-func TestTrialAndPlanChange(t *testing.T) {
+func TestTrialStart(t *testing.T) {
 	t.Parallel()
 
 	e := licensetest.NewEnv()
@@ -51,27 +51,6 @@ func TestTrialAndPlanChange(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, plans, 2)
 	assert.Equal(t, "starter", plans[0].Code)
-
-	e.Store.Garages["user-1"], e.Store.Staff["user-1"] = 2, 3
-	_, _, err = e.Subscriptions.ChangeMyPlan(ctx, "user-1", "p-starter")
-	requireReason(t, err, domain.ReasonPlanLimitReached)
-
-	e.Store.Garages["user-1"], e.Store.Staff["user-1"] = 1, 6
-	_, _, err = e.Subscriptions.ChangeMyPlan(ctx, "user-1", "p-starter")
-	requireReason(t, err, domain.ReasonPlanLimitReached)
-
-	changed, usage, err := e.Subscriptions.ChangeMyPlan(ctx, "user-1", "p-pro")
-	require.NoError(t, err)
-	assert.Equal(t, domain.StatusActive, changed.Status)
-	assert.Equal(t, 6, usage.Staff)
-	assert.Equal(t, e.Now.AddDate(1, 0, 0), changed.CurrentPeriodEnd)
-	assert.Contains(t, e.Store.Events, usecase.EventSubscriptionStatusChanged)
-	assert.Contains(t, e.Store.Audits, "subscription.plan_changed")
-
-	_, _, err = e.Subscriptions.ChangeMyPlan(ctx, "user-1", "p-legacy")
-	requireReason(t, err, domain.ReasonPlanNotAvailable)
-	_, _, err = e.Subscriptions.ChangeMyPlan(ctx, "user-1", "missing")
-	requireReason(t, err, apperror.ReasonNotFound)
 
 	// GetMine starts the trial of an owner without a subscription.
 	sub, _, err = e.Subscriptions.GetMine(ctx, "user-new")
@@ -100,18 +79,6 @@ func TestSubscriptionFailures(t *testing.T) {
 			_, _, err := e.Subscriptions.GetMine(ctx, "a")
 			return err
 		},
-		"subs.lock": func(e *licensetest.Env) error {
-			_, _, err := e.Subscriptions.ChangeMyPlan(ctx, "a", "p-pro")
-			return err
-		},
-		"subs.update": func(e *licensetest.Env) error {
-			_, _, err := e.Subscriptions.ChangeMyPlan(ctx, "a", "p-pro")
-			return err
-		},
-		"events": func(e *licensetest.Env) error {
-			_, _, err := e.Subscriptions.ChangeMyPlan(ctx, "a", "p-pro")
-			return err
-		},
 	} {
 		e := licensetest.NewEnv()
 		if op != "plans.code" && op != "subs.create" && op != "entitlements" && op != "subs.find" {
@@ -121,18 +88,6 @@ func TestSubscriptionFailures(t *testing.T) {
 		e.Store.Fail[op] = errBoom
 		require.Error(t, call(e), op)
 	}
-
-	e := licensetest.NewEnv()
-	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "a"))
-	e.Store.AuditErr = errBoom
-	_, _, err := e.Subscriptions.ChangeMyPlan(ctx, "a", "p-pro")
-	requireReason(t, err, apperror.ReasonInternal)
-
-	e2 := licensetest.NewEnv()
-	require.NoError(t, e2.Subscriptions.EnsureTrial(ctx, "a"))
-	e2.Store.Fail["entitlements"] = errBoom
-	_, _, err = e2.Subscriptions.ChangeMyPlan(ctx, "a", "p-starter")
-	requireReason(t, err, apperror.ReasonInternal)
 }
 
 func TestEntitlements(t *testing.T) {

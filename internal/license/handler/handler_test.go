@@ -9,6 +9,7 @@ import (
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
 
@@ -41,14 +42,14 @@ func as(t *testing.T, userID string) context.Context {
 func newServer() (*handler.Server, *licensetest.Env) {
 	e := licensetest.NewEnv()
 
-	return handler.NewServer(e.Subscriptions, e.Entitlements), e
+	return handler.NewServer(e.Subscriptions, e.Entitlements, e.Payments), e
 }
 
 func TestPoliciesAndWiring(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 9)
+	assert.Len(t, p, 23)
 	assert.True(t, p[licensev1.LicenseAdminService_CreatePlan_FullMethodName].PlatformAdmin)
 	assert.True(t, p[licensev1.LicenseService_GetGarageEntitlements_FullMethodName].SkipLicense)
 	assert.True(t, p[licensev1.LicenseService_ListPlans_FullMethodName].AllowUnverified)
@@ -83,13 +84,51 @@ func TestLicenseService(t *testing.T) {
 	assert.NotNil(t, sub.GetSubscription().GetTrialEndAt())
 	assert.NotNil(t, sub.GetSubscription().GetUsage())
 
-	changed, err := srv.ChangeMyPlan(ctx, &licensev1.ChangeMyPlanRequest{PlanId: "p-pro"})
+	created, err := srv.CreatePlanPaymentRequest(ctx, &licensev1.CreatePlanPaymentRequestRequest{
+		PlanId: "p-pro", Kind: licensev1.PlanPaymentKind_PLAN_PAYMENT_KIND_CHANGE,
+	})
 	require.NoError(t, err)
-	assert.Equal(t, "pro", changed.GetSubscription().GetPlan().GetCode())
-	assert.Len(t, changed.GetSubscription().GetPlan().GetFeatures(), 7)
+	assert.EqualValues(t, 599000, created.GetRequest().GetAmountDue())
+	assert.Equal(t, licensev1.PlanPaymentStatus_PLAN_PAYMENT_STATUS_AWAITING_PAYMENT, created.GetRequest().GetStatus())
 
-	_, err = srv.ChangeMyPlan(ctx, &licensev1.ChangeMyPlanRequest{PlanId: "p-legacy"})
-	assert.Equal(t, "PLAN_NOT_AVAILABLE", reason(err))
+	_, err = srv.CreatePlanPaymentRequest(ctx, &licensev1.CreatePlanPaymentRequestRequest{PlanId: "p-legacy"})
+	require.Error(t, err)
+
+	mine, err := srv.ListMyPlanPaymentRequests(ctx, &licensev1.ListMyPlanPaymentRequestsRequest{})
+	require.NoError(t, err)
+	require.Len(t, mine.GetData(), 1)
+
+	_, err = srv.SubmitPlanPayment(ctx, &licensev1.SubmitPlanPaymentRequest{
+		RequestId: created.GetRequest().GetId(), PayerName: "A", TransferredAmount: 599000,
+		Evidence: &licensev1.PaymentEvidence{Content: []byte("png"), ContentType: "image/png"},
+	})
+	require.NoError(t, err)
+
+	queue, err := srv.ListPlanPaymentRequests(as(t, "admin"), &licensev1.ListPlanPaymentRequestsRequest{
+		Status: licensev1.PlanPaymentStatus_PLAN_PAYMENT_STATUS_SUBMITTED,
+	})
+	require.NoError(t, err)
+	require.Len(t, queue.GetData(), 1)
+
+	approved, err := srv.ApprovePlanPayment(as(t, "admin"), &licensev1.ApprovePlanPaymentRequest{RequestId: created.GetRequest().GetId()})
+	require.NoError(t, err)
+	assert.Equal(t, "pro", approved.GetSubscription().GetPlan().GetCode())
+
+	instructions, err := srv.GetPaymentInstructions(ctx, &licensev1.GetPaymentInstructionsRequest{})
+	require.NoError(t, err)
+	assert.NotNil(t, instructions.GetInstructions())
+
+	settings, err := srv.UpdatePlatformPaymentSettings(as(t, "admin"), &licensev1.UpdatePlatformPaymentSettingsRequest{
+		Settings:   &licensev1.PlatformPaymentSettings{BankName: "VCB"},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"bank_name"}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "VCB", settings.GetSettings().GetBankName())
+
+	_, err = srv.UpdatePlatformPaymentSettings(as(t, "admin"), &licensev1.UpdatePlatformPaymentSettingsRequest{
+		Settings: &licensev1.PlatformPaymentSettings{}, UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"qr_url"}},
+	})
+	require.Error(t, err)
 
 	ent, err := srv.GetGarageEntitlements(ctx, &licensev1.GetGarageEntitlementsRequest{GarageId: "g-1"})
 	require.NoError(t, err)
@@ -187,4 +226,72 @@ func TestLicenseAdminService(t *testing.T) {
 	e.Store.Fail["subs.search"] = assert.AnError
 	_, err = srv.ListSubscriptions(ctx, &licensev1.ListSubscriptionsRequest{})
 	require.Error(t, err)
+}
+
+func TestPaymentReviewHandlers(t *testing.T) {
+	t.Parallel()
+
+	srv, e := newServer()
+	owner, admin := as(t, "owner"), as(t, "admin")
+	e.Store.Owners["g-1"] = "owner"
+
+	_, err := srv.GetMySubscription(owner, &licensev1.GetMySubscriptionRequest{})
+	require.NoError(t, err)
+
+	created, err := srv.CreatePlanPaymentRequest(owner, &licensev1.CreatePlanPaymentRequestRequest{
+		PlanId: "p-pro", Kind: licensev1.PlanPaymentKind_PLAN_PAYMENT_KIND_CHANGE,
+	})
+	require.NoError(t, err)
+
+	id := created.GetRequest().GetId()
+
+	got, err := srv.GetMyPlanPaymentRequest(owner, &licensev1.GetMyPlanPaymentRequestRequest{RequestId: id})
+	require.NoError(t, err)
+	assert.Equal(t, id, got.GetRequest().GetId())
+
+	submit := &licensev1.SubmitPlanPaymentRequest{
+		RequestId: id, PayerName: "A", TransferredAmount: 599000, PaidAt: timestamppb.Now(),
+		Evidence: &licensev1.PaymentEvidence{Content: []byte("png"), ContentType: "image/png"},
+	}
+	_, err = srv.SubmitPlanPayment(owner, submit)
+	require.NoError(t, err)
+
+	detail, err := srv.GetPlanPaymentRequest(admin, &licensev1.GetPlanPaymentRequestRequest{RequestId: id})
+	require.NoError(t, err)
+	assert.NotNil(t, detail.GetRequest())
+
+	rejected, err := srv.RejectPlanPayment(admin, &licensev1.RejectPlanPaymentRequest{RequestId: id, Reason: "not received"})
+	require.NoError(t, err)
+	assert.Equal(t, licensev1.PlanPaymentStatus_PLAN_PAYMENT_STATUS_REJECTED, rejected.GetRequest().GetStatus())
+
+	again, err := srv.CreatePlanPaymentRequest(owner, &licensev1.CreatePlanPaymentRequestRequest{
+		PlanId: "p-pro", Kind: licensev1.PlanPaymentKind_PLAN_PAYMENT_KIND_CHANGE,
+	})
+	require.NoError(t, err)
+
+	cancelled, err := srv.CancelPlanPayment(owner, &licensev1.CancelPlanPaymentRequest{RequestId: again.GetRequest().GetId()})
+	require.NoError(t, err)
+	assert.Equal(t, licensev1.PlanPaymentStatus_PLAN_PAYMENT_STATUS_CANCELLED, cancelled.GetRequest().GetStatus())
+
+	sub, err := srv.GetMySubscription(owner, &licensev1.GetMySubscriptionRequest{})
+	require.NoError(t, err)
+
+	adjusted, err := srv.AdjustCredit(admin, &licensev1.AdjustCreditRequest{SubscriptionId: sub.GetSubscription().GetId(), Amount: 5000, Note: "goodwill"})
+	require.NoError(t, err)
+	assert.EqualValues(t, 5000, adjusted.GetEntry().GetAmount())
+
+	ledger, err := srv.ListMyCreditLedger(owner, &licensev1.ListMyCreditLedgerRequest{})
+	require.NoError(t, err)
+	assert.Len(t, ledger.GetData(), 1)
+
+	settings, err := srv.GetPlatformPaymentSettings(admin, &licensev1.GetPlatformPaymentSettingsRequest{})
+	require.NoError(t, err)
+	assert.NotNil(t, settings.GetSettings())
+
+	qr, err := srv.UploadPaymentQr(admin, &licensev1.UploadPaymentQrRequest{Content: []byte("png"), ContentType: "image/png"})
+	require.NoError(t, err)
+	assert.NotEmpty(t, qr.GetSettings().GetQrUrl())
+
+	_, err = srv.GetMyPlanPaymentRequest(as(t, "stranger"), &licensev1.GetMyPlanPaymentRequestRequest{RequestId: id})
+	assert.Equal(t, "NOT_FOUND", reason(err))
 }

@@ -1,9 +1,14 @@
-{{define "subject"}}Gói dịch vụ VietGara của bạn gia hạn vào {{.CurrentPeriodEnd}}{{end}}
+{{define "subject"}}Gói VietGara của bạn hết hạn ngày {{.CurrentPeriodEnd}}{{end}}
 {{define "text"}}Xin chào {{.Name}},
 
-Gói {{.PlanCode}} của bạn sẽ gia hạn vào {{.CurrentPeriodEnd}}. Bạn không cần làm gì nếu đã bật tự động gia hạn; nếu chưa, vui lòng gia hạn trước ngày này để không bị gián đoạn dịch vụ.
-
+Gói {{.PlanCode}} của bạn hết hạn ngày {{.CurrentPeriodEnd}}. Để tiếp tục sử dụng VietGara, hãy gia hạn trong ứng dụng trước ngày đó: chọn "Gia hạn", chuyển khoản số tiền hiển thị và gửi chứng từ chuyển khoản cho chúng tôi.
+{{if .BankName}}
+Số tiền gia hạn: {{.AmountDue}} VND
+Ngân hàng: {{.BankName}}{{if .Branch}} ({{.Branch}}){{end}}
+Tài khoản: {{.AccountNumber}} - {{.AccountHolder}}
+{{end}}
 VietGara{{end}}
 {{define "html"}}<p>Xin chào {{.Name}},</p>
-<p>Gói <strong>{{.PlanCode}}</strong> của bạn sẽ gia hạn vào <strong>{{.CurrentPeriodEnd}}</strong>. Bạn không cần làm gì nếu đã bật tự động gia hạn; nếu chưa, vui lòng gia hạn trước ngày này để không bị gián đoạn dịch vụ.</p>
+<p>Gói <strong>{{.PlanCode}}</strong> của bạn hết hạn ngày <strong>{{.CurrentPeriodEnd}}</strong>. Để tiếp tục sử dụng VietGara, hãy gia hạn trong ứng dụng trước ngày đó: chọn "Gia hạn", chuyển khoản số tiền hiển thị và gửi chứng từ chuyển khoản cho chúng tôi.</p>
+{{if .BankName}}<p>Số tiền gia hạn: <strong>{{.AmountDue}} VND</strong><br>Ngân hàng: {{.BankName}}{{if .Branch}} ({{.Branch}}){{end}}<br>Tài khoản: {{.AccountNumber}} - {{.AccountHolder}}</p>{{end}}
 <p>VietGara</p>{{end}}

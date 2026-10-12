@@ -19,6 +19,18 @@ type Kind string
 const (
 	// KindLogo is a garage logo (public).
 	KindLogo Kind = "logo"
+	// KindPaymentEvidence is the screenshot of a subscription transfer; it
+	// belongs to the owner user (private).
+	KindPaymentEvidence Kind = "payment_evidence"
+	// KindPlatformQR is the platform's bank QR code; it belongs to the
+	// platform admin who uploaded it (private, served by signed URL).
+	KindPlatformQR Kind = "platform_qr"
+)
+
+// Entity types of a file owned by a user rather than a garage.
+const (
+	EntityUser     = "user"
+	EntityPlatform = "platform"
 )
 
 // EntityGarage is the entity type of a file that belongs to the garage
@@ -59,6 +71,19 @@ var Rules = map[Kind]Rule{
 		Write:            access.GarageWrite,
 		AttachedByModule: true,
 	},
+	KindPaymentEvidence: {
+		ContentTypes:     map[string]string{"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "application/pdf": "pdf"},
+		MaxBytes:         5 << 20,
+		EntityType:       EntityUser,
+		AttachedByModule: true,
+	},
+	KindPlatformQR: {
+		ContentTypes:     map[string]string{"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"},
+		MaxBytes:         1 << 20,
+		ImageOnly:        true,
+		EntityType:       EntityPlatform,
+		AttachedByModule: true,
+	},
 }
 
 // IsValid reports whether k is a defined Kind.
@@ -70,8 +95,10 @@ func (k Kind) IsValid() bool {
 
 // File is one registered object. See: Database Design (files).
 type File struct {
-	ID          string
+	ID string
+	// GarageID owns a garage's file; UserID a user's own (exactly one).
 	GarageID    string
+	UserID      string
 	Kind        Kind
 	EntityType  string
 	EntityID    string
@@ -88,6 +115,12 @@ type File struct {
 // garages/{garage_id}/{kind}/{entity_id}/{uuid}.{ext}.
 func ObjectKey(garageID string, kind Kind, entityID, fileID, ext string) string {
 	return fmt.Sprintf("garages/%s/%s/%s/%s.%s", garageID, kind, entityID, fileID, ext)
+}
+
+// UserObjectKey returns the storage key of a user's own file:
+// users/{user_id}/{kind}/{uuid}.{ext}.
+func UserObjectKey(userID string, kind Kind, fileID, ext string) string {
+	return fmt.Sprintf("users/%s/%s/%s.%s", userID, kind, fileID, ext)
 }
 
 // Sentinel errors for business-rule violations in the File module.

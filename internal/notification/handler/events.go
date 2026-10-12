@@ -18,4 +18,8 @@ const ConsumerName = "notification"
 func Subscribe(bus outbox.Subscriber, processor *outbox.Processor, uc *usecase.NotificationUseCase) {
 	bus.Subscribe("user.email_verified", processor.Wrap(ConsumerName, uc.HandleUserEmailVerified))
 	bus.Subscribe("subscription.expiring_soon", processor.Wrap(ConsumerName, uc.HandleSubscriptionExpiringSoon))
+	bus.Subscribe("subscription.payment_submitted", processor.Wrap(ConsumerName, uc.HandlePaymentSubmitted))
+	bus.Subscribe("subscription.payment_approved", processor.Wrap(ConsumerName, uc.HandlePaymentApproved))
+	bus.Subscribe("subscription.payment_rejected", processor.Wrap(ConsumerName, uc.HandlePaymentRejected))
+	bus.Subscribe("subscription.payment_review_reminder", processor.Wrap(ConsumerName, uc.HandlePaymentReviewReminder))
 }

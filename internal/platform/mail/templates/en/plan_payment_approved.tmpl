@@ -1,0 +1,12 @@
+{{define "subject"}}Your VietGara payment was approved{{end}}
+{{define "text"}}Hello {{.Name}},
+
+Your payment {{.Reference}} was approved. The {{.PlanCode}} plan is active now.
+
+Thank you.
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p>Your payment <strong>{{.Reference}}</strong> was approved. The <strong>{{.PlanCode}}</strong> plan is active now.</p>
+<p>Thank you.</p>
+<p>VietGara</p>{{end}}

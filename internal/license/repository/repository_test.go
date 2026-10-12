@@ -27,7 +27,7 @@ func planRow() []any {
 }
 
 func subRow() []any {
-	return append([]any{"s-1", "user-1", "p-1", "trial", now, now, now, nil, true, nil, now, now}, planRow()...)
+	return append([]any{"s-1", "user-1", "p-1", "trial", now, now, now, nil, true, nil, int64(0), int64(0), now, now}, planRow()...)
 }
 
 func TestPlanRepository(t *testing.T) {

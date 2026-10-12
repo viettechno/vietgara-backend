@@ -23,6 +23,7 @@ const DefaultExpiryJobInterval = time.Hour
 // second instance running the job cannot double-publish or undo a change.
 type ExpiryJob struct {
 	subscriptions SubscriptionRepository
+	payments      PaymentRepository
 	tx            Transactor
 	sync          syncer
 	opts          options
@@ -34,11 +35,13 @@ func NewExpiryJob(
 	entitlements EntitlementRepository,
 	events EventPublisher,
 	cache EntitlementCache,
+	payments PaymentRepository,
 	tx Transactor,
 	opts ...Option,
 ) *ExpiryJob {
 	return &ExpiryJob{
 		subscriptions: subscriptions,
+		payments:      payments,
 		tx:            tx,
 		sync:          syncer{entitlements: entitlements, events: events, cache: cache},
 		opts:          newOptions(opts),
@@ -82,6 +85,10 @@ func (j *ExpiryJob) Run(ctx context.Context) error {
 		}
 	}
 
+	if err := j.remindReviewers(ctx, now); err != nil {
+		errs = append(errs, err)
+	}
+
 	return errors.Join(errs...)
 }
 
@@ -95,14 +102,12 @@ func (j *ExpiryJob) process(ctx context.Context, userID string, now time.Time) e
 		changed := false
 
 		if sub.NeedsExpiryReminder(now, domain.ExpiringSoonWindow) {
-			err := j.sync.events.Publish(ctx, EventSubscriptionExpiringSoon, "", userID, map[string]any{
-				"subscription_id":    sub.ID,
-				keyUserID:            userID,
-				"status":             sub.Status,
-				"plan_code":          sub.Plan.Code,
-				"current_period_end": sub.CurrentPeriodEnd.Format(time.RFC3339),
-			})
+			payload, err := j.expiringSoon(ctx, sub)
 			if err != nil {
+				return err
+			}
+
+			if err := j.sync.events.Publish(ctx, EventSubscriptionExpiringSoon, "", userID, payload); err != nil {
 				return err
 			}
 
@@ -133,5 +138,52 @@ func (j *ExpiryJob) process(ctx context.Context, userID string, now time.Time) e
 		}
 
 		return j.sync.entitlementsChanged(ctx, sub)
+	})
+}
+
+// expiringSoon is the payload of the renewal reminder: what to pay and
+// where, so the owner can transfer straight away (FR-LIC-04, FR-LIC-07).
+func (j *ExpiryJob) expiringSoon(ctx context.Context, sub *domain.Subscription) (map[string]any, error) {
+	settings, err := j.payments.Settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	return map[string]any{
+		"subscription_id":    sub.ID,
+		keyUserID:            sub.UserID,
+		keyStatus:            sub.Status,
+		"plan_code":          sub.Plan.Code,
+		"current_period_end": sub.CurrentPeriodEnd.Format(time.RFC3339),
+		keyAmountDue:         sub.Plan.Price - min(sub.CreditBalance, sub.Plan.Price),
+		"bank_name":          settings.BankName,
+		"account_number":     settings.AccountNumber,
+		"account_holder":     settings.AccountHolder,
+		"branch":             settings.Branch,
+	}, nil
+}
+
+// reviewReminderInterval is how often the admins are reminded of requests
+// waiting for review.
+const reviewReminderInterval = 20 * time.Hour
+
+// remindReviewers publishes subscription.payment_review_reminder once a day
+// while requests wait for review (LLD 3.2); the claim makes it once across
+// instances.
+func (j *ExpiryJob) remindReviewers(ctx context.Context, now time.Time) error {
+	return j.tx.WithTransaction(ctx, platformdb.Scope{}, func(ctx context.Context) error {
+		waiting, oldest, err := j.payments.WaitingForReview(ctx)
+		if err != nil || waiting == 0 {
+			return err
+		}
+
+		claimed, err := j.payments.ClaimReviewReminder(ctx, now, reviewReminderInterval)
+		if err != nil || !claimed {
+			return err
+		}
+
+		return j.sync.events.Publish(ctx, EventPaymentReviewReminder, "", "", map[string]any{
+			"waiting": waiting, "oldest_submitted_at": oldest.Format(time.RFC3339),
+		})
 	})
 }

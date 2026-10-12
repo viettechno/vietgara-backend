@@ -1,9 +1,14 @@
-{{define "subject"}}Your VietGara plan renews on {{.CurrentPeriodEnd}}{{end}}
+{{define "subject"}}Your VietGara plan ends on {{.CurrentPeriodEnd}}{{end}}
 {{define "text"}}Hello {{.Name}},
 
-Your {{.PlanCode}} plan is due to renew on {{.CurrentPeriodEnd}}. No action is needed if auto-renewal is on; otherwise, please renew before that date to avoid any interruption.
-
+Your {{.PlanCode}} plan ends on {{.CurrentPeriodEnd}}. To keep using VietGara, renew it in the app before that date: choose "Renew", transfer the amount shown and send us the proof of your transfer.
+{{if .BankName}}
+Amount to renew: {{.AmountDue}} VND
+Bank: {{.BankName}}{{if .Branch}} ({{.Branch}}){{end}}
+Account: {{.AccountNumber}} - {{.AccountHolder}}
+{{end}}
 VietGara{{end}}
 {{define "html"}}<p>Hello {{.Name}},</p>
-<p>Your <strong>{{.PlanCode}}</strong> plan is due to renew on <strong>{{.CurrentPeriodEnd}}</strong>. No action is needed if auto-renewal is on; otherwise, please renew before that date to avoid any interruption.</p>
+<p>Your <strong>{{.PlanCode}}</strong> plan ends on <strong>{{.CurrentPeriodEnd}}</strong>. To keep using VietGara, renew it in the app before that date: choose "Renew", transfer the amount shown and send us the proof of your transfer.</p>
+{{if .BankName}}<p>Amount to renew: <strong>{{.AmountDue}} VND</strong><br>Bank: {{.BankName}}{{if .Branch}} ({{.Branch}}){{end}}<br>Account: {{.AccountNumber}} - {{.AccountHolder}}</p>{{end}}
 <p>VietGara</p>{{end}}

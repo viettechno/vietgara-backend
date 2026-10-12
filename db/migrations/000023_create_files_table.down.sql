@@ -1,3 +1,4 @@
+DROP FUNCTION IF EXISTS file_object_key(UUID);
 DROP POLICY IF EXISTS files_rls_policy ON files;
 DROP TRIGGER IF EXISTS trigger_files_row_audit ON files;
 DROP TABLE IF EXISTS files;

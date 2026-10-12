@@ -1,0 +1,12 @@
+{{define "subject"}}{{.Waiting}} plan payment(s) waiting for review{{end}}
+{{define "text"}}Hello {{.Name}},
+
+{{.Waiting}} plan payment request(s) are waiting for review. The oldest was submitted on {{.Oldest}}.
+
+Review them in the admin console.
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p><strong>{{.Waiting}}</strong> plan payment request(s) are waiting for review. The oldest was submitted on {{.Oldest}}.</p>
+<p>Review them in the admin console.</p>
+<p>VietGara</p>{{end}}

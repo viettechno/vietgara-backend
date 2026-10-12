@@ -1,0 +1,12 @@
+{{define "subject"}}Thanh toán VietGara của bạn đã được duyệt{{end}}
+{{define "text"}}Xin chào {{.Name}},
+
+Thanh toán {{.Reference}} của bạn đã được duyệt. Gói {{.PlanCode}} đã có hiệu lực.
+
+Cảm ơn bạn.
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.Name}},</p>
+<p>Thanh toán <strong>{{.Reference}}</strong> của bạn đã được duyệt. Gói <strong>{{.PlanCode}}</strong> đã có hiệu lực.</p>
+<p>Cảm ơn bạn.</p>
+<p>VietGara</p>{{end}}

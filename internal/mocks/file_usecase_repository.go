@@ -243,6 +243,78 @@ func (_c *MockFileRepository_FindByKey_Call) RunAndReturn(run func(ctx context.C
 	return _c
 }
 
+// KeyByID provides a mock function for the type MockFileRepository
+func (_mock *MockFileRepository) KeyByID(ctx context.Context, fileID string) (string, string, error) {
+	ret := _mock.Called(ctx, fileID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for KeyByID")
+	}
+
+	var r0 string
+	var r1 string
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (string, string, error)); ok {
+		return returnFunc(ctx, fileID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) string); ok {
+		r0 = returnFunc(ctx, fileID)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) string); ok {
+		r1 = returnFunc(ctx, fileID)
+	} else {
+		r1 = ret.Get(1).(string)
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string) error); ok {
+		r2 = returnFunc(ctx, fileID)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockFileRepository_KeyByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'KeyByID'
+type MockFileRepository_KeyByID_Call struct {
+	*mock.Call
+}
+
+// KeyByID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - fileID string
+func (_e *MockFileRepository_Expecter) KeyByID(ctx any, fileID any) *MockFileRepository_KeyByID_Call {
+	return &MockFileRepository_KeyByID_Call{Call: _e.mock.On("KeyByID", ctx, fileID)}
+}
+
+func (_c *MockFileRepository_KeyByID_Call) Run(run func(ctx context.Context, fileID string)) *MockFileRepository_KeyByID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockFileRepository_KeyByID_Call) Return(key string, contentType string, err error) *MockFileRepository_KeyByID_Call {
+	_c.Call.Return(key, contentType, err)
+	return _c
+}
+
+func (_c *MockFileRepository_KeyByID_Call) RunAndReturn(run func(ctx context.Context, fileID string) (string, string, error)) *MockFileRepository_KeyByID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SetActive provides a mock function for the type MockFileRepository
 func (_mock *MockFileRepository) SetActive(ctx context.Context, garageID string, fileID string, active bool, updatedBy string) error {
 	ret := _mock.Called(ctx, garageID, fileID, active, updatedBy)

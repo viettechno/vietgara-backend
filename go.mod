@@ -11,7 +11,7 @@ require (
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.43.0
-	github.com/viettechno/vietgara-proto v1.8.0
+	github.com/viettechno/vietgara-proto v1.9.0
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12
 )
@@ -30,6 +30,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.45.0
 	go.opentelemetry.io/otel/trace v1.45.0
 	golang.org/x/crypto v0.55.0
+	google.golang.org/api v0.287.1
 	google.golang.org/genproto v0.0.0-20260921155816-b14227669459
 	google.golang.org/genproto/googleapis/api v0.0.0-20260918162117-cecb64721679
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260921155816-b14227669459
@@ -122,6 +123,5 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	google.golang.org/api v0.287.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

@@ -1,0 +1,12 @@
+{{define "subject"}}{{.Waiting}} thanh toán gói đang chờ duyệt{{end}}
+{{define "text"}}Xin chào {{.Name}},
+
+Có {{.Waiting}} yêu cầu thanh toán gói đang chờ duyệt. Yêu cầu cũ nhất được gửi ngày {{.Oldest}}.
+
+Hãy xem và duyệt trong trang quản trị.
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.Name}},</p>
+<p>Có <strong>{{.Waiting}}</strong> yêu cầu thanh toán gói đang chờ duyệt. Yêu cầu cũ nhất được gửi ngày {{.Oldest}}.</p>
+<p>Hãy xem và duyệt trong trang quản trị.</p>
+<p>VietGara</p>{{end}}

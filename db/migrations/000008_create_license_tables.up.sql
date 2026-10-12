@@ -62,6 +62,11 @@ CREATE TABLE subscriptions (
     grace_period_end TIMESTAMP WITH TIME ZONE,
     auto_renew BOOLEAN NOT NULL DEFAULT true,
     reminder_period_end TIMESTAMP WITH TIME ZONE,
+    -- What the owner paid for the current period (VND; 0 for a trial): the
+    -- basis of the credit when the plan changes (FR-LIC-09).
+    period_paid_amount BIGINT NOT NULL DEFAULT 0 CHECK (period_paid_amount >= 0),
+    -- Account credit, applied automatically to the next payment.
+    credit_balance BIGINT NOT NULL DEFAULT 0 CHECK (credit_balance >= 0),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     created_by UUID,

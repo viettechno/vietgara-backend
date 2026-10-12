@@ -7,6 +7,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"time"
 
@@ -24,8 +25,16 @@ const (
 	EventSubscriptionStatusChanged = "subscription.status_changed"
 )
 
-// keyUserID is the user key of event and audit payloads.
-const keyUserID = "user_id"
+// Keys of event and audit payloads.
+const (
+	keyUserID    = "user_id"
+	keyPlanCode  = "plan_code"
+	keyPlanID    = "plan_id"
+	keyStatus    = "status"
+	keyAmountDue = "amount_due"
+	keyReference = "reference"
+	keyRequestID = "request_id"
+)
 
 // PlanRepository persists the plan catalogue. Finders return
 // domain.ErrPlanNotFound.
@@ -196,9 +205,50 @@ func toAppError(op string, err error) error {
 		return apperror.Validation("days", apperror.IssueInvalid, err.Error())
 	case errors.Is(err, domain.ErrSubscriptionCancelled):
 		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err)
+	case isPaymentError(err):
+		return paymentAppError(err)
 	default:
 		return apperror.Internal(op, err)
 	}
+}
+
+type paymentError struct {
+	err    error
+	code   apperror.Code
+	reason string
+}
+
+// paymentErrors maps the payment errors to their code and reason.
+var paymentErrors = []paymentError{
+	{domain.ErrPaymentRequestNotFound, apperror.CodeNotFound, ""},
+	{domain.ErrTrialNotAvailable, apperror.CodeInvalidArgument, domain.ReasonTrialNotAvailable},
+	{domain.ErrRequestAlreadyOpen, apperror.CodeAlreadyExists, domain.ReasonRequestAlreadyOpen},
+	{domain.ErrRequestNotOpen, apperror.CodeFailedPrecondition, domain.ReasonRequestNotOpen},
+	{domain.ErrEvidenceRequired, apperror.CodeInvalidArgument, domain.ReasonEvidenceRequired},
+	{domain.ErrMismatchNoteRequired, apperror.CodeInvalidArgument, domain.ReasonMismatchNoteRequired},
+	{domain.ErrInvalidDeclaration, apperror.CodeInvalidArgument, ""},
+	{domain.ErrInvalidAdjustment, apperror.CodeInvalidArgument, ""},
+	{domain.ErrInvalidEvidence, apperror.CodeInvalidArgument, ""},
+	{domain.ErrInvalidQR, apperror.CodeInvalidArgument, ""},
+}
+
+func isPaymentError(err error) bool {
+	return slices.ContainsFunc(paymentErrors, func(e paymentError) bool { return errors.Is(err, e.err) })
+}
+
+func paymentAppError(err error) error {
+	for _, e := range paymentErrors {
+		if errors.Is(err, e.err) {
+			wrapped := apperror.Wrap(e.code, err.Error(), err)
+			if e.reason != "" {
+				wrapped = wrapped.WithReason(e.reason)
+			}
+
+			return wrapped
+		}
+	}
+
+	return err
 }
 
 func isAppError(err error) bool {

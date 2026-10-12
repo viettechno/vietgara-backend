@@ -255,10 +255,10 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// Tenant/Garage Management
 	garages := tenantRepo.NewPostgresGarageRepository(pool)
 	accessReader := tenantRepo.NewPostgresAccessReader(pool)
-	license := buildLicense(pool, tx, redisClient, events, auditLog, accessReader, garages)
+	fileModule := buildFiles(pool, files, garages)
+	license := buildLicense(pool, tx, redisClient, events, auditLog, accessReader, garages, fileModule.uc)
 
 	// File registry (Release 5.0): the garage logo and every later upload.
-	fileModule := buildFiles(pool, files, garages)
 
 	tenantUC := tenantUsecase.NewTenantUseCase(tenantUsecase.Deps{
 		Garages:     garages,

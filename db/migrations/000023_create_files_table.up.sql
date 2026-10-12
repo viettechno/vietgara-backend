@@ -12,7 +12,7 @@
 -- (is_active = false, FR-CAT-07); an unreferenced one is soft-deleted
 -- (deleted_at) and its object removed.
 
-CREATE TYPE file_kind AS ENUM ('logo');
+CREATE TYPE file_kind AS ENUM ('logo', 'payment_evidence', 'platform_qr');
 
 CREATE TABLE files (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -60,3 +60,16 @@ WITH CHECK (
 
 COMMENT ON POLICY files_rls_policy ON files IS
 'A garage file is visible in its garage (app.current_garage_id); a user file to its user (app.current_user_id).';
+
+-- The License module serves a subscription payment's evidence and the
+-- platform's QR code to platform admins, who are not the file's owner: this
+-- function runs SECURITY DEFINER and returns only the object key (and its
+-- content type) of a live file by its id, never a row. Callers authorize
+-- the read themselves.
+CREATE OR REPLACE FUNCTION file_object_key(file_id UUID)
+RETURNS TABLE (key VARCHAR, content_type VARCHAR)
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+    SELECT f.key, f.content_type FROM files f WHERE f.id = file_id AND f.deleted_at IS NULL
+$$;
+
+GRANT EXECUTE ON FUNCTION file_object_key(UUID) TO vietgara_app;

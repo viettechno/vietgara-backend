@@ -1,0 +1,15 @@
+{{define "subject"}}Your VietGara payment was not approved{{end}}
+{{define "text"}}Hello {{.Name}},
+
+Your payment {{.Reference}} was not approved.
+
+Reason: {{.Reason}}
+
+You can submit a new request in the app, or contact us if you have already paid.
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p>Your payment <strong>{{.Reference}}</strong> was not approved.</p>
+<p>Reason: {{.Reason}}</p>
+<p>You can submit a new request in the app, or contact us if you have already paid.</p>
+<p>VietGara</p>{{end}}

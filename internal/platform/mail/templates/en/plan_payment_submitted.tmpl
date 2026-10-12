@@ -1,0 +1,12 @@
+{{define "subject"}}A plan payment waits for review: {{.Reference}}{{end}}
+{{define "text"}}Hello {{.Name}},
+
+An owner declared a transfer for the {{.PlanCode}} plan (reference {{.Reference}}): amount due {{.AmountDue}} VND, transferred {{.TransferredAmount}} VND.{{if .Mismatch}} The amounts differ: please check with the owner before approving.{{end}}
+
+Review it in the admin console.
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p>An owner declared a transfer for the <strong>{{.PlanCode}}</strong> plan (reference <strong>{{.Reference}}</strong>): amount due {{.AmountDue}} VND, transferred {{.TransferredAmount}} VND.{{if .Mismatch}} The amounts differ: please check with the owner before approving.{{end}}</p>
+<p>Review it in the admin console.</p>
+<p>VietGara</p>{{end}}

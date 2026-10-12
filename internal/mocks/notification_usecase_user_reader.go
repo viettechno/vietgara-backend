@@ -103,3 +103,65 @@ func (_c *MockNotificationUserReader_Get_Call) RunAndReturn(run func(ctx context
 	_c.Call.Return(run)
 	return _c
 }
+
+// PlatformAdmins provides a mock function for the type MockNotificationUserReader
+func (_mock *MockNotificationUserReader) PlatformAdmins(ctx context.Context) ([]usecase.UserInfo, error) {
+	ret := _mock.Called(ctx)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PlatformAdmins")
+	}
+
+	var r0 []usecase.UserInfo
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context) ([]usecase.UserInfo, error)); ok {
+		return returnFunc(ctx)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context) []usecase.UserInfo); ok {
+		r0 = returnFunc(ctx)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]usecase.UserInfo)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
+		r1 = returnFunc(ctx)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockNotificationUserReader_PlatformAdmins_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PlatformAdmins'
+type MockNotificationUserReader_PlatformAdmins_Call struct {
+	*mock.Call
+}
+
+// PlatformAdmins is a helper method to define mock.On call
+//   - ctx context.Context
+func (_e *MockNotificationUserReader_Expecter) PlatformAdmins(ctx any) *MockNotificationUserReader_PlatformAdmins_Call {
+	return &MockNotificationUserReader_PlatformAdmins_Call{Call: _e.mock.On("PlatformAdmins", ctx)}
+}
+
+func (_c *MockNotificationUserReader_PlatformAdmins_Call) Run(run func(ctx context.Context)) *MockNotificationUserReader_PlatformAdmins_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *MockNotificationUserReader_PlatformAdmins_Call) Return(userInfos []usecase.UserInfo, err error) *MockNotificationUserReader_PlatformAdmins_Call {
+	_c.Call.Return(userInfos, err)
+	return _c
+}
+
+func (_c *MockNotificationUserReader_PlatformAdmins_Call) RunAndReturn(run func(ctx context.Context) ([]usecase.UserInfo, error)) *MockNotificationUserReader_PlatformAdmins_Call {
+	_c.Call.Return(run)
+	return _c
+}

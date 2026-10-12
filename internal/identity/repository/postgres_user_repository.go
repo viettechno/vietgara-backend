@@ -157,6 +157,31 @@ func (r *PostgresUserRepository) Update(ctx context.Context, user *domain.User) 
 	return mapUniqueViolation(err)
 }
 
+// ListPlatformAdmins returns the platform admins, for the notices addressed
+// to them (a payment waiting for review).
+func (r *PostgresUserRepository) ListPlatformAdmins(ctx context.Context) ([]*domain.User, error) {
+	rows, err := platformdb.QuerierFromContext(ctx, r.pool).Query(ctx,
+		`SELECT `+userColumns+` FROM users a JOIN platform_admins pa ON pa.user_id = a.id
+		WHERE a.status = 'active' AND a.email IS NOT NULL ORDER BY a.created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var admins []*domain.User
+
+	for rows.Next() {
+		user, err := scanUser(rows)
+		if err != nil {
+			return nil, err
+		}
+
+		admins = append(admins, user)
+	}
+
+	return admins, rows.Err()
+}
+
 // GrantPlatformAdmins adds the users with the given e-mails to
 // platform_admins.
 func (r *PostgresUserRepository) GrantPlatformAdmins(ctx context.Context, emails []string) (int, error) {

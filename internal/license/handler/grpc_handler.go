@@ -30,11 +30,14 @@ type Server struct {
 
 	subscriptions *usecase.SubscriptionUseCase
 	entitlements  *usecase.EntitlementUseCase
+	payments      *usecase.PaymentUseCase
 }
 
 // NewServer returns the License API server.
-func NewServer(subscriptions *usecase.SubscriptionUseCase, entitlements *usecase.EntitlementUseCase) *Server {
-	return &Server{subscriptions: subscriptions, entitlements: entitlements}
+func NewServer(
+	subscriptions *usecase.SubscriptionUseCase, entitlements *usecase.EntitlementUseCase, payments *usecase.PaymentUseCase,
+) *Server {
+	return &Server{subscriptions: subscriptions, entitlements: entitlements, payments: payments}
 }
 
 // Policies declares what every License RPC requires. The subscription is
@@ -45,16 +48,31 @@ func Policies() middleware.Policies {
 	entitlements.SkipLicense = true
 
 	return middleware.Policies{
-		licensev1.LicenseService_ListPlans_FullMethodName:             middleware.UnverifiedMethod(),
-		licensev1.LicenseService_GetMySubscription_FullMethodName:     middleware.UserMethod(),
-		licensev1.LicenseService_ChangeMyPlan_FullMethodName:          middleware.UserMethod(),
-		licensev1.LicenseService_GetGarageEntitlements_FullMethodName: entitlements,
+		licensev1.LicenseService_ListPlans_FullMethodName:                 middleware.UnverifiedMethod(),
+		licensev1.LicenseService_GetMySubscription_FullMethodName:         middleware.UserMethod(),
+		licensev1.LicenseService_CreatePlanPaymentRequest_FullMethodName:  middleware.UserMethod(),
+		licensev1.LicenseService_ListMyPlanPaymentRequests_FullMethodName: middleware.UserMethod(),
+		licensev1.LicenseService_GetMyPlanPaymentRequest_FullMethodName:   middleware.UserMethod(),
+		licensev1.LicenseService_SubmitPlanPayment_FullMethodName:         middleware.UserMethod(),
+		licensev1.LicenseService_CancelPlanPayment_FullMethodName:         middleware.UserMethod(),
+		licensev1.LicenseService_ListMyCreditLedger_FullMethodName:        middleware.UserMethod(),
+		licensev1.LicenseService_GetPaymentInstructions_FullMethodName:    middleware.UserMethod(),
+		licensev1.LicenseService_GetGarageEntitlements_FullMethodName:     entitlements,
 
 		licensev1.LicenseAdminService_ListAllPlans_FullMethodName:       middleware.AdminMethod(),
 		licensev1.LicenseAdminService_CreatePlan_FullMethodName:         middleware.AdminMethod(),
 		licensev1.LicenseAdminService_UpdatePlan_FullMethodName:         middleware.AdminMethod(),
 		licensev1.LicenseAdminService_ListSubscriptions_FullMethodName:  middleware.AdminMethod(),
 		licensev1.LicenseAdminService_ExtendSubscription_FullMethodName: middleware.AdminMethod(),
+
+		licensev1.LicenseAdminService_ListPlanPaymentRequests_FullMethodName:       middleware.AdminMethod(),
+		licensev1.LicenseAdminService_GetPlanPaymentRequest_FullMethodName:         middleware.AdminMethod(),
+		licensev1.LicenseAdminService_ApprovePlanPayment_FullMethodName:            middleware.AdminMethod(),
+		licensev1.LicenseAdminService_RejectPlanPayment_FullMethodName:             middleware.AdminMethod(),
+		licensev1.LicenseAdminService_AdjustCredit_FullMethodName:                  middleware.AdminMethod(),
+		licensev1.LicenseAdminService_GetPlatformPaymentSettings_FullMethodName:    middleware.AdminMethod(),
+		licensev1.LicenseAdminService_UpdatePlatformPaymentSettings_FullMethodName: middleware.AdminMethod(),
+		licensev1.LicenseAdminService_UploadPaymentQr_FullMethodName:               middleware.AdminMethod(),
 	}
 }
 
@@ -75,17 +93,18 @@ func (s *Server) GetMySubscription(ctx context.Context, _ *licensev1.GetMySubscr
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	return &licensev1.GetMySubscriptionResponse{Subscription: subscriptionToProto(sub, &usage)}, nil
-}
+	out := subscriptionToProto(sub, &usage)
 
-// ChangeMyPlan switches the caller's plan.
-func (s *Server) ChangeMyPlan(ctx context.Context, req *licensev1.ChangeMyPlanRequest) (*licensev1.ChangeMyPlanResponse, error) {
-	sub, usage, err := s.subscriptions.ChangeMyPlan(ctx, middleware.UserID(ctx), req.GetPlanId())
+	open, err := s.payments.OpenRequest(ctx, middleware.UserID(ctx))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	return &licensev1.ChangeMyPlanResponse{Subscription: subscriptionToProto(sub, &usage)}, nil
+	if open != nil {
+		out.OpenRequest = paymentRequestToProto(*open)
+	}
+
+	return &licensev1.GetMySubscriptionResponse{Subscription: out}, nil
 }
 
 // GetGarageEntitlements returns what the garage may use.
@@ -147,16 +166,7 @@ func (s *Server) UpdatePlan(ctx context.Context, req *licensev1.UpdatePlanReques
 
 // ListSubscriptions lists subscriptions for platform admins.
 func (s *Server) ListSubscriptions(ctx context.Context, req *licensev1.ListSubscriptionsRequest) (*licensev1.ListSubscriptionsResponse, error) {
-	page, pageSize := int(req.GetPage()), int(req.GetPageSize())
-	if page < 1 {
-		page = 1
-	}
-
-	if pageSize < 1 {
-		pageSize = defaultPageSize
-	}
-
-	pageSize = min(pageSize, maxPageSize)
+	page, pageSize := pageOf(req.GetPage(), req.GetPageSize())
 
 	result, err := s.subscriptions.ListSubscriptions(ctx, usecase.SubscriptionFilter{
 		Query: req.GetQuery(), Status: statusFromProto(req.GetStatus()), Page: page, PageSize: pageSize,
@@ -165,7 +175,25 @@ func (s *Server) ListSubscriptions(ctx context.Context, req *licensev1.ListSubsc
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	return listSubscriptionsToProto(result, page, pageSize), nil
+	ids := make([]string, 0, len(result.Items))
+	for _, item := range result.Items {
+		ids = append(ids, item.Subscription.ID)
+	}
+
+	open, err := s.payments.WithOpenRequests(ctx, ids)
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	resp := listSubscriptionsToProto(result, page, pageSize)
+
+	for i, item := range result.Items {
+		if v, ok := open[item.Subscription.ID]; ok {
+			resp.Data[i].Subscription.OpenRequest = paymentRequestToProto(v)
+		}
+	}
+
+	return resp, nil
 }
 
 // ExtendSubscription renews a subscription manually.
@@ -176,4 +204,18 @@ func (s *Server) ExtendSubscription(ctx context.Context, req *licensev1.ExtendSu
 	}
 
 	return &licensev1.ExtendSubscriptionResponse{Subscription: subscriptionToProto(sub, nil)}, nil
+}
+
+// pageOf applies the paging defaults of API Specification Section 1.1.
+func pageOf(page, pageSize int32) (int, int) {
+	p, size := int(page), int(pageSize)
+	if p < 1 {
+		p = 1
+	}
+
+	if size < 1 {
+		size = defaultPageSize
+	}
+
+	return p, min(size, maxPageSize)
 }

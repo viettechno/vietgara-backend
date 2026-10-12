@@ -3,6 +3,7 @@ package usecase_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -455,4 +456,67 @@ func TestUseCase_FutureKinds(t *testing.T) { //nolint:tparallel // mutates the s
 		require.NoError(t, err)
 		assert.Equal(t, "https://cdn/f.png", res.URL)
 	})
+}
+
+func TestUseCase_StoreUserFile(t *testing.T) {
+	t.Parallel()
+
+	pdf := []byte("%PDF-1.7 evidence")
+
+	t.Run("a user's evidence is stored privately under their prefix", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+		e.storage.EXPECT().PutPrivate(mock.Anything, mock.MatchedBy(func(key string) bool {
+			return strings.HasPrefix(key, "users/"+actorID+"/payment_evidence/") && strings.HasSuffix(key, ".pdf")
+		}), "application/pdf", pdf).Return(nil).Once()
+		e.files.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+
+		f, err := e.uc.StoreUserFile(t.Context(), actorID, domain.KindPaymentEvidence, pdf, "application/pdf")
+		require.NoError(t, err)
+		assert.Equal(t, actorID, f.UserID)
+		assert.Equal(t, domain.EntityUser, f.EntityType)
+	})
+
+	t.Run("a registration failure removes the object", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+		e.storage.EXPECT().PutPrivate(mock.Anything, mock.Anything, "image/png", png).Return(nil).Once()
+		e.files.EXPECT().Create(mock.Anything, mock.Anything).Return(errBoom).Once()
+		e.storage.EXPECT().Delete(mock.Anything, mock.Anything).Return(nil).Once()
+
+		_, err := e.uc.StoreUserFile(t.Context(), actorID, domain.KindPlatformQR, png, "image/png")
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+
+	t.Run("garage kinds and bad content are refused", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+
+		_, err := e.uc.StoreUserFile(t.Context(), actorID, domain.KindLogo, png, "image/png")
+		assertAppError(t, err, apperror.CodeInvalidArgument)
+
+		_, err = e.uc.StoreUserFile(t.Context(), actorID, domain.KindPlatformQR, []byte("not an image"), "image/png")
+		assertAppError(t, err, apperror.CodeInvalidArgument)
+	})
+}
+
+func TestUseCase_SignedURLByID(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t)
+	e.files.EXPECT().KeyByID(mock.Anything, fileID).Return("users/u/payment_evidence/f.pdf", "application/pdf", nil).Once()
+	e.storage.EXPECT().SignedURL(mock.Anything, "users/u/payment_evidence/f.pdf", usecase.SignedURLTTL).
+		Return("https://signed", time.Now(), nil).Once()
+
+	url, err := e.uc.SignedURLByID(t.Context(), fileID)
+	require.NoError(t, err)
+	assert.Equal(t, "https://signed", url)
+
+	e.files.EXPECT().KeyByID(mock.Anything, "missing").Return("", "", domain.ErrFileNotFound).Once()
+
+	_, err = e.uc.SignedURLByID(t.Context(), "missing")
+	assertAppError(t, err, apperror.CodeNotFound)
 }

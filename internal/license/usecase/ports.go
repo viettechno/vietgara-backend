@@ -24,8 +24,16 @@ const (
 	EventSubscriptionStatusChanged = "subscription.status_changed"
 )
 
-// keyUserID is the user key of event and audit payloads.
-const keyUserID = "user_id"
+// Keys of event and audit payloads.
+const (
+	keyUserID    = "user_id"
+	keyPlanCode  = "plan_code"
+	keyPlanID    = "plan_id"
+	keyStatus    = "status"
+	keyAmountDue = "amount_due"
+	keyReference = "reference"
+	keyRequestID = "request_id"
+)
 
 // PlanRepository persists the plan catalogue. Finders return
 // domain.ErrPlanNotFound.
@@ -196,6 +204,21 @@ func toAppError(op string, err error) error {
 		return apperror.Validation("days", apperror.IssueInvalid, err.Error())
 	case errors.Is(err, domain.ErrSubscriptionCancelled):
 		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err)
+	case errors.Is(err, domain.ErrPaymentRequestNotFound):
+		return apperror.Wrap(apperror.CodeNotFound, err.Error(), err)
+	case errors.Is(err, domain.ErrTrialNotAvailable):
+		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err).WithReason(domain.ReasonTrialNotAvailable)
+	case errors.Is(err, domain.ErrRequestAlreadyOpen):
+		return apperror.Wrap(apperror.CodeAlreadyExists, err.Error(), err).WithReason(domain.ReasonRequestAlreadyOpen)
+	case errors.Is(err, domain.ErrRequestNotOpen):
+		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err).WithReason(domain.ReasonRequestNotOpen)
+	case errors.Is(err, domain.ErrEvidenceRequired):
+		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err).WithReason(domain.ReasonEvidenceRequired)
+	case errors.Is(err, domain.ErrMismatchNoteRequired):
+		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err).WithReason(domain.ReasonMismatchNoteRequired)
+	case errors.Is(err, domain.ErrInvalidDeclaration), errors.Is(err, domain.ErrInvalidAdjustment),
+		errors.Is(err, domain.ErrInvalidEvidence), errors.Is(err, domain.ErrInvalidQR):
+		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err)
 	default:
 		return apperror.Internal(op, err)
 	}

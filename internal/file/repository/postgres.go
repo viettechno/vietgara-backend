@@ -53,10 +53,10 @@ func (r *PostgresRepository) Create(ctx context.Context, f *domain.File) error {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
 	return q.QueryRow(ctx, `
-		INSERT INTO files (id, garage_id, kind, entity_type, entity_id, key, content_type, size, sha256, is_active, created_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		INSERT INTO files (id, garage_id, user_id, kind, entity_type, entity_id, key, content_type, size, sha256, is_active, created_by)
+		VALUES ($1, $2, $12, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		RETURNING created_at`,
-		f.ID, f.GarageID, string(f.Kind), f.EntityType, f.EntityID, f.Key, f.ContentType, f.Size, f.SHA256, f.IsActive, f.CreatedBy,
+		f.ID, nullable(f.GarageID), string(f.Kind), f.EntityType, f.EntityID, f.Key, f.ContentType, f.Size, f.SHA256, f.IsActive, f.CreatedBy, nullable(f.UserID),
 	).Scan(&f.CreatedAt)
 }
 
@@ -119,4 +119,21 @@ func (r *PostgresRepository) SetActive(ctx context.Context, garageID, fileID str
 	return r.exec(ctx, `
 		UPDATE files SET is_active = $3, updated_by = $4
 		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL`, garageID, fileID, active, nullable(updatedBy))
+}
+
+// KeyByID returns the object key and content type of a live file by its id,
+// whoever owns it, through the SECURITY DEFINER file_object_key() (000023).
+// The caller authorizes the read.
+func (r *PostgresRepository) KeyByID(ctx context.Context, fileID string) (key, contentType string, err error) {
+	if uuid.Validate(fileID) != nil {
+		return "", "", domain.ErrFileNotFound
+	}
+
+	err = platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx,
+		`SELECT key, content_type FROM file_object_key($1)`, fileID).Scan(&key, &contentType)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", domain.ErrFileNotFound
+	}
+
+	return key, contentType, err
 }

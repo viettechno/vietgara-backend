@@ -145,54 +145,6 @@ func (uc *SubscriptionUseCase) Usage(ctx context.Context, userID string) (Usage,
 	return Usage{Garages: garages, Staff: staff, TransactionsToday: transactions}, nil
 }
 
-// ChangeMyPlan switches the owner to another plan (FR-LIC-02); choosing the
-// current plan renews it, which is how a past-due or suspended owner
-// recovers. A downgrade below current usage is refused.
-func (uc *SubscriptionUseCase) ChangeMyPlan(ctx context.Context, userID, planID string) (*domain.Subscription, Usage, error) {
-	if _, _, err := uc.GetMine(ctx, userID); err != nil {
-		return nil, Usage{}, err
-	}
-
-	sub, err := uc.subscriptions.LockByUserID(ctx, userID)
-	if err != nil {
-		return nil, Usage{}, toAppError("change plan", err)
-	}
-
-	plan, err := uc.plans.FindByID(ctx, planID)
-	if err != nil {
-		return nil, Usage{}, toAppError("change plan", err)
-	}
-
-	if !plan.Selectable() {
-		return nil, Usage{}, toAppError("change plan", domain.ErrPlanNotAvailable)
-	}
-
-	usage, err := uc.Usage(ctx, userID)
-	if err != nil {
-		return nil, Usage{}, err
-	}
-
-	switch {
-	case usage.Garages > plan.MaxGarages:
-		return nil, Usage{}, limitReached(domain.LimitGarages, plan.MaxGarages)
-	case usage.Staff > plan.MaxStaff:
-		return nil, Usage{}, limitReached(domain.LimitStaff, plan.MaxStaff)
-	}
-
-	before := *sub
-	from := sub.Status
-
-	if err := sub.ChangePlan(plan, uc.opts.now().UTC()); err != nil {
-		return nil, Usage{}, toAppError("change plan", err)
-	}
-
-	if err := uc.persistChange(ctx, sub, from, "subscription.plan_changed", before); err != nil {
-		return nil, Usage{}, err
-	}
-
-	return sub, usage, nil
-}
-
 // persistChange saves sub, publishes the resulting events and audits it.
 func (uc *SubscriptionUseCase) persistChange(ctx context.Context, sub *domain.Subscription, from domain.SubscriptionStatus, action string, before domain.Subscription) error {
 	if err := uc.subscriptions.Update(ctx, sub); err != nil {
@@ -222,7 +174,7 @@ func (uc *SubscriptionUseCase) persistChange(ctx context.Context, sub *domain.Su
 
 func subscriptionAudit(s *domain.Subscription) map[string]any {
 	return map[string]any{
-		keyUserID: s.UserID, "plan_id": s.PlanID, "status": s.Status,
+		keyUserID: s.UserID, keyPlanID: s.PlanID, keyStatus: s.Status,
 		"current_period_start": s.CurrentPeriodStart, "current_period_end": s.CurrentPeriodEnd,
 	}
 }

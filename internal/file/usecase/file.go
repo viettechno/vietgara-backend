@@ -109,6 +109,61 @@ func (uc *UseCase) RetireByKey(ctx context.Context, garageID, actorID, key strin
 	return nil
 }
 
+// StoreUserFile registers and stores a private file of the user's own (a
+// subscription payment's evidence) or of the platform (its QR code, owned by
+// the admin who uploaded it), for the License module, which authorizes the
+// caller. It returns the registered file.
+func (uc *UseCase) StoreUserFile(ctx context.Context, userID string, kind domain.Kind, content []byte, contentType string) (*domain.File, error) {
+	rule, ok := domain.Rules[kind]
+	if !ok || rule.EntityType == domain.EntityGarage || rule.Public {
+		return nil, toAppError("store file", domain.ErrInvalidKind)
+	}
+
+	contentType = strings.ToLower(strings.TrimSpace(contentType))
+
+	ext, ok := rule.ContentTypes[contentType]
+	if !ok || len(content) == 0 || len(content) > rule.MaxBytes ||
+		(rule.ImageOnly && http.DetectContentType(content) != contentType) {
+		return nil, toAppError("store file", domain.ErrInvalidFile)
+	}
+
+	sum := sha256.Sum256(content)
+	id := uuid.NewString()
+	f := &domain.File{
+		ID: id, UserID: userID, Kind: kind, EntityType: rule.EntityType, EntityID: userID,
+		Key: domain.UserObjectKey(userID, kind, id, ext), ContentType: contentType, Size: int64(len(content)),
+		SHA256: hex.EncodeToString(sum[:]), IsActive: true, CreatedBy: actorRef(userID),
+	}
+
+	if err := uc.storage.PutPrivate(ctx, f.Key, contentType, content); err != nil {
+		return nil, toAppError("store file", err)
+	}
+
+	if err := uc.files.Create(ctx, f); err != nil {
+		_ = uc.storage.Delete(context.WithoutCancel(ctx), f.Key)
+
+		return nil, toAppError("register file", err)
+	}
+
+	return f, nil
+}
+
+// SignedURLByID returns a short-lived URL of a private file by its id,
+// whoever owns it. The caller authorizes the read.
+func (uc *UseCase) SignedURLByID(ctx context.Context, fileID string) (string, error) {
+	key, _, err := uc.files.KeyByID(ctx, fileID)
+	if err != nil {
+		return "", toAppError("get file url", err)
+	}
+
+	url, _, err := uc.storage.SignedURL(ctx, key, SignedURLTTL)
+	if err != nil {
+		return "", toAppError("get file url", err)
+	}
+
+	return url, nil
+}
+
 // PublicURL returns the URL of a public object key.
 func (uc *UseCase) PublicURL(key string) string { return uc.storage.PublicURL(key) }
 

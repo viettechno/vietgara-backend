@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"time"
+
 	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/viettechno/vietgara-backend/internal/license/domain"
 	"github.com/viettechno/vietgara-backend/internal/license/usecase"
@@ -146,12 +149,10 @@ func subscriptionToProto(s *domain.Subscription, usage *usecase.Usage) *licensev
 		out.GracePeriodEnd = converter.TimeToProto(*s.GracePeriodEnd)
 	}
 
+	out.CreditBalance, out.PeriodPaidAmount = s.CreditBalance, s.PeriodPaidAmount
+
 	if usage != nil {
-		out.Usage = &licensev1.Usage{
-			Garages:           int32(usage.Garages),           //nolint:gosec // bounded by plan limits
-			Staff:             int32(usage.Staff),             //nolint:gosec // bounded by plan limits
-			TransactionsToday: int32(usage.TransactionsToday), //nolint:gosec // bounded by plan limits
-		}
+		out.Usage = usageToProto(*usage)
 	}
 
 	return out
@@ -171,10 +172,8 @@ func entitlementsToProto(garageID string, e *domain.Entitlements) *licensev1.Ent
 
 func listSubscriptionsToProto(page *usecase.SubscriptionPage, pageNo, pageSize int) *licensev1.ListSubscriptionsResponse {
 	resp := &licensev1.ListSubscriptionsResponse{
-		Data: make([]*licensev1.SubscriptionSummary, 0, len(page.Items)),
-		Pagination: &commonv1.Pagination{
-			Total: int32(page.Total), Page: int32(pageNo), PageSize: int32(pageSize), //nolint:gosec // bounded
-		},
+		Data:       make([]*licensev1.SubscriptionSummary, 0, len(page.Items)),
+		Pagination: paginationOf(page.Total, pageNo, pageSize),
 	}
 
 	for _, item := range page.Items {
@@ -272,4 +271,102 @@ func setLimits(f *usecase.PlanFields, limits *licensev1.PlanLimits, path string)
 	if path == pathLimits || path == "limits.max_transactions_per_day" {
 		f.MaxTransactionsPerDay = new(int(limits.GetMaxTransactionsPerDay()))
 	}
+}
+
+var paymentKinds = map[domain.PaymentKind]licensev1.PlanPaymentKind{
+	domain.PaymentChange: licensev1.PlanPaymentKind_PLAN_PAYMENT_KIND_CHANGE,
+	domain.PaymentRenew:  licensev1.PlanPaymentKind_PLAN_PAYMENT_KIND_RENEW,
+}
+
+var paymentStatuses = map[domain.PaymentStatus]licensev1.PlanPaymentStatus{
+	domain.PaymentAwaitingPayment: licensev1.PlanPaymentStatus_PLAN_PAYMENT_STATUS_AWAITING_PAYMENT,
+	domain.PaymentSubmitted:       licensev1.PlanPaymentStatus_PLAN_PAYMENT_STATUS_SUBMITTED,
+	domain.PaymentApproved:        licensev1.PlanPaymentStatus_PLAN_PAYMENT_STATUS_APPROVED,
+	domain.PaymentRejected:        licensev1.PlanPaymentStatus_PLAN_PAYMENT_STATUS_REJECTED,
+	domain.PaymentCancelled:       licensev1.PlanPaymentStatus_PLAN_PAYMENT_STATUS_CANCELLED,
+}
+
+func paymentStatusFromProto(s licensev1.PlanPaymentStatus) domain.PaymentStatus {
+	for status, proto := range paymentStatuses {
+		if proto == s {
+			return status
+		}
+	}
+
+	return ""
+}
+
+var creditKinds = map[domain.CreditEntryKind]licensev1.CreditEntryKind{
+	domain.CreditEarned:     licensev1.CreditEntryKind_CREDIT_ENTRY_KIND_EARNED,
+	domain.CreditApplied:    licensev1.CreditEntryKind_CREDIT_ENTRY_KIND_APPLIED,
+	domain.CreditAdjustment: licensev1.CreditEntryKind_CREDIT_ENTRY_KIND_ADJUSTMENT,
+}
+
+func paymentRequestToProto(v usecase.RequestView) *licensev1.PlanPaymentRequest {
+	r := v.Request
+
+	out := &licensev1.PlanPaymentRequest{
+		Id: r.ID, Kind: paymentKinds[r.Kind], Status: paymentStatuses[r.Status], Reference: r.Reference,
+		QuotedAmount: r.QuotedAmount, CreditApplied: r.CreditApplied, AmountDue: r.AmountDue, CreditSurplus: r.CreditSurplus,
+		PeriodDays: int32(r.PeriodDays), UnusedDays: int32(r.UnusedDays), //nolint:gosec // days of a period
+		Instructions: &licensev1.PaymentInstructions{
+			BankName: r.Instructions.BankName, AccountNumber: r.Instructions.AccountNumber,
+			AccountHolder: r.Instructions.AccountHolder, Branch: r.Instructions.Branch,
+			TransferInstructions: r.Instructions.TransferInstructions, QrUrl: v.QRURL,
+		},
+		PayerName: r.PayerName, PayerBank: r.PayerBank, PayerAccount: r.PayerAccount,
+		BankTransactionRef: r.BankTransactionRef, EvidenceUrl: v.EvidenceURL, AmountMismatch: r.AmountMismatch,
+		ReviewNote: r.ReviewNote, RejectionReason: r.RejectionReason, CreatedAt: converter.TimeToProto(r.CreatedAt),
+	}
+
+	if r.Plan != nil {
+		out.Plan = planToProto(r.Plan)
+	}
+
+	if r.TransferredAmount != nil {
+		out.TransferredAmount = *r.TransferredAmount
+	}
+
+	for target, at := range map[**timestamppb.Timestamp]*time.Time{
+		&out.PaidAt: r.PaidAt, &out.SubmittedAt: r.SubmittedAt, &out.ReviewedAt: r.ReviewedAt,
+	} {
+		if at != nil {
+			*target = converter.TimeToProto(*at)
+		}
+	}
+
+	return out
+}
+
+func creditEntryToProto(e *domain.CreditEntry) *licensev1.CreditLedgerEntry {
+	return &licensev1.CreditLedgerEntry{
+		Kind: creditKinds[e.Kind], Amount: e.Amount, BalanceAfter: e.BalanceAfter,
+		PlanPaymentRequestId: e.PlanPaymentRequestID, Note: e.Note, CreatedAt: converter.TimeToProto(e.CreatedAt),
+	}
+}
+
+func settingsToProto(v usecase.SettingsView) *licensev1.PlatformPaymentSettings {
+	s := v.Settings
+
+	return &licensev1.PlatformPaymentSettings{
+		BankName: s.BankName, AccountNumber: s.AccountNumber, AccountHolder: s.AccountHolder, Branch: s.Branch,
+		TransferInstructions: s.TransferInstructions, QrUrl: v.QRURL, UpdatedAt: converter.TimeToProto(s.UpdatedAt),
+	}
+}
+
+func reviewDetailToProto(d usecase.ReviewDetail) *licensev1.AdminPlanPaymentRequest {
+	return &licensev1.AdminPlanPaymentRequest{
+		Request: paymentRequestToProto(d.RequestView), SubscriptionId: d.SubscriptionID, UserEmail: d.Email, UserName: d.FullName,
+		CurrentPlan: planToProto(d.CurrentPlan), Usage: usageToProto(d.Usage),
+	}
+}
+
+func usageToProto(u usecase.Usage) *licensev1.Usage {
+	return &licensev1.Usage{
+		Garages: int32(u.Garages), Staff: int32(u.Staff), TransactionsToday: int32(u.TransactionsToday), //nolint:gosec // bounded by plan limits
+	}
+}
+
+func paginationOf(total, page, pageSize int) *commonv1.Pagination {
+	return &commonv1.Pagination{Total: int32(total), Page: int32(page), PageSize: int32(pageSize)} //nolint:gosec // bounded
 }

@@ -81,8 +81,14 @@ type Subscription struct {
 	// ReminderPeriodEnd is the period end an expiring-soon reminder was
 	// already sent for.
 	ReminderPeriodEnd *time.Time
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	// PeriodPaidAmount is what the owner paid for the current period (VND;
+	// 0 for a trial): the basis of the credit when the plan changes.
+	PeriodPaidAmount int64
+	// CreditBalance is the account credit (VND), applied automatically to
+	// the next payment (FR-LIC-09).
+	CreditBalance int64
+	CreatedAt     time.Time
+	UpdatedAt     time.Time
 }
 
 // NewTrial starts a TrialPeriod-long trial on the trial plan at start.
@@ -156,28 +162,6 @@ func (s *Subscription) Expire(now time.Time, grace time.Duration) bool {
 	}
 
 	return changed
-}
-
-// ChangePlan upgrades, downgrades or renews to plan, starting a new billing
-// period at now (FR-LIC-02). Payment collection arrives in Phase 2, so the
-// plan takes effect immediately.
-func (s *Subscription) ChangePlan(plan *Plan, now time.Time) error {
-	if !plan.Selectable() {
-		return ErrPlanNotAvailable
-	}
-
-	if s.Status == StatusCancelled {
-		return ErrSubscriptionCancelled
-	}
-
-	s.PlanID, s.Plan = plan.ID, plan
-	s.Status = StatusActive
-	s.TrialEndAt = nil
-	s.CurrentPeriodStart = now
-	s.CurrentPeriodEnd = plan.BillingCycle.PeriodEnd(now)
-	s.GracePeriodEnd = nil
-
-	return nil
 }
 
 // Extend adds days to the current period (from now when it already

@@ -25,7 +25,7 @@ func (s syncer) entitlementsChanged(ctx context.Context, sub *domain.Subscriptio
 
 	err := s.events.Publish(ctx, EventEntitlementUpdated, "", sub.UserID, map[string]any{
 		keyUserID:   sub.UserID,
-		"status":    sub.Status,
+		keyStatus:   sub.Status,
 		"plan_code": sub.Plan.Code,
 	})
 	if err != nil {

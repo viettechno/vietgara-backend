@@ -22,6 +22,9 @@ type Repository interface {
 	FindByKey(ctx context.Context, garageID, key string) (*domain.File, error)
 	// SoftDelete returns domain.ErrFileNotFound when absent.
 	SoftDelete(ctx context.Context, garageID, fileID, deletedBy string) error
+	// KeyByID returns the object key and content type of a live file by its
+	// id, whoever owns it; domain.ErrFileNotFound when absent.
+	KeyByID(ctx context.Context, fileID string) (key, contentType string, err error)
 	// SetActive deactivates or reactivates a file.
 	SetActive(ctx context.Context, garageID, fileID string, active bool, updatedBy string) error
 }

@@ -821,6 +821,23 @@ type notificationUsers struct {
 	users *identityRepo.PostgresUserRepository
 }
 
+// PlatformAdmins returns the platform admins.
+func (a notificationUsers) PlatformAdmins(ctx context.Context) ([]notificationUsecase.UserInfo, error) {
+	admins, err := a.users.ListPlatformAdmins(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]notificationUsecase.UserInfo, 0, len(admins))
+	for _, u := range admins {
+		out = append(out, notificationUsecase.UserInfo{
+			ID: u.ID, Email: u.Email, FullName: u.FullName, Locale: string(u.Locale.OrDefault()),
+		})
+	}
+
+	return out, nil
+}
+
 func (a notificationUsers) Get(ctx context.Context, userID string) (notificationUsecase.UserInfo, error) {
 	user, err := a.users.FindByID(ctx, userID)
 	if err != nil {

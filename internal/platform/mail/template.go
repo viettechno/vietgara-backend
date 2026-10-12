@@ -18,6 +18,10 @@ const (
 	TemplateQuoteReadyForApproval    = "quote_ready_for_approval"
 	TemplateRegistrationConfirmation = "registration_confirmation"
 	TemplateSubscriptionExpiringSoon = "subscription_expiring_soon"
+	TemplatePaymentSubmitted         = "plan_payment_submitted"
+	TemplatePaymentApproved          = "plan_payment_approved"
+	TemplatePaymentRejected          = "plan_payment_rejected"
+	TemplatePaymentReviewReminder    = "payment_review_reminder"
 )
 
 // Supported locales; Vietnamese is the default.

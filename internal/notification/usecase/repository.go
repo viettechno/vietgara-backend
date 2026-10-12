@@ -22,6 +22,7 @@ type Mailer interface {
 // UserInfo is the Identity module's view of a user that
 // Notification needs to address an e-mail.
 type UserInfo struct {
+	ID       string
 	Email    string
 	FullName string
 	Locale   string
@@ -39,6 +40,9 @@ var ErrUserNotFound = errors.New("user not found")
 // adapter over the Identity module in cmd/server.
 type UserReader interface {
 	Get(ctx context.Context, userID string) (UserInfo, error)
+	// PlatformAdmins returns the platform admins, who are told of payments
+	// waiting for review.
+	PlatformAdmins(ctx context.Context) ([]UserInfo, error)
 }
 
 // Repository records what was sent (domain.Log), in the same transaction

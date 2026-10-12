@@ -4,6 +4,7 @@ package licensetest
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -20,25 +21,30 @@ import (
 
 // Store fakes plans, subscriptions and entitlements.
 type Store struct {
-	mu       sync.Mutex
-	plans    map[string]*domain.Plan
-	subs     map[string]*domain.Subscription // by user
-	Flags    map[string]map[domain.Feature]bool
-	Emails   map[string]string // user -> e-mail for Search
-	Fail     map[string]error
-	Garages  map[string]int // user -> garages in use
-	Staff    map[string]int
-	Owners   map[string]string // garage -> owner
-	Events   []string
-	Audits   []string
-	AuditErr error
+	mu         sync.Mutex
+	plans      map[string]*domain.Plan
+	subs       map[string]*domain.Subscription // by user
+	requests   []*domain.PlanPaymentRequest
+	ledger     []*domain.CreditEntry
+	settings   domain.PaymentSettings
+	files      map[string]string // file id -> content type
+	lastRemind time.Time
+	Flags      map[string]map[domain.Feature]bool
+	Emails     map[string]string // user -> e-mail for Search
+	Fail       map[string]error
+	Garages    map[string]int // user -> garages in use
+	Staff      map[string]int
+	Owners     map[string]string // garage -> owner
+	Events     []string
+	Audits     []string
+	AuditErr   error
 }
 
 // NewStore returns a store with the seeded catalogue: trial, starter,
 // pro (2 garages, 20 staff, 100/day) and a hidden legacy plan.
 func NewStore() *Store {
 	s := &Store{
-		plans: map[string]*domain.Plan{}, subs: map[string]*domain.Subscription{}, Flags: map[string]map[domain.Feature]bool{},
+		plans: map[string]*domain.Plan{}, subs: map[string]*domain.Subscription{}, files: map[string]string{}, Flags: map[string]map[domain.Feature]bool{},
 		Emails: map[string]string{}, Fail: map[string]error{}, Garages: map[string]int{}, Staff: map[string]int{}, Owners: map[string]string{},
 	}
 
@@ -366,6 +372,7 @@ type Env struct {
 	Counter       *repository.MemoryTransactionCounter
 	Subscriptions *usecase.SubscriptionUseCase
 	Entitlements  *usecase.EntitlementUseCase
+	Payments      *usecase.PaymentUseCase
 	Expiry        *usecase.ExpiryJob
 	Now           time.Time
 }
@@ -382,8 +389,344 @@ func NewEnv() *Env {
 		Plans: e.Store.Plans(), Subscriptions: e.Store, Entitlements: e.Store, Usage: e.Store, Counter: e.Counter,
 		Events: e.Store, Cache: e.Cache, Audit: e.Store,
 	}, clock)
+	e.Payments = usecase.NewPaymentUseCase(usecase.PaymentDeps{
+		Plans: e.Store.Plans(), Subscriptions: e.Store, Entitlements: e.Store, Payments: e.Store, Files: e.Store, Usage: e.Store,
+		Events: e.Store, Cache: e.Cache, Audit: e.Store,
+	}, clock)
 	e.Entitlements = usecase.NewEntitlementUseCase(e.Store, e.Cache, e.Store, e.Counter, e.Subscriptions, clock)
-	e.Expiry = usecase.NewExpiryJob(e.Store, e.Store, e.Store, e.Cache, e.Store, clock, usecase.WithGracePeriod(domain.GracePeriod))
+	e.Expiry = usecase.NewExpiryJob(e.Store, e.Store, e.Store, e.Cache, e.Store, e.Store, clock, usecase.WithGracePeriod(domain.GracePeriod))
 
 	return e
+}
+
+// CreateRequest implements usecase.PaymentRepository: one open request per
+// owner and unique references.
+func (s *Store) CreateRequest(_ context.Context, r *domain.PlanPaymentRequest) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("payments.create"); err != nil {
+		return err
+	}
+
+	for _, e := range s.requests {
+		if e.Reference == r.Reference {
+			return domain.ErrReferenceTaken
+		}
+
+		if e.UserID == r.UserID && e.Status.Open() && r.Status.Open() {
+			return domain.ErrRequestAlreadyOpen
+		}
+	}
+
+	r.ID = uuid.NewString()
+	r.CreatedAt = time.Now().UTC()
+	copied := *r
+	s.requests = append(s.requests, &copied)
+
+	return nil
+}
+
+func (s *Store) requestCopy(r *domain.PlanPaymentRequest) *domain.PlanPaymentRequest {
+	copied := *r
+	if plan, ok := s.plans[r.PlanID]; ok {
+		p := *plan
+		copied.Plan = &p
+	}
+
+	return &copied
+}
+
+// FindRequest implements usecase.PaymentRepository.
+func (s *Store) FindRequest(_ context.Context, id string) (*domain.PlanPaymentRequest, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("payments.find"); err != nil {
+		return nil, err
+	}
+
+	for _, r := range s.requests {
+		if r.ID == id {
+			return s.requestCopy(r), nil
+		}
+	}
+
+	return nil, domain.ErrPaymentRequestNotFound
+}
+
+// LockRequest implements usecase.PaymentRepository.
+func (s *Store) LockRequest(ctx context.Context, id string) (*domain.PlanPaymentRequest, error) {
+	if err := s.fail("payments.lock"); err != nil {
+		return nil, err
+	}
+
+	return s.FindRequest(ctx, id)
+}
+
+// FindOpenRequest implements usecase.PaymentRepository.
+func (s *Store) FindOpenRequest(_ context.Context, userID string) (*domain.PlanPaymentRequest, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("payments.open"); err != nil {
+		return nil, err
+	}
+
+	for _, r := range s.requests {
+		if r.UserID == userID && r.Status.Open() {
+			return s.requestCopy(r), nil
+		}
+	}
+
+	return nil, domain.ErrPaymentRequestNotFound
+}
+
+// SaveRequest implements usecase.PaymentRepository.
+func (s *Store) SaveRequest(_ context.Context, r *domain.PlanPaymentRequest) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("payments.save"); err != nil {
+		return err
+	}
+
+	for i, e := range s.requests {
+		if e.ID == r.ID {
+			copied := *r
+			s.requests[i] = &copied
+
+			return nil
+		}
+	}
+
+	return domain.ErrPaymentRequestNotFound
+}
+
+// ListRequests implements usecase.PaymentRepository.
+func (s *Store) ListRequests(_ context.Context, userID string, status domain.PaymentStatus) ([]*domain.PlanPaymentRequest, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("payments.list"); err != nil {
+		return nil, err
+	}
+
+	var out []*domain.PlanPaymentRequest
+
+	for _, r := range slices.Backward(s.requests) {
+		if r.UserID == userID && (status == "" || r.Status == status) {
+			out = append(out, s.requestCopy(r))
+		}
+	}
+
+	return out, nil
+}
+
+// OpenRequests implements usecase.PaymentRepository.
+func (s *Store) OpenRequests(_ context.Context, subscriptionIDs []string) (map[string]*domain.PlanPaymentRequest, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("payments.openrequests"); err != nil {
+		return nil, err
+	}
+
+	out := map[string]*domain.PlanPaymentRequest{}
+
+	for _, r := range s.requests {
+		if r.Status.Open() && slices.Contains(subscriptionIDs, r.SubscriptionID) {
+			out[r.SubscriptionID] = s.requestCopy(r)
+		}
+	}
+
+	return out, nil
+}
+
+// SearchRequests implements usecase.PaymentRepository.
+func (s *Store) SearchRequests(_ context.Context, f usecase.ReviewFilter) (*usecase.ReviewPage, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("payments.search"); err != nil {
+		return nil, err
+	}
+
+	page := &usecase.ReviewPage{}
+
+	for _, r := range s.requests {
+		if r.Status != f.Status {
+			continue
+		}
+
+		email := s.Emails[r.UserID]
+		if f.Query != "" && !strings.Contains(email, f.Query) && !strings.Contains(strings.ToLower(r.Reference), strings.ToLower(f.Query)) {
+			continue
+		}
+
+		page.Items = append(page.Items, usecase.ReviewItem{Request: s.requestCopy(r), Email: email})
+	}
+
+	page.Total = len(page.Items)
+
+	return page, nil
+}
+
+// WaitingForReview implements usecase.PaymentRepository.
+func (s *Store) WaitingForReview(context.Context) (int, time.Time, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("payments.waiting"); err != nil {
+		return 0, time.Time{}, err
+	}
+
+	var (
+		count  int
+		oldest time.Time
+	)
+
+	for _, r := range s.requests {
+		if r.Status == domain.PaymentSubmitted {
+			count++
+
+			if r.SubmittedAt != nil && (oldest.IsZero() || r.SubmittedAt.Before(oldest)) {
+				oldest = *r.SubmittedAt
+			}
+		}
+	}
+
+	return count, oldest, nil
+}
+
+// AddCreditEntry implements usecase.PaymentRepository.
+func (s *Store) AddCreditEntry(_ context.Context, e *domain.CreditEntry) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("payments.credit"); err != nil {
+		return err
+	}
+
+	e.ID = uuid.NewString()
+	e.CreatedAt = time.Now().UTC()
+	copied := *e
+	s.ledger = append(s.ledger, &copied)
+
+	return nil
+}
+
+// ListCredit implements usecase.PaymentRepository.
+func (s *Store) ListCredit(_ context.Context, userID string) ([]*domain.CreditEntry, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("payments.ledger"); err != nil {
+		return nil, err
+	}
+
+	var out []*domain.CreditEntry
+
+	for _, e := range slices.Backward(s.ledger) {
+		if e.UserID == userID {
+			copied := *e
+			out = append(out, &copied)
+		}
+	}
+
+	return out, nil
+}
+
+// Ledger returns the credit entries recorded so far, oldest first.
+func (s *Store) Ledger() []*domain.CreditEntry {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return slices.Clone(s.ledger)
+}
+
+// ClaimReviewReminder implements usecase.PaymentRepository.
+func (s *Store) ClaimReviewReminder(_ context.Context, now time.Time, minInterval time.Duration) (bool, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("payments.remind"); err != nil {
+		return false, err
+	}
+
+	if !s.lastRemind.IsZero() && s.lastRemind.After(now.Add(-minInterval)) {
+		return false, nil
+	}
+
+	s.lastRemind = now
+
+	return true, nil
+}
+
+// Settings implements usecase.PaymentRepository.
+func (s *Store) Settings(context.Context) (*domain.PaymentSettings, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("payments.settings"); err != nil {
+		return nil, err
+	}
+
+	copied := s.settings
+
+	return &copied, nil
+}
+
+// SaveSettings implements usecase.PaymentRepository.
+func (s *Store) SaveSettings(_ context.Context, settings *domain.PaymentSettings, _ string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("payments.savesettings"); err != nil {
+		return err
+	}
+
+	s.settings = *settings
+
+	return nil
+}
+
+// StoreEvidence implements usecase.FileStore.
+func (s *Store) StoreEvidence(_ context.Context, _ string, content []byte, contentType string) (string, error) {
+	return s.storeFile("evidence", content, contentType, domain.ErrInvalidEvidence)
+}
+
+// StoreQR implements usecase.FileStore.
+func (s *Store) StoreQR(_ context.Context, _ string, content []byte, contentType string) (string, error) {
+	return s.storeFile("qr", content, contentType, domain.ErrInvalidQR)
+}
+
+func (s *Store) storeFile(kind string, content []byte, contentType string, invalid error) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := s.fail("files.store"); err != nil {
+		return "", err
+	}
+
+	if len(content) == 0 || contentType == "text/plain" {
+		return "", invalid
+	}
+
+	id := kind + "-" + uuid.NewString()
+	s.files[id] = contentType
+
+	return id, nil
+}
+
+// SignedURL implements usecase.FileStore.
+func (s *Store) SignedURL(_ context.Context, fileID string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.files[fileID]; !ok {
+		return "", domain.ErrPaymentRequestNotFound
+	}
+
+	return "https://files.example/" + fileID + "?sig=1", nil
 }

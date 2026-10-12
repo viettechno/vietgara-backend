@@ -1,0 +1,12 @@
+{{define "subject"}}Có khoản thanh toán gói chờ duyệt: {{.Reference}}{{end}}
+{{define "text"}}Xin chào {{.Name}},
+
+Một chủ gara vừa khai báo chuyển khoản cho gói {{.PlanCode}} (mã tham chiếu {{.Reference}}): số tiền phải trả {{.AmountDue}} VND, đã chuyển {{.TransferredAmount}} VND.{{if .Mismatch}} Hai số tiền khác nhau: hãy trao đổi với chủ gara trước khi duyệt.{{end}}
+
+Hãy xem và duyệt trong trang quản trị.
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.Name}},</p>
+<p>Một chủ gara vừa khai báo chuyển khoản cho gói <strong>{{.PlanCode}}</strong> (mã tham chiếu <strong>{{.Reference}}</strong>): số tiền phải trả {{.AmountDue}} VND, đã chuyển {{.TransferredAmount}} VND.{{if .Mismatch}} Hai số tiền khác nhau: hãy trao đổi với chủ gara trước khi duyệt.{{end}}</p>
+<p>Hãy xem và duyệt trong trang quản trị.</p>
+<p>VietGara</p>{{end}}

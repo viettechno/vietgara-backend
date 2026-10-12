@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"maps"
 	"time"
 
 	"github.com/google/uuid"
@@ -57,6 +58,11 @@ type subscriptionExpiringSoonPayload struct {
 	UserID           string `json:"user_id"`
 	PlanCode         string `json:"plan_code"`
 	CurrentPeriodEnd string `json:"current_period_end"`
+	AmountDue        int64  `json:"amount_due"`
+	BankName         string `json:"bank_name"`
+	AccountNumber    string `json:"account_number"`
+	AccountHolder    string `json:"account_holder"`
+	Branch           string `json:"branch"`
 }
 
 // HandleSubscriptionExpiringSoon sends a license renewal reminder ahead
@@ -84,7 +90,101 @@ func (uc *NotificationUseCase) HandleSubscriptionExpiringSoon(ctx context.Contex
 		map[string]any{
 			"Name": user.FullName, "PlanCode": payload.PlanCode,
 			"CurrentPeriodEnd": formatPeriodEnd(payload.CurrentPeriodEnd, user.Locale),
+			"AmountDue":        payload.AmountDue, "BankName": payload.BankName, "AccountNumber": payload.AccountNumber,
+			"AccountHolder": payload.AccountHolder, "Branch": payload.Branch,
 		})
+}
+
+type paymentPayload struct {
+	UserID            string `json:"user_id"`
+	PlanCode          string `json:"plan_code"`
+	Reference         string `json:"reference"`
+	AmountDue         int64  `json:"amount_due"`
+	TransferredAmount int64  `json:"transferred_amount"`
+	AmountMismatch    bool   `json:"amount_mismatch"`
+	Reason            string `json:"reason"`
+	Waiting           int    `json:"waiting"`
+	OldestSubmittedAt string `json:"oldest_submitted_at"`
+}
+
+// HandlePaymentSubmitted tells every platform admin a plan payment waits
+// for review (FR-LIC-07).
+func (uc *NotificationUseCase) HandlePaymentSubmitted(ctx context.Context, event outbox.Event) error {
+	var p paymentPayload
+	if err := json.Unmarshal(event.Data, &p); err != nil || p.UserID == "" {
+		return nil //nolint:nilerr // a malformed event cannot succeed on retry: drop it
+	}
+
+	return uc.tellAdmins(ctx, mail.TemplatePaymentSubmitted, map[string]any{
+		"Reference": p.Reference, "PlanCode": p.PlanCode, "AmountDue": p.AmountDue, "TransferredAmount": p.TransferredAmount,
+		"Mismatch": p.AmountMismatch,
+	})
+}
+
+// HandlePaymentReviewReminder reminds the platform admins daily of requests
+// still waiting for review.
+func (uc *NotificationUseCase) HandlePaymentReviewReminder(ctx context.Context, event outbox.Event) error {
+	var p paymentPayload
+	if err := json.Unmarshal(event.Data, &p); err != nil || p.Waiting == 0 {
+		return nil //nolint:nilerr // a malformed event cannot succeed on retry: drop it
+	}
+
+	return uc.tellAdmins(ctx, mail.TemplatePaymentReviewReminder, map[string]any{
+		"Waiting": p.Waiting, "Oldest": formatPeriodEnd(p.OldestSubmittedAt, mail.LocaleVI),
+	})
+}
+
+// tellAdmins sends one e-mail to each platform admin, in their language.
+func (uc *NotificationUseCase) tellAdmins(ctx context.Context, template string, data map[string]any) error {
+	admins, err := uc.Users.PlatformAdmins(ctx)
+	if err != nil {
+		return err
+	}
+
+	for _, admin := range admins {
+		personal := map[string]any{"Name": admin.FullName}
+		maps.Copy(personal, data)
+
+		if err := uc.send(ctx, admin.ID, template, admin.Locale, admin.Email, admin.FullName, personal); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// HandlePaymentApproved tells the owner their plan payment was approved and
+// the plan applies.
+func (uc *NotificationUseCase) HandlePaymentApproved(ctx context.Context, event outbox.Event) error {
+	return uc.tellOwner(ctx, event, mail.TemplatePaymentApproved)
+}
+
+// HandlePaymentRejected tells the owner their plan payment was rejected,
+// with the reason.
+func (uc *NotificationUseCase) HandlePaymentRejected(ctx context.Context, event outbox.Event) error {
+	return uc.tellOwner(ctx, event, mail.TemplatePaymentRejected)
+}
+
+func (uc *NotificationUseCase) tellOwner(ctx context.Context, event outbox.Event, template string) error {
+	var p paymentPayload
+	if err := json.Unmarshal(event.Data, &p); err != nil || p.UserID == "" {
+		return nil //nolint:nilerr // a malformed event cannot succeed on retry: drop it
+	}
+
+	user, err := uc.Users.Get(ctx, p.UserID)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			slog.Warn("notification: user no longer exists, dropping its payment notice", "user_id", p.UserID)
+
+			return nil
+		}
+
+		return err
+	}
+
+	return uc.send(ctx, p.UserID, template, user.Locale, user.Email, user.FullName, map[string]any{
+		"Name": user.FullName, "PlanCode": p.PlanCode, "Reference": p.Reference, "Reason": p.Reason,
+	})
 }
 
 // formatPeriodEnd renders an RFC3339 instant as a plain date in the

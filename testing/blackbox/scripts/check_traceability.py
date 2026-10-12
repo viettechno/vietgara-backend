@@ -249,11 +249,17 @@ def top_level_funcs(source):
     return found
 
 
-def resolve_expr(expr, helpers, seen=()):
-    """Resolve a path expression to a template; {..} marks parameters."""
+def resolve_expr(expr, helpers, env=None, seen=()):
+    """Resolve a path expression to a template; {..} marks parameters.
+
+    Besides literals, helper calls and url.PathEscape, bare identifiers
+    resolve through env (local `path :=` / `path +=` assignments collected
+    by collect_calls).
+    """
+    env = env or {}
     parts = split_top_level(expr, "+")
     if len(parts) > 1:
-        return "".join(resolve_expr(p, helpers, seen) for p in parts)
+        return "".join(resolve_expr(p, helpers, env, seen) for p in parts)
     atom = expr.strip()
     if len(atom) >= 2 and atom[0] == '"' and atom[-1] == '"':
         return atom[1:-1].replace('\\"', '"').replace("\\\\", "\\")
@@ -266,9 +272,79 @@ def resolve_expr(expr, helpers, seen=()):
     if m:
         name = m.group(1)
         if name in helpers and name not in seen:
-            return resolve_expr(helpers[name], helpers, seen + (name,))
+            return resolve_expr(helpers[name], helpers, env, seen + (name,))
         raise Unresolvable(atom)
+    m = re.fullmatch(r"([A-Za-z_]\w*)", atom)
+    if m and m.group(1) in env:
+        if m.group(1) in seen:
+            raise Unresolvable(atom)
+        return env[m.group(1)]
     raise Unresolvable(atom)
+
+
+def _statements(body):
+    """Go statements: split on ; and newlines at depth 0 (strings kept)."""
+    out = []
+    for part in split_top_level(body, ";"):
+        out.extend(s.strip() for s in split_top_level(part, "\n"))
+    return [s for s in out if s]
+
+
+def collect_calls(body, helpers):
+    """[(http_method|None, template)] from call[/DownloadRaw sites.
+
+    Tracks local `name :=` / `name +=` string assembly (the client's
+    `path := ...` + `?updateMask=`/`?query=` pattern); query strings are
+    stripped since they never appear in the OpenAPI paths.
+    """
+    env, pairs, ok = {}, [], True
+    for stmt in _statements(body):
+        sites = []
+        for keyword in ("call[", "DownloadRaw("):
+            start = 0
+            while True:
+                at = stmt.find(keyword, start)
+                if at < 0:
+                    break
+                try:
+                    if keyword == "call[":
+                        br = stmt.index("[", at + 4)
+                        paren = stmt.index("(", _balanced(stmt, br))
+                    else:
+                        paren = stmt.index("(", at + len(keyword) - 1)
+                    end = _balanced(stmt, paren)
+                    args = split_top_level(stmt[paren + 1 : end - 1], ",")
+                    if keyword == "call[":
+                        method_arg, path_arg = args[2], args[3]
+                    else:
+                        method_arg, path_arg = args[1], args[2]
+                    mm = re.search(r"http\.Method(\w+)", method_arg)
+                    template = resolve_expr(path_arg, helpers, env).split("?")[0]
+                    sites.append((
+                        mm.group(1).upper() if mm else None,
+                        template,
+                    ))
+                    start = end
+                except (Unresolvable, ValueError, IndexError):
+                    ok = False
+                    start = at + len(keyword)
+        if sites:
+            pairs.extend(sites)
+            continue
+        m = re.match(r"(\w+)\s*:=\s*(.+)$", stmt, re.S)
+        if m:
+            try:
+                env[m.group(1)] = resolve_expr(m.group(2), helpers, env)
+            except Unresolvable:
+                env.pop(m.group(1), None)
+            continue
+        m = re.match(r"(\w+)\s*\+=\s*(.+)$", stmt, re.S)
+        if m and m.group(1) in env:
+            try:
+                env[m.group(1)] = env[m.group(1)] + resolve_expr(m.group(2), helpers, env)
+            except Unresolvable:
+                env.pop(m.group(1), None)
+    return pairs, ok
 
 
 def client_table(client_dir):
@@ -286,26 +362,7 @@ def client_table(client_dir):
         for name, body in top_level_funcs(path.read_text()):
             if not (name and name[0].isupper()):
                 continue
-            pairs, ok = [], True
-            idx = 0
-            while True:
-                idx = body.find("call[", idx)
-                if idx < 0:
-                    break
-                end = None
-                try:
-                    br = body.index("[", idx + 4)
-                    paren = body.index("(", _balanced(body, br))
-                    end = _balanced(body, paren)
-                    args = split_top_level(body[paren + 1 : end - 1], ",")
-                    mm = re.search(r"http\.Method(\w+)", args[2])
-                    pairs.append((
-                        mm.group(1).upper() if mm else None,
-                        resolve_expr(args[3], helpers),
-                    ))
-                except (Unresolvable, ValueError, IndexError):
-                    ok = False
-                idx = end if end is not None else idx + 5
+            pairs, ok = collect_calls(body, helpers)
             if pairs:
                 table.setdefault(name, []).extend(pairs)
             if not ok:
@@ -322,15 +379,15 @@ def called_methods(blackbox_dir, defined):
     return sorted(used & defined)
 
 
+def _norm_seg(seg):
+    return re.sub(r"\{[^{}]*\}", "{}", seg)
+
+
 def template_equal(resolved, swagger_path):
     a, b = resolved.split("/"), swagger_path.split("/")
     if len(a) != len(b):
         return False
-    return all(
-        x == y or (x.startswith("{") and x.endswith("}"))
-        or (y.startswith("{") and y.endswith("}"))
-        for x, y in zip(a, b)
-    )
+    return all(_norm_seg(x) == _norm_seg(y) for x, y in zip(a, b))
 
 
 def api_coverage(swagger_path, blackbox_dir, client_dir):

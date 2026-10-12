@@ -67,7 +67,7 @@ type technicianRepairOrders struct {
 }
 
 func (r technicianRepairOrders) ListAssigned(ctx context.Context, garageID, userID string) ([]*repairorderDomain.RepairOrder, error) {
-	return allPages(func(page int) ([]*repairorderDomain.RepairOrder, int, error) {
+	orders, err := allPages(func(page int) ([]*repairorderDomain.RepairOrder, int, error) {
 		result, err := r.uc.List(ctx, repairorderUsecase.ListRepairOrdersRequest{
 			PageRequest: repairorderUsecase.PageRequest{Page: page, PageSize: repairorderUsecase.MaxPageSize},
 			GarageID:    garageID, TechnicianID: userID,
@@ -78,6 +78,23 @@ func (r technicianRepairOrders) ListAssigned(ctx context.Context, garageID, user
 
 		return result.Items, result.Total, nil
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	// List returns orders without lines, but the work list keeps each
+	// order's own lines (FR-TAPP-01): reload them one by one.
+	full := make([]*repairorderDomain.RepairOrder, 0, len(orders))
+	for _, o := range orders {
+		got, err := r.uc.Get(ctx, garageID, o.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		full = append(full, got)
+	}
+
+	return full, nil
 }
 
 // allPages reads a paginated listing to its end.

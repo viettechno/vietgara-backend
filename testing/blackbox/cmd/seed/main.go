@@ -26,12 +26,13 @@ import (
 )
 
 var (
-	errUnexpectedPositionalArguments = errors.New("unexpected positional arguments")
-	errDatasetHasNoStubbedPassword   = errors.New("dataset has no stubbed password")
-	errInvalidLoopbackURL            = errors.New("must be a plain HTTP URL without credentials, path, query, or fragment")
-	errNonLoopbackURL                = errors.New("must resolve to a loopback host; remote targets are not supported")
-	errInvalidReservedTestDomain     = errors.New("must be a valid reserved test domain")
-	errTestDomainMissingSuffix       = errors.New("must end in .test, .example, .invalid, or .localhost")
+	errUnexpectedPositionalArguments    = errors.New("unexpected positional arguments")
+	errDatasetHasNoStubbedPassword      = errors.New("dataset has no stubbed password")
+	errDatasetHasNoStubbedAdminPassword = errors.New("dataset has no stubbed admin password")
+	errInvalidLoopbackURL               = errors.New("must be a plain HTTP URL without credentials, path, query, or fragment")
+	errNonLoopbackURL                   = errors.New("must resolve to a loopback host; remote targets are not supported")
+	errInvalidReservedTestDomain        = errors.New("must be a valid reserved test domain")
+	errTestDomainMissingSuffix          = errors.New("must end in .test, .example, .invalid, or .localhost")
 )
 
 type apiClient struct {
@@ -58,8 +59,20 @@ func (a apiClient) ListPlans(ctx context.Context) ([]*licensev1.Plan, error) {
 	return a.client.ListPlans(ctx)
 }
 
-func (a apiClient) ChangeMyPlan(ctx context.Context, planID string) (*licensev1.Subscription, error) {
-	return a.client.ChangeMyPlan(ctx, planID)
+func (a apiClient) CreatePlanPaymentRequest(ctx context.Context, planID string,
+	kind licensev1.PlanPaymentKind,
+) (*licensev1.PlanPaymentRequest, error) {
+	return a.client.CreatePlanPaymentRequest(ctx, planID, kind)
+}
+
+func (a apiClient) SubmitPlanPayment(ctx context.Context,
+	req *licensev1.SubmitPlanPaymentRequest,
+) (*licensev1.PlanPaymentRequest, error) {
+	return a.client.SubmitPlanPayment(ctx, req)
+}
+
+func (a apiClient) ApprovePlanPayment(ctx context.Context, requestID, note string) (*licensev1.Subscription, error) {
+	return a.client.ApprovePlanPayment(ctx, requestID, note)
 }
 
 func (a apiClient) ListGarages(ctx context.Context) ([]*tenantv1.Garage, error) {
@@ -122,13 +135,18 @@ func run() error {
 		return errDatasetHasNoStubbedPassword
 	}
 
+	if environment.AdminPassword == "" {
+		return errDatasetHasNoStubbedAdminPassword
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
-	summary, err := seed.Run(ctx, dataset, apiClient{client: client.New(*apiURL)}, client.NewMailpit(*mailpitURL), *emailDomain, environment.Password)
+	summary, err := seed.Run(ctx, dataset, apiClient{client: client.New(*apiURL)}, client.NewMailpit(*mailpitURL),
+		*emailDomain, environment.Password, environment.AdminPassword)
 	if err != nil {
 		return err
 	}

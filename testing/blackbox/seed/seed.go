@@ -2,9 +2,12 @@
 package seed
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"image"
+	"image/png"
 	"net/http"
 	"strings"
 
@@ -12,6 +15,7 @@ import (
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 	testdata "github.com/viettechno/vietgara-testdata/go"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 )
@@ -24,6 +28,8 @@ var (
 	errUnsupportedOwnerSetup        = errors.New("owner")
 	errMultiplePublicPlansMatch     = errors.New("multiple public plans match")
 	errPublicPlanNotFound           = errors.New("public plan")
+	errNoPlatformAdminInDataset     = errors.New("dataset has no platform admin to approve plan payments")
+	errApprovedPlanDiffers          = errors.New("approved subscription plan differs from")
 	errGarageHasNoSeededOwner       = errors.New("garage")
 	errMultipleGaragesNamed         = errors.New("multiple garages are named")
 	errExistingGarageValuesMismatch = errors.New("existing garage values differ from the dataset")
@@ -31,14 +37,18 @@ var (
 	errUserNameDiffersFromDataset   = errors.New("user name differs from the dataset")
 )
 
-// API is the public API surface the baseline seeder needs.
+// API is the public API surface the baseline seeder needs. Plan changes
+// since Release 5.2 go through a bank-transfer payment request that a
+// platform admin approves.
 type API interface {
 	Login(context.Context, string, string) (*identityv1.Session, error)
 	Register(context.Context, *identityv1.RegisterRequest) (*identityv1.Session, error)
 	VerifyEmail(context.Context, string, string) (*identityv1.Session, error)
 	MySubscription(context.Context) (*licensev1.Subscription, error)
 	ListPlans(context.Context) ([]*licensev1.Plan, error)
-	ChangeMyPlan(context.Context, string) (*licensev1.Subscription, error)
+	CreatePlanPaymentRequest(context.Context, string, licensev1.PlanPaymentKind) (*licensev1.PlanPaymentRequest, error)
+	SubmitPlanPayment(context.Context, *licensev1.SubmitPlanPaymentRequest) (*licensev1.PlanPaymentRequest, error)
+	ApprovePlanPayment(context.Context, string, string) (*licensev1.Subscription, error)
 	ListGarages(context.Context) ([]*tenantv1.Garage, error)
 	CreateGarage(context.Context, *tenantv1.Garage) (*tenantv1.Garage, error)
 	WithToken(string) API
@@ -58,11 +68,12 @@ type Summary struct {
 	ExistingGarages int
 }
 
-// Run creates dataset owners referenced by garages, applies any dataset plan
-// for those owners, and creates the garages. It preserves matching existing
-// records and rejects same-name garages with different dataset values rather
-// than silently changing shared state.
-func Run(ctx context.Context, dataset *testdata.Dataset, apiClient API, mail Inbox, emailDomain, password string) (Summary, error) {
+// Run creates the dataset platform admin, the owners referenced by garages
+// (applying any dataset plan through a payment request an admin approves),
+// and the garages. It preserves matching existing records and rejects
+// same-name garages with different dataset values rather than silently
+// changing shared state.
+func Run(ctx context.Context, dataset *testdata.Dataset, apiClient API, mail Inbox, emailDomain, password, adminPassword string) (Summary, error) {
 	if dataset == nil {
 		return Summary{}, errSharedDatasetNil
 	}
@@ -75,12 +86,17 @@ func Run(ctx context.Context, dataset *testdata.Dataset, apiClient API, mail Inb
 		return Summary{}, errDatasetHasNoGarages
 	}
 
+	adminAPI, err := seedAdmin(ctx, apiClient, mail, dataset, emailDomain, adminPassword)
+	if err != nil {
+		return Summary{}, err
+	}
+
 	owners, err := datasetOwners(dataset)
 	if err != nil {
 		return Summary{}, err
 	}
 
-	sessions, summary, err := seedOwners(ctx, apiClient, mail, owners, emailDomain, password)
+	sessions, summary, err := seedOwners(ctx, apiClient, mail, adminAPI, owners, emailDomain, password)
 	if err != nil {
 		return summary, err
 	}
@@ -97,6 +113,28 @@ func Run(ctx context.Context, dataset *testdata.Dataset, apiClient API, mail Inb
 	summary.ExistingGarages = garageSummary.ExistingGarages
 
 	return summary, nil
+}
+
+// seedAdmin signs the dataset's first platform admin in, registering and
+// verifying it when missing. It returns nil when the dataset has no
+// platform admin (plan payments then fail with errNoPlatformAdminInDataset).
+func seedAdmin(ctx context.Context, apiClient API, mail Inbox, dataset *testdata.Dataset,
+	emailDomain, adminPassword string,
+) (API, error) {
+	for _, user := range dataset.Users {
+		if !user.PlatformAdmin {
+			continue
+		}
+
+		session, _, err := ensureOwner(ctx, apiClient, mail, user, user.Key+"@"+emailDomain, adminPassword)
+		if err != nil {
+			return nil, fmt.Errorf("seed platform admin %q: %w", user.Key, err)
+		}
+
+		return apiClient.WithToken(session.GetAccessToken()), nil
+	}
+
+	return nil, nil
 }
 
 func datasetOwners(dataset *testdata.Dataset) ([]testdata.User, error) {
@@ -127,6 +165,7 @@ func seedOwners(
 	ctx context.Context,
 	apiClient API,
 	mail Inbox,
+	adminAPI API,
 	owners []testdata.User,
 	emailDomain, password string,
 ) (map[string]*identityv1.Session, Summary, error) {
@@ -157,7 +196,7 @@ func seedOwners(
 		if user.Plan != "" {
 			ownerAPI := apiClient.WithToken(session.GetAccessToken())
 
-			changed, err := ensurePlan(ctx, ownerAPI, user.Plan)
+			changed, err := ensurePlan(ctx, ownerAPI, adminAPI, user.Name, user.Plan)
 			if err != nil {
 				return nil, summary, fmt.Errorf("set plan for owner %q: %w", user.Key, err)
 			}
@@ -171,7 +210,10 @@ func seedOwners(
 	return sessions, summary, nil
 }
 
-func ensurePlan(ctx context.Context, apiClient API, planCode string) (bool, error) {
+// ensurePlan moves the signed-in owner onto planCode through the payment
+// flow: it opens a request, declares the transfer with evidence, and has
+// the platform admin approve it.
+func ensurePlan(ctx context.Context, apiClient, adminAPI API, payerName, planCode string) (bool, error) {
 	subscription, err := apiClient.MySubscription(ctx)
 	if err != nil {
 		return false, fmt.Errorf("read subscription: %w", err)
@@ -181,9 +223,47 @@ func ensurePlan(ctx context.Context, apiClient API, planCode string) (bool, erro
 		return false, nil
 	}
 
+	selected, err := findPublicPlan(ctx, apiClient, planCode)
+	if err != nil {
+		return false, err
+	}
+
+	request, err := apiClient.CreatePlanPaymentRequest(ctx, selected.GetId(), licensev1.PlanPaymentKind_PLAN_PAYMENT_KIND_CHANGE)
+	if err != nil {
+		return false, fmt.Errorf("create plan payment request: %w", err)
+	}
+
+	submitted, err := apiClient.SubmitPlanPayment(ctx, &licensev1.SubmitPlanPaymentRequest{
+		RequestId:         request.GetId(),
+		PayerName:         payerName,
+		TransferredAmount: request.GetAmountDue(),
+		PaidAt:            timestamppb.Now(),
+		Evidence:          paymentEvidence(),
+	})
+	if err != nil {
+		return false, fmt.Errorf("submit plan payment: %w", err)
+	}
+
+	if adminAPI == nil {
+		return false, errNoPlatformAdminInDataset
+	}
+
+	updated, err := adminAPI.ApprovePlanPayment(ctx, submitted.GetId(), "")
+	if err != nil {
+		return false, fmt.Errorf("approve plan payment: %w", err)
+	}
+
+	if !planMatches(updated.GetPlan(), planCode) {
+		return false, fmt.Errorf("%w from %q", errApprovedPlanDiffers, planCode)
+	}
+
+	return true, nil
+}
+
+func findPublicPlan(ctx context.Context, apiClient API, planCode string) (*licensev1.Plan, error) {
 	plans, err := apiClient.ListPlans(ctx)
 	if err != nil {
-		return false, fmt.Errorf("list public plans: %w", err)
+		return nil, fmt.Errorf("list public plans: %w", err)
 	}
 
 	var selected *licensev1.Plan
@@ -205,7 +285,7 @@ func ensurePlan(ctx context.Context, apiClient API, planCode string) (bool, erro
 			}
 
 			if selected != nil {
-				return false, fmt.Errorf("%w %q", errMultiplePublicPlansMatch, planCode)
+				return nil, fmt.Errorf("%w %q", errMultiplePublicPlansMatch, planCode)
 			}
 
 			selected = plan
@@ -213,14 +293,19 @@ func ensurePlan(ctx context.Context, apiClient API, planCode string) (bool, erro
 	}
 
 	if selected == nil {
-		return false, fmt.Errorf("%w %q was not found", errPublicPlanNotFound, planCode)
+		return nil, fmt.Errorf("%w %q was not found", errPublicPlanNotFound, planCode)
 	}
 
-	if _, err := apiClient.ChangeMyPlan(ctx, selected.GetId()); err != nil {
-		return false, fmt.Errorf("change subscription: %w", err)
-	}
+	return selected, nil
+}
 
-	return true, nil
+// paymentEvidence returns a valid 1x1 PNG transfer screenshot.
+func paymentEvidence() *licensev1.PaymentEvidence {
+	var buf bytes.Buffer
+
+	_ = png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 1, 1)))
+
+	return &licensev1.PaymentEvidence{Content: buf.Bytes(), ContentType: "image/png"}
 }
 
 func planMatches(plan *licensev1.Plan, planCode string) bool {

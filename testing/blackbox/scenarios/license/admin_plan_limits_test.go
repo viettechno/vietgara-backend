@@ -43,8 +43,7 @@ func TestAdminChangePlanLimits(t *testing.T) {
 	garage, err := owner.API.CreateGarage(ctx, &tenantv1.Garage{Name: "Blackbox Limit Test"})
 	require.NoError(t, err)
 
-	sub, err := owner.API.ChangeMyPlan(ctx, createdPlan.GetId())
-	require.NoError(t, err)
+	sub := fixture.SwitchPlanByID(t, owner, createdPlan.GetId(), createdPlan.GetName())
 	assert.Equal(t, licensev1.SubscriptionStatus_SUBSCRIPTION_STATUS_ACTIVE, sub.GetStatus())
 	assert.Equal(t, "qa-limit-test", sub.GetPlan().GetCode())
 	assert.EqualValues(t, 2, sub.GetUsage().GetStaff(), "initial staff limit should be 2")

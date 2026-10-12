@@ -19,20 +19,31 @@ import (
 var (
 	errFakeUserAlreadyExists = errors.New("user already exists")
 	errInvalidOTP            = errors.New("invalid OTP")
-	errUnsupportedFakePlanID = errors.New("unsupported fake plan id")
+	errFakeEvidenceRequired  = errors.New("evidence is required")
 	errGarageCreationFailed  = errors.New("create failed")
 )
 
+type fakePaymentRequest struct {
+	ownerEmail string
+	plan       *licensev1.Plan
+	amountDue  int64
+	submitted  bool
+}
+
 type fakeState struct {
-	users         map[string]*identityv1.User
-	subscriptions map[string]*licensev1.Subscription
-	garages       map[string][]*tenantv1.Garage
-	tokens        map[string]string
-	nextToken     int
-	registers     int
-	verifications int
-	planChanges   int
-	createError   error
+	users            map[string]*identityv1.User
+	subscriptions    map[string]*licensev1.Subscription
+	garages          map[string][]*tenantv1.Garage
+	tokens           map[string]string
+	paymentRequests  map[string]*fakePaymentRequest
+	nextToken        int
+	nextRequestID    int
+	registers        int
+	verifications    int
+	paymentCreations int
+	submissions      int
+	approvals        int
+	createError      error
 }
 
 type fakeAPI struct {
@@ -84,16 +95,52 @@ func (a *fakeAPI) ListPlans(context.Context) ([]*licensev1.Plan, error) {
 	return []*licensev1.Plan{{Id: "professional-id", Code: "professional", Name: "Pro"}}, nil
 }
 
-func (a *fakeAPI) ChangeMyPlan(_ context.Context, planID string) (*licensev1.Subscription, error) {
-	if planID != "professional-id" {
-		return nil, fmt.Errorf("%w %q", errUnsupportedFakePlanID, planID)
+func (a *fakeAPI) CreatePlanPaymentRequest(_ context.Context, planID string,
+	_ licensev1.PlanPaymentKind,
+) (*licensev1.PlanPaymentRequest, error) {
+	a.state.paymentCreations++
+
+	a.state.nextRequestID++
+
+	request := &fakePaymentRequest{
+		ownerEmail: a.email,
+		plan:       &licensev1.Plan{Id: planID, Code: "professional", Name: "Pro"},
+		amountDue:  599000,
 	}
 
-	a.state.planChanges++
-	subscription := &licensev1.Subscription{
-		Plan: &licensev1.Plan{Code: "professional", Name: "Pro"},
+	id := fmt.Sprintf("pr-%d", a.state.nextRequestID)
+	a.state.paymentRequests[id] = request
+
+	return &licensev1.PlanPaymentRequest{Id: id, AmountDue: request.amountDue}, nil
+}
+
+func (a *fakeAPI) SubmitPlanPayment(_ context.Context,
+	req *licensev1.SubmitPlanPaymentRequest,
+) (*licensev1.PlanPaymentRequest, error) {
+	request := a.state.paymentRequests[req.GetRequestId()]
+	if request == nil {
+		return nil, fmt.Errorf("unknown payment request %q", req.GetRequestId())
 	}
-	a.state.subscriptions[a.email] = subscription
+
+	if req.GetPayerName() == "" || (request.amountDue > 0 && len(req.GetEvidence().GetContent()) == 0) {
+		return nil, errFakeEvidenceRequired
+	}
+
+	a.state.submissions++
+	request.submitted = true
+
+	return &licensev1.PlanPaymentRequest{Id: req.GetRequestId(), AmountDue: request.amountDue}, nil
+}
+
+func (a *fakeAPI) ApprovePlanPayment(_ context.Context, requestID, _ string) (*licensev1.Subscription, error) {
+	request := a.state.paymentRequests[requestID]
+	if request == nil || !request.submitted {
+		return nil, fmt.Errorf("payment request %q is not awaiting review", requestID)
+	}
+
+	a.state.approvals++
+	subscription := &licensev1.Subscription{Plan: request.plan}
+	a.state.subscriptions[request.ownerEmail] = subscription
 
 	return subscription, nil
 }
@@ -146,7 +193,7 @@ func TestRunSeedsOwnersAndGaragesIdempotently(t *testing.T) {
 	api := &fakeAPI{state: state}
 	dataset := sampleDataset()
 
-	first, err := seed.Run(t.Context(), dataset, api, fakeInbox{}, "blackbox.vietgara.test", "test-password")
+	first, err := seed.Run(t.Context(), dataset, api, fakeInbox{}, "blackbox.vietgara.test", "test-password", "admin-password")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,12 +203,12 @@ func TestRunSeedsOwnersAndGaragesIdempotently(t *testing.T) {
 		t.Fatalf("first run summary = %+v", first)
 	}
 
-	if state.registers != 2 || state.verifications != 2 || state.planChanges != 1 {
-		t.Fatalf("registration/verification/plan-change calls = %d/%d/%d, want 2/2/1",
-			state.registers, state.verifications, state.planChanges)
+	if state.registers != 3 || state.verifications != 3 || state.approvals != 1 {
+		t.Fatalf("registration/verification/approval calls = %d/%d/%d, want 3/3/1",
+			state.registers, state.verifications, state.approvals)
 	}
 
-	second, err := seed.Run(t.Context(), dataset, api, fakeInbox{}, "blackbox.vietgara.test", "test-password")
+	second, err := seed.Run(t.Context(), dataset, api, fakeInbox{}, "blackbox.vietgara.test", "test-password", "admin-password")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,9 +218,9 @@ func TestRunSeedsOwnersAndGaragesIdempotently(t *testing.T) {
 		t.Fatalf("second run summary = %+v", second)
 	}
 
-	if state.registers != 2 || state.verifications != 2 || state.planChanges != 1 {
+	if state.registers != 3 || state.verifications != 3 || state.approvals != 1 {
 		t.Fatalf("rerun changed owners or plans: calls = %d/%d/%d",
-			state.registers, state.verifications, state.planChanges)
+			state.registers, state.verifications, state.approvals)
 	}
 
 	if len(state.garages["owner1@blackbox.vietgara.test"]) != 1 ||
@@ -189,12 +236,12 @@ func TestRunRejectsSameNameGarageWithDifferentData(t *testing.T) {
 	state := newFakeState()
 	api := &fakeAPI{state: state}
 
-	if _, err := seed.Run(t.Context(), dataset, api, fakeInbox{}, "blackbox.vietgara.test", "test-password"); err != nil {
+	if _, err := seed.Run(t.Context(), dataset, api, fakeInbox{}, "blackbox.vietgara.test", "test-password", "admin-password"); err != nil {
 		t.Fatal(err)
 	}
 
 	dataset.Garages[0].Address = "changed address"
-	if _, err := seed.Run(t.Context(), dataset, api, fakeInbox{}, "blackbox.vietgara.test", "test-password"); err == nil {
+	if _, err := seed.Run(t.Context(), dataset, api, fakeInbox{}, "blackbox.vietgara.test", "test-password", "admin-password"); err == nil {
 		t.Fatal("Run() succeeded when an existing garage differed from the dataset")
 	}
 
@@ -209,7 +256,7 @@ func TestRunRejectsGarageWithMissingOwner(t *testing.T) {
 	dataset := sampleDataset()
 	dataset.Garages[0].Owner = "unknown"
 
-	_, err := seed.Run(t.Context(), dataset, newFakeAPI(), fakeInbox{}, "blackbox.vietgara.test", "test-password")
+	_, err := seed.Run(t.Context(), dataset, newFakeAPI(), fakeInbox{}, "blackbox.vietgara.test", "test-password", "admin-password")
 	if err == nil {
 		t.Fatal("Run() succeeded with a garage owner missing from the dataset")
 	}
@@ -221,7 +268,7 @@ func TestRunRejectsUnsupportedOwnerSetup(t *testing.T) {
 	dataset := sampleDataset()
 	dataset.Garages[0].Owner = "admin"
 
-	_, err := seed.Run(t.Context(), dataset, newFakeAPI(), fakeInbox{}, "blackbox.vietgara.test", "test-password")
+	_, err := seed.Run(t.Context(), dataset, newFakeAPI(), fakeInbox{}, "blackbox.vietgara.test", "test-password", "admin-password")
 	if err == nil {
 		t.Fatal("Run() succeeded for a platform-admin owner")
 	}
@@ -234,7 +281,7 @@ func TestRunReturnsGarageCreationError(t *testing.T) {
 	state.createError = errGarageCreationFailed
 	api := &fakeAPI{state: state}
 
-	_, err := seed.Run(t.Context(), sampleDataset(), api, fakeInbox{}, "blackbox.vietgara.test", "test-password")
+	_, err := seed.Run(t.Context(), sampleDataset(), api, fakeInbox{}, "blackbox.vietgara.test", "test-password", "admin-password")
 	if err == nil || !strings.Contains(err.Error(), "create failed") {
 		t.Fatalf("Run() error = %v, want create failure", err)
 	}
@@ -257,7 +304,7 @@ func TestRunRejectsInvalidInputs(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 
-			_, err := seed.Run(t.Context(), tt.dataset, tt.api, tt.inbox, "blackbox.vietgara.test", "test-password")
+			_, err := seed.Run(t.Context(), tt.dataset, tt.api, tt.inbox, "blackbox.vietgara.test", "test-password", "admin-password")
 			if err == nil {
 				t.Fatal("Run() succeeded with invalid input")
 			}
@@ -271,10 +318,11 @@ func newFakeAPI() *fakeAPI {
 
 func newFakeState() *fakeState {
 	return &fakeState{
-		users:         make(map[string]*identityv1.User),
-		subscriptions: make(map[string]*licensev1.Subscription),
-		garages:       make(map[string][]*tenantv1.Garage),
-		tokens:        make(map[string]string),
+		users:           make(map[string]*identityv1.User),
+		subscriptions:   make(map[string]*licensev1.Subscription),
+		garages:         make(map[string][]*tenantv1.Garage),
+		tokens:          make(map[string]string),
+		paymentRequests: make(map[string]*fakePaymentRequest),
 	}
 }
 

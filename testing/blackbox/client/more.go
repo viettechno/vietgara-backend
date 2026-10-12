@@ -67,12 +67,6 @@ func (c *Client) DownloadRaw(ctx context.Context, method, path string) (string, 
 
 // ---- License ---------------------------------------------------------------
 
-// CancelMyPendingPlanChange drops the signed-in owner's scheduled or
-// postponed plan change.
-func (c *Client) CancelMyPendingPlanChange(ctx context.Context) (*licensev1.Subscription, error) {
-	return call[licensev1.Subscription](ctx, c, http.MethodDelete, "/api/v1/me/subscription/plan-changes/pending", nil)
-}
-
 // GetGarageEntitlements returns what garageID may use; any active member
 // may read it.
 func (c *Client) GetGarageEntitlements(ctx context.Context, garageID string) (*licensev1.Entitlements, error) {
@@ -109,10 +103,23 @@ func (c *Client) UpdatePlan(ctx context.Context, planID string, plan *licensev1.
 }
 
 // ListSubscriptions returns owners' subscription summaries. Platform admin only.
-func (c *Client) ListSubscriptions(ctx context.Context, query string) ([]*licensev1.SubscriptionSummary, error) {
+// status 0 filters by nothing; query fuzzy-matches e-mail, name or garage.
+func (c *Client) ListSubscriptions(ctx context.Context, query string,
+	status licensev1.SubscriptionStatus,
+) ([]*licensev1.SubscriptionSummary, error) {
 	path := "/api/v1/admin/subscriptions"
+
+	params := url.Values{}
 	if query != "" {
-		path += "?query=" + url.QueryEscape(query)
+		params.Set("query", query)
+	}
+
+	if status != 0 {
+		params.Set("status", strconv.FormatInt(int64(status), 10))
+	}
+
+	if len(params) > 0 {
+		path += "?" + params.Encode()
 	}
 
 	resp, err := call[licensev1.ListSubscriptionsResponse](ctx, c, http.MethodGet, path, nil)
@@ -125,6 +132,23 @@ func (c *Client) ExtendSubscription(ctx context.Context, subscriptionID string, 
 	return call[licensev1.Subscription](ctx, c, http.MethodPost,
 		"/api/v1/admin/subscriptions/"+url.PathEscape(subscriptionID)+"/extensions",
 		&licensev1.ExtendSubscriptionRequest{SubscriptionId: subscriptionID, Days: days})
+}
+
+// ApprovePlanPayment approves a submitted payment request; it returns the
+// owner's subscription with the new plan and period. Platform admin only.
+func (c *Client) ApprovePlanPayment(ctx context.Context, requestID, note string) (*licensev1.Subscription, error) {
+	path := "/api/v1/admin/plan-payment-requests/" + url.PathEscape(requestID) + ":approve"
+
+	return call[licensev1.Subscription](ctx, c, http.MethodPost, path,
+		&licensev1.ApprovePlanPaymentRequest{RequestId: requestID, Note: note})
+}
+
+// RejectPlanPayment refuses a payment request. Platform admin only.
+func (c *Client) RejectPlanPayment(ctx context.Context, requestID, reason string) (*licensev1.PlanPaymentRequest, error) {
+	path := "/api/v1/admin/plan-payment-requests/" + url.PathEscape(requestID) + ":reject"
+
+	return call[licensev1.PlanPaymentRequest](ctx, c, http.MethodPost, path,
+		&licensev1.RejectPlanPaymentRequest{RequestId: requestID, Reason: reason})
 }
 
 // ---- Customers -------------------------------------------------------------

@@ -59,9 +59,9 @@ func TestAdminCreatePlans(t *testing.T) {
 	assert.Equal(t, "qa-yearly", createdYearly.GetCode())
 	assert.True(t, createdYearly.GetIsPublic())
 
-	// Try to create duplicate code qa-small (assuming it exists in baseline)
+	// Creating a plan whose code is already taken is refused
 	duplicatePlan := &licensev1.Plan{
-		Code:         "qa-small",
+		Code:         "qa-yearly",
 		Name:         "QA Duplicate",
 		Price:        1,
 		Currency:     "VND",
@@ -78,7 +78,7 @@ func TestAdminCreatePlans(t *testing.T) {
 	require.Error(t, err)
 	fixture.RequireAPIError(t, err, http.StatusConflict, "")
 
-	// Verify code field is not editable on update
+	// Verify the code field is not editable on update
 	allPlans, err := admin.API.ListAllPlans(ctx)
 	require.NoError(t, err)
 	var yearlyID string
@@ -90,8 +90,8 @@ func TestAdminCreatePlans(t *testing.T) {
 	}
 	require.NotEmpty(t, yearlyID)
 
-	// Try to update the code - should be rejected or ignored
-	updatedYearly, err := admin.API.UpdatePlan(ctx, yearlyID, &licensev1.Plan{Code: "qa-yearly-modified"})
+	// Trying to rename it leaves the code unchanged
+	updatedYearly, err := admin.API.UpdatePlan(ctx, yearlyID, &licensev1.Plan{Code: "qa-yearly-modified"}, "code")
 	require.NoError(t, err)
 	assert.Equal(t, "qa-yearly", updatedYearly.GetCode(), "plan code must be immutable")
 }

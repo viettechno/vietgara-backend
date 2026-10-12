@@ -30,7 +30,7 @@ func TestAdminFindAndExtendSubscription(t *testing.T) {
 	require.NotZero(t, oldTrialEnd)
 
 	// Admin searches by owner email
-	subscriptions, err := admin.API.ListSubscriptions(ctx, owner.Email)
+	subscriptions, err := admin.API.ListSubscriptions(ctx, owner.Email, 0)
 	require.NoError(t, err)
 	require.NotEmpty(t, subscriptions, "admin should find owner by email")
 	// SubscriptionSummary has a nested subscription field
@@ -38,7 +38,7 @@ func TestAdminFindAndExtendSubscription(t *testing.T) {
 	assert.Equal(t, licensev1.SubscriptionStatus_SUBSCRIPTION_STATUS_TRIAL, subscriptions[0].GetSubscription().GetStatus())
 
 	// Filter by Trial status
-	trialSubs, err := admin.API.ListSubscriptions(ctx, "status:trial")
+	trialSubs, err := admin.API.ListSubscriptions(ctx, "", licensev1.SubscriptionStatus_SUBSCRIPTION_STATUS_TRIAL)
 	require.NoError(t, err)
 	require.NotEmpty(t, trialSubs)
 
@@ -68,10 +68,10 @@ func TestAdminFindAndExtendSubscription(t *testing.T) {
 
 	newTrialEnd := subAfter.GetTrialEndAt().AsTime()
 	diff := newTrialEnd.Sub(oldTrialEnd)
-	assert.True(t, diff >= 29*24*time.Hour, "trial end should move by at least 29 days, got %v", diff)
+	assert.GreaterOrEqual(t, diff, 29*24*time.Hour, "trial end should move by at least 29 days")
 
 	// Admin list should show updated subscription
-	updatedSubs, err := admin.API.ListSubscriptions(ctx, owner.Email)
+	updatedSubs, err := admin.API.ListSubscriptions(ctx, owner.Email, 0)
 	require.NoError(t, err)
 	// The extended subscription has updated trial_end_at
 	assert.True(t, updatedSubs[0].GetSubscription().GetTrialEndAt().AsTime().After(oldTrialEnd))

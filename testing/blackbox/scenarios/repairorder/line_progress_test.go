@@ -3,6 +3,7 @@
 package repairorder_test
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -14,24 +15,23 @@ import (
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
-func TestLineProgressDrivesOrderStatus(t *testing.T) {
-	t.Parallel()
+func createLineProgressTestEnv(t *testing.T) (context.Context, *fixture.Actor, string, *customerv1.Customer, *customerv1.Vehicle, string, []*tenantv1.StaffGroup) {
+	t.Helper()
 
-	ctx := t.Context()
 	owner := fixture.NewVerifiedOwner(t, "rep-line-progress")
-	garage, err := owner.API.CreateGarage(ctx, &tenantv1.Garage{Name: "Blackbox Line Progress"})
+	garage, err := owner.API.CreateGarage(t.Context(), &tenantv1.Garage{Name: "Blackbox Line Progress"})
 	require.NoError(t, err)
 
 	garageID := garage.GetId()
 
 	// Create customer and vehicle
-	customer, err := owner.API.CreateCustomer(ctx, garageID, &customerv1.Customer{FullName: "Khách Line Progress", PersonalDataConsent: true})
+	customer, err := owner.API.CreateCustomer(t.Context(), garageID, &customerv1.Customer{FullName: "Khách Line Progress", PersonalDataConsent: true})
 	require.NoError(t, err)
-	vehicle, err := owner.API.CreateVehicle(ctx, garageID, &customerv1.Vehicle{CustomerId: customer.GetId(), LicensePlate: "51R-33333"})
+	vehicle, err := owner.API.CreateVehicle(t.Context(), garageID, &customerv1.Vehicle{CustomerId: customer.GetId(), LicensePlate: "51R-33333"})
 	require.NoError(t, err)
 
 	// Create repair order with 2 lines
-	order, err := owner.API.CreateRepairOrder(ctx, garageID, &repairorderv1.RepairOrder{
+	order, err := owner.API.CreateRepairOrder(t.Context(), garageID, &repairorderv1.RepairOrder{
 		VehicleId: vehicle.GetId(),
 		Lines: []*repairorderv1.RepairOrderLine{{
 			ItemType:    repairorderv1.RepairOrderItemType_REPAIR_ORDER_ITEM_TYPE_LABOR,
@@ -49,6 +49,17 @@ func TestLineProgressDrivesOrderStatus(t *testing.T) {
 	assert.Equal(t, repairorderv1.RepairOrderStatus_REPAIR_ORDER_STATUS_OPEN, order.GetStatus())
 
 	orderID := order.GetId()
+
+	groups, err := owner.API.ListStaffGroups(t.Context(), garageID)
+	require.NoError(t, err)
+
+	return t.Context(), owner, garageID, customer, vehicle, orderID, groups
+}
+
+func TestLineProgressDrivesOrderStatus(t *testing.T) {
+	t.Parallel()
+
+	ctx, owner, garageID, _, _, orderID, _ := createLineProgressTestEnv(t)
 
 	// Get line IDs
 	lines, err := owner.API.GetRepairOrder(ctx, garageID, orderID)
@@ -97,9 +108,16 @@ func TestLineProgressDrivesOrderStatus(t *testing.T) {
 	ro, err = owner.API.GetRepairOrder(ctx, garageID, orderID)
 	require.NoError(t, err)
 	require.Len(t, ro.GetLines(), 2)
+
 	for _, l := range ro.GetLines() {
 		assert.Equal(t, repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_COMPLETED, l.GetStatus())
 	}
+}
+
+func TestTechnicianAssignmentPreservedOnStatusChange(t *testing.T) {
+	t.Parallel()
+
+	ctx, owner, garageID, _, vehicle, _, groups := createLineProgressTestEnv(t)
 
 	// Technician checkboxes for that line are unaffected by status-only save
 	// (status and technicians are edited and saved together from the same row,
@@ -109,8 +127,6 @@ func TestLineProgressDrivesOrderStatus(t *testing.T) {
 	cand, err := owner.API.LookupStaffCandidate(ctx, garageID, tech.Email)
 	require.NoError(t, err)
 
-	groups, err := owner.API.ListStaffGroups(ctx, garageID)
-	require.NoError(t, err)
 	techGroup := groups[0]
 	_, err = owner.API.CreateInvitation(ctx, garageID, cand.GetUserId(), []string{techGroup.GetId()})
 	require.NoError(t, err)
@@ -135,6 +151,7 @@ func TestLineProgressDrivesOrderStatus(t *testing.T) {
 
 	lines2, err := owner.API.GetRepairOrder(ctx, garageID, order2.GetId())
 	require.NoError(t, err)
+
 	techLine := lines2.GetLines()[0]
 
 	// Assign technician

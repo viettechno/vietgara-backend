@@ -81,13 +81,16 @@ func TestAdminCreatePlans(t *testing.T) {
 	// Verify the code field is not editable on update
 	allPlans, err := admin.API.ListAllPlans(ctx)
 	require.NoError(t, err)
+
 	var yearlyID string
+
 	for _, p := range allPlans {
 		if p.GetCode() == "qa-yearly" {
 			yearlyID = p.GetId()
 			break
 		}
 	}
+
 	require.NotEmpty(t, yearlyID)
 
 	// Trying to rename it leaves the code unchanged
@@ -108,12 +111,14 @@ func TestAdminListAllPlans(t *testing.T) {
 
 	// Should include hidden plans
 	hasHidden := false
+
 	for _, p := range allPlans {
 		if !p.GetIsPublic() {
 			hasHidden = true
 			break
 		}
 	}
+
 	assert.True(t, hasHidden, "admin list should include hidden plans")
 
 	// Regular owner should only see public plans

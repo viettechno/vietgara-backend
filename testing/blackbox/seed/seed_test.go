@@ -21,6 +21,8 @@ var (
 	errInvalidOTP            = errors.New("invalid OTP")
 	errFakeEvidenceRequired  = errors.New("evidence is required")
 	errGarageCreationFailed  = errors.New("create failed")
+	errUnknownPaymentRequest = errors.New("unknown payment request")
+	errPaymentNotAwaiting    = errors.New("payment request is not awaiting review")
 )
 
 type fakePaymentRequest struct {
@@ -119,7 +121,7 @@ func (a *fakeAPI) SubmitPlanPayment(_ context.Context,
 ) (*licensev1.PlanPaymentRequest, error) {
 	request := a.state.paymentRequests[req.GetRequestId()]
 	if request == nil {
-		return nil, fmt.Errorf("unknown payment request %q", req.GetRequestId())
+		return nil, fmt.Errorf("%w: %q", errUnknownPaymentRequest, req.GetRequestId())
 	}
 
 	if req.GetPayerName() == "" || (request.amountDue > 0 && len(req.GetEvidence().GetContent()) == 0) {
@@ -135,7 +137,7 @@ func (a *fakeAPI) SubmitPlanPayment(_ context.Context,
 func (a *fakeAPI) ApprovePlanPayment(_ context.Context, requestID, _ string) (*licensev1.Subscription, error) {
 	request := a.state.paymentRequests[requestID]
 	if request == nil || !request.submitted {
-		return nil, fmt.Errorf("payment request %q is not awaiting review", requestID)
+		return nil, fmt.Errorf("%w: %q", errPaymentNotAwaiting, requestID)
 	}
 
 	a.state.approvals++

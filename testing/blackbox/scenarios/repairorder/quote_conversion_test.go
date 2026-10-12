@@ -90,10 +90,12 @@ func TestRepairOrderFromApprovedQuote(t *testing.T) {
 
 	// Lines match only approved lines (both approved in this case)
 	require.Len(t, ro.GetLines(), 2)
+
 	lineDesc := map[string]bool{}
 	for _, l := range ro.GetLines() {
 		lineDesc[l.GetDescription()] = true
 	}
+
 	assert.True(t, lineDesc["Oil change service"])
 	assert.True(t, lineDesc["Engine oil 5W-30"])
 	assert.False(t, lineDesc["Unapproved line"])
@@ -118,21 +120,25 @@ func TestRepairOrderFromApprovedQuote(t *testing.T) {
 	history, err := owner.API.GetVehicleHistory(ctx, garageID, vehicle.GetId())
 	require.NoError(t, err)
 	require.Len(t, history, 2)
+
 	hasConvertedQuote := false
 	hasRepairOrder := false
+
 	for _, h := range history {
 		if h.GetType() == customerv1.VehicleHistoryEntryType_VEHICLE_HISTORY_ENTRY_TYPE_QUOTE && h.GetStatus() == "Converted" {
 			hasConvertedQuote = true
 		}
+
 		if h.GetType() == customerv1.VehicleHistoryEntryType_VEHICLE_HISTORY_ENTRY_TYPE_REPAIR_ORDER {
 			hasRepairOrder = true
 		}
 	}
+
 	assert.True(t, hasConvertedQuote)
 	assert.True(t, hasRepairOrder)
 }
 
-// Scenario: E2E-REP-003 partial: mixed approval converts only approved lines
+// Scenario: E2E-REP-003 partial: mixed approval converts only approved lines.
 func TestRepairOrderFromMixedApproval(t *testing.T) {
 	t.Parallel()
 

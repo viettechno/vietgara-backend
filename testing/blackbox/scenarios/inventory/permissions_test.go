@@ -3,6 +3,7 @@
 package inventory_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
@@ -14,18 +15,17 @@ import (
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
-func TestInventoryPermissions(t *testing.T) {
-	t.Parallel()
+func createInventoryTestEnv(t *testing.T) (context.Context, *fixture.Actor, string, *inventoryv1.Item, []*tenantv1.StaffGroup) {
+	t.Helper()
 
-	ctx := t.Context()
 	owner := fixture.NewVerifiedOwner(t, "inv-perms-owner")
-	garage, err := owner.API.CreateGarage(ctx, &tenantv1.Garage{Name: "Blackbox Inventory Perms"})
+	garage, err := owner.API.CreateGarage(t.Context(), &tenantv1.Garage{Name: "Blackbox Inventory Perms"})
 	require.NoError(t, err)
 
 	garageID := garage.GetId()
 
 	// Create an item as owner
-	item, err := owner.API.CreateItem(ctx, garageID, &inventoryv1.Item{
+	item, err := owner.API.CreateItem(t.Context(), garageID, &inventoryv1.Item{
 		Sku:              "INV-PERMS-001",
 		Name:             "Test Part",
 		Unit:             "pcs",
@@ -34,120 +34,152 @@ func TestInventoryPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Record stock receipt
-	_, err = owner.API.CreateStockReceipt(ctx, garageID, item.GetId(), "100", 50000)
+	_, err = owner.API.CreateStockReceipt(t.Context(), garageID, item.GetId(), "100", 50000)
 	require.NoError(t, err)
 
-	// --- Test 1: Staff with NO inventory permission cannot access ---
-	noPerm := fixture.NewVerifiedOwner(t, "inv-no-perm")
-	cand, err := owner.API.LookupStaffCandidate(ctx, garageID, noPerm.Email)
+	groups, err := owner.API.ListStaffGroups(t.Context(), garageID)
 	require.NoError(t, err)
 
-	groups, err := owner.API.ListStaffGroups(ctx, garageID)
-	require.NoError(t, err)
-	// Use a group without inventory permission (e.g., default Technician or custom no-inventory group)
-	_, err = owner.API.CreateInvitation(ctx, garageID, cand.GetUserId(), []string{groups[0].GetId()})
-	require.NoError(t, err)
+	return t.Context(), owner, garageID, item, groups
+}
 
-	noPermInvites, err := noPerm.API.ListMyInvitations(ctx)
-	require.NoError(t, err)
-	require.NotEmpty(t, noPermInvites)
-	_, err = noPerm.API.AcceptInvitation(ctx, noPermInvites[0].GetId())
-	require.NoError(t, err)
+func TestInventoryPermissionsNoAccess(t *testing.T) {
+	t.Parallel()
 
-	// No perm staff tries to list items - should fail
-	_, err = noPerm.API.ListItems(ctx, garageID)
-	require.Error(t, err)
-	fixture.RequireAPIError(t, err, http.StatusForbidden, "")
+	ctx, owner, garageID, _, groups := createInventoryTestEnv(t)
 
-	// No perm staff tries to create item - should fail
-	_, err = noPerm.API.CreateItem(ctx, garageID, &inventoryv1.Item{Sku: "TEST", Name: "Test"})
-	require.Error(t, err)
-	fixture.RequireAPIError(t, err, http.StatusForbidden, "")
+	t.Run("no inventory permission", func(t *testing.T) {
+		t.Parallel()
+		noPerm := fixture.NewVerifiedOwner(t, "inv-no-perm")
+		cand, err := owner.API.LookupStaffCandidate(ctx, garageID, noPerm.Email)
+		require.NoError(t, err)
 
-	// --- Test 2: Staff with VIEW ONLY (Technician role) can read but not write ---
-	tech := fixture.NewVerifiedOwner(t, "inv-tech")
-	cand2, err := owner.API.LookupStaffCandidate(ctx, garageID, tech.Email)
-	require.NoError(t, err)
+		_, err = owner.API.CreateInvitation(ctx, garageID, cand.GetUserId(), []string{groups[0].GetId()})
+		require.NoError(t, err)
 
-	_, err = owner.API.CreateInvitation(ctx, garageID, cand2.GetUserId(), []string{groups[0].GetId()})
-	require.NoError(t, err)
+		noPermInvites, err := noPerm.API.ListMyInvitations(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, noPermInvites)
+		_, err = noPerm.API.AcceptInvitation(ctx, noPermInvites[0].GetId())
+		require.NoError(t, err)
 
-	techInvites, err := tech.API.ListMyInvitations(ctx)
-	require.NoError(t, err)
-	require.NotEmpty(t, techInvites)
-	_, err = tech.API.AcceptInvitation(ctx, techInvites[0].GetId())
-	require.NoError(t, err)
+		// No perm staff tries to list items - should fail
+		_, err = noPerm.API.ListItems(ctx, garageID)
+		require.Error(t, err)
+		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
 
-	// Technician can list items
-	items, err := tech.API.ListItems(ctx, garageID)
-	require.NoError(t, err)
-	require.NotEmpty(t, items)
-	assert.Equal(t, "INV-PERMS-001", items[0].GetSku())
+		// No perm staff tries to create item - should fail
+		_, err = noPerm.API.CreateItem(ctx, garageID, &inventoryv1.Item{Sku: "TEST", Name: "Test"})
+		require.Error(t, err)
+		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
+	})
+}
 
-	// Technician can get item
-	got, err := tech.API.GetItem(ctx, garageID, item.GetId())
-	require.NoError(t, err)
-	assert.Equal(t, item.GetId(), got.GetId())
+func TestInventoryPermissionsViewOnly(t *testing.T) {
+	t.Parallel()
 
-	// Technician can list stock movements
-	movements, err := tech.API.ListStockTransactions(ctx, garageID)
-	require.NoError(t, err)
-	require.NotEmpty(t, movements)
+	ctx, owner, garageID, item, groups := createInventoryTestEnv(t)
 
-	// Technician CANNOT create item
-	_, err = tech.API.CreateItem(ctx, garageID, &inventoryv1.Item{Sku: "TECH-TEST", Name: "Tech Test"})
-	require.Error(t, err)
-	fixture.RequireAPIError(t, err, http.StatusForbidden, "")
+	t.Run("view only (technician)", func(t *testing.T) {
+		t.Parallel()
+		tech := fixture.NewVerifiedOwner(t, "inv-tech")
+		cand2, err := owner.API.LookupStaffCandidate(ctx, garageID, tech.Email)
+		require.NoError(t, err)
 
-	// Technician CANNOT record stock receipt
-	_, err = tech.API.CreateStockReceipt(ctx, garageID, item.GetId(), "50", 0)
-	require.Error(t, err)
-	fixture.RequireAPIError(t, err, http.StatusForbidden, "")
+		_, err = owner.API.CreateInvitation(ctx, garageID, cand2.GetUserId(), []string{groups[0].GetId()})
+		require.NoError(t, err)
 
-	// Technician CANNOT delete item
-	err = tech.API.DeleteItem(ctx, garageID, item.GetId())
-	require.Error(t, err)
-	fixture.RequireAPIError(t, err, http.StatusForbidden, "")
+		techInvites, err := tech.API.ListMyInvitations(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, techInvites)
+		_, err = tech.API.AcceptInvitation(ctx, techInvites[0].GetId())
+		require.NoError(t, err)
 
-	// --- Test 3: Owner (full access) can do everything ---
-	// Owner creates another item
-	item2, err := owner.API.CreateItem(ctx, garageID, &inventoryv1.Item{Sku: "OWNER-002", Name: "Owner Item", Unit: "pcs"})
-	require.NoError(t, err)
+		// Technician can list items
+		items, err := tech.API.ListItems(ctx, garageID)
+		require.NoError(t, err)
+		require.NotEmpty(t, items)
+		assert.Equal(t, "INV-PERMS-001", items[0].GetSku())
 
-	// Owner records stock
-	_, err = owner.API.CreateStockReceipt(ctx, garageID, item2.GetId(), "200", 60000)
-	require.NoError(t, err)
+		// Technician can get item
+		got, err := tech.API.GetItem(ctx, garageID, item.GetId())
+		require.NoError(t, err)
+		assert.Equal(t, item.GetId(), got.GetId())
 
-	// Owner updates item
-	updated, err := owner.API.UpdateItem(ctx, garageID, item2.GetId(), &inventoryv1.Item{Name: "Updated Owner Item"}, "name")
-	require.NoError(t, err)
-	assert.Equal(t, "Updated Owner Item", updated.GetName())
+		// Technician can list stock movements
+		movements, err := tech.API.ListStockTransactions(ctx, garageID)
+		require.NoError(t, err)
+		require.NotEmpty(t, movements)
 
-	// Owner deletes item
-	err = owner.API.DeleteItem(ctx, garageID, item2.GetId())
-	require.NoError(t, err)
+		// Technician CANNOT create item
+		_, err = tech.API.CreateItem(ctx, garageID, &inventoryv1.Item{Sku: "TECH-TEST", Name: "Tech Test"})
+		require.Error(t, err)
+		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
 
-	// Deleted item is not in list
-	itemsAfter, err := owner.API.ListItems(ctx, garageID)
-	require.NoError(t, err)
-	found := false
-	for _, i := range itemsAfter {
-		if i.GetId() == item2.GetId() {
-			found = true
-			break
+		// Technician CANNOT record stock receipt
+		_, err = tech.API.CreateStockReceipt(ctx, garageID, item.GetId(), "50", 0)
+		require.Error(t, err)
+		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
+
+		// Technician CANNOT delete item
+		err = tech.API.DeleteItem(ctx, garageID, item.GetId())
+		require.Error(t, err)
+		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
+	})
+}
+
+func TestInventoryPermissionsOwner(t *testing.T) {
+	t.Parallel()
+
+	ctx, owner, garageID, _, _ := createInventoryTestEnv(t)
+
+	t.Run("owner full access", func(t *testing.T) {
+		t.Parallel()
+		// Owner creates another item
+		item2, err := owner.API.CreateItem(ctx, garageID, &inventoryv1.Item{Sku: "OWNER-002", Name: "Owner Item", Unit: "pcs"})
+		require.NoError(t, err)
+
+		// Owner records stock
+		_, err = owner.API.CreateStockReceipt(ctx, garageID, item2.GetId(), "200", 60000)
+		require.NoError(t, err)
+
+		// Owner updates item
+		updated, err := owner.API.UpdateItem(ctx, garageID, item2.GetId(), &inventoryv1.Item{Name: "Updated Owner Item"}, "name")
+		require.NoError(t, err)
+		assert.Equal(t, "Updated Owner Item", updated.GetName())
+
+		// Owner deletes item
+		err = owner.API.DeleteItem(ctx, garageID, item2.GetId())
+		require.NoError(t, err)
+
+		// Deleted item is not in list
+		itemsAfter, err := owner.API.ListItems(ctx, garageID)
+		require.NoError(t, err)
+
+		found := false
+
+		for _, i := range itemsAfter {
+			if i.GetId() == item2.GetId() {
+				found = true
+				break
+			}
 		}
-	}
-	assert.False(t, found, "deleted item should not appear in list")
 
-	// But past transactions are kept
-	movements, err = owner.API.ListStockTransactions(ctx, garageID)
-	require.NoError(t, err)
-	hasReceipt := false
-	for _, m := range movements {
-		if m.GetItemId() == item2.GetId() {
-			hasReceipt = true
-			break
+		assert.False(t, found, "deleted item should not appear in list")
+
+		// But past transactions are kept
+		movements, err := owner.API.ListStockTransactions(ctx, garageID)
+		require.NoError(t, err)
+
+		hasReceipt := false
+
+		for _, m := range movements {
+			if m.GetItemId() == item2.GetId() {
+				hasReceipt = true
+				break
+			}
 		}
-	}
-	assert.True(t, hasReceipt, "past transactions of deleted item are kept")
+
+		assert.True(t, hasReceipt, "past transactions of deleted item are kept")
+	})
 }

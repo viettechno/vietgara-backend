@@ -54,6 +54,7 @@ func TestBillingPermissions(t *testing.T) {
 
 	groups, err := owner.API.ListStaffGroups(ctx, garageID)
 	require.NoError(t, err)
+
 	techGroup := groups[0] // Technician group has no billing permission
 	_, err = owner.API.CreateInvitation(ctx, garageID, cand.GetUserId(), []string{techGroup.GetId()})
 	require.NoError(t, err)

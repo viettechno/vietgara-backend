@@ -1,10 +1,12 @@
+package fixture
+
 // Plan fixtures: the dataset platform admin and moving an owner onto a
 // plan through the Release 5.2 bank-transfer payment flow.
-package fixture
 
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"image/png"
@@ -20,6 +22,8 @@ import (
 	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/env"
 )
+
+var errNoPublicPlan = errors.New("no public plan matches")
 
 // adminMu serialises provisioning the dataset platform admin across the
 // parallel scenarios: exactly one of them registers and verifies it.
@@ -186,7 +190,7 @@ func publicPlanID(ctx context.Context, api *client.Client, planName string) (str
 		}
 	}
 
-	return "", fmt.Errorf("no public plan matches %q", planName)
+	return "", fmt.Errorf("%w: %q", errNoPublicPlan, planName)
 }
 
 // transferEvidence returns a valid 1x1 PNG transfer screenshot.

@@ -83,21 +83,7 @@ func TestSupplierNameUniquePerGarage(t *testing.T) {
 	ctx := t.Context()
 	owner := fixture.NewVerifiedOwner(t, "sup-unique")
 
-	plans, err := owner.API.ListPlans(ctx)
-	require.NoError(t, err)
-
-	var proID string
-
-	for _, p := range plans {
-		if p.GetName() == "Pro" {
-			proID = p.GetId()
-		}
-	}
-
-	require.NotEmpty(t, proID)
-
-	_, err = owner.API.ChangeMyPlan(ctx, proID)
-	require.NoError(t, err)
+	fixture.SwitchPlan(t, owner, "Pro")
 
 	gA, err := owner.API.CreateGarage(ctx, &tenantv1.Garage{Name: "Blackbox Sup A"})
 	require.NoError(t, err)

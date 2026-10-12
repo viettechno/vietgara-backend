@@ -15,7 +15,6 @@ import (
 	billingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/billing/v1"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
-	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
@@ -37,21 +36,18 @@ func settle(t *testing.T, label string) (*fixture.Actor, string, *billingv1.Sett
 }
 
 // openRepairOrder creates a garage with an order that is still open.
-func openRepairOrder(t *testing.T, api *client.Client) (garageID, orderID string) {
+func openRepairOrder(t *testing.T, api *client.Client, garageID string) (orderID string) {
 	t.Helper()
 
 	ctx := t.Context()
 
-	garage, err := api.CreateGarage(ctx, &tenantv1.Garage{Name: "Billing Open Garage"})
+	customer, err := api.CreateCustomer(ctx, garageID, &customerv1.Customer{FullName: "Khách Mở", PersonalDataConsent: true})
 	require.NoError(t, err)
 
-	customer, err := api.CreateCustomer(ctx, garage.GetId(), &customerv1.Customer{FullName: "Khách Mở", PersonalDataConsent: true})
+	vehicle, err := api.CreateVehicle(ctx, garageID, &customerv1.Vehicle{CustomerId: customer.GetId(), LicensePlate: "51B-99999"})
 	require.NoError(t, err)
 
-	vehicle, err := api.CreateVehicle(ctx, garage.GetId(), &customerv1.Vehicle{CustomerId: customer.GetId(), LicensePlate: "51B-99999"})
-	require.NoError(t, err)
-
-	order, err := api.CreateRepairOrder(ctx, garage.GetId(), &repairorderv1.RepairOrder{
+	order, err := api.CreateRepairOrder(ctx, garageID, &repairorderv1.RepairOrder{
 		VehicleId: vehicle.GetId(),
 		Lines: []*repairorderv1.RepairOrderLine{{
 			ItemType: repairorderv1.RepairOrderItemType_REPAIR_ORDER_ITEM_TYPE_LABOR, Description: "Check-up", Quantity: "1", UnitPrice: total,
@@ -59,7 +55,7 @@ func openRepairOrder(t *testing.T, api *client.Client) (garageID, orderID string
 	})
 	require.NoError(t, err)
 
-	return garage.GetId(), order.GetId()
+	return order.GetId()
 }
 
 // pay records a cash payment with a fresh idempotency key.
@@ -119,9 +115,9 @@ func TestSettlementGuards(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusConflict, "")
 
 	// An order still in progress cannot be settled.
-	openGarageID, openOrderID := openRepairOrder(t, owner.API)
-	_, err = owner.API.WithIdempotencyKey(uuid.NewString()).CreateSettlement(ctx, openGarageID, openOrderID)
-	fixture.RequireAPIError(t, err, http.StatusPreconditionFailed, "")
+	openOrderID := openRepairOrder(t, owner.API, garageID)
+	_, err = owner.API.WithIdempotencyKey(uuid.NewString()).CreateSettlement(ctx, garageID, openOrderID)
+	fixture.RequireAPIError(t, err, http.StatusConflict, "")
 }
 
 // Scenario: E2E-BIL-003 (partial): a partial payment, then the rest to

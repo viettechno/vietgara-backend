@@ -58,7 +58,7 @@ func TestVehicleIdentityLockAndCorrection(t *testing.T) {
 	// Direct identity edit is refused.
 	_, err = owner.API.UpdateVehicle(ctx, garage.GetId(), vehicle.GetId(),
 		&customerv1.Vehicle{LicensePlate: "51L-54321"}, "license_plate")
-	fixture.RequireAPIError(t, err, http.StatusPreconditionFailed, "VEHICLE_FIELD_LOCKED")
+	fixture.RequireAPIError(t, err, http.StatusConflict, "VEHICLE_FIELD_LOCKED")
 
 	// A correction with a reason works.
 	corrected, err := owner.API.CorrectVehicle(ctx, garage.GetId(), vehicle.GetId(),

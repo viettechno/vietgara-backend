@@ -76,12 +76,12 @@ func (c *Client) CancelMyPendingPlanChange(ctx context.Context) (*licensev1.Subs
 // GetGarageEntitlements returns what garageID may use; any active member
 // may read it.
 func (c *Client) GetGarageEntitlements(ctx context.Context, garageID string) (*licensev1.Entitlements, error) {
-	resp, err := call[licensev1.GetGarageEntitlementsResponse](ctx, c, http.MethodGet, garagePath(garageID)+"/entitlements", nil)
+	resp, err := call[licensev1.Entitlements](ctx, c, http.MethodGet, garagePath(garageID)+"/entitlements", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return resp.GetEntitlements(), nil
+	return resp, nil
 }
 
 // ListAllPlans returns every plan, including hidden and inactive ones.
@@ -193,26 +193,26 @@ func (c *Client) LookupCustomers(ctx context.Context, garageID, phone, email str
 // RequestCustomerUserLink asks to link a customer profile with the
 // VietGara user matching its contact; fails when no user matches.
 func (c *Client) RequestCustomerUserLink(ctx context.Context, garageID, customerID string) (*customerv1.CustomerUserLink, error) {
-	resp, err := call[customerv1.RequestCustomerUserLinkResponse](ctx, c, http.MethodPost,
+	resp, err := call[customerv1.CustomerUserLink](ctx, c, http.MethodPost,
 		garagePath(garageID)+"/customers/"+url.PathEscape(customerID)+"/user-links",
 		&customerv1.RequestCustomerUserLinkRequest{GarageId: garageID, CustomerId: customerID})
 	if err != nil {
 		return nil, err
 	}
 
-	return resp.GetLink(), nil
+	return resp, nil
 }
 
 // UnlinkCustomerUser ends the customer-user link from the garage's
 // side; the profile stays.
 func (c *Client) UnlinkCustomerUser(ctx context.Context, garageID, customerID string) (*customerv1.CustomerUserLink, error) {
-	resp, err := call[customerv1.UnlinkCustomerUserResponse](ctx, c, http.MethodDelete,
+	resp, err := call[customerv1.CustomerUserLink](ctx, c, http.MethodDelete,
 		garagePath(garageID)+"/customers/"+url.PathEscape(customerID)+"/user-links/current", nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return resp.GetLink(), nil
+	return resp, nil
 }
 
 // GetVehicleHistory returns a vehicle's quotes and repair orders, newest
@@ -435,26 +435,26 @@ func (c *Client) ConvertQuote(ctx context.Context, garageID, quoteID string) (*q
 
 // GetPublicQuote opens a quote's public approval page without signing in.
 func (c *Client) GetPublicQuote(ctx context.Context, token string) (*quotev1.PublicQuote, error) {
-	resp, err := call[quotev1.GetPublicQuoteResponse](ctx, c, http.MethodGet,
+	resp, err := call[quotev1.PublicQuote](ctx, c, http.MethodGet,
 		"/api/v1/public/quotes/"+url.PathEscape(token), nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return resp.GetQuote(), nil
+	return resp, nil
 }
 
 // DecidePublicQuote submits the customer's line decisions through the
 // public link, without signing in.
 func (c *Client) DecidePublicQuote(ctx context.Context, token string, decisions ...*quotev1.QuoteLineDecisionInput) (*quotev1.PublicQuote, error) {
-	resp, err := call[quotev1.DecidePublicQuoteResponse](ctx, c, http.MethodPost,
+	resp, err := call[quotev1.PublicQuote](ctx, c, http.MethodPost,
 		"/api/v1/public/quotes/"+url.PathEscape(token)+"/decision",
 		&quotev1.DecidePublicQuoteRequest{Token: token, Decisions: decisions})
 	if err != nil {
 		return nil, err
 	}
 
-	return resp.GetQuote(), nil
+	return resp, nil
 }
 
 // ---- Repair orders ---------------------------------------------------------
@@ -604,13 +604,13 @@ func (c *Client) ListOutstandingSettlements(ctx context.Context, garageID string
 
 // GetSettlement returns one settlement with its payments.
 func (c *Client) GetSettlement(ctx context.Context, garageID, settlementID string) (*billingv1.Settlement, error) {
-	resp, err := call[billingv1.GetSettlementResponse](ctx, c, http.MethodGet,
+	resp, err := call[billingv1.Settlement](ctx, c, http.MethodGet,
 		garagePath(garageID)+"/settlements/"+url.PathEscape(settlementID), nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return resp.GetSettlement(), nil
+	return resp, nil
 }
 
 // UpdateSettlement changes who a settlement is billed to and whether a
@@ -714,39 +714,39 @@ func (c *Client) ListMyGarageLinks(ctx context.Context) ([]*customerportalv1.Gar
 
 // AcceptGarageLink accepts a garage's link request (customer portal).
 func (c *Client) AcceptGarageLink(ctx context.Context, linkID string) (*customerportalv1.GarageLink, error) {
-	resp, err := call[customerportalv1.AcceptGarageLinkResponse](ctx, c, http.MethodPost,
+	resp, err := call[customerportalv1.GarageLink](ctx, c, http.MethodPost,
 		"/api/v1/me/garage-links/"+url.PathEscape(linkID)+":accept",
 		&customerportalv1.AcceptGarageLinkRequest{LinkId: linkID})
 	if err != nil {
 		return nil, err
 	}
 
-	return resp.GetLink(), nil
+	return resp, nil
 }
 
 // DeclineGarageLink declines a garage's link request (customer portal).
 func (c *Client) DeclineGarageLink(ctx context.Context, linkID string) (*customerportalv1.GarageLink, error) {
-	resp, err := call[customerportalv1.DeclineGarageLinkResponse](ctx, c, http.MethodPost,
+	resp, err := call[customerportalv1.GarageLink](ctx, c, http.MethodPost,
 		"/api/v1/me/garage-links/"+url.PathEscape(linkID)+":decline",
 		&customerportalv1.DeclineGarageLinkRequest{LinkId: linkID})
 	if err != nil {
 		return nil, err
 	}
 
-	return resp.GetLink(), nil
+	return resp, nil
 }
 
 // UnlinkGarageLink ends a garage link from the user's side (customer
 // portal).
 func (c *Client) UnlinkGarageLink(ctx context.Context, linkID string) (*customerportalv1.GarageLink, error) {
-	resp, err := call[customerportalv1.UnlinkGarageLinkResponse](ctx, c, http.MethodPost,
+	resp, err := call[customerportalv1.GarageLink](ctx, c, http.MethodPost,
 		"/api/v1/me/garage-links/"+url.PathEscape(linkID)+":unlink",
 		&customerportalv1.UnlinkGarageLinkRequest{LinkId: linkID})
 	if err != nil {
 		return nil, err
 	}
 
-	return resp.GetLink(), nil
+	return resp, nil
 }
 
 // GetMyVehicleHistory returns the signed-in person's history of one
@@ -760,13 +760,13 @@ func (c *Client) GetMyVehicleHistory(ctx context.Context, garageID, vehicleID st
 
 // GetMyInvitation returns one of the signed-in user's invitations.
 func (c *Client) GetMyInvitation(ctx context.Context, invitationID string) (*tenantv1.Invitation, error) {
-	resp, err := call[tenantv1.GetMyInvitationResponse](ctx, c, http.MethodGet,
+	resp, err := call[tenantv1.Invitation](ctx, c, http.MethodGet,
 		"/api/v1/me/invitations/"+url.PathEscape(invitationID), nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return resp.GetInvitation(), nil
+	return resp, nil
 }
 
 // ListPermissions returns the permission catalogue.
@@ -778,12 +778,12 @@ func (c *Client) ListPermissions(ctx context.Context) ([]*tenantv1.PermissionInf
 
 // GetRole returns one role.
 func (c *Client) GetRole(ctx context.Context, roleID string) (*tenantv1.Role, error) {
-	resp, err := call[tenantv1.GetRoleResponse](ctx, c, http.MethodGet, "/api/v1/roles/"+url.PathEscape(roleID), nil)
+	resp, err := call[tenantv1.Role](ctx, c, http.MethodGet, "/api/v1/roles/"+url.PathEscape(roleID), nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return resp.GetRole(), nil
+	return resp, nil
 }
 
 var _ = commonv1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_UNSPECIFIED

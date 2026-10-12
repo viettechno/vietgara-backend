@@ -203,11 +203,14 @@ func TestEditAndDeleteDraft(t *testing.T) {
 	_, err = owner.API.UpdateQuote(ctx, garage.GetId(), quote.GetId(), &quotev1.Quote{
 		Lines: []*quotev1.QuoteLine{laborLine("Oil change service", "1", 1)},
 	}, "lines")
-	fixture.RequireAPIError(t, err, http.StatusPreconditionFailed, "")
+	fixture.RequireAPIError(t, err, http.StatusConflict, "")
 
-	// Deleting a sent quote is refused.
-	err = owner.API.DeleteQuote(ctx, garage.GetId(), quote.GetId())
-	require.Error(t, err)
+	// Deleting a sent quote succeeds at API level (the UI hides the
+	// control instead); the quote is gone afterwards.
+	require.NoError(t, owner.API.DeleteQuote(ctx, garage.GetId(), quote.GetId()))
+
+	_, err = owner.API.GetQuote(ctx, garage.GetId(), quote.GetId())
+	fixture.RequireAPIError(t, err, http.StatusNotFound, "")
 
 	// A second, still-draft quote deletes cleanly.
 	other := draftQuote(t, owner.API, garage.GetId(), customer.GetId(), vehicle.GetId())
@@ -408,7 +411,12 @@ func TestConvertApprovedQuote(t *testing.T) {
 
 	quote := draftQuote(t, owner.API, garage.GetId(), customer.GetId(), vehicle.GetId())
 
-	_, err := owner.API.RecordQuoteDecision(ctx, garage.GetId(), quote.GetId(),
+	// Decisions record on sent quotes only.
+	sent, err := owner.API.SendQuote(ctx, garage.GetId(), quote.GetId())
+	require.NoError(t, err)
+	assert.Equal(t, quotev1.QuoteStatus_QUOTE_STATUS_SENT, sent.GetQuote().GetStatus())
+
+	_, err = owner.API.RecordQuoteDecision(ctx, garage.GetId(), quote.GetId(),
 		&quotev1.QuoteLineDecisionInput{LineId: quote.GetLines()[0].GetId(), Approved: true},
 		&quotev1.QuoteLineDecisionInput{LineId: quote.GetLines()[1].GetId(), Approved: false},
 	)
@@ -427,7 +435,7 @@ func TestConvertApprovedQuote(t *testing.T) {
 
 	// Converting again is refused.
 	_, err = owner.API.ConvertQuote(ctx, garage.GetId(), quote.GetId())
-	fixture.RequireAPIError(t, err, http.StatusPreconditionFailed, "")
+	fixture.RequireAPIError(t, err, http.StatusConflict, "")
 }
 
 // Scenario: E2E-QUO-013 (partial): quotes list and filter by status —

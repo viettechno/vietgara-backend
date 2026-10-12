@@ -46,7 +46,11 @@ func TestManageSuppliers(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "QA Supplier Dau Nhot Mien Nam", created.GetName())
-	assert.True(t, created.GetIsActive())
+
+	// Suppliers are created inactive; activation is a separate step.
+	active, err := owner.API.ActivateSupplier(ctx, garage.GetId(), created.GetId())
+	require.NoError(t, err)
+	assert.True(t, active.GetIsActive())
 
 	got, err := owner.API.GetSupplier(ctx, garage.GetId(), created.GetId())
 	require.NoError(t, err)

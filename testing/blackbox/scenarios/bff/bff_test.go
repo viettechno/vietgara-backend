@@ -7,10 +7,12 @@ package bff_test
 import (
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
+	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
@@ -26,14 +28,23 @@ func inviteTechnician(t *testing.T, owner *fixture.Actor, garageID, label string
 
 	groups, err := owner.API.ListStaffGroups(ctx, garageID)
 	require.NoError(t, err)
-	require.NotEmpty(t, groups)
+
+	var technicianID string
+
+	for _, g := range groups {
+		if g.GetName() == "Technician" {
+			technicianID = g.GetId()
+		}
+	}
+
+	require.NotEmpty(t, technicianID, "no Technician group in garage %s", garageID)
 
 	tech := fixture.NewVerifiedOwner(t, label)
 
 	cand, err := owner.API.LookupStaffCandidate(ctx, garageID, tech.Email)
 	require.NoError(t, err)
 
-	_, err = owner.API.CreateInvitation(ctx, garageID, cand.GetUserId(), []string{groups[0].GetId()})
+	_, err = owner.API.CreateInvitation(ctx, garageID, cand.GetUserId(), []string{technicianID})
 	require.NoError(t, err)
 
 	mine, err := tech.API.ListMyInvitations(ctx)
@@ -53,7 +64,7 @@ func TestTechnicianWorkList(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	owner := fixture.NewVerifiedOwner(t, "bff-owner")
+	owner := fixture.NewVerifiedOwnerWithLocale(t, "bff-owner", identityv1.Locale_LOCALE_EN)
 
 	garage, err := owner.API.CreateGarage(ctx, &tenantv1.Garage{Name: "Blackbox BFF Work"})
 	require.NoError(t, err)
@@ -249,6 +260,29 @@ func TestCustomerPortalGarageSideUnlink(t *testing.T) {
 	assert.Empty(t, vehicles)
 }
 
+// waitForRoles polls until the owner's default roles arrive (created by
+// the async outbox consumer after verification).
+func waitForRoles(t *testing.T, owner *fixture.Actor) []*tenantv1.Role {
+	t.Helper()
+
+	deadline := time.Now().Add(30 * time.Second)
+
+	for {
+		roles, err := owner.API.ListRoles(t.Context())
+		require.NoError(t, err)
+
+		if len(roles) > 0 {
+			return roles
+		}
+
+		if time.Now().After(deadline) {
+			t.Fatal("default roles never arrived")
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
 // Scenario: E2E-CUS-012 (partial): the permission catalogue
 // and role reads back the technician BFF guards — asserted at API
 // level; the sidebar is web-E2E.
@@ -262,8 +296,8 @@ func TestPermissionCatalogueAndRoleRead(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, permissions)
 
-	roles, err := owner.API.ListRoles(ctx)
-	require.NoError(t, err)
+	// Default roles arrive through the async outbox relay: wait for them.
+	roles := waitForRoles(t, owner)
 	require.NotEmpty(t, roles)
 
 	role, err := owner.API.GetRole(ctx, roles[0].GetId())

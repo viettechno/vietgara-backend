@@ -248,7 +248,7 @@ func TestCloseRequiresCompletedLines(t *testing.T) {
 
 	// Closing with open lines is refused.
 	_, err := owner.API.CloseRepairOrder(ctx, garage.GetId(), order.GetId())
-	fixture.RequireAPIError(t, err, http.StatusPreconditionFailed, "")
+	fixture.RequireAPIError(t, err, http.StatusConflict, "")
 
 	done := completeLine(t, owner.API, garage.GetId(), order.GetId(), order.GetLines()[0].GetId())
 	done = completeLine(t, owner.API, garage.GetId(), order.GetId(), done.GetLines()[1].GetId())
@@ -281,11 +281,11 @@ func TestClosedOrderImmutable(t *testing.T) {
 	// Editing a line of a closed order is refused.
 	_, err = owner.API.UpdateRepairOrderLine(ctx, garage.GetId(), order.GetId(), order.GetLines()[0].GetId(),
 		&repairorderv1.RepairOrderLine{Status: repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_IN_PROGRESS})
-	fixture.RequireAPIError(t, err, http.StatusPreconditionFailed, "")
+	fixture.RequireAPIError(t, err, http.StatusConflict, "")
 
 	// Closing again is refused.
 	_, err = owner.API.CloseRepairOrder(ctx, garage.GetId(), order.GetId())
-	fixture.RequireAPIError(t, err, http.StatusPreconditionFailed, "")
+	fixture.RequireAPIError(t, err, http.StatusConflict, "")
 }
 
 // Scenario: E2E-REP-010 (partial): the repair order joins the vehicle's

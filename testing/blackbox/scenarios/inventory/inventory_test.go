@@ -255,6 +255,11 @@ func TestStockMovementReportFilters(t *testing.T) {
 
 	closeOrderWithPart(t, owner.API, garage.GetId(), item.GetId(), "4")
 
+	// The close deduction arrives through the async outbox relay: wait
+	// for an OUT transaction before asserting the report contents.
+	waitForTransactions(t, owner.API, garage.GetId(),
+		inventoryv1.StockTransactionType_STOCK_TRANSACTION_TYPE_OUT)
+
 	all, err := owner.API.ListStockTransactions(ctx, garage.GetId())
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(all), 2)

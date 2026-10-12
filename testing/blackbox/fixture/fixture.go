@@ -90,12 +90,28 @@ func UniqueEmail(tb testing.TB, label string) string {
 func NewVerifiedOwner(tb testing.TB, label string) *Actor {
 	tb.Helper()
 
+	return newVerifiedOwner(tb, label, identityv1.Locale_LOCALE_UNSPECIFIED)
+}
+
+// NewVerifiedOwnerWithLocale is NewVerifiedOwner with an interface
+// language. Tenant tests use English so default role and group names are
+// deterministic: they are snapshotted in the owner's locale when the
+// e-mail is verified and the first garage is created.
+func NewVerifiedOwnerWithLocale(tb testing.TB, label string, locale identityv1.Locale) *Actor {
+	tb.Helper()
+
+	return newVerifiedOwner(tb, label, locale)
+}
+
+func newVerifiedOwner(tb testing.TB, label string, locale identityv1.Locale) *Actor {
+	tb.Helper()
+
 	mail := Mailpit(tb)
 	email := UniqueEmail(tb, label)
 	api := Anonymous(tb)
 
 	registered, err := api.Register(tb.Context(), &identityv1.RegisterRequest{
-		Email: email, Password: Password, FullName: "Blackbox " + label,
+		Email: email, Password: Password, FullName: "Blackbox " + label, Locale: locale,
 	})
 	if err != nil {
 		tb.Fatalf("register %s: %v", email, err)

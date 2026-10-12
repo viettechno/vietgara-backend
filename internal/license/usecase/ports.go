@@ -7,6 +7,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"slices"
 	"strconv"
 	"time"
 
@@ -204,24 +205,50 @@ func toAppError(op string, err error) error {
 		return apperror.Validation("days", apperror.IssueInvalid, err.Error())
 	case errors.Is(err, domain.ErrSubscriptionCancelled):
 		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err)
-	case errors.Is(err, domain.ErrPaymentRequestNotFound):
-		return apperror.Wrap(apperror.CodeNotFound, err.Error(), err)
-	case errors.Is(err, domain.ErrTrialNotAvailable):
-		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err).WithReason(domain.ReasonTrialNotAvailable)
-	case errors.Is(err, domain.ErrRequestAlreadyOpen):
-		return apperror.Wrap(apperror.CodeAlreadyExists, err.Error(), err).WithReason(domain.ReasonRequestAlreadyOpen)
-	case errors.Is(err, domain.ErrRequestNotOpen):
-		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err).WithReason(domain.ReasonRequestNotOpen)
-	case errors.Is(err, domain.ErrEvidenceRequired):
-		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err).WithReason(domain.ReasonEvidenceRequired)
-	case errors.Is(err, domain.ErrMismatchNoteRequired):
-		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err).WithReason(domain.ReasonMismatchNoteRequired)
-	case errors.Is(err, domain.ErrInvalidDeclaration), errors.Is(err, domain.ErrInvalidAdjustment),
-		errors.Is(err, domain.ErrInvalidEvidence), errors.Is(err, domain.ErrInvalidQR):
-		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err)
+	case isPaymentError(err):
+		return paymentAppError(err)
 	default:
 		return apperror.Internal(op, err)
 	}
+}
+
+type paymentError struct {
+	err    error
+	code   apperror.Code
+	reason string
+}
+
+// paymentErrors maps the payment errors to their code and reason.
+var paymentErrors = []paymentError{
+	{domain.ErrPaymentRequestNotFound, apperror.CodeNotFound, ""},
+	{domain.ErrTrialNotAvailable, apperror.CodeInvalidArgument, domain.ReasonTrialNotAvailable},
+	{domain.ErrRequestAlreadyOpen, apperror.CodeAlreadyExists, domain.ReasonRequestAlreadyOpen},
+	{domain.ErrRequestNotOpen, apperror.CodeFailedPrecondition, domain.ReasonRequestNotOpen},
+	{domain.ErrEvidenceRequired, apperror.CodeInvalidArgument, domain.ReasonEvidenceRequired},
+	{domain.ErrMismatchNoteRequired, apperror.CodeInvalidArgument, domain.ReasonMismatchNoteRequired},
+	{domain.ErrInvalidDeclaration, apperror.CodeInvalidArgument, ""},
+	{domain.ErrInvalidAdjustment, apperror.CodeInvalidArgument, ""},
+	{domain.ErrInvalidEvidence, apperror.CodeInvalidArgument, ""},
+	{domain.ErrInvalidQR, apperror.CodeInvalidArgument, ""},
+}
+
+func isPaymentError(err error) bool {
+	return slices.ContainsFunc(paymentErrors, func(e paymentError) bool { return errors.Is(err, e.err) })
+}
+
+func paymentAppError(err error) error {
+	for _, e := range paymentErrors {
+		if errors.Is(err, e.err) {
+			wrapped := apperror.Wrap(e.code, err.Error(), err)
+			if e.reason != "" {
+				wrapped = wrapped.WithReason(e.reason)
+			}
+
+			return wrapped
+		}
+	}
+
+	return err
 }
 
 func isAppError(err error) bool {

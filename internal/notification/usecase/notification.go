@@ -15,6 +15,9 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
 )
 
+// keyName is the template variable holding the recipient's name.
+const keyName = "Name"
+
 // Deps are the dependencies of NotificationUseCase.
 type Deps struct {
 	Mailer Mailer
@@ -51,7 +54,7 @@ func (uc *NotificationUseCase) HandleUserEmailVerified(ctx context.Context, even
 	}
 
 	return uc.send(ctx, payload.UserID, mail.TemplateRegistrationConfirmation, payload.Locale, payload.Email, payload.FullName,
-		map[string]any{"Name": payload.FullName})
+		map[string]any{keyName: payload.FullName})
 }
 
 type subscriptionExpiringSoonPayload struct {
@@ -88,7 +91,7 @@ func (uc *NotificationUseCase) HandleSubscriptionExpiringSoon(ctx context.Contex
 
 	return uc.send(ctx, payload.UserID, mail.TemplateSubscriptionExpiringSoon, user.Locale, user.Email, user.FullName,
 		map[string]any{
-			"Name": user.FullName, "PlanCode": payload.PlanCode,
+			keyName: user.FullName, "PlanCode": payload.PlanCode,
 			"CurrentPeriodEnd": formatPeriodEnd(payload.CurrentPeriodEnd, user.Locale),
 			"AmountDue":        payload.AmountDue, "BankName": payload.BankName, "AccountNumber": payload.AccountNumber,
 			"AccountHolder": payload.AccountHolder, "Branch": payload.Branch,
@@ -142,7 +145,7 @@ func (uc *NotificationUseCase) tellAdmins(ctx context.Context, template string, 
 	}
 
 	for _, admin := range admins {
-		personal := map[string]any{"Name": admin.FullName}
+		personal := map[string]any{keyName: admin.FullName}
 		maps.Copy(personal, data)
 
 		if err := uc.send(ctx, admin.ID, template, admin.Locale, admin.Email, admin.FullName, personal); err != nil {
@@ -183,7 +186,7 @@ func (uc *NotificationUseCase) tellOwner(ctx context.Context, event outbox.Event
 	}
 
 	return uc.send(ctx, p.UserID, template, user.Locale, user.Email, user.FullName, map[string]any{
-		"Name": user.FullName, "PlanCode": p.PlanCode, "Reference": p.Reference, "Reason": p.Reason,
+		keyName: user.FullName, "PlanCode": p.PlanCode, "Reference": p.Reference, "Reason": p.Reason,
 	})
 }
 

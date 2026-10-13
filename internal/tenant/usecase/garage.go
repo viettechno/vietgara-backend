@@ -275,6 +275,11 @@ func callerID(caller *access.Access) string {
 	return caller.UserID
 }
 
+// CallerIDForTest is a test helper for callerID.
+func CallerIDForTest(caller *access.Access) string {
+	return callerID(caller)
+}
+
 // applyGarageFields validates and applies fields to g.
 func applyGarageFields(g *domain.Garage, f GarageFields) error {
 	if f.Name != nil {

@@ -67,3 +67,8 @@ func (uc *TenantUseCase) userLocale(ctx context.Context, userID string) string {
 
 	return "en"
 }
+
+// UserLocaleForTest is a test helper for userLocale.
+func (uc *TenantUseCase) UserLocaleForTest(ctx context.Context, userID string) string {
+	return uc.userLocale(ctx, userID)
+}

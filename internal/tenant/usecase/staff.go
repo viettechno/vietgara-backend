@@ -154,3 +154,8 @@ func (uc *TenantUseCase) checkGarageOwnerUsage(ctx context.Context, garageID str
 
 	return uc.checkUsage(ctx, garage.OwnerUserID, limit)
 }
+
+// CheckGarageOwnerUsageForTest is a test helper for checkGarageOwnerUsage.
+func (uc *TenantUseCase) CheckGarageOwnerUsageForTest(ctx context.Context, garageID string, limit Limit) error {
+	return uc.checkGarageOwnerUsage(ctx, garageID, limit)
+}

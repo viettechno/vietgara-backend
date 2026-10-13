@@ -52,3 +52,20 @@ func reportToProto(report *usecase.RevenueReport) *reportingv1.GetRevenueReportR
 
 	return &reportingv1.GetRevenueReportResponse{Points: points, TotalAmount: report.TotalAmount}
 }
+
+// Test helper functions
+
+// RequestFromProtoForTest is a test helper for requestFromProto.
+func RequestFromProtoForTest(req *reportingv1.GetRevenueReportRequest) (usecase.GetRevenueReportRequest, error) {
+	return requestFromProto(req)
+}
+
+// PeriodFromProtoForTest is a test helper for periodFromProto.
+func PeriodFromProtoForTest(p reportingv1.RevenuePeriod) usecase.Period {
+	return periodFromProto(p)
+}
+
+// ReportToProtoForTest is a test helper for reportToProto.
+func ReportToProtoForTest(report *usecase.RevenueReport) *reportingv1.GetRevenueReportResponse {
+	return reportToProto(report)
+}

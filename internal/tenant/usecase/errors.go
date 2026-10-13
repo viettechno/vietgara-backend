@@ -50,3 +50,8 @@ func toAppError(op string, err error) error {
 
 	return apperror.Internal(op, err)
 }
+
+// ToAppErrorForTest is a test helper for toAppError.
+func (uc *TenantUseCase) ToAppErrorForTest(op string, err error) error {
+	return toAppError(op, err)
+}

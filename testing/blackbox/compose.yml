@@ -22,6 +22,10 @@ services:
   vietgara-pgsql:
     image: postgres:18.4
     environment: *db
+    # Published for the suite's time-shifting setup helpers (timeshift);
+    # loopback only, and the stack is disposable.
+    ports:
+      - "127.0.0.1:${BLACKBOX_PG_PORT:-15432}:5432"
     tmpfs:
       - /var/lib/postgresql
     healthcheck:
@@ -103,6 +107,8 @@ services:
       # Google: mobile ID tokens are verified against the stub's JWKS; the
       # web OAuth endpoints point at the stub too, so nothing reaches Google.
       GOOGLE_MOBILE_CLIENT_IDS: blackbox-mobile.apps.googleusercontent.com
+      GOOGLE_CLIENT_ID: blackbox-web.apps.googleusercontent.com
+      GOOGLE_CLIENT_SECRET: blackbox-web-secret
       GOOGLE_CERTS_URL: http://google-stub:8080/oauth2/v3/certs
       GOOGLE_AUTH_ENDPOINT: http://google-stub:8080/o/oauth2/v2/auth
       GOOGLE_TOKEN_ENDPOINT: http://google-stub:8080/token
@@ -112,6 +118,11 @@ services:
       KAFKA_TOPIC_PREFIX: vietgara
       KAFKA_CONSUMER_GROUP: vietgara-backend
       OUTBOX_RELAY_INTERVAL: 500ms
+      # Short, so the period-end, grace-end and reminder scenarios wait
+      # seconds instead of the default hour, and the entitlement cache
+      # never hides a status change for long.
+      LICENSE_EXPIRY_JOB_INTERVAL: 5s
+      ENTITLEMENT_CACHE_TTL: 1s
       # The dataset's admin user registers after startup, so the
       # register-time grant makes it a platform admin on a fresh stack.
       PLATFORM_ADMIN_EMAILS: admin@blackbox.vietgara.test

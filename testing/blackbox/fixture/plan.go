@@ -201,3 +201,24 @@ func transferEvidence() *licensev1.PaymentEvidence {
 
 	return &licensev1.PaymentEvidence{Content: buf.Bytes(), ContentType: "image/png"}
 }
+
+// LimitedPlan creates a public plan with the given daily transaction
+// limit (the other limits are generous) and moves owner onto it, so a
+// scenario can reach the limit with a handful of calls.
+func LimitedPlan(tb testing.TB, owner *Actor, maxTransactionsPerDay int32) *licensev1.Subscription {
+	tb.Helper()
+
+	code := fmt.Sprintf("qa-limit-%d-%d", maxTransactionsPerDay, seq.Add(1))
+
+	created, err := PlatformAdmin(tb).API.CreatePlan(tb.Context(), &licensev1.Plan{
+		Code: code, Name: "QA " + code, Price: 100000, Currency: "VND",
+		BillingCycle: licensev1.BillingCycle_BILLING_CYCLE_MONTHLY,
+		Limits:       &licensev1.PlanLimits{MaxGarages: 5, MaxStaff: 10, MaxTransactionsPerDay: maxTransactionsPerDay},
+		IsPublic:     true, IsActive: true,
+	})
+	if err != nil {
+		tb.Fatalf("create plan %s: %v", code, err)
+	}
+
+	return SwitchPlanByID(tb, owner, created.GetId(), created.GetName())
+}

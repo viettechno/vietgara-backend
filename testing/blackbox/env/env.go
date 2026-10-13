@@ -54,6 +54,14 @@ type Config struct {
 	GoogleClientID string
 	// TestdataDir contains the YAML files from the pinned shared dataset.
 	TestdataDir string
+	// DatabaseURL is the schema owner's connection string on the stubbed
+	// target only. Scenarios that must move stored dates forward (the
+	// documented SQL helpers H1 to H4: period end, grace end, expiring
+	// soon, invitation expiry) use it as setup, never for assertions.
+	DatabaseURL string
+	// Slow enables scenarios that wait for real time to pass (2 and 10
+	// minute expiries): BLACKBOX_SLOW=1.
+	Slow bool
 
 	// OwnerEmail and OwnerPassword sign in a pre-provisioned, verified
 	// user for the read-only checks when there is no test inbox.
@@ -97,10 +105,13 @@ func load() (Config, error) {
 		OwnerPassword:  os.Getenv("BLACKBOX_OWNER_PASSWORD"),
 		AdminEmail:     os.Getenv("BLACKBOX_ADMIN_EMAIL"),
 		AdminPassword:  os.Getenv("BLACKBOX_ADMIN_PASSWORD"),
+		Slow:           os.Getenv("BLACKBOX_SLOW") == "1",
 	}
 
 	switch cfg.Target {
 	case Stubbed:
+		cfg.DatabaseURL = getenv("BLACKBOX_DATABASE_URL",
+			"postgres://vietgara:vietgara@localhost:15432/vietgara?sslmode=disable")
 	case Staging:
 		if os.Getenv("BLACKBOX_API_URL") == "" {
 			return Config{}, fmt.Errorf("%w %q", errBlackboxAPIURLRequired, cfg.Target)
@@ -122,6 +133,16 @@ func RequireStubbed(tb testing.TB, why string) {
 
 	if cfg := Get(tb); cfg.Target != Stubbed {
 		tb.Skipf("stubbed target only (%s); running against %s", why, cfg.Target)
+	}
+}
+
+// RequireSlow skips tb unless BLACKBOX_SLOW=1: the scenario waits for a
+// real-time expiry of minutes.
+func RequireSlow(tb testing.TB, why string) {
+	tb.Helper()
+
+	if !Get(tb).Slow {
+		tb.Skipf("slow scenario (%s): set BLACKBOX_SLOW=1 to run it", why)
 	}
 }
 

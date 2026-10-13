@@ -121,3 +121,84 @@ func (m *Mailpit) getJSON(ctx context.Context, path string, out any) error {
 
 	return json.NewDecoder(resp.Body).Decode(out)
 }
+
+// WaitForMatching returns the newest e-mail to address for which match
+// is true, polling until one arrives or ctx ends. Scenarios that expect
+// several e-mails to the same address in turn (a reminder, then a
+// suspension notice) use it to tell them apart by subject.
+func (m *Mailpit) WaitForMatching(ctx context.Context, address string, match func(*Message) bool) (*Message, error) {
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		msg, err := m.findMatching(ctx, address, match)
+		if err != nil {
+			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				return nil, fmt.Errorf("%w for %s: %w", ErrNoMessage, address, ctx.Err())
+			}
+
+			return nil, err
+		}
+
+		if msg != nil {
+			return msg, nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return nil, fmt.Errorf("%w for %s: %w", ErrNoMessage, address, ctx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+func (m *Mailpit) findMatching(ctx context.Context, address string, match func(*Message) bool) (*Message, error) {
+	var found struct {
+		Messages []struct {
+			ID string `json:"ID"`
+		} `json:"messages"`
+	}
+
+	if err := m.getJSON(ctx, "/api/v1/search?limit=50&query="+url.QueryEscape("to:"+address), &found); err != nil {
+		return nil, err
+	}
+
+	for _, item := range found.Messages {
+		var msg Message
+		if err := m.getJSON(ctx, "/api/v1/message/"+url.PathEscape(item.ID), &msg); err != nil {
+			return nil, err
+		}
+
+		if match(&msg) {
+			return &msg, nil
+		}
+	}
+
+	return nil, nil //nolint:nilnil // nil, nil means "nothing matches yet"
+}
+
+// Messages returns up to 50 e-mails to address, newest first.
+func (m *Mailpit) Messages(ctx context.Context, address string) ([]*Message, error) {
+	var found struct {
+		Messages []struct {
+			ID string `json:"ID"`
+		} `json:"messages"`
+	}
+
+	if err := m.getJSON(ctx, "/api/v1/search?limit=50&query="+url.QueryEscape("to:"+address), &found); err != nil {
+		return nil, err
+	}
+
+	out := make([]*Message, 0, len(found.Messages))
+
+	for _, item := range found.Messages {
+		var msg Message
+		if err := m.getJSON(ctx, "/api/v1/message/"+url.PathEscape(item.ID), &msg); err != nil {
+			return nil, err
+		}
+
+		out = append(out, &msg)
+	}
+
+	return out, nil
+}

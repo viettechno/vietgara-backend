@@ -249,6 +249,18 @@ func (c *Client) CreateRole(ctx context.Context, role *tenantv1.Role) (*tenantv1
 	return call[tenantv1.Role](ctx, c, http.MethodPost, "/api/v1/roles", role)
 }
 
+// UpdateRole saves a role's name, description and permissions (paths name
+// the fields to change). Default roles keep their key and may be edited
+// and reset to their default permissions; write permissions imply reads.
+func (c *Client) UpdateRole(ctx context.Context, roleID string, role *tenantv1.Role, paths ...string) (*tenantv1.Role, error) {
+	path := "/api/v1/roles/" + url.PathEscape(roleID)
+	if len(paths) > 0 {
+		path += "?updateMask=" + url.QueryEscape(strings.Join(paths, ","))
+	}
+
+	return call[tenantv1.Role](ctx, c, http.MethodPatch, path, role)
+}
+
 // DeleteRole deletes a custom role no group uses; in-use roles fail with
 // ROLE_IN_USE.
 func (c *Client) DeleteRole(ctx context.Context, roleID string) error {

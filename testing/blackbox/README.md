@@ -58,8 +58,18 @@ to the development `docker-compose.yml`:
 | `BLACKBOX_API_URL` | `http://localhost:18000` (Kong; `BLACKBOX_KONG_PORT` for Compose) |
 | `BLACKBOX_MAILPIT_URL` | `http://localhost:18025` (`BLACKBOX_MAILPIT_PORT`) |
 | `BLACKBOX_EMAIL_DOMAIN` | `blackbox.vietgara.test`, the `TEST_USERS_EMAIL_DOMAIN` set in `compose.yml` |
+| `BLACKBOX_DATABASE_URL` | `postgres://vietgara:vietgara@localhost:15432/vietgara?sslmode=disable` (`BLACKBOX_PG_PORT` for Compose; stubbed only) |
 | `BLACKBOX_GOOGLE_STUB_URL` | `http://localhost:18090` (`BLACKBOX_GOOGLE_STUB_PORT`) |
 | `BLACKBOX_GOOGLE_CLIENT_ID` | the `GOOGLE_MOBILE_CLIENT_IDS` set in `compose.yml` |
+
+#### Time-dependent scenarios
+
+Some rules depend on time. Two helpers keep them testable:
+
+| Helper | What it does | Where it runs |
+| --- | --- | --- |
+| `timeshift` (`BLACKBOX_DATABASE_URL`, default `postgres://vietgara:vietgara@localhost:15432/vietgara`) | The SQL helpers H1 to H4 of the scenarios' README: ends the period or the grace period, brings the end within 7 days, expires an invitation. Setup only; results are read through the API and Mailpit. The stubbed stack publishes Postgres on `127.0.0.1:${BLACKBOX_PG_PORT:-15432}` and runs the expiry job every 5 s (`LICENSE_EXPIRY_JOB_INTERVAL`). | stubbed only (skipped elsewhere) |
+| `BLACKBOX_SLOW=1` | Enables scenarios that wait for real time: the 2 minute verification code (E2E-IAM-005) and the 10 minute reset session (E2E-IAM-013). | any target |
 
 ### `staging`
 

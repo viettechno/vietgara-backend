@@ -458,7 +458,25 @@ func (c *Client) ConvertQuote(ctx context.Context, garageID, quoteID string) (*q
 }
 
 // GetPublicQuote opens a quote's public approval page without signing in.
-func (c *Client) GetPublicQuote(ctx context.Context, token string) (*quotev1.PublicQuote, error) {
+// Accepts either a full public URL or just the token.
+func (c *Client) GetPublicQuote(ctx context.Context, tokenOrURL string) (*quotev1.PublicQuote, error) {
+	token := tokenOrURL
+	if strings.HasPrefix(tokenOrURL, "http") {
+		// Extract token from full URL: .../public/quotes/{token}
+		// URL format: https://host/public/quotes/{token} or https://host/public/quotes/{token}/
+		const prefix = "/public/quotes/"
+
+		_, after, found := strings.Cut(tokenOrURL, prefix)
+		if found {
+			token = after
+			// Remove trailing slash and query parameters
+			token = strings.TrimSuffix(token, "/")
+			if qIdx := strings.Index(token, "?"); qIdx >= 0 {
+				token = token[:qIdx]
+			}
+		}
+	}
+
 	resp, err := call[quotev1.PublicQuote](ctx, c, http.MethodGet,
 		"/api/v1/public/quotes/"+url.PathEscape(token), nil)
 	if err != nil {
@@ -469,8 +487,23 @@ func (c *Client) GetPublicQuote(ctx context.Context, token string) (*quotev1.Pub
 }
 
 // DecidePublicQuote submits the customer's line decisions through the
-// public link, without signing in.
-func (c *Client) DecidePublicQuote(ctx context.Context, token string, decisions ...*quotev1.QuoteLineDecisionInput) (*quotev1.PublicQuote, error) {
+// public link, without signing in. Accepts either a full public URL or just the token.
+func (c *Client) DecidePublicQuote(ctx context.Context, tokenOrURL string, decisions ...*quotev1.QuoteLineDecisionInput) (*quotev1.PublicQuote, error) {
+	token := tokenOrURL
+	if strings.HasPrefix(tokenOrURL, "http") {
+		const prefix = "/public/quotes/"
+
+		_, after, found := strings.Cut(tokenOrURL, prefix)
+		if found {
+			token = after
+
+			token = strings.TrimSuffix(token, "/")
+			if qIdx := strings.Index(token, "?"); qIdx >= 0 {
+				token = token[:qIdx]
+			}
+		}
+	}
+
 	resp, err := call[quotev1.PublicQuote](ctx, c, http.MethodPost,
 		"/api/v1/public/quotes/"+url.PathEscape(token)+"/decision",
 		&quotev1.DecidePublicQuoteRequest{Token: token, Decisions: decisions})

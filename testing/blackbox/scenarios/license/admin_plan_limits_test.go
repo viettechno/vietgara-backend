@@ -46,7 +46,7 @@ func TestAdminChangePlanLimits(t *testing.T) {
 	sub := fixture.SwitchPlanByID(t, owner, createdPlan.GetId(), createdPlan.GetName())
 	assert.Equal(t, licensev1.SubscriptionStatus_SUBSCRIPTION_STATUS_ACTIVE, sub.GetStatus())
 	assert.Equal(t, "qa-limit-test", sub.GetPlan().GetCode())
-	assert.EqualValues(t, 2, sub.GetUsage().GetStaff(), "initial staff limit should be 2")
+	assert.EqualValues(t, 2, sub.GetPlan().GetLimits().GetMaxStaff(), "initial staff limit should be 2")
 
 	// Admin changes max staff from 2 to 3
 	updatedPlan, err := admin.API.UpdatePlan(ctx, createdPlan.GetId(), &licensev1.Plan{
@@ -58,7 +58,7 @@ func TestAdminChangePlanLimits(t *testing.T) {
 	// Owner should see the new limit immediately
 	subAfter, err := owner.API.MySubscription(ctx)
 	require.NoError(t, err)
-	assert.EqualValues(t, 3, subAfter.GetUsage().GetStaff(), "owner should see updated staff limit at once")
+	assert.EqualValues(t, 3, subAfter.GetPlan().GetLimits().GetMaxStaff(), "owner should see updated staff limit at once")
 
 	// Owner can now invite a third staff member
 	garageID := garage.GetId()

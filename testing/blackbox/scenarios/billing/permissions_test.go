@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	billingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/billing/v1"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
+	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
@@ -20,7 +21,7 @@ func TestBillingPermissions(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	owner := fixture.NewVerifiedOwner(t, "bil-perms-owner")
+	owner := fixture.NewVerifiedOwnerWithLocale(t, "bil-perms-owner", identityv1.Locale_LOCALE_EN)
 	garage, err := owner.API.CreateGarage(ctx, &tenantv1.Garage{Name: "Blackbox Billing Perms"})
 	require.NoError(t, err)
 
@@ -43,6 +44,15 @@ func TestBillingPermissions(t *testing.T) {
 	})
 	require.NoError(t, err)
 
+	// Complete the line before closing
+	lines, err := owner.API.GetRepairOrder(ctx, garageID, order.GetId())
+	require.NoError(t, err)
+
+	line := lines.GetLines()[0]
+	line.Status = repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_COMPLETED
+	_, err = owner.API.UpdateRepairOrderLineMasked(ctx, garageID, order.GetId(), line.GetId(), line, "status")
+	require.NoError(t, err)
+
 	closed, err := owner.API.CloseRepairOrder(ctx, garageID, order.GetId())
 	require.NoError(t, err)
 	assert.Equal(t, repairorderv1.RepairOrderStatus_REPAIR_ORDER_STATUS_CLOSED, closed.GetStatus())
@@ -55,7 +65,18 @@ func TestBillingPermissions(t *testing.T) {
 	groups, err := owner.API.ListStaffGroups(ctx, garageID)
 	require.NoError(t, err)
 
-	techGroup := groups[0] // Technician group has no billing permission
+	// Find Technician group (no billing permission)
+	var techGroup *tenantv1.StaffGroup
+
+	for _, g := range groups {
+		if g.GetName() == "Technician" {
+			techGroup = g
+			break
+		}
+	}
+
+	require.NotNil(t, techGroup, "Technician group should exist")
+
 	_, err = owner.API.CreateInvitation(ctx, garageID, cand.GetUserId(), []string{techGroup.GetId()})
 	require.NoError(t, err)
 
@@ -66,7 +87,7 @@ func TestBillingPermissions(t *testing.T) {
 	require.NoError(t, err)
 
 	// Technician tries to create settlement - should fail
-	_, err = tech.API.CreateSettlement(ctx, garageID, closed.GetId())
+	_, err = tech.API.WithIdempotencyKey("test-tech-key").CreateSettlement(ctx, garageID, closed.GetId())
 	require.Error(t, err)
 	fixture.RequireAPIError(t, err, http.StatusForbidden, "")
 
@@ -96,14 +117,14 @@ func TestBillingPermissions(t *testing.T) {
 	assert.Equal(t, settlement.GetId(), got.GetId())
 
 	// Record payment
-	paid, err := owner.API.WithIdempotencyKey("pay-key-1").RecordPayment(ctx, garageID, settlement.GetId(), &billingv1.RecordSettlementPaymentRequest{Amount: 500000, Method: billingv1.PaymentMethod_PAYMENT_METHOD_CASH})
+	paid, err := owner.API.WithIdempotencyKey("pay-key-1").RecordPayment(ctx, garageID, settlement.GetId(), &billingv1.RecordSettlementPaymentRequest{Amount: 1000000, Method: billingv1.PaymentMethod_PAYMENT_METHOD_CASH})
 	require.NoError(t, err)
 	assert.Equal(t, billingv1.SettlementStatus_SETTLEMENT_STATUS_PAID, paid.GetStatus())
 
 	// Void payment
 	voided, err := owner.API.VoidSettlementPayment(ctx, garageID, settlement.GetId(), paid.GetPayments()[0].GetId(), "Test void")
 	require.NoError(t, err)
-	assert.Equal(t, billingv1.SettlementStatus_SETTLEMENT_STATUS_PARTIALLY_PAID, voided.GetStatus())
+	assert.Equal(t, billingv1.SettlementStatus_SETTLEMENT_STATUS_PENDING, voided.GetStatus())
 
 	// --- Test 3: Staff with billing write can do everything owner can ---
 	// (would need a custom role with billing write - skip for now as baseline may not have it)

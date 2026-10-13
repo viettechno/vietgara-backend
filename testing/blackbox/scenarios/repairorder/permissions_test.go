@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
+	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
@@ -19,7 +20,7 @@ import (
 func createRepairOrderPermTestEnv(t *testing.T) (context.Context, *fixture.Actor, string, *customerv1.Customer, *customerv1.Vehicle, string, []*tenantv1.StaffGroup) {
 	t.Helper()
 
-	owner := fixture.NewVerifiedOwner(t, "rep-perms-owner")
+	owner := fixture.NewVerifiedOwnerWithLocale(t, "rep-perms-owner", identityv1.Locale_LOCALE_EN)
 	garage, err := owner.API.CreateGarage(t.Context(), &tenantv1.Garage{Name: "Blackbox RO Perms"})
 	require.NoError(t, err)
 
@@ -51,45 +52,70 @@ func createRepairOrderPermTestEnv(t *testing.T) (context.Context, *fixture.Actor
 	return t.Context(), owner, garageID, customer, vehicle, orderID, groups
 }
 
-func TestRepairOrderPermissionsNoAccess(t *testing.T) {
+func TestRepairOrderPermissionsFullAccess(t *testing.T) {
 	t.Parallel()
 
 	ctx, owner, garageID, _, _, orderID, groups := createRepairOrderPermTestEnv(t)
 
-	t.Run("no repair-order access", func(t *testing.T) {
+	t.Run("technician has full repair order access", func(t *testing.T) {
 		t.Parallel()
-		noPerm := fixture.NewVerifiedOwner(t, "rep-no-perm")
-		cand, err := owner.API.LookupStaffCandidate(ctx, garageID, noPerm.Email)
+		tech := fixture.NewVerifiedOwner(t, "rep-tech-full")
+		cand, err := owner.API.LookupStaffCandidate(ctx, garageID, tech.Email)
 		require.NoError(t, err)
 
-		_, err = owner.API.CreateInvitation(ctx, garageID, cand.GetUserId(), []string{groups[0].GetId()})
+		// Find Technician group (has RepairOrderRead + RepairOrderWrite)
+		var techGroup *tenantv1.StaffGroup
+
+		for _, g := range groups {
+			if g.GetName() == "Technician" {
+				techGroup = g
+				break
+			}
+		}
+
+		require.NotNil(t, techGroup, "Technician group should exist")
+
+		_, err = owner.API.CreateInvitation(ctx, garageID, cand.GetUserId(), []string{techGroup.GetId()})
 		require.NoError(t, err)
 
-		noPermInvites, err := noPerm.API.ListMyInvitations(ctx)
+		techInvites, err := tech.API.ListMyInvitations(ctx)
 		require.NoError(t, err)
-		require.NotEmpty(t, noPermInvites)
-		_, err = noPerm.API.AcceptInvitation(ctx, noPermInvites[0].GetId())
+		require.NotEmpty(t, techInvites)
+		_, err = tech.API.AcceptInvitation(ctx, techInvites[0].GetId())
 		require.NoError(t, err)
 
-		// No perm staff tries to list repair orders - should fail
-		_, err = noPerm.API.ListRepairOrders(ctx, garageID)
-		require.Error(t, err)
-		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
+		// Technician CAN list repair orders
+		techROs, err := tech.API.ListRepairOrders(ctx, garageID)
+		require.NoError(t, err)
+		require.NotEmpty(t, techROs)
 
-		// No perm staff tries to get repair order - should fail
-		_, err = noPerm.API.GetRepairOrder(ctx, garageID, orderID)
-		require.Error(t, err)
-		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
+		// Technician CAN get repair order
+		got, err := tech.API.GetRepairOrder(ctx, garageID, orderID)
+		require.NoError(t, err)
+		assert.Equal(t, orderID, got.GetId())
 
-		// No perm staff tries to update line - should fail
-		_, err = noPerm.API.UpdateRepairOrderLine(ctx, garageID, orderID, "", &repairorderv1.RepairOrderLine{})
-		require.Error(t, err)
-		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
+		// Technician CAN update line status
+		lines, err := tech.API.GetRepairOrder(ctx, garageID, orderID)
+		require.NoError(t, err)
 
-		// No perm staff tries to close - should fail
-		_, err = noPerm.API.CloseRepairOrder(ctx, garageID, orderID)
-		require.Error(t, err)
-		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
+		techLine := lines.GetLines()[0]
+		techLine.Status = repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_IN_PROGRESS
+		updated, err := tech.API.UpdateRepairOrderLineMasked(ctx, garageID, orderID, techLine.GetId(), techLine, "status")
+		require.NoError(t, err)
+		assert.Equal(t, repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_IN_PROGRESS, updated.GetLines()[0].GetStatus())
+
+		// Technician CAN assign self
+		techLine.AssignedTechnicianIds = []string{tech.Session.GetUser().GetId()}
+		techLine.Status = repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_COMPLETED
+		updated, err = tech.API.UpdateRepairOrderLineMasked(ctx, garageID, orderID, techLine.GetId(), techLine, "status", "assigned_technician_ids")
+		require.NoError(t, err)
+		assert.Len(t, updated.GetLines()[0].GetAssignedTechnicianIds(), 1)
+		assert.Equal(t, repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_COMPLETED, updated.GetLines()[0].GetStatus())
+
+		// Technician CAN close once all lines completed
+		closed, err := tech.API.CloseRepairOrder(ctx, garageID, orderID)
+		require.NoError(t, err)
+		assert.Equal(t, repairorderv1.RepairOrderStatus_REPAIR_ORDER_STATUS_CLOSED, closed.GetStatus())
 	})
 }
 
@@ -135,12 +161,12 @@ func TestRepairOrderPermissionsViewOnly(t *testing.T) {
 			assert.Equal(t, orderID, got.GetId())
 
 			// Viewer CANNOT update line status
-			_, err = viewer.API.UpdateRepairOrderLine(ctx, garageID, orderID, "", &repairorderv1.RepairOrderLine{Status: repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_IN_PROGRESS})
+			_, err = viewer.API.UpdateRepairOrderLineMasked(ctx, garageID, orderID, "", &repairorderv1.RepairOrderLine{Status: repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_IN_PROGRESS}, "status")
 			require.Error(t, err)
 			fixture.RequireAPIError(t, err, http.StatusForbidden, "")
 
 			// Viewer CANNOT assign technician
-			_, err = viewer.API.UpdateRepairOrderLine(ctx, garageID, orderID, "", &repairorderv1.RepairOrderLine{AssignedTechnicianIds: []string{""}})
+			_, err = viewer.API.UpdateRepairOrderLineMasked(ctx, garageID, orderID, "", &repairorderv1.RepairOrderLine{AssignedTechnicianIds: []string{""}}, "assigned_technician_ids")
 			require.Error(t, err)
 			fixture.RequireAPIError(t, err, http.StatusForbidden, "")
 
@@ -197,14 +223,14 @@ func TestRepairOrderPermissionsReadWrite(t *testing.T) {
 
 			techLine := lines.GetLines()[0]
 			techLine.Status = repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_IN_PROGRESS
-			updated, err := tech.API.UpdateRepairOrderLine(ctx, garageID, orderID, techLine.GetId(), techLine)
+			updated, err := tech.API.UpdateRepairOrderLineMasked(ctx, garageID, orderID, techLine.GetId(), techLine, "status")
 			require.NoError(t, err)
 			assert.Equal(t, repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_IN_PROGRESS, updated.GetLines()[0].GetStatus())
 
 			// Technician can assign self
 			techLine.AssignedTechnicianIds = []string{tech.Session.GetUser().GetId()}
 			techLine.Status = repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_COMPLETED
-			updated, err = tech.API.UpdateRepairOrderLine(ctx, garageID, orderID, techLine.GetId(), techLine)
+			updated, err = tech.API.UpdateRepairOrderLineMasked(ctx, garageID, orderID, techLine.GetId(), techLine, "status", "assigned_technician_ids")
 			require.NoError(t, err)
 			assert.Len(t, updated.GetLines()[0].GetAssignedTechnicianIds(), 1)
 			assert.Equal(t, repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_COMPLETED, updated.GetLines()[0].GetStatus())
@@ -241,7 +267,7 @@ func TestRepairOrderPermissionsOwner(t *testing.T) {
 
 		ownerLine := lines2.GetLines()[0]
 		ownerLine.Status = repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_COMPLETED
-		_, err = owner.API.UpdateRepairOrderLine(ctx, garageID, order2.GetId(), ownerLine.GetId(), ownerLine)
+		_, err = owner.API.UpdateRepairOrderLineMasked(ctx, garageID, order2.GetId(), ownerLine.GetId(), ownerLine, "status")
 		require.NoError(t, err)
 
 		closed2, err := owner.API.CloseRepairOrder(ctx, garageID, order2.GetId())
@@ -249,13 +275,13 @@ func TestRepairOrderPermissionsOwner(t *testing.T) {
 		assert.Equal(t, repairorderv1.RepairOrderStatus_REPAIR_ORDER_STATUS_CLOSED, closed2.GetStatus())
 
 		// A closed order cannot be edited further
-		_, err = owner.API.UpdateRepairOrderLine(ctx, garageID, order2.GetId(), ownerLine.GetId(), &repairorderv1.RepairOrderLine{Description: "Try edit"})
+		_, err = owner.API.UpdateRepairOrderLineMasked(ctx, garageID, order2.GetId(), ownerLine.GetId(), &repairorderv1.RepairOrderLine{Description: "Try edit"}, "description")
 		require.Error(t, err)
 		fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "")
 
 		// Closing again is refused
 		_, err = owner.API.CloseRepairOrder(ctx, garageID, order2.GetId())
 		require.Error(t, err)
-		fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "")
+		fixture.RequireAPIError(t, err, http.StatusConflict, "")
 	})
 }

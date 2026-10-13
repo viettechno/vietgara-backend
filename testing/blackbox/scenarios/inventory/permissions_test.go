@@ -9,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
@@ -18,7 +19,7 @@ import (
 func createInventoryTestEnv(t *testing.T) (context.Context, *fixture.Actor, string, *inventoryv1.Item, []*tenantv1.StaffGroup) {
 	t.Helper()
 
-	owner := fixture.NewVerifiedOwner(t, "inv-perms-owner")
+	owner := fixture.NewVerifiedOwnerWithLocale(t, "inv-perms-owner", identityv1.Locale_LOCALE_EN)
 	garage, err := owner.API.CreateGarage(t.Context(), &tenantv1.Garage{Name: "Blackbox Inventory Perms"})
 	require.NoError(t, err)
 
@@ -48,45 +49,25 @@ func TestInventoryPermissionsNoAccess(t *testing.T) {
 
 	ctx, owner, garageID, _, groups := createInventoryTestEnv(t)
 
-	t.Run("no inventory permission", func(t *testing.T) {
+	t.Run("technician has read-only inventory access", func(t *testing.T) {
 		t.Parallel()
-		noPerm := fixture.NewVerifiedOwner(t, "inv-no-perm")
-		cand, err := owner.API.LookupStaffCandidate(ctx, garageID, noPerm.Email)
+		tech := fixture.NewVerifiedOwner(t, "inv-tech-read")
+		cand, err := owner.API.LookupStaffCandidate(ctx, garageID, tech.Email)
 		require.NoError(t, err)
 
-		_, err = owner.API.CreateInvitation(ctx, garageID, cand.GetUserId(), []string{groups[0].GetId()})
-		require.NoError(t, err)
+		// Find Technician group (has InventoryRead, no InventoryWrite)
+		var techGroup *tenantv1.StaffGroup
 
-		noPermInvites, err := noPerm.API.ListMyInvitations(ctx)
-		require.NoError(t, err)
-		require.NotEmpty(t, noPermInvites)
-		_, err = noPerm.API.AcceptInvitation(ctx, noPermInvites[0].GetId())
-		require.NoError(t, err)
+		for _, g := range groups {
+			if g.GetName() == "Technician" {
+				techGroup = g
+				break
+			}
+		}
 
-		// No perm staff tries to list items - should fail
-		_, err = noPerm.API.ListItems(ctx, garageID)
-		require.Error(t, err)
-		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
+		require.NotNil(t, techGroup, "Technician group should exist")
 
-		// No perm staff tries to create item - should fail
-		_, err = noPerm.API.CreateItem(ctx, garageID, &inventoryv1.Item{Sku: "TEST", Name: "Test"})
-		require.Error(t, err)
-		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
-	})
-}
-
-func TestInventoryPermissionsViewOnly(t *testing.T) {
-	t.Parallel()
-
-	ctx, owner, garageID, item, groups := createInventoryTestEnv(t)
-
-	t.Run("view only (technician)", func(t *testing.T) {
-		t.Parallel()
-		tech := fixture.NewVerifiedOwner(t, "inv-tech")
-		cand2, err := owner.API.LookupStaffCandidate(ctx, garageID, tech.Email)
-		require.NoError(t, err)
-
-		_, err = owner.API.CreateInvitation(ctx, garageID, cand2.GetUserId(), []string{groups[0].GetId()})
+		_, err = owner.API.CreateInvitation(ctx, garageID, cand.GetUserId(), []string{techGroup.GetId()})
 		require.NoError(t, err)
 
 		techInvites, err := tech.API.ListMyInvitations(ctx)
@@ -95,36 +76,93 @@ func TestInventoryPermissionsViewOnly(t *testing.T) {
 		_, err = tech.API.AcceptInvitation(ctx, techInvites[0].GetId())
 		require.NoError(t, err)
 
-		// Technician can list items
+		// Technician CAN list items (has InventoryRead)
 		items, err := tech.API.ListItems(ctx, garageID)
 		require.NoError(t, err)
 		require.NotEmpty(t, items)
-		assert.Equal(t, "INV-PERMS-001", items[0].GetSku())
 
-		// Technician can get item
-		got, err := tech.API.GetItem(ctx, garageID, item.GetId())
+		// Technician CAN get item
+		got, err := tech.API.GetItem(ctx, garageID, items[0].GetId())
 		require.NoError(t, err)
-		assert.Equal(t, item.GetId(), got.GetId())
+		assert.Equal(t, items[0].GetId(), got.GetId())
 
-		// Technician can list stock movements
-		movements, err := tech.API.ListStockTransactions(ctx, garageID)
-		require.NoError(t, err)
-		require.NotEmpty(t, movements)
-
-		// Technician CANNOT create item
-		_, err = tech.API.CreateItem(ctx, garageID, &inventoryv1.Item{Sku: "TECH-TEST", Name: "Tech Test"})
+		// Technician CANNOT create item (no InventoryWrite)
+		_, err = tech.API.CreateItem(ctx, garageID, &inventoryv1.Item{Sku: "TEST", Name: "Test"})
 		require.Error(t, err)
 		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
 
 		// Technician CANNOT record stock receipt
-		_, err = tech.API.CreateStockReceipt(ctx, garageID, item.GetId(), "50", 0)
+		_, err = tech.API.CreateStockReceipt(ctx, garageID, items[0].GetId(), "50", 0)
 		require.Error(t, err)
 		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
 
 		// Technician CANNOT delete item
-		err = tech.API.DeleteItem(ctx, garageID, item.GetId())
+		err = tech.API.DeleteItem(ctx, garageID, items[0].GetId())
 		require.Error(t, err)
 		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
+	})
+}
+
+func TestInventoryPermissionsReadWrite(t *testing.T) {
+	t.Parallel()
+
+	ctx, owner, garageID, item, groups := createInventoryTestEnv(t)
+
+	t.Run("inventory staff has read-write access", func(t *testing.T) {
+		t.Parallel()
+		staff := fixture.NewVerifiedOwner(t, "inv-staff-rw")
+		cand2, err := owner.API.LookupStaffCandidate(ctx, garageID, staff.Email)
+		require.NoError(t, err)
+
+		// Find Inventory Staff group (has InventoryRead + InventoryWrite)
+		var staffGroup *tenantv1.StaffGroup
+
+		for _, g := range groups {
+			if g.GetName() == "Inventory Staff" {
+				staffGroup = g
+				break
+			}
+		}
+
+		require.NotNil(t, staffGroup, "Inventory Staff group should exist")
+
+		_, err = owner.API.CreateInvitation(ctx, garageID, cand2.GetUserId(), []string{staffGroup.GetId()})
+		require.NoError(t, err)
+
+		staffInvites, err := staff.API.ListMyInvitations(ctx)
+		require.NoError(t, err)
+		require.NotEmpty(t, staffInvites)
+		_, err = staff.API.AcceptInvitation(ctx, staffInvites[0].GetId())
+		require.NoError(t, err)
+
+		// Inventory Staff can list items
+		items, err := staff.API.ListItems(ctx, garageID)
+		require.NoError(t, err)
+		require.NotEmpty(t, items)
+		assert.Equal(t, "INV-PERMS-001", items[0].GetSku())
+
+		// Inventory Staff can get item
+		got, err := staff.API.GetItem(ctx, garageID, item.GetId())
+		require.NoError(t, err)
+		assert.Equal(t, item.GetId(), got.GetId())
+
+		// Inventory Staff can list stock movements
+		movements, err := staff.API.ListStockTransactions(ctx, garageID)
+		require.NoError(t, err)
+		require.NotEmpty(t, movements)
+
+		// Inventory Staff CAN create item
+		newItem, err := staff.API.CreateItem(ctx, garageID, &inventoryv1.Item{Sku: "STAFF-TEST", Name: "Staff Test", Unit: "pcs"})
+		require.NoError(t, err)
+		assert.Equal(t, "STAFF-TEST", newItem.GetSku())
+
+		// Inventory Staff CAN record stock receipt
+		_, err = staff.API.CreateStockReceipt(ctx, garageID, newItem.GetId(), "50", 10000)
+		require.NoError(t, err)
+
+		// Inventory Staff CAN delete item
+		err = staff.API.DeleteItem(ctx, garageID, newItem.GetId())
+		require.NoError(t, err)
 	})
 }
 

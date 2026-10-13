@@ -75,7 +75,7 @@ func TestLineProgressDrivesOrderStatus(t *testing.T) {
 
 	// Step 2: Line A -> In progress -> In Progress
 	lineA.Status = repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_IN_PROGRESS
-	_, err = owner.API.UpdateRepairOrderLine(ctx, garageID, orderID, lineA.GetId(), lineA)
+	_, err = owner.API.UpdateRepairOrderLineMasked(ctx, garageID, orderID, lineA.GetId(), lineA, "status")
 	require.NoError(t, err)
 
 	ro, err = owner.API.GetRepairOrder(ctx, garageID, orderID)
@@ -84,11 +84,11 @@ func TestLineProgressDrivesOrderStatus(t *testing.T) {
 
 	// Step 3: Line A -> Completed, Line B -> In progress -> In Progress
 	lineA.Status = repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_COMPLETED
-	_, err = owner.API.UpdateRepairOrderLine(ctx, garageID, orderID, lineA.GetId(), lineA)
+	_, err = owner.API.UpdateRepairOrderLineMasked(ctx, garageID, orderID, lineA.GetId(), lineA, "status")
 	require.NoError(t, err)
 
 	lineB.Status = repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_IN_PROGRESS
-	_, err = owner.API.UpdateRepairOrderLine(ctx, garageID, orderID, lineB.GetId(), lineB)
+	_, err = owner.API.UpdateRepairOrderLineMasked(ctx, garageID, orderID, lineB.GetId(), lineB, "status")
 	require.NoError(t, err)
 
 	ro, err = owner.API.GetRepairOrder(ctx, garageID, orderID)
@@ -97,7 +97,7 @@ func TestLineProgressDrivesOrderStatus(t *testing.T) {
 
 	// Step 4: Both Completed -> Completed
 	lineB.Status = repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_COMPLETED
-	_, err = owner.API.UpdateRepairOrderLine(ctx, garageID, orderID, lineB.GetId(), lineB)
+	_, err = owner.API.UpdateRepairOrderLineMasked(ctx, garageID, orderID, lineB.GetId(), lineB, "status")
 	require.NoError(t, err)
 
 	ro, err = owner.API.GetRepairOrder(ctx, garageID, orderID)
@@ -157,13 +157,13 @@ func TestTechnicianAssignmentPreservedOnStatusChange(t *testing.T) {
 	// Assign technician
 	techLine.AssignedTechnicianIds = []string{tech.Session.GetUser().GetId()}
 	techLine.Status = repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_IN_PROGRESS
-	_, err = owner.API.UpdateRepairOrderLine(ctx, garageID, order2.GetId(), techLine.GetId(), techLine)
+	_, err = owner.API.UpdateRepairOrderLineMasked(ctx, garageID, order2.GetId(), techLine.GetId(), techLine, "status", "assigned_technician_ids")
 	require.NoError(t, err)
 
 	// Now change status only (should not clear technician)
 	techLine.Status = repairorderv1.RepairOrderLineStatus_REPAIR_ORDER_LINE_STATUS_COMPLETED
 	techLine.AssignedTechnicianIds = nil // empty in request = don't change
-	_, err = owner.API.UpdateRepairOrderLine(ctx, garageID, order2.GetId(), techLine.GetId(), techLine)
+	_, err = owner.API.UpdateRepairOrderLineMasked(ctx, garageID, order2.GetId(), techLine.GetId(), techLine, "status")
 	require.NoError(t, err)
 
 	// Verify technician assignment preserved

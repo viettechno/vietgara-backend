@@ -184,3 +184,147 @@ func TestNotificationUseCase_HandleSubscriptionStatusChanged(t *testing.T) {
 		require.ErrorIs(t, uc.HandleSubscriptionStatusChanged(t.Context(), outbox.Event{Data: payload}), errBoom)
 	})
 }
+
+func TestNotificationUseCase_HandlePaymentSubmitted(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+
+	d.Users.EXPECT().PlatformAdmins(mock.Anything).
+		Return([]usecase.UserInfo{
+			{ID: "admin-1", Email: "admin1@example.com", FullName: "Admin One", Locale: "en"},
+			{ID: "admin-2", Email: "admin2@example.com", FullName: "Admin Two", Locale: "vi"},
+		}, nil).Once()
+
+	d.Mailer.EXPECT().Send(mock.Anything, mock.MatchedBy(func(msg mail.Message) bool {
+		return msg.ToEmail == "admin1@example.com" && msg.Tag == mail.TemplatePaymentSubmitted
+	})).Return(nil).Once()
+	d.Mailer.EXPECT().Send(mock.Anything, mock.MatchedBy(func(msg mail.Message) bool {
+		return msg.ToEmail == "admin2@example.com" && msg.Tag == mail.TemplatePaymentSubmitted
+	})).Return(nil).Once()
+
+	d.Log.EXPECT().Create(mock.Anything, mock.MatchedBy(func(log *domain.Log) bool {
+		return log.UserID == "admin-1" && log.Channel == domain.ChannelEmail && log.Template == mail.TemplatePaymentSubmitted
+	})).Return(nil).Once()
+	d.Log.EXPECT().Create(mock.Anything, mock.MatchedBy(func(log *domain.Log) bool {
+		return log.UserID == "admin-2" && log.Channel == domain.ChannelEmail && log.Template == mail.TemplatePaymentSubmitted
+	})).Return(nil).Once()
+
+	payload := []byte(`{"user_id":"user-123","plan_code":"pro","reference":"REF-123","amount_due":100000,"transferred_amount":100000,"amount_mismatch":false,"reason":"","waiting":1,"oldest_submitted_at":"2026-10-01T00:00:00Z"}`)
+
+	err := uc.HandlePaymentSubmitted(t.Context(), outbox.Event{UserID: "user-123", Data: payload})
+	require.NoError(t, err)
+}
+
+func TestNotificationUseCase_HandlePaymentReviewReminder(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+
+	d.Users.EXPECT().PlatformAdmins(mock.Anything).
+		Return([]usecase.UserInfo{
+			{ID: "admin-1", Email: "admin1@example.com", FullName: "Admin One", Locale: "en"},
+		}, nil).Once()
+
+	d.Mailer.EXPECT().Send(mock.Anything, mock.MatchedBy(func(msg mail.Message) bool {
+		return msg.ToEmail == "admin1@example.com" && msg.Tag == mail.TemplatePaymentReviewReminder
+	})).Return(nil).Once()
+
+	d.Log.EXPECT().Create(mock.Anything, mock.MatchedBy(func(log *domain.Log) bool {
+		return log.UserID == "admin-1" && log.Channel == domain.ChannelEmail && log.Template == mail.TemplatePaymentReviewReminder
+	})).Return(nil).Once()
+
+	payload := []byte(`{"waiting":5,"oldest_submitted_at":"2026-10-01T00:00:00Z"}`)
+
+	err := uc.HandlePaymentReviewReminder(t.Context(), outbox.Event{Data: payload})
+	require.NoError(t, err)
+}
+
+func TestNotificationUseCase_HandlePaymentApproved(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+
+	d.Users.EXPECT().Get(mock.Anything, userID).
+		Return(usecase.UserInfo{ID: userID, Email: "owner@example.com", FullName: "Owner", Locale: "en"}, nil).Once()
+
+	d.Mailer.EXPECT().Send(mock.Anything, mock.MatchedBy(func(msg mail.Message) bool {
+		return msg.ToEmail == "owner@example.com" && msg.Tag == mail.TemplatePaymentApproved
+	})).Return(nil).Once()
+
+	d.Log.EXPECT().Create(mock.Anything, mock.MatchedBy(func(log *domain.Log) bool {
+		return log.UserID == userID && log.Channel == domain.ChannelEmail && log.Template == mail.TemplatePaymentApproved
+	})).Return(nil).Once()
+
+	payload := []byte(`{"user_id":"` + userID + `","plan_code":"pro","reference":"REF-123","amount_due":100000,"transferred_amount":100000,"amount_mismatch":false,"reason":"","waiting":0,"oldest_submitted_at":""}`)
+
+	err := uc.HandlePaymentApproved(t.Context(), outbox.Event{UserID: userID, Data: payload})
+	require.NoError(t, err)
+}
+
+func TestNotificationUseCase_HandlePaymentRejected(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+
+	d.Users.EXPECT().Get(mock.Anything, userID).
+		Return(usecase.UserInfo{ID: userID, Email: "owner@example.com", FullName: "Owner", Locale: "en"}, nil).Once()
+
+	d.Mailer.EXPECT().Send(mock.Anything, mock.MatchedBy(func(msg mail.Message) bool {
+		return msg.ToEmail == "owner@example.com" && msg.Tag == mail.TemplatePaymentRejected
+	})).Return(nil).Once()
+
+	d.Log.EXPECT().Create(mock.Anything, mock.MatchedBy(func(log *domain.Log) bool {
+		return log.UserID == userID && log.Channel == domain.ChannelEmail && log.Template == mail.TemplatePaymentRejected
+	})).Return(nil).Once()
+
+	payload := []byte(`{"user_id":"` + userID + `","plan_code":"pro","reference":"REF-123","amount_due":100000,"transferred_amount":50000,"amount_mismatch":true,"reason":"amount mismatch","waiting":0,"oldest_submitted_at":""}`)
+
+	err := uc.HandlePaymentRejected(t.Context(), outbox.Event{UserID: userID, Data: payload})
+	require.NoError(t, err)
+}
+
+func TestNotificationUseCase_FormatPeriodEnd(t *testing.T) {
+	t.Parallel()
+
+	uc := usecase.NewNotificationUseCase(usecase.Deps{})
+	_ = uc
+
+	tests := []struct {
+		name     string
+		input    string
+		locale   string
+		expected string
+	}{
+		{"Vietnamese locale", "2026-10-25T00:00:00Z", "vi", "25/10/2026"},
+		{"English locale", "2026-10-25T00:00:00Z", "en", "Oct 25, 2026"},
+		{"Invalid RFC3339 falls back", "not-a-date", "vi", "not-a-date"},
+		{"Empty string", "", "vi", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			result := usecase.FormatPeriodEndForTest(tt.input, tt.locale)
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestNotificationUseCase_Send(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+
+	d.Mailer.EXPECT().Send(mock.Anything, mock.MatchedBy(func(msg mail.Message) bool {
+		return msg.ToEmail == "test@example.com" && msg.Tag == mail.TemplateRegistrationConfirmation
+	})).Return(nil).Once()
+
+	d.Log.EXPECT().Create(mock.Anything, mock.MatchedBy(func(log *domain.Log) bool {
+		return log.UserID == userID && log.Channel == domain.ChannelEmail && log.Template == mail.TemplateRegistrationConfirmation && log.Recipient == "test@example.com"
+	})).Return(nil).Once()
+
+	err := uc.SendForTest(t.Context(), userID, mail.TemplateRegistrationConfirmation, "en", "test@example.com", "Test User", map[string]any{"Name": "Test User"})
+	require.NoError(t, err)
+}

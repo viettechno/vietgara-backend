@@ -101,52 +101,150 @@ func TestExportQuotePdf(t *testing.T) {
 func TestExportRepairOrderPdf(t *testing.T) {
 	t.Parallel()
 
-	e := newEnv(t)
-	e.garages.EXPECT().Get(anyArg, garageID).Return(defaultGarage(), nil).Once()
-	e.repairOrders.EXPECT().Get(anyArg, garageID, repairOrderID).Return(usecase.RepairOrderInfo{
-		Number: "LSC-0001", CustomerName: "An Nguyen", TotalAmount: 250_000,
-		Lines: []render.DocumentLine{{Description: "Oil change", Quantity: "1", UnitPrice: 250_000, LineTotal: 250_000}},
-	}, nil).Once()
+	t.Run("returns a PDF HttpBody", func(t *testing.T) {
+		t.Parallel()
 
-	resp, err := e.srv.ExportRepairOrderPdf(t.Context(), &documentv1.ExportRepairOrderPdfRequest{
-		GarageId: garageID, RepairOrderId: repairOrderID,
+		e := newEnv(t)
+		e.garages.EXPECT().Get(anyArg, garageID).Return(defaultGarage(), nil).Once()
+		e.repairOrders.EXPECT().Get(anyArg, garageID, repairOrderID).Return(usecase.RepairOrderInfo{
+			Number: "LSC-0001", CustomerName: "An Nguyen", TotalAmount: 250_000,
+			Lines: []render.DocumentLine{{Description: "Oil change", Quantity: "1", UnitPrice: 250_000, LineTotal: 250_000}},
+		}, nil).Once()
+
+		resp, err := e.srv.ExportRepairOrderPdf(t.Context(), &documentv1.ExportRepairOrderPdfRequest{
+			GarageId: garageID, RepairOrderId: repairOrderID,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "application/pdf", resp.GetContentType())
+		assert.NotEmpty(t, resp.GetData())
 	})
-	require.NoError(t, err)
-	assert.Equal(t, "application/pdf", resp.GetContentType())
-	assert.NotEmpty(t, resp.GetData())
+
+	t.Run("repair order not found", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+
+		notFound := apperror.Wrap(apperror.CodeNotFound, "repair order not found", errDocumentTestBoom)
+		e.repairOrders.EXPECT().Get(anyArg, garageID, repairOrderID).Return(usecase.RepairOrderInfo{}, notFound).Once()
+
+		_, err := e.srv.ExportRepairOrderPdf(t.Context(), &documentv1.ExportRepairOrderPdfRequest{
+			GarageId: garageID, RepairOrderId: repairOrderID,
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.NotFound, status.Code(err))
+	})
+
+	t.Run("garage not found", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+
+		e.repairOrders.EXPECT().Get(anyArg, garageID, repairOrderID).Return(usecase.RepairOrderInfo{
+			Number: "LSC-0001", CustomerName: "An Nguyen", TotalAmount: 250_000,
+			Lines:  []render.DocumentLine{{Description: "Oil change", Quantity: "1", UnitPrice: 250_000, LineTotal: 250_000}},
+			Issuer: issuer.Issuer{},
+		}, nil).Once()
+
+		notFound := apperror.Wrap(apperror.CodeNotFound, "garage not found", errDocumentTestBoom)
+		e.garages.EXPECT().Get(anyArg, garageID).Return(usecase.GarageHeaderInfo{}, notFound).Once()
+
+		_, err := e.srv.ExportRepairOrderPdf(t.Context(), &documentv1.ExportRepairOrderPdfRequest{
+			GarageId: garageID, RepairOrderId: repairOrderID,
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.Internal, status.Code(err))
+	})
 }
 
 func TestExportSettlementReceiptPdf(t *testing.T) {
 	t.Parallel()
 
-	e := newEnv(t)
-	e.garages.EXPECT().Get(anyArg, garageID).Return(defaultGarage(), nil).Once()
-	e.settlements.EXPECT().Get(anyArg, garageID, settlementID).Return(usecase.SettlementInfo{
-		Number: "QT-0001", CustomerName: "An Nguyen", TotalAmount: 1_000_000,
-	}, nil).Once()
+	t.Run("returns a PDF HttpBody", func(t *testing.T) {
+		t.Parallel()
 
-	resp, err := e.srv.ExportSettlementReceiptPdf(t.Context(), &documentv1.ExportSettlementReceiptPdfRequest{
-		GarageId: garageID, SettlementId: settlementID,
+		e := newEnv(t)
+		e.garages.EXPECT().Get(anyArg, garageID).Return(defaultGarage(), nil).Once()
+		e.settlements.EXPECT().Get(anyArg, garageID, settlementID).Return(usecase.SettlementInfo{
+			Number: "QT-0001", CustomerName: "An Nguyen", TotalAmount: 1_000_000,
+		}, nil).Once()
+
+		resp, err := e.srv.ExportSettlementReceiptPdf(t.Context(), &documentv1.ExportSettlementReceiptPdfRequest{
+			GarageId: garageID, SettlementId: settlementID,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "application/pdf", resp.GetContentType())
+		assert.NotEmpty(t, resp.GetData())
 	})
-	require.NoError(t, err)
-	assert.Equal(t, "application/pdf", resp.GetContentType())
-	assert.NotEmpty(t, resp.GetData())
+
+	t.Run("settlement not found", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+
+		notFound := apperror.Wrap(apperror.CodeNotFound, "settlement not found", errDocumentTestBoom)
+		e.settlements.EXPECT().Get(anyArg, garageID, settlementID).Return(usecase.SettlementInfo{}, notFound).Once()
+
+		_, err := e.srv.ExportSettlementReceiptPdf(t.Context(), &documentv1.ExportSettlementReceiptPdfRequest{
+			GarageId: garageID, SettlementId: settlementID,
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.NotFound, status.Code(err))
+	})
+
+	t.Run("garage not found", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+
+		e.settlements.EXPECT().Get(anyArg, garageID, settlementID).Return(usecase.SettlementInfo{
+			Number: "QT-0001", CustomerName: "An Nguyen", TotalAmount: 1_000_000,
+			Issuer: issuer.Issuer{},
+		}, nil).Once()
+
+		notFound := apperror.Wrap(apperror.CodeNotFound, "garage not found", errDocumentTestBoom)
+		e.garages.EXPECT().Get(anyArg, garageID).Return(usecase.GarageHeaderInfo{}, notFound).Once()
+
+		_, err := e.srv.ExportSettlementReceiptPdf(t.Context(), &documentv1.ExportSettlementReceiptPdfRequest{
+			GarageId: garageID, SettlementId: settlementID,
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.Internal, status.Code(err))
+	})
 }
 
 func TestExportStockMovementsExcel(t *testing.T) {
 	t.Parallel()
 
-	e := newEnv(t)
-	e.stockMovements.EXPECT().List(anyArg, garageID, itemID).Return([]render.StockMovementRow{
-		{Date: "2026-09-30", SKU: "OIL-5W30", ItemName: "Engine oil 5W30", Direction: "in", Quantity: "10", Reference: "SR-1"},
-	}, nil).Once()
+	t.Run("returns an Excel HttpBody", func(t *testing.T) {
+		t.Parallel()
 
-	resp, err := e.srv.ExportStockMovementsExcel(t.Context(), &documentv1.ExportStockMovementsExcelRequest{
-		GarageId: garageID, ItemId: itemID,
+		e := newEnv(t)
+		e.stockMovements.EXPECT().List(anyArg, garageID, itemID).Return([]render.StockMovementRow{
+			{Date: "2026-09-30", SKU: "OIL-5W30", ItemName: "Engine oil 5W30", Direction: "in", Quantity: "10", Reference: "SR-1"},
+		}, nil).Once()
+
+		resp, err := e.srv.ExportStockMovementsExcel(t.Context(), &documentv1.ExportStockMovementsExcelRequest{
+			GarageId: garageID, ItemId: itemID,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", resp.GetContentType())
+		assert.NotEmpty(t, resp.GetData())
 	})
-	require.NoError(t, err)
-	assert.Equal(t, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", resp.GetContentType())
-	assert.NotEmpty(t, resp.GetData())
+
+	t.Run("item not found", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+
+		notFound := apperror.Wrap(apperror.CodeNotFound, "item not found", errDocumentTestBoom)
+		e.stockMovements.EXPECT().List(anyArg, garageID, itemID).Return(nil, notFound).Once()
+
+		_, err := e.srv.ExportStockMovementsExcel(t.Context(), &documentv1.ExportStockMovementsExcelRequest{
+			GarageId: garageID, ItemId: itemID,
+		})
+		require.Error(t, err)
+		assert.Equal(t, codes.NotFound, status.Code(err))
+	})
 }
 
 func TestExportPaymentVoucherPdf(t *testing.T) {

@@ -91,16 +91,16 @@ func TestGarageEntitlementsTrial(t *testing.T) {
 }
 
 // Scenario: E2E-LIC-002 (partial): the owner switches from the trial to
-// a paid plan — the API substance (plan, active status) is asserted; the
-// dialog copy and the admin list are web-E2E.
+// a paid plan through the bank-transfer flow — the API substance (plan,
+// active status) is asserted; the dialog copy and the admin list are
+// web-E2E.
 func TestSwitchToPaidPlan(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	owner := fixture.NewVerifiedOwner(t, "lic-switch")
 
-	sub, err := owner.API.ChangeMyPlan(ctx, planIDByName(t, owner.API, "Starter"))
-	require.NoError(t, err)
+	sub := fixture.SwitchPlan(t, owner, "Starter")
 	assert.Equal(t, licensev1.SubscriptionStatus_SUBSCRIPTION_STATUS_ACTIVE, sub.GetStatus())
 	assert.Equal(t, "starter", sub.GetPlan().GetCode())
 	assert.NotNil(t, sub.GetCurrentPeriodEnd())
@@ -111,7 +111,7 @@ func TestSwitchToPaidPlan(t *testing.T) {
 	assert.Equal(t, licensev1.SubscriptionStatus_SUBSCRIPTION_STATUS_ACTIVE, again.GetStatus())
 }
 
-// Scenario: E2E-LIC-002 (partial): choosing an unknown or unavailable
+// Scenario: E2E-LIC-002 (partial): paying for an unknown or unavailable
 // plan is refused — the API guard behind the plan cards.
 func TestChangeToUnknownPlanRefused(t *testing.T) {
 	t.Parallel()
@@ -119,7 +119,8 @@ func TestChangeToUnknownPlanRefused(t *testing.T) {
 	ctx := t.Context()
 	owner := fixture.NewVerifiedOwner(t, "lic-badplan")
 
-	_, err := owner.API.ChangeMyPlan(ctx, "00000000-0000-4000-8000-000000000099")
+	_, err := owner.API.CreatePlanPaymentRequest(ctx, "00000000-0000-4000-8000-000000000099",
+		licensev1.PlanPaymentKind_PLAN_PAYMENT_KIND_CHANGE)
 	fixture.RequireAPIError(t, err, http.StatusNotFound, "")
 }
 
@@ -133,16 +134,16 @@ func TestDowngradeRefusedOverLimit(t *testing.T) {
 	ctx := t.Context()
 	owner := fixture.NewVerifiedOwner(t, "lic-downgrade")
 
-	_, err := owner.API.ChangeMyPlan(ctx, planIDByName(t, owner.API, "Pro"))
-	require.NoError(t, err)
+	fixture.SwitchPlan(t, owner, "Pro")
 
-	_, err = owner.API.CreateGarage(ctx, &tenantv1.Garage{Name: "Blackbox Downgrade A"})
+	_, err := owner.API.CreateGarage(ctx, &tenantv1.Garage{Name: "Blackbox Downgrade A"})
 	require.NoError(t, err)
 
 	_, err = owner.API.CreateGarage(ctx, &tenantv1.Garage{Name: "Blackbox Downgrade B"})
 	require.NoError(t, err)
 
-	_, err = owner.API.ChangeMyPlan(ctx, planIDByName(t, owner.API, "Starter"))
+	_, err = owner.API.CreatePlanPaymentRequest(ctx, planIDByName(t, owner.API, "Starter"),
+		licensev1.PlanPaymentKind_PLAN_PAYMENT_KIND_CHANGE)
 	fixture.RequireAPIError(t, err, http.StatusPaymentRequired, "PLAN_LIMIT_REACHED")
 
 	sub, err := owner.API.MySubscription(ctx)

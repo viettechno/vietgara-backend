@@ -117,6 +117,12 @@ func (uc *PaymentUseCase) Start(ctx context.Context, userID, planID string, kind
 		return RequestView{}, toAppError("start payment", domain.ErrPlanNotAvailable)
 	}
 
+	// Ensure the user has a subscription (trial) before locking it.
+	if _, err := uc.ensureSubscription(ctx, userID); err != nil {
+		return RequestView{}, toAppError("start payment", err)
+	}
+
+	// Now lock the subscription for the payment flow.
 	sub, err := uc.subscriptions.LockByUserID(ctx, userID)
 	if err != nil {
 		return RequestView{}, toAppError("start payment", err)
@@ -157,6 +163,39 @@ func (uc *PaymentUseCase) Start(ctx context.Context, userID, planID string, kind
 	}
 
 	return uc.view(ctx, req), nil
+}
+
+// ensureSubscription ensures the user has a subscription (creating trial if needed)
+// and returns the subscription.
+func (uc *PaymentUseCase) ensureSubscription(ctx context.Context, userID string) (*domain.Subscription, error) {
+	sub, err := uc.subscriptions.FindByUserID(ctx, userID)
+	if err == nil {
+		return sub, nil
+	}
+
+	if !errors.Is(err, domain.ErrSubscriptionNotFound) {
+		return nil, err
+	}
+
+	trialPlan, err := uc.plans.FindByCode(ctx, domain.TrialPlanCode)
+	if err != nil {
+		return nil, err
+	}
+
+	trialSub := domain.NewTrial(userID, trialPlan, uc.opts.now().UTC())
+
+	inserted, err := uc.subscriptions.CreateIfAbsent(ctx, trialSub)
+	if err != nil {
+		return nil, err
+	}
+
+	if inserted {
+		if err := uc.sync.entitlementsChanged(ctx, trialSub); err != nil {
+			return nil, err
+		}
+	}
+
+	return uc.subscriptions.FindByUserID(ctx, userID)
 }
 
 // choosePlan resolves the plan a request pays for: the chosen one for a

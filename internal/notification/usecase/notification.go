@@ -284,3 +284,13 @@ func (uc *NotificationUseCase) send(ctx context.Context, userID, template, local
 		Status: domain.StatusSent,
 	})
 }
+
+// FormatPeriodEndForTest is a test helper for formatPeriodEnd.
+func FormatPeriodEndForTest(rfc3339, locale string) string {
+	return formatPeriodEnd(rfc3339, locale)
+}
+
+// SendForTest is a test helper for send.
+func (uc *NotificationUseCase) SendForTest(ctx context.Context, userID, template, locale, email, name string, data any) error {
+	return uc.send(ctx, userID, template, locale, email, name, data)
+}

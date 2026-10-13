@@ -59,6 +59,10 @@ type Config struct {
 	// user for the read-only checks when there is no test inbox.
 	OwnerEmail    string
 	OwnerPassword string
+	// AdminEmail and AdminPassword sign in a pre-provisioned platform
+	// admin for targets without a test inbox.
+	AdminEmail    string
+	AdminPassword string
 }
 
 var (
@@ -91,6 +95,8 @@ func load() (Config, error) {
 		TestdataDir:    os.Getenv("BLACKBOX_TESTDATA_DIR"),
 		OwnerEmail:     os.Getenv("BLACKBOX_OWNER_EMAIL"),
 		OwnerPassword:  os.Getenv("BLACKBOX_OWNER_PASSWORD"),
+		AdminEmail:     os.Getenv("BLACKBOX_ADMIN_EMAIL"),
+		AdminPassword:  os.Getenv("BLACKBOX_ADMIN_PASSWORD"),
 	}
 
 	switch cfg.Target {

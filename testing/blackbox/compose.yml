@@ -112,6 +112,9 @@ services:
       KAFKA_TOPIC_PREFIX: vietgara
       KAFKA_CONSUMER_GROUP: vietgara-backend
       OUTBOX_RELAY_INTERVAL: 500ms
+      # The dataset's admin user registers after startup, so the
+      # register-time grant makes it a platform admin on a fresh stack.
+      PLATFORM_ADMIN_EMAILS: admin@blackbox.vietgara.test
       MAIL_PROVIDER: smtp
       MAIL_FROM_ADDRESS: blackbox@vietgara.test
       MAIL_FROM_NAME: VietGara

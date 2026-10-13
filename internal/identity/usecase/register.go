@@ -50,6 +50,14 @@ func (uc *IdentityUseCase) Register(ctx context.Context, req RegisterRequest) (*
 			return mapCreateError(err)
 		}
 
+		if uc.isConfiguredAdmin(user.Email) {
+			if _, err := uc.users.GrantPlatformAdmins(ctx, []string{user.Email}); err != nil {
+				return apperror.Internal("grant platform admin", err)
+			}
+
+			user.PlatformAdmin = true
+		}
+
 		platformdb.AfterCommit(ctx, func() {
 			if _, err := uc.sendOTP(context.WithoutCancel(ctx), domain.OTPEmailVerification, user); err != nil {
 				slog.Warn("identity: sending the verification e-mail after sign-up failed", "user_id", user.ID, "error", err)
@@ -63,6 +71,16 @@ func (uc *IdentityUseCase) Register(ctx context.Context, req RegisterRequest) (*
 	}
 
 	return uc.issueSession(ctx, user)
+}
+
+func (uc *IdentityUseCase) isConfiguredAdmin(email string) bool {
+	if len(uc.platformAdminEmails) == 0 {
+		return false
+	}
+
+	_, ok := uc.platformAdminEmails[email]
+
+	return ok
 }
 
 func newUser(req RegisterRequest) (*domain.User, string, error) {

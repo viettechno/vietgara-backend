@@ -237,7 +237,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		slog.Warn("REDIS_ADDR is not set: sessions, OTPs and the entitlement cache live in memory (single instance only)")
 	}
 
-	identityUC := identityUsecase.NewIdentityUseCase(users, sessions, sessions, mailer, events, tx, issuer)
+	identityUC := identityUsecase.NewIdentityUseCase(users, sessions, sessions, mailer, events, tx, issuer,
+		identityUsecase.WithPlatformAdminEmails(envList("PLATFORM_ADMIN_EMAILS")))
 	if err := identityUC.GrantPlatformAdmins(ctx, envList("PLATFORM_ADMIN_EMAILS")); err != nil {
 		return nil, err
 	}

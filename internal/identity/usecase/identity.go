@@ -29,6 +29,10 @@ type IdentityUseCase struct {
 	tx       Transactor
 	issuer   *auth.TokenIssuer
 	now      func() time.Time
+	// platformAdminEmails grants platform admin to users registering
+	// with one of these e-mails (PLATFORM_ADMIN_EMAILS); verified at
+	// registration so a configured admin exists on a fresh database.
+	platformAdminEmails map[string]struct{}
 }
 
 // Option customizes an IdentityUseCase.
@@ -37,6 +41,19 @@ type Option func(*IdentityUseCase)
 // WithClock replaces time.Now (tests).
 func WithClock(now func() time.Time) Option {
 	return func(uc *IdentityUseCase) { uc.now = now }
+}
+
+// WithPlatformAdminEmails lets users registering with one of these e-mails
+// become platform admins immediately.
+func WithPlatformAdminEmails(emails []string) Option {
+	return func(uc *IdentityUseCase) {
+		uc.platformAdminEmails = make(map[string]struct{}, len(emails))
+		for _, raw := range emails {
+			if addr, err := email.Normalize(raw); err == nil {
+				uc.platformAdminEmails[addr] = struct{}{}
+			}
+		}
+	}
 }
 
 // NewIdentityUseCase wires the identity use case to its dependencies.

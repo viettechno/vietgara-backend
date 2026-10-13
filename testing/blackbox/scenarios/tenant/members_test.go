@@ -150,7 +150,7 @@ func TestTwoGaragePermissions(t *testing.T) {
 
 	ctx := t.Context()
 	owner := fixture.NewVerifiedOwnerWithLocale(t, "two-garage-owner", identityv1.Locale_LOCALE_EN)
-	upgradeToPro(t, owner.API)
+	upgradeToPro(t, owner)
 
 	gA, err := owner.API.CreateGarage(ctx, &tenantv1.Garage{Name: "Blackbox Two A"})
 	require.NoError(t, err)

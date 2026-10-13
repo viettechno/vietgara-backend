@@ -101,21 +101,7 @@ func TestCustomerPhoneUniquePerGarage(t *testing.T) {
 	ctx := t.Context()
 	owner := fixture.NewVerifiedOwner(t, "cus-phone")
 
-	plans, err := owner.API.ListPlans(ctx)
-	require.NoError(t, err)
-
-	var proID string
-
-	for _, p := range plans {
-		if p.GetName() == "Pro" {
-			proID = p.GetId()
-		}
-	}
-
-	require.NotEmpty(t, proID)
-
-	_, err = owner.API.ChangeMyPlan(ctx, proID)
-	require.NoError(t, err)
+	fixture.SwitchPlan(t, owner, "Pro")
 
 	gA, err := owner.API.CreateGarage(ctx, &tenantv1.Garage{Name: "Blackbox Phone A"})
 	require.NoError(t, err)
@@ -215,21 +201,7 @@ func TestLicensePlateUniquePerGarage(t *testing.T) {
 	ctx := t.Context()
 	owner := fixture.NewVerifiedOwner(t, "cus-plate")
 
-	plans, err := owner.API.ListPlans(ctx)
-	require.NoError(t, err)
-
-	var proID string
-
-	for _, p := range plans {
-		if p.GetName() == "Pro" {
-			proID = p.GetId()
-		}
-	}
-
-	require.NotEmpty(t, proID)
-
-	_, err = owner.API.ChangeMyPlan(ctx, proID)
-	require.NoError(t, err)
+	fixture.SwitchPlan(t, owner, "Pro")
 
 	gA, err := owner.API.CreateGarage(ctx, &tenantv1.Garage{Name: "Blackbox Plate A"})
 	require.NoError(t, err)

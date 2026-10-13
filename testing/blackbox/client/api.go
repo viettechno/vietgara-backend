@@ -303,10 +303,31 @@ func (c *Client) ListPlans(ctx context.Context) ([]*licensev1.Plan, error) {
 	return resp.GetData(), err
 }
 
-// ChangeMyPlan changes the signed-in owner's subscription to planID.
-func (c *Client) ChangeMyPlan(ctx context.Context, planID string) (*licensev1.Subscription, error) {
-	return call[licensev1.Subscription](ctx, c, http.MethodPost, "/api/v1/me/subscription/plan-changes",
-		&licensev1.ChangeMyPlanRequest{PlanId: planID})
+// CreatePlanPaymentRequest opens a request to pay for a plan change or
+// renewal (Release 5.2 bank-transfer flow).
+func (c *Client) CreatePlanPaymentRequest(ctx context.Context, planID string,
+	kind licensev1.PlanPaymentKind,
+) (*licensev1.PlanPaymentRequest, error) {
+	return call[licensev1.PlanPaymentRequest](ctx, c, http.MethodPost, "/api/v1/me/subscription/payment-requests",
+		&licensev1.CreatePlanPaymentRequestRequest{PlanId: planID, Kind: kind})
+}
+
+// SubmitPlanPayment declares the bank transfer for requestID. Evidence is
+// required unless the amount due is 0.
+func (c *Client) SubmitPlanPayment(ctx context.Context,
+	req *licensev1.SubmitPlanPaymentRequest,
+) (*licensev1.PlanPaymentRequest, error) {
+	path := "/api/v1/me/subscription/payment-requests/" + url.PathEscape(req.GetRequestId()) + ":submit"
+
+	return call[licensev1.PlanPaymentRequest](ctx, c, http.MethodPost, path, req)
+}
+
+// CancelPlanPayment drops requestID (the signed-in owner's own request).
+func (c *Client) CancelPlanPayment(ctx context.Context, requestID string) (*licensev1.PlanPaymentRequest, error) {
+	path := "/api/v1/me/subscription/payment-requests/" + url.PathEscape(requestID) + ":cancel"
+
+	return call[licensev1.PlanPaymentRequest](ctx, c, http.MethodPost, path,
+		&licensev1.CancelPlanPaymentRequest{RequestId: requestID})
 }
 
 // ---- Customer --------------------------------------------------------------

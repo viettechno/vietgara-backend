@@ -16,8 +16,8 @@ github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 h1:/Tnpcb2E0Pz/tN9s3bfEY2Q8ePC
 github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0/go.mod h1:zOBXOsUaBSjKgmH4OGzV1esUpR3oUSCPYVd2cUBjKYY=
 github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
-github.com/viettechno/vietgara-proto v1.8.0 h1:sxmuluH3RjtrUxl0AJaxlPov3MB8mCLdg0e51T8LbpA=
-github.com/viettechno/vietgara-proto v1.8.0/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
+github.com/viettechno/vietgara-proto v1.9.0 h1:zMS4yeW8TlAY9wxP7RFhxK+CZ04gaNmT7IZ02PSMjdM=
+github.com/viettechno/vietgara-proto v1.9.0/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
 github.com/viettechno/vietgara-testdata v0.2.0 h1:lqZGwn5Yr75Tq3hG2nByPTSwtZfcjieiFU0gzNs5B14=
 github.com/viettechno/vietgara-testdata v0.2.0/go.mod h1:U0TReHiBgomNBgvyFNxgMpcvQA5V8CDaOiLmeOXr1W4=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=

@@ -90,23 +90,9 @@ func invitationByID(t *testing.T, invitations []*tenantv1.Invitation, id string)
 }
 
 // upgradeToPro moves a fresh (trial) owner to the Pro plan so tests that
-// need two garages pass the plan limit. Plan changes need no payment.
-func upgradeToPro(t *testing.T, api *client.Client) {
+// need two garages pass the plan limit.
+func upgradeToPro(t *testing.T, owner *fixture.Actor) {
 	t.Helper()
 
-	plans, err := api.ListPlans(t.Context())
-	require.NoError(t, err)
-
-	var proID string
-
-	for _, p := range plans {
-		if p.GetName() == "Pro" {
-			proID = p.GetId()
-		}
-	}
-
-	require.NotEmpty(t, proID, "no Pro plan among the seeded plans")
-
-	_, err = api.ChangeMyPlan(t.Context(), proID)
-	require.NoError(t, err)
+	fixture.SwitchPlan(t, owner, "Pro")
 }

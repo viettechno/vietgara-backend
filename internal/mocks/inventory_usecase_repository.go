@@ -39,105 +39,48 @@ func (_m *MockInventoryRepository) EXPECT() *MockInventoryRepository_Expecter {
 	return &MockInventoryRepository_Expecter{mock: &_m.Mock}
 }
 
-// CreateItem provides a mock function for the type MockInventoryRepository
-func (_mock *MockInventoryRepository) CreateItem(ctx context.Context, item *domain.Item) error {
-	ret := _mock.Called(ctx, item)
+// Balances provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) Balances(ctx context.Context, garageID string, ids []string) (map[string]string, error) {
+	ret := _mock.Called(ctx, garageID, ids)
 
 	if len(ret) == 0 {
-		panic("no return value specified for CreateItem")
+		panic("no return value specified for Balances")
 	}
 
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.Item) error); ok {
-		r0 = returnFunc(ctx, item)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockInventoryRepository_CreateItem_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateItem'
-type MockInventoryRepository_CreateItem_Call struct {
-	*mock.Call
-}
-
-// CreateItem is a helper method to define mock.On call
-//   - ctx context.Context
-//   - item *domain.Item
-func (_e *MockInventoryRepository_Expecter) CreateItem(ctx any, item any) *MockInventoryRepository_CreateItem_Call {
-	return &MockInventoryRepository_CreateItem_Call{Call: _e.mock.On("CreateItem", ctx, item)}
-}
-
-func (_c *MockInventoryRepository_CreateItem_Call) Run(run func(ctx context.Context, item *domain.Item)) *MockInventoryRepository_CreateItem_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 *domain.Item
-		if args[1] != nil {
-			arg1 = args[1].(*domain.Item)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockInventoryRepository_CreateItem_Call) Return(err error) *MockInventoryRepository_CreateItem_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockInventoryRepository_CreateItem_Call) RunAndReturn(run func(ctx context.Context, item *domain.Item) error) *MockInventoryRepository_CreateItem_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// FindItemByID provides a mock function for the type MockInventoryRepository
-func (_mock *MockInventoryRepository) FindItemByID(ctx context.Context, garageID string, itemID string) (*domain.Item, error) {
-	ret := _mock.Called(ctx, garageID, itemID)
-
-	if len(ret) == 0 {
-		panic("no return value specified for FindItemByID")
-	}
-
-	var r0 *domain.Item
+	var r0 map[string]string
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (*domain.Item, error)); ok {
-		return returnFunc(ctx, garageID, itemID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) (map[string]string, error)); ok {
+		return returnFunc(ctx, garageID, ids)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) *domain.Item); ok {
-		r0 = returnFunc(ctx, garageID, itemID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) map[string]string); ok {
+		r0 = returnFunc(ctx, garageID, ids)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*domain.Item)
+			r0 = ret.Get(0).(map[string]string)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
-		r1 = returnFunc(ctx, garageID, itemID)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, []string) error); ok {
+		r1 = returnFunc(ctx, garageID, ids)
 	} else {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
 }
 
-// MockInventoryRepository_FindItemByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindItemByID'
-type MockInventoryRepository_FindItemByID_Call struct {
+// MockInventoryRepository_Balances_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Balances'
+type MockInventoryRepository_Balances_Call struct {
 	*mock.Call
 }
 
-// FindItemByID is a helper method to define mock.On call
+// Balances is a helper method to define mock.On call
 //   - ctx context.Context
 //   - garageID string
-//   - itemID string
-func (_e *MockInventoryRepository_Expecter) FindItemByID(ctx any, garageID any, itemID any) *MockInventoryRepository_FindItemByID_Call {
-	return &MockInventoryRepository_FindItemByID_Call{Call: _e.mock.On("FindItemByID", ctx, garageID, itemID)}
+//   - ids []string
+func (_e *MockInventoryRepository_Expecter) Balances(ctx any, garageID any, ids any) *MockInventoryRepository_Balances_Call {
+	return &MockInventoryRepository_Balances_Call{Call: _e.mock.On("Balances", ctx, garageID, ids)}
 }
 
-func (_c *MockInventoryRepository_FindItemByID_Call) Run(run func(ctx context.Context, garageID string, itemID string)) *MockInventoryRepository_FindItemByID_Call {
+func (_c *MockInventoryRepository_Balances_Call) Run(run func(ctx context.Context, garageID string, ids []string)) *MockInventoryRepository_Balances_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -147,9 +90,9 @@ func (_c *MockInventoryRepository_FindItemByID_Call) Run(run func(ctx context.Co
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
-		var arg2 string
+		var arg2 []string
 		if args[2] != nil {
-			arg2 = args[2].(string)
+			arg2 = args[2].([]string)
 		}
 		run(
 			arg0,
@@ -160,92 +103,12 @@ func (_c *MockInventoryRepository_FindItemByID_Call) Run(run func(ctx context.Co
 	return _c
 }
 
-func (_c *MockInventoryRepository_FindItemByID_Call) Return(item *domain.Item, err error) *MockInventoryRepository_FindItemByID_Call {
-	_c.Call.Return(item, err)
+func (_c *MockInventoryRepository_Balances_Call) Return(stringToString map[string]string, err error) *MockInventoryRepository_Balances_Call {
+	_c.Call.Return(stringToString, err)
 	return _c
 }
 
-func (_c *MockInventoryRepository_FindItemByID_Call) RunAndReturn(run func(ctx context.Context, garageID string, itemID string) (*domain.Item, error)) *MockInventoryRepository_FindItemByID_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// ListItems provides a mock function for the type MockInventoryRepository
-func (_mock *MockInventoryRepository) ListItems(ctx context.Context, garageID string, filter usecase.ListFilter) ([]*domain.Item, int, error) {
-	ret := _mock.Called(ctx, garageID, filter)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ListItems")
-	}
-
-	var r0 []*domain.Item
-	var r1 int
-	var r2 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.ListFilter) ([]*domain.Item, int, error)); ok {
-		return returnFunc(ctx, garageID, filter)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.ListFilter) []*domain.Item); ok {
-		r0 = returnFunc(ctx, garageID, filter)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]*domain.Item)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, usecase.ListFilter) int); ok {
-		r1 = returnFunc(ctx, garageID, filter)
-	} else {
-		r1 = ret.Get(1).(int)
-	}
-	if returnFunc, ok := ret.Get(2).(func(context.Context, string, usecase.ListFilter) error); ok {
-		r2 = returnFunc(ctx, garageID, filter)
-	} else {
-		r2 = ret.Error(2)
-	}
-	return r0, r1, r2
-}
-
-// MockInventoryRepository_ListItems_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListItems'
-type MockInventoryRepository_ListItems_Call struct {
-	*mock.Call
-}
-
-// ListItems is a helper method to define mock.On call
-//   - ctx context.Context
-//   - garageID string
-//   - filter usecase.ListFilter
-func (_e *MockInventoryRepository_Expecter) ListItems(ctx any, garageID any, filter any) *MockInventoryRepository_ListItems_Call {
-	return &MockInventoryRepository_ListItems_Call{Call: _e.mock.On("ListItems", ctx, garageID, filter)}
-}
-
-func (_c *MockInventoryRepository_ListItems_Call) Run(run func(ctx context.Context, garageID string, filter usecase.ListFilter)) *MockInventoryRepository_ListItems_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 usecase.ListFilter
-		if args[2] != nil {
-			arg2 = args[2].(usecase.ListFilter)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
-	})
-	return _c
-}
-
-func (_c *MockInventoryRepository_ListItems_Call) Return(items []*domain.Item, n int, err error) *MockInventoryRepository_ListItems_Call {
-	_c.Call.Return(items, n, err)
-	return _c
-}
-
-func (_c *MockInventoryRepository_ListItems_Call) RunAndReturn(run func(ctx context.Context, garageID string, filter usecase.ListFilter) ([]*domain.Item, int, error)) *MockInventoryRepository_ListItems_Call {
+func (_c *MockInventoryRepository_Balances_Call) RunAndReturn(run func(ctx context.Context, garageID string, ids []string) (map[string]string, error)) *MockInventoryRepository_Balances_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -383,132 +246,6 @@ func (_c *MockInventoryRepository_RecordTransaction_Call) Return(err error) *Moc
 }
 
 func (_c *MockInventoryRepository_RecordTransaction_Call) RunAndReturn(run func(ctx context.Context, tx *domain.StockTransaction) error) *MockInventoryRepository_RecordTransaction_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// SoftDeleteItem provides a mock function for the type MockInventoryRepository
-func (_mock *MockInventoryRepository) SoftDeleteItem(ctx context.Context, garageID string, itemID string, deletedBy string) error {
-	ret := _mock.Called(ctx, garageID, itemID, deletedBy)
-
-	if len(ret) == 0 {
-		panic("no return value specified for SoftDeleteItem")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string) error); ok {
-		r0 = returnFunc(ctx, garageID, itemID, deletedBy)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockInventoryRepository_SoftDeleteItem_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SoftDeleteItem'
-type MockInventoryRepository_SoftDeleteItem_Call struct {
-	*mock.Call
-}
-
-// SoftDeleteItem is a helper method to define mock.On call
-//   - ctx context.Context
-//   - garageID string
-//   - itemID string
-//   - deletedBy string
-func (_e *MockInventoryRepository_Expecter) SoftDeleteItem(ctx any, garageID any, itemID any, deletedBy any) *MockInventoryRepository_SoftDeleteItem_Call {
-	return &MockInventoryRepository_SoftDeleteItem_Call{Call: _e.mock.On("SoftDeleteItem", ctx, garageID, itemID, deletedBy)}
-}
-
-func (_c *MockInventoryRepository_SoftDeleteItem_Call) Run(run func(ctx context.Context, garageID string, itemID string, deletedBy string)) *MockInventoryRepository_SoftDeleteItem_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		var arg3 string
-		if args[3] != nil {
-			arg3 = args[3].(string)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-			arg3,
-		)
-	})
-	return _c
-}
-
-func (_c *MockInventoryRepository_SoftDeleteItem_Call) Return(err error) *MockInventoryRepository_SoftDeleteItem_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockInventoryRepository_SoftDeleteItem_Call) RunAndReturn(run func(ctx context.Context, garageID string, itemID string, deletedBy string) error) *MockInventoryRepository_SoftDeleteItem_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
-// UpdateItem provides a mock function for the type MockInventoryRepository
-func (_mock *MockInventoryRepository) UpdateItem(ctx context.Context, item *domain.Item) error {
-	ret := _mock.Called(ctx, item)
-
-	if len(ret) == 0 {
-		panic("no return value specified for UpdateItem")
-	}
-
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.Item) error); ok {
-		r0 = returnFunc(ctx, item)
-	} else {
-		r0 = ret.Error(0)
-	}
-	return r0
-}
-
-// MockInventoryRepository_UpdateItem_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateItem'
-type MockInventoryRepository_UpdateItem_Call struct {
-	*mock.Call
-}
-
-// UpdateItem is a helper method to define mock.On call
-//   - ctx context.Context
-//   - item *domain.Item
-func (_e *MockInventoryRepository_Expecter) UpdateItem(ctx any, item any) *MockInventoryRepository_UpdateItem_Call {
-	return &MockInventoryRepository_UpdateItem_Call{Call: _e.mock.On("UpdateItem", ctx, item)}
-}
-
-func (_c *MockInventoryRepository_UpdateItem_Call) Run(run func(ctx context.Context, item *domain.Item)) *MockInventoryRepository_UpdateItem_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 *domain.Item
-		if args[1] != nil {
-			arg1 = args[1].(*domain.Item)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockInventoryRepository_UpdateItem_Call) Return(err error) *MockInventoryRepository_UpdateItem_Call {
-	_c.Call.Return(err)
-	return _c
-}
-
-func (_c *MockInventoryRepository_UpdateItem_Call) RunAndReturn(run func(ctx context.Context, item *domain.Item) error) *MockInventoryRepository_UpdateItem_Call {
 	_c.Call.Return(run)
 	return _c
 }

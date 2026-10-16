@@ -13,6 +13,7 @@ import (
 // request.
 type reportingModule struct {
 	server *reportingHandler.Server
+	uc     *reportingUsecase.ReportingUseCase
 }
 
 func buildReporting(settlements *billingRepository.PostgresRepository) *reportingModule {
@@ -20,5 +21,5 @@ func buildReporting(settlements *billingRepository.PostgresRepository) *reportin
 		Settlements: reportingSettlements{settlements: settlements},
 	})
 
-	return &reportingModule{server: reportingHandler.NewServer(uc)}
+	return &reportingModule{server: reportingHandler.NewServer(uc), uc: uc}
 }

@@ -31,11 +31,8 @@ func Policies() middleware.Policies {
 	read, write := access.Requires(access.InventoryRead), access.Requires(access.InventoryWrite)
 
 	return middleware.Policies{
-		inventoryv1.InventoryService_ListItems_FullMethodName:             middleware.GarageMethod(read),
-		inventoryv1.InventoryService_CreateItem_FullMethodName:            middleware.GarageMethod(write),
-		inventoryv1.InventoryService_GetItem_FullMethodName:               middleware.GarageMethod(read),
-		inventoryv1.InventoryService_UpdateItem_FullMethodName:            middleware.GarageMethod(write),
-		inventoryv1.InventoryService_DeleteItem_FullMethodName:            middleware.GarageMethod(write),
+		inventoryv1.InventoryService_ListStockLevels_FullMethodName:       middleware.GarageMethod(read),
+		inventoryv1.InventoryService_GetStockLevel_FullMethodName:         middleware.GarageMethod(read),
 		inventoryv1.InventoryService_CreateStockReceipt_FullMethodName:    middleware.GarageMethod(write),
 		inventoryv1.InventoryService_ListStockTransactions_FullMethodName: middleware.GarageMethod(read),
 	}
@@ -52,17 +49,4 @@ func run[T any](ctx context.Context, fn func(actorID string) (T, error)) (T, err
 	}
 
 	return resp, nil
-}
-
-// maskPaths returns the update mask paths, or settable when it is empty.
-func maskPaths(paths []string, settable ...string) []string {
-	if len(paths) == 0 {
-		return settable
-	}
-
-	return paths
-}
-
-func badMask(path string) error {
-	return apperror.Validation("updateMask", apperror.IssueInvalid, "field "+path+" cannot be updated")
 }

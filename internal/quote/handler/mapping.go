@@ -48,14 +48,23 @@ func lineToProto(l domain.Line) *quotev1.QuoteLine {
 	return &quotev1.QuoteLine{
 		Id: l.ID, ItemType: itemTypeToProto(l.ItemType), ItemRefId: l.ItemRefID, Description: l.Description,
 		Quantity: l.Quantity, UnitPrice: l.UnitPrice, LineTotal: l.LineTotal, Decision: decisionToProto(l.Decision),
+		UnitId: l.UnitID, EnteredQuantity: derefString(l.EnteredQuantity), UnitAbbreviation: l.UnitAbbreviation,
 	}
 }
 
 func lineFromProto(l *quotev1.QuoteLine) usecase.LineInput {
 	return usecase.LineInput{
 		ItemType: itemTypeFromProto(l.GetItemType()), ItemRefID: l.ItemRefId, Description: l.GetDescription(),
-		Quantity: l.GetQuantity(), UnitPrice: l.GetUnitPrice(),
+		Quantity: l.GetQuantity(), UnitID: l.GetUnitId(), EnteredQuantity: l.GetEnteredQuantity(), UnitPrice: l.GetUnitPrice(),
 	}
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+
+	return *s
 }
 
 func linesFromProto(lines []*quotev1.QuoteLine) []usecase.LineInput {

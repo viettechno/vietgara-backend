@@ -104,13 +104,20 @@ type Line struct {
 	ItemType    ItemType
 	ItemRefID   *string
 	Description string
-	// Quantity is a decimal string with at most 2 decimal places, e.g.
+	// Quantity is a decimal string with at most 3 decimal places, e.g.
 	// "1" or "1.5" (ParseQuantity validates and scales it).
-	Quantity  string
-	UnitPrice int64
-	LineTotal int64
-	Decision  LineDecision
-	DecidedAt *time.Time
+	Quantity string
+	// UnitID and EnteredQuantity keep the packaging unit the user typed a
+	// part line's quantity in (FR-CAT-02); Quantity is then the base-unit
+	// amount derived from it. Both are nil for labor and base-unit lines.
+	// UnitAbbreviation is derived when reading.
+	UnitID           *string
+	EnteredQuantity  *string
+	UnitAbbreviation string
+	UnitPrice        int64
+	LineTotal        int64
+	Decision         LineDecision
+	DecidedAt        *time.Time
 }
 
 // Quote is a price estimate awaiting the customer's approval (FR-QUO-01).
@@ -173,7 +180,7 @@ var (
 	ErrTooManyLines        = errors.New("a quote may have at most 100 lines")
 	ErrDescriptionRequired = errors.New("line description is required")
 	ErrInvalidItemType     = errors.New("item type must be labor or part")
-	ErrInvalidQuantity     = errors.New("quantity must be a positive number with at most 2 decimal places")
+	ErrInvalidQuantity     = errors.New("quantity must be a positive number with at most 3 decimal places")
 	ErrInvalidUnitPrice    = errors.New("unit price must not be negative")
 	ErrInvalidApprovalMode = errors.New("approval mode must be link or manual")
 	ErrFieldTooLong        = errors.New("field is too long")
@@ -205,14 +212,14 @@ func CheckLength(value string, maxLen int) error {
 	return nil
 }
 
-var quantityPattern = regexp.MustCompile(`^\d{1,7}(\.\d{1,2})?$`)
+var quantityPattern = regexp.MustCompile(`^\d{1,7}(\.\d{1,3})?$`)
 
-// QuantityScale is the fixed-point precision ParseQuantity scales to (2
+// QuantityScale is the fixed-point precision ParseQuantity scales to (3
 // decimal places).
-const QuantityScale = 100
+const QuantityScale = 1000
 
 // ParseQuantity validates a quote line's quantity and returns it scaled by
-// QuantityScale (e.g. "1.5" -> 150), the precision LineTotal computes at.
+// QuantityScale (e.g. "1.5" -> 1500), the precision LineTotal computes at.
 func ParseQuantity(s string) (int64, error) {
 	s = strings.TrimSpace(s)
 	if !quantityPattern.MatchString(s) {
@@ -220,7 +227,7 @@ func ParseQuantity(s string) (int64, error) {
 	}
 
 	intPart, fracPart, _ := strings.Cut(s, ".")
-	for len(fracPart) < 2 {
+	for len(fracPart) < 3 {
 		fracPart += "0"
 	}
 

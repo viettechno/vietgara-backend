@@ -1,20 +1,23 @@
-// Package inventory_test covers Inventory at API level: the catalogue,
-// goods receipts, the low-stock badge rule, search, edit/delete with
-// kept history, the movement report with direction filters, automatic
-// deduction on close, and the free-text part line that deducts nothing.
-// Units, thresholds and empty states on screen are web-E2E.
+// Package inventory_test covers Inventory at API level: the stock levels
+// of the Catalogue's parts, goods receipts, the low-stock rule, search,
+// the deactivation of a part that has history, the movement report with
+// direction filters, automatic deduction on close, and the free-text part
+// line that deducts nothing. Units, thresholds and empty states on screen
+// are web-E2E; the part itself (units, categories, images) is covered by
+// the catalogue scenarios.
 package inventory_test
 
 import (
 	"fmt"
 	"net/http"
-	"strconv"
+	"net/url"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	cataloguev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/catalogue/v1"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
 	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
@@ -40,60 +43,72 @@ func setup(t *testing.T, label string) (*fixture.Actor, *tenantv1.Garage) {
 
 func sku() string { return fmt.Sprintf("OIL-%05d", seq.Add(1)%100000) }
 
-// Scenario: E2E-INV-001 (partial): a part code is added to the
-// catalogue — the API substance; the row and cross-garage hiding are
-// web-E2E (isolation follows the same garage-scoping as customers).
+// litre adds the unit most inventory scenarios stock their parts in.
+func litre(t *testing.T, owner *fixture.Actor, garageID string) *cataloguev1.Unit {
+	t.Helper()
+
+	return fixture.NewUnit(t, owner.API, garageID, "Litre", "L")
+}
+
+// Scenario: E2E-INV-001 (partial): a part is added to the catalogue and
+// shows in the stock list with nothing on hand — the API substance; the
+// row and cross-garage hiding are web-E2E (isolation follows the same
+// garage-scoping as customers).
 func TestAddCatalogueItem(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	owner, garage := setup(t, "inv-add")
 
-	item, err := owner.API.CreateItem(ctx, garage.GetId(), &inventoryv1.Item{
-		Sku: sku(), Name: "Engine oil 5W-30", Unit: "L", ReorderThreshold: 5,
-	})
-	require.NoError(t, err)
-	assert.Equal(t, "0", item.GetQuantityOnHand())
-	assert.EqualValues(t, 5, item.GetReorderThreshold())
+	part := fixture.NewPart(t, owner.API, garage.GetId(), sku(), "Engine oil 5W-30", litre(t, owner, garage.GetId()),
+		fixture.WithThreshold("5"))
 
-	got, err := owner.API.GetItem(ctx, garage.GetId(), item.GetId())
+	level, err := owner.API.GetStockLevel(ctx, garage.GetId(), part.GetId())
 	require.NoError(t, err)
-	assert.Equal(t, item.GetId(), got.GetId())
+	assert.Equal(t, "0", level.GetQuantityOnHand())
+	assert.Equal(t, "5", level.GetReorderThreshold())
+	assert.Equal(t, "L", level.GetBaseUnitAbbreviation())
+	assert.True(t, level.GetLowStock(), "0 on hand is at or below the threshold")
 
-	listed, err := owner.API.ListItems(ctx, garage.GetId())
+	listed, err := owner.API.ListStockLevels(ctx, garage.GetId())
 	require.NoError(t, err)
-	require.NotEmpty(t, listed)
+	require.Len(t, listed, 1)
+	assert.Equal(t, part.GetId(), listed[0].GetPartId())
 }
 
 // Scenario: E2E-INV-002 (partial): the SKU is unique per garage, and
-// item fields are validated — the API guards behind the form.
+// part fields are validated — the API guards behind the form.
 func TestItemSKUUniqueAndValidation(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	owner, garage := setup(t, "inv-valid")
+	unit := litre(t, owner, garage.GetId())
 
 	code := sku()
-
-	_, err := owner.API.CreateItem(ctx, garage.GetId(), &inventoryv1.Item{Sku: code, Name: "Engine oil"})
-	require.NoError(t, err)
+	fixture.NewPart(t, owner.API, garage.GetId(), code, "Engine oil", unit)
 
 	// Duplicate SKU is refused.
-	_, err = owner.API.CreateItem(ctx, garage.GetId(), &inventoryv1.Item{Sku: code, Name: "Different oil"})
+	_, err := owner.API.CreatePart(ctx, garage.GetId(), &cataloguev1.Part{Sku: code, Name: "Different oil", BaseUnitId: unit.GetId()})
 	fixture.RequireAPIError(t, err, http.StatusConflict, "")
 
-	// Empty SKU is refused.
-	_, err = owner.API.CreateItem(ctx, garage.GetId(), &inventoryv1.Item{Name: "Air filter"})
-	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "")
+	// Empty SKU, empty name and a missing base unit are refused.
+	for name, part := range map[string]*cataloguev1.Part{
+		"no SKU":       {Name: "Air filter", BaseUnitId: unit.GetId()},
+		"no name":      {Sku: "FILTER-01", BaseUnitId: unit.GetId()},
+		"no base unit": {Sku: "FILTER-01", Name: "Air filter"},
+	} {
+		_, err = owner.API.CreatePart(ctx, garage.GetId(), part)
+		fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "")
 
-	// Empty name is refused.
-	_, err = owner.API.CreateItem(ctx, garage.GetId(), &inventoryv1.Item{Sku: "FILTER-01", Name: ""})
-	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "")
+		_ = name
+	}
 
-	saved, err := owner.API.CreateItem(ctx, garage.GetId(), &inventoryv1.Item{Sku: "FILTER-01", Name: "Air filter"})
+	saved := fixture.NewPart(t, owner.API, garage.GetId(), "FILTER-01", "Air filter", unit)
+
+	outcome, err := owner.API.DeletePart(ctx, garage.GetId(), saved.GetId(), false)
 	require.NoError(t, err)
-
-	require.NoError(t, owner.API.DeleteItem(ctx, garage.GetId(), saved.GetId()))
+	assert.Equal(t, "DELETE_OUTCOME_DELETED", outcome.GetOutcome().String(), "nothing refers to it yet")
 }
 
 // Scenario: E2E-INV-003 (partial): a goods receipt increases stock on
@@ -104,27 +119,20 @@ func TestGoodsReceiptIncreasesStock(t *testing.T) {
 	ctx := t.Context()
 	owner, garage := setup(t, "inv-receipt")
 
-	item, err := owner.API.CreateItem(ctx, garage.GetId(), &inventoryv1.Item{
-		Sku: sku(), Name: "Engine oil 5W-30", Unit: "L", ReorderThreshold: 5,
-	})
-	require.NoError(t, err)
+	part := fixture.NewPart(t, owner.API, garage.GetId(), sku(), "Engine oil 5W-30", litre(t, owner, garage.GetId()),
+		fixture.WithThreshold("5"))
 
-	first, err := owner.API.CreateStockReceipt(ctx, garage.GetId(), item.GetId(), "10", 150000)
+	first, err := owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "10", "", 150000)
 	require.NoError(t, err)
-	assert.Equal(t, inventoryv1.StockTransactionType_STOCK_TRANSACTION_TYPE_IN, first.GetType())
-	assert.Equal(t, "10", first.GetQuantity())
-
-	afterFirst, err := owner.API.GetItem(ctx, garage.GetId(), item.GetId())
-	require.NoError(t, err)
-	assert.Equal(t, "10", afterFirst.GetQuantityOnHand())
+	assert.Equal(t, inventoryv1.StockTransactionType_STOCK_TRANSACTION_TYPE_IN, first.GetTransaction().GetType())
+	assert.Equal(t, "10", first.GetTransaction().GetQuantity())
+	assert.EqualValues(t, 150000, first.GetTransaction().GetUnitCost())
+	assert.Equal(t, "10", first.GetStockLevel().GetQuantityOnHand())
 
 	// Unit cost is optional per receipt.
-	_, err = owner.API.CreateStockReceipt(ctx, garage.GetId(), item.GetId(), "5", 0)
+	second, err := owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "5", "", 0)
 	require.NoError(t, err)
-
-	afterSecond, err := owner.API.GetItem(ctx, garage.GetId(), item.GetId())
-	require.NoError(t, err)
-	assert.Equal(t, "15", afterSecond.GetQuantityOnHand())
+	assert.Equal(t, "15", second.GetStockLevel().GetQuantityOnHand())
 
 	movements, err := owner.API.ListStockTransactions(ctx, garage.GetId())
 	require.NoError(t, err)
@@ -132,111 +140,117 @@ func TestGoodsReceiptIncreasesStock(t *testing.T) {
 }
 
 // Scenario: E2E-INV-004 (partial): the low-stock rule (on hand at or
-// below the threshold) — asserted at API level through the item read;
-// the badge and highlight are web-E2E.
+// below the threshold) — asserted at API level through the stock level
+// and its filter; the badge and highlight are web-E2E.
 func TestLowStockThreshold(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	owner, garage := setup(t, "inv-lowstock")
 
-	item, err := owner.API.CreateItem(ctx, garage.GetId(), &inventoryv1.Item{
-		Sku: sku(), Name: "Engine oil", Unit: "L", ReorderThreshold: 5,
-	})
+	part := fixture.NewPart(t, owner.API, garage.GetId(), sku(), "Engine oil", litre(t, owner, garage.GetId()),
+		fixture.WithThreshold("5"))
+
+	_, err := owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "15", "", 0)
 	require.NoError(t, err)
 
-	_, err = owner.API.CreateStockReceipt(ctx, garage.GetId(), item.GetId(), "15", 0)
-	require.NoError(t, err)
+	for _, tc := range []struct {
+		threshold string
+		wantLow   bool
+	}{
+		{"20", true},    // 15 <= 20
+		{"15", true},    // the boundary is still low
+		{"14.5", false}, // above the threshold
+		{"5", false},
+	} {
+		_, err = owner.API.UpdatePart(ctx, garage.GetId(), part.GetId(),
+			&cataloguev1.Part{ReorderThreshold: tc.threshold}, "reorder_threshold")
+		require.NoError(t, err)
 
-	// 15 <= 20: low.
-	low, err := owner.API.UpdateItem(ctx, garage.GetId(), item.GetId(),
-		&inventoryv1.Item{ReorderThreshold: 20}, "reorder_threshold")
-	require.NoError(t, err)
-	assertLowStock(t, low.GetQuantityOnHand(), low.GetReorderThreshold(), true)
+		level, err := owner.API.GetStockLevel(ctx, garage.GetId(), part.GetId())
+		require.NoError(t, err)
+		assert.Equal(t, tc.wantLow, level.GetLowStock(), "threshold %s", tc.threshold)
 
-	// 15 <= 15, boundary: still low.
-	boundary, err := owner.API.UpdateItem(ctx, garage.GetId(), item.GetId(),
-		&inventoryv1.Item{ReorderThreshold: 15}, "reorder_threshold")
-	require.NoError(t, err)
-	assertLowStock(t, boundary.GetQuantityOnHand(), boundary.GetReorderThreshold(), true)
-
-	// Back to 5: not low.
-	restored, err := owner.API.UpdateItem(ctx, garage.GetId(), item.GetId(),
-		&inventoryv1.Item{ReorderThreshold: 5}, "reorder_threshold")
-	require.NoError(t, err)
-	assertLowStock(t, restored.GetQuantityOnHand(), restored.GetReorderThreshold(), false)
+		low, err := owner.API.SearchStockLevels(ctx, garage.GetId(), url.Values{"lowStock": {"true"}})
+		require.NoError(t, err)
+		assert.Equal(t, tc.wantLow, len(low) == 1, "low-stock filter at threshold %s", tc.threshold)
+	}
 }
 
-// assertLowStock checks the documented inclusive low-stock rule (on
-// hand at or below the threshold) against the API values; the badge
-// itself is web-E2E.
-func assertLowStock(t *testing.T, onHand string, threshold int32, wantLow bool) {
-	t.Helper()
-
-	parsed, err := strconv.ParseFloat(onHand, 64)
-	require.NoError(t, err)
-	assert.Equal(t, wantLow, parsed <= float64(threshold))
-}
-
-// Scenario: E2E-INV-005 (partial): items are searched by SKU or name —
-// the API substance; the empty state is web-E2E.
+// Scenario: E2E-INV-005 (partial): the stock list is searched by SKU or
+// name — the API substance; the empty state is web-E2E.
 func TestSearchItems(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	owner, garage := setup(t, "inv-search")
+	unit := litre(t, owner, garage.GetId())
 
-	oilSKU := sku()
-
-	_, err := owner.API.CreateItem(ctx, garage.GetId(), &inventoryv1.Item{Sku: oilSKU, Name: "Engine oil 5W-30", Unit: "L"})
-	require.NoError(t, err)
-
-	_, err = owner.API.CreateItem(ctx, garage.GetId(), &inventoryv1.Item{Sku: "FILTER-01", Name: "Air filter", Unit: "piece"})
-	require.NoError(t, err)
+	fixture.NewPart(t, owner.API, garage.GetId(), sku(), "Engine oil 5W-30", unit)
+	fixture.NewPart(t, owner.API, garage.GetId(), "FILTER-01", "Air filter", unit)
 
 	for _, query := range []string{"OIL", "Engine", "FILTER"} {
-		found, err := owner.API.SearchItems(ctx, garage.GetId(), query)
+		found, err := owner.API.SearchStockLevels(ctx, garage.GetId(), url.Values{"query": {query}})
 		require.NoError(t, err, "query %q", query)
 		require.NotEmpty(t, found, "query %q", query)
 	}
 
-	none, err := owner.API.SearchItems(ctx, garage.GetId(), "no-such-item-zzz")
+	none, err := owner.API.SearchStockLevels(ctx, garage.GetId(), url.Values{"query": {"no-such-item-zzz"}})
 	require.NoError(t, err)
 	assert.Empty(t, none)
 }
 
-// Scenario: E2E-INV-006 (partial): an item is edited and deleted while
-// its past transactions are kept — the API substance; the confirm copy
-// is web-E2E.
+// Scenario: E2E-INV-006 (partial): a part with history is edited and
+// then deactivated, not deleted, so its past transactions stay — the API
+// substance; the confirm copy is web-E2E.
 func TestEditAndDeleteItem(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
 	owner, garage := setup(t, "inv-edit")
+	piece := fixture.NewUnit(t, owner.API, garage.GetId(), "Piece", "pc")
 
-	item, err := owner.API.CreateItem(ctx, garage.GetId(), &inventoryv1.Item{
-		Sku: "TEST-PART-01", Name: "QA Test Part", Unit: "piece",
-	})
+	part := fixture.NewPart(t, owner.API, garage.GetId(), "TEST-PART-01", "QA Test Part", piece)
+
+	_, err := owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "3", "", 0)
 	require.NoError(t, err)
 
-	_, err = owner.API.CreateStockReceipt(ctx, garage.GetId(), item.GetId(), "3", 0)
-	require.NoError(t, err)
-
-	renamed, err := owner.API.UpdateItem(ctx, garage.GetId(), item.GetId(),
-		&inventoryv1.Item{Name: "QA Test Part Renamed", Unit: "piece"}, "name", "unit")
+	renamed, err := owner.API.UpdatePart(ctx, garage.GetId(), part.GetId(), &cataloguev1.Part{Name: "QA Test Part Renamed"}, "name")
 	require.NoError(t, err)
 	assert.Equal(t, "QA Test Part Renamed", renamed.GetName())
 
-	require.NoError(t, owner.API.DeleteItem(ctx, garage.GetId(), item.GetId()))
+	// The dry run says what a delete would do without doing it.
+	dry, err := owner.API.DeletePart(ctx, garage.GetId(), part.GetId(), true)
+	require.NoError(t, err)
+	assert.Equal(t, "DELETE_OUTCOME_DEACTIVATED", dry.GetOutcome().String())
 
-	_, err = owner.API.GetItem(ctx, garage.GetId(), item.GetId())
-	fixture.RequireAPIError(t, err, http.StatusNotFound, "")
+	done, err := owner.API.DeletePart(ctx, garage.GetId(), part.GetId(), false)
+	require.NoError(t, err)
+	assert.Equal(t, "DELETE_OUTCOME_DEACTIVATED", done.GetOutcome().String())
 
-	// The receipt transaction is still listed.
+	// The default stock list no longer offers it; the history stays.
+	active, err := owner.API.ListStockLevels(ctx, garage.GetId())
+	require.NoError(t, err)
+	assert.Empty(t, active)
+
+	all, err := owner.API.SearchStockLevels(ctx, garage.GetId(), url.Values{"includeInactive": {"true"}})
+	require.NoError(t, err)
+	require.Len(t, all, 1)
+	assert.False(t, all[0].GetIsActive())
+	assert.Equal(t, "3", all[0].GetQuantityOnHand())
+
 	movements, err := owner.API.ListStockTransactions(ctx, garage.GetId())
 	require.NoError(t, err)
 	require.NotEmpty(t, movements)
 	assert.Equal(t, "TEST-PART-01", movements[0].GetItemSku())
+
+	// A deactivated part cannot be received into until it is reactivated.
+	_, err = owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "1", "", 0)
+	fixture.RequireAPIError(t, err, http.StatusConflict, "")
+
+	reactivated, err := owner.API.ActivatePart(ctx, garage.GetId(), part.GetId())
+	require.NoError(t, err)
+	assert.True(t, reactivated.GetIsActive())
 }
 
 // Scenario: E2E-INV-007 (partial): the stock movement report filters by
@@ -247,13 +261,12 @@ func TestStockMovementReportFilters(t *testing.T) {
 	ctx := t.Context()
 	owner, garage := setup(t, "inv-report")
 
-	item, err := owner.API.CreateItem(ctx, garage.GetId(), &inventoryv1.Item{Sku: sku(), Name: "Engine oil", Unit: "L"})
+	part := fixture.NewPart(t, owner.API, garage.GetId(), sku(), "Engine oil", litre(t, owner, garage.GetId()))
+
+	_, err := owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "10", "", 0)
 	require.NoError(t, err)
 
-	_, err = owner.API.CreateStockReceipt(ctx, garage.GetId(), item.GetId(), "10", 0)
-	require.NoError(t, err)
-
-	closeOrderWithPart(t, owner.API, garage.GetId(), item.GetId(), "4")
+	closeOrderWithPart(t, owner.API, garage.GetId(), part.GetId(), "4")
 
 	// The close deduction arrives through the async outbox relay: wait
 	// for an OUT transaction before asserting the report contents.
@@ -273,7 +286,6 @@ func TestStockMovementReportFilters(t *testing.T) {
 		assert.Equal(t, inventoryv1.StockTransactionType_STOCK_TRANSACTION_TYPE_IN, tx.GetType())
 	}
 
-	// The OUT leg arrives through the async outbox relay; poll for it.
 	outs := waitForTransactions(t, owner.API, garage.GetId(),
 		inventoryv1.StockTransactionType_STOCK_TRANSACTION_TYPE_OUT)
 
@@ -290,19 +302,18 @@ func TestCloseDeductsStock(t *testing.T) {
 	ctx := t.Context()
 	owner, garage := setup(t, "inv-deduct")
 
-	item, err := owner.API.CreateItem(ctx, garage.GetId(), &inventoryv1.Item{Sku: sku(), Name: "Engine oil", Unit: "L"})
+	part := fixture.NewPart(t, owner.API, garage.GetId(), sku(), "Engine oil", litre(t, owner, garage.GetId()))
+
+	_, err := owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "10", "", 0)
 	require.NoError(t, err)
 
-	_, err = owner.API.CreateStockReceipt(ctx, garage.GetId(), item.GetId(), "10", 0)
-	require.NoError(t, err)
-
-	closeOrderWithPart(t, owner.API, garage.GetId(), item.GetId(), "4")
+	closeOrderWithPart(t, owner.API, garage.GetId(), part.GetId(), "4")
 
 	// Deduction arrives through the async outbox relay; poll for it.
-	waitForOnHand(t, owner.API, garage.GetId(), item.GetId(), "6")
+	waitForOnHand(t, owner.API, garage.GetId(), part.GetId(), "6")
 }
 
-// Scenario: E2E-INV-009 (partial): a part line without a catalogue item
+// Scenario: E2E-INV-009 (partial): a part line without a catalogue part
 // deducts nothing on close — asserted at API level.
 func TestCloseWithoutCatalogueItemDeductsNothing(t *testing.T) {
 	t.Parallel()
@@ -310,10 +321,9 @@ func TestCloseWithoutCatalogueItemDeductsNothing(t *testing.T) {
 	ctx := t.Context()
 	owner, garage := setup(t, "inv-nodeduct")
 
-	item, err := owner.API.CreateItem(ctx, garage.GetId(), &inventoryv1.Item{Sku: sku(), Name: "Engine oil", Unit: "L"})
-	require.NoError(t, err)
+	part := fixture.NewPart(t, owner.API, garage.GetId(), sku(), "Engine oil", litre(t, owner, garage.GetId()))
 
-	_, err = owner.API.CreateStockReceipt(ctx, garage.GetId(), item.GetId(), "10", 0)
+	_, err := owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "10", "", 0)
 	require.NoError(t, err)
 
 	vehicle := vehicleFor(t, owner.API, garage.GetId())
@@ -335,28 +345,28 @@ func TestCloseWithoutCatalogueItemDeductsNothing(t *testing.T) {
 	_, err = owner.API.CloseRepairOrder(ctx, garage.GetId(), order.GetId())
 	require.NoError(t, err)
 
-	after, err := owner.API.GetItem(ctx, garage.GetId(), item.GetId())
+	after, err := owner.API.GetStockLevel(ctx, garage.GetId(), part.GetId())
 	require.NoError(t, err)
 	assert.Equal(t, "10", after.GetQuantityOnHand())
 }
 
-// waitForOnHand polls the item until its on-hand quantity reads want
+// waitForOnHand polls the part until its on-hand quantity reads want
 // (the close deduction arrives through the async outbox relay).
-func waitForOnHand(t *testing.T, api *client.Client, garageID, itemID, want string) {
+func waitForOnHand(t *testing.T, api *client.Client, garageID, partID, want string) {
 	t.Helper()
 
 	deadline := time.Now().Add(60 * time.Second)
 
 	for {
-		item, err := api.GetItem(t.Context(), garageID, itemID)
+		level, err := api.GetStockLevel(t.Context(), garageID, partID)
 		require.NoError(t, err)
 
-		if item.GetQuantityOnHand() == want {
+		if level.GetQuantityOnHand() == want {
 			return
 		}
 
 		if time.Now().After(deadline) {
-			t.Fatalf("on hand is %q, want %q after close", item.GetQuantityOnHand(), want)
+			t.Fatalf("on hand is %q, want %q after close", level.GetQuantityOnHand(), want)
 		}
 
 		time.Sleep(500 * time.Millisecond)
@@ -408,19 +418,19 @@ func vehicleFor(t *testing.T, api *client.Client, garageID string) *customerv1.V
 }
 
 // closeOrderWithPart creates and closes an order with one part line
-// linked to itemID, quantity qty.
-func closeOrderWithPart(t *testing.T, api *client.Client, garageID, itemID, qty string) {
+// linked to partID, quantity qty (in the base unit).
+func closeOrderWithPart(t *testing.T, api *client.Client, garageID, partID, qty string) {
 	t.Helper()
 
 	ctx := t.Context()
 	vehicle := vehicleFor(t, api, garageID)
-	itemRef := itemID
+	partRef := partID
 
 	order, err := api.CreateRepairOrder(ctx, garageID, &repairorderv1.RepairOrder{
 		VehicleId: vehicle.GetId(),
 		Lines: []*repairorderv1.RepairOrderLine{{
 			ItemType:  repairorderv1.RepairOrderItemType_REPAIR_ORDER_ITEM_TYPE_PART,
-			ItemRefId: &itemRef, Description: "Engine oil 5W-30", Quantity: qty, UnitPrice: 150000,
+			ItemRefId: &partRef, Description: "Engine oil 5W-30", Quantity: qty, UnitPrice: 150000,
 		}},
 	})
 	require.NoError(t, err)

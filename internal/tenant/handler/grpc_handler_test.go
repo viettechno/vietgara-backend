@@ -100,7 +100,7 @@ func TestGarageRPCs(t *testing.T) {
 	assert.Equal(t, "LSC-{YYYY}{MM}-{SEQ:4}", g.GetNumbering().GetRepairOrder())
 	assert.Equal(t, tenantv1.GarageStatus_GARAGE_STATUS_ACTIVE, g.GetStatus())
 	assert.True(t, g.GetAccess().GetOwner())
-	assert.Len(t, g.GetAccess().GetPermissions(), 18)
+	assert.Len(t, g.GetAccess().GetPermissions(), 20)
 	assert.Len(t, g.GetOperatingHours(), 1)
 
 	_, err = e.srv.CreateGarage(ownerCtx, &tenantv1.CreateGarageRequest{Garage: &tenantv1.Garage{}})
@@ -235,7 +235,7 @@ func TestStaffAndInvitationRPCs(t *testing.T) {
 	require.Len(t, members.GetData(), 2)
 	ownerRow, member := members.GetData()[0], members.GetData()[1]
 	assert.True(t, ownerRow.GetOwner())
-	assert.Len(t, ownerRow.GetPermissions(), 18)
+	assert.Len(t, ownerRow.GetPermissions(), 20)
 	assert.Equal(t, []string{groupID}, member.GetGroupIds())
 
 	updated, err := e.srv.UpdateStaff(ctx, &tenantv1.UpdateStaffRequest{
@@ -293,7 +293,7 @@ func TestRoleAndGroupRPCs(t *testing.T) {
 
 	perms, err := e.srv.ListPermissions(ownerCtx, &tenantv1.ListPermissionsRequest{})
 	require.NoError(t, err)
-	assert.Len(t, perms.GetData(), 18)
+	assert.Len(t, perms.GetData(), 20)
 	assert.Equal(t, "garage", perms.GetData()[0].GetModule())
 	assert.Equal(t, "write", perms.GetData()[0].GetAction())
 	assert.Equal(t, "read", perms.GetData()[1].GetAction())

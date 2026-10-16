@@ -11,6 +11,7 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 	"github.com/viettechno/vietgara-backend/pkg/billingparty"
 	"github.com/viettechno/vietgara-backend/pkg/numbering"
+	"github.com/viettechno/vietgara-backend/pkg/partquantity"
 )
 
 const docTypeRepairOrder = "repair_order"
@@ -29,6 +30,8 @@ type Deps struct {
 	Limits       TransactionLimiter
 	Sequences    Sequencer
 	Events       EventPublisher
+	// Parts converts part-line quantities typed in a packaging unit.
+	Parts partquantity.Resolver
 	// Now defaults to time.Now.
 	Now clock
 }
@@ -53,7 +56,11 @@ type LineInput struct {
 	ItemRefID   *string
 	Description string
 	Quantity    string
-	UnitPrice   int64
+	// UnitID and EnteredQuantity are the packaging unit and the amount
+	// typed in it (FR-CAT-02); with a unit, Quantity is derived from them.
+	UnitID          string
+	EnteredQuantity string
+	UnitPrice       int64
 }
 
 // CreateRepairOrderRequest is the input for RepairOrderUseCase.Create.
@@ -73,7 +80,7 @@ func (uc *RepairOrderUseCase) Create(ctx context.Context, req CreateRepairOrderR
 		return nil, err
 	}
 
-	lines, err := buildLines(req.Lines)
+	lines, err := uc.buildLines(ctx, req.GarageID, req.Lines)
 	if err != nil {
 		return nil, toAppError("create repair order", err)
 	}
@@ -245,7 +252,7 @@ func (uc *RepairOrderUseCase) nextNumber(ctx context.Context, garageID string, g
 
 // buildLines validates inputs and assigns each line an id, position,
 // status and computed total.
-func buildLines(inputs []LineInput) ([]domain.Line, error) {
+func (uc *RepairOrderUseCase) buildLines(ctx context.Context, garageID string, inputs []LineInput) ([]domain.Line, error) {
 	if len(inputs) == 0 {
 		return nil, domain.ErrNoLines
 	}
@@ -274,15 +281,23 @@ func buildLines(inputs []LineInput) ([]domain.Line, error) {
 			return nil, domain.ErrInvalidUnitPrice
 		}
 
-		scaled, err := domain.ParseQuantity(in.Quantity)
+		stored, err := partquantity.ForLine(ctx, uc.Parts, garageID, in.ItemType == domain.ItemTypePart, in.ItemRefID,
+			in.Quantity, in.UnitID, in.EnteredQuantity)
+		if err != nil {
+			return nil, err
+		}
+
+		scaled, err := domain.ParseQuantity(stored.Quantity)
 		if err != nil {
 			return nil, err
 		}
 
 		lines = append(lines, domain.Line{
 			ID: uuid.NewString(), Position: i + 1, ItemType: in.ItemType, ItemRefID: in.ItemRefID,
-			Description: description, Quantity: in.Quantity, UnitPrice: in.UnitPrice,
-			LineTotal: domain.LineTotal(scaled, in.UnitPrice), Status: domain.LineNotStarted,
+			Description: description, Quantity: stored.Quantity, UnitID: stored.UnitID, EnteredQuantity: stored.Entered,
+			UnitAbbreviation: stored.UnitAbbreviation,
+			UnitPrice:        in.UnitPrice,
+			LineTotal:        domain.LineTotal(scaled, in.UnitPrice), Status: domain.LineNotStarted,
 		})
 	}
 

@@ -9,14 +9,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	cataloguev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/catalogue/v1"
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
-	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
-func createInventoryTestEnv(t *testing.T) (context.Context, *fixture.Actor, string, *inventoryv1.Item, []*tenantv1.StaffGroup) {
+func createInventoryTestEnv(t *testing.T) (context.Context, *fixture.Actor, string, *cataloguev1.Part, []*tenantv1.StaffGroup) {
 	t.Helper()
 
 	owner := fixture.NewVerifiedOwnerWithLocale(t, "inv-perms-owner", identityv1.Locale_LOCALE_EN)
@@ -25,23 +25,18 @@ func createInventoryTestEnv(t *testing.T) (context.Context, *fixture.Actor, stri
 
 	garageID := garage.GetId()
 
-	// Create an item as owner
-	item, err := owner.API.CreateItem(t.Context(), garageID, &inventoryv1.Item{
-		Sku:              "INV-PERMS-001",
-		Name:             "Test Part",
-		Unit:             "pcs",
-		ReorderThreshold: 10,
-	})
-	require.NoError(t, err)
+	// Create a part as owner
+	part := fixture.NewPart(t, owner.API, garageID, "INV-PERMS-001", "Test Part",
+		fixture.NewUnit(t, owner.API, garageID, "Piece", "pcs"), fixture.WithThreshold("10"))
 
 	// Record stock receipt
-	_, err = owner.API.CreateStockReceipt(t.Context(), garageID, item.GetId(), "100", 50000)
+	_, err = owner.API.CreateStockReceipt(t.Context(), garageID, part.GetId(), "100", "", 50000)
 	require.NoError(t, err)
 
 	groups, err := owner.API.ListStaffGroups(t.Context(), garageID)
 	require.NoError(t, err)
 
-	return t.Context(), owner, garageID, item, groups
+	return t.Context(), owner, garageID, part, groups
 }
 
 func TestInventoryPermissionsNoAccess(t *testing.T) {
@@ -76,28 +71,33 @@ func TestInventoryPermissionsNoAccess(t *testing.T) {
 		_, err = tech.API.AcceptInvitation(ctx, techInvites[0].GetId())
 		require.NoError(t, err)
 
-		// Technician CAN list items (has InventoryRead)
-		items, err := tech.API.ListItems(ctx, garageID)
+		// Technician CAN list the stock (has InventoryRead)
+		levels, err := tech.API.ListStockLevels(ctx, garageID)
 		require.NoError(t, err)
-		require.NotEmpty(t, items)
+		require.NotEmpty(t, levels)
 
-		// Technician CAN get item
-		got, err := tech.API.GetItem(ctx, garageID, items[0].GetId())
+		// Technician CAN get a stock level
+		got, err := tech.API.GetStockLevel(ctx, garageID, levels[0].GetPartId())
 		require.NoError(t, err)
-		assert.Equal(t, items[0].GetId(), got.GetId())
+		assert.Equal(t, levels[0].GetPartId(), got.GetPartId())
 
-		// Technician CANNOT create item (no InventoryWrite)
-		_, err = tech.API.CreateItem(ctx, garageID, &inventoryv1.Item{Sku: "TEST", Name: "Test"})
+		// Technician CAN see the part (has CatalogueRead)
+		parts, err := tech.API.ListParts(ctx, garageID, nil)
+		require.NoError(t, err)
+		require.NotEmpty(t, parts)
+
+		// Technician CANNOT create a part (no CatalogueWrite)
+		_, err = tech.API.CreatePart(ctx, garageID, &cataloguev1.Part{Sku: "TEST", Name: "Test", BaseUnitId: parts[0].GetBaseUnitId()})
 		require.Error(t, err)
 		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
 
 		// Technician CANNOT record stock receipt
-		_, err = tech.API.CreateStockReceipt(ctx, garageID, items[0].GetId(), "50", 0)
+		_, err = tech.API.CreateStockReceipt(ctx, garageID, levels[0].GetPartId(), "50", "", 0)
 		require.Error(t, err)
 		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
 
-		// Technician CANNOT delete item
-		err = tech.API.DeleteItem(ctx, garageID, items[0].GetId())
+		// Technician CANNOT delete a part
+		_, err = tech.API.DeletePart(ctx, garageID, levels[0].GetPartId(), false)
 		require.Error(t, err)
 		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
 	})
@@ -106,7 +106,7 @@ func TestInventoryPermissionsNoAccess(t *testing.T) {
 func TestInventoryPermissionsReadWrite(t *testing.T) {
 	t.Parallel()
 
-	ctx, owner, garageID, item, groups := createInventoryTestEnv(t)
+	ctx, owner, garageID, part, groups := createInventoryTestEnv(t)
 
 	t.Run("inventory staff has read-write access", func(t *testing.T) {
 		t.Parallel()
@@ -135,33 +135,33 @@ func TestInventoryPermissionsReadWrite(t *testing.T) {
 		_, err = staff.API.AcceptInvitation(ctx, staffInvites[0].GetId())
 		require.NoError(t, err)
 
-		// Inventory Staff can list items
-		items, err := staff.API.ListItems(ctx, garageID)
+		// Inventory Staff can list the stock
+		levels, err := staff.API.ListStockLevels(ctx, garageID)
 		require.NoError(t, err)
-		require.NotEmpty(t, items)
-		assert.Equal(t, "INV-PERMS-001", items[0].GetSku())
+		require.NotEmpty(t, levels)
+		assert.Equal(t, "INV-PERMS-001", levels[0].GetSku())
 
-		// Inventory Staff can get item
-		got, err := staff.API.GetItem(ctx, garageID, item.GetId())
+		// Inventory Staff can get a part
+		got, err := staff.API.GetPart(ctx, garageID, part.GetId())
 		require.NoError(t, err)
-		assert.Equal(t, item.GetId(), got.GetId())
+		assert.Equal(t, part.GetId(), got.GetId())
 
 		// Inventory Staff can list stock movements
 		movements, err := staff.API.ListStockTransactions(ctx, garageID)
 		require.NoError(t, err)
 		require.NotEmpty(t, movements)
 
-		// Inventory Staff CAN create item
-		newItem, err := staff.API.CreateItem(ctx, garageID, &inventoryv1.Item{Sku: "STAFF-TEST", Name: "Staff Test", Unit: "pcs"})
+		// Inventory Staff CAN create a part
+		newPart, err := staff.API.CreatePart(ctx, garageID, &cataloguev1.Part{Sku: "STAFF-TEST", Name: "Staff Test", BaseUnitId: part.GetBaseUnitId()})
 		require.NoError(t, err)
-		assert.Equal(t, "STAFF-TEST", newItem.GetSku())
+		assert.Equal(t, "STAFF-TEST", newPart.GetSku())
 
 		// Inventory Staff CAN record stock receipt
-		_, err = staff.API.CreateStockReceipt(ctx, garageID, newItem.GetId(), "50", 10000)
+		_, err = staff.API.CreateStockReceipt(ctx, garageID, newPart.GetId(), "50", "", 10000)
 		require.NoError(t, err)
 
-		// Inventory Staff CAN delete item
-		err = staff.API.DeleteItem(ctx, garageID, newItem.GetId())
+		// Inventory Staff CAN delete a part (it has stock history, so it is deactivated)
+		_, err = staff.API.DeletePart(ctx, garageID, newPart.GetId(), false)
 		require.NoError(t, err)
 	})
 }
@@ -169,41 +169,40 @@ func TestInventoryPermissionsReadWrite(t *testing.T) {
 func TestInventoryPermissionsOwner(t *testing.T) {
 	t.Parallel()
 
-	ctx, owner, garageID, _, _ := createInventoryTestEnv(t)
+	ctx, owner, garageID, part, _ := createInventoryTestEnv(t)
 
 	t.Run("owner full access", func(t *testing.T) {
 		t.Parallel()
-		// Owner creates another item
-		item2, err := owner.API.CreateItem(ctx, garageID, &inventoryv1.Item{Sku: "OWNER-002", Name: "Owner Item", Unit: "pcs"})
-		require.NoError(t, err)
+		// Owner creates another part
+		part2 := fixture.NewPart(t, owner.API, garageID, "OWNER-002", "Owner Item",
+			&cataloguev1.Unit{Id: part.GetBaseUnitId()})
 
 		// Owner records stock
-		_, err = owner.API.CreateStockReceipt(ctx, garageID, item2.GetId(), "200", 60000)
+		_, err := owner.API.CreateStockReceipt(ctx, garageID, part2.GetId(), "200", "", 60000)
 		require.NoError(t, err)
 
-		// Owner updates item
-		updated, err := owner.API.UpdateItem(ctx, garageID, item2.GetId(), &inventoryv1.Item{Name: "Updated Owner Item"}, "name")
+		// Owner updates the part
+		updated, err := owner.API.UpdatePart(ctx, garageID, part2.GetId(), &cataloguev1.Part{Name: "Updated Owner Item"}, "name")
 		require.NoError(t, err)
 		assert.Equal(t, "Updated Owner Item", updated.GetName())
 
-		// Owner deletes item
-		err = owner.API.DeleteItem(ctx, garageID, item2.GetId())
+		// Owner deletes the part: it has history, so it is deactivated and leaves the stock list
+		_, err = owner.API.DeletePart(ctx, garageID, part2.GetId(), false)
 		require.NoError(t, err)
 
-		// Deleted item is not in list
-		itemsAfter, err := owner.API.ListItems(ctx, garageID)
+		levelsAfter, err := owner.API.ListStockLevels(ctx, garageID)
 		require.NoError(t, err)
 
 		found := false
 
-		for _, i := range itemsAfter {
-			if i.GetId() == item2.GetId() {
+		for _, l := range levelsAfter {
+			if l.GetPartId() == part2.GetId() {
 				found = true
 				break
 			}
 		}
 
-		assert.False(t, found, "deleted item should not appear in list")
+		assert.False(t, found, "a deactivated part should not appear in the default list")
 
 		// But past transactions are kept
 		movements, err := owner.API.ListStockTransactions(ctx, garageID)
@@ -212,12 +211,12 @@ func TestInventoryPermissionsOwner(t *testing.T) {
 		hasReceipt := false
 
 		for _, m := range movements {
-			if m.GetItemId() == item2.GetId() {
+			if m.GetItemId() == part2.GetId() {
 				hasReceipt = true
 				break
 			}
 		}
 
-		assert.True(t, hasReceipt, "past transactions of deleted item are kept")
+		assert.True(t, hasReceipt, "past transactions of a deactivated part are kept")
 	})
 }

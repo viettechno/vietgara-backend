@@ -27,11 +27,12 @@ func TestParseQuantity(t *testing.T) {
 		input string
 		want  int64
 	}{
-		{"whole", "1", 100},
-		{"fraction", "1.5", 150},
-		{"two decimals", "1.99", 199},
-		{"padded", " 2 ", 200},
-		{"max digits", "9999999", 999999900},
+		{"whole", "1", 1000},
+		{"fraction", "1.5", 1500},
+		{"two decimals", "1.99", 1990},
+		{"three decimals", "0.125", 125},
+		{"padded", " 2 ", 2000},
+		{"max digits", "9999999", 9999999000},
 	}
 
 	for _, c := range cases {
@@ -44,7 +45,7 @@ func TestParseQuantity(t *testing.T) {
 		})
 	}
 
-	invalid := []string{"", "0", "0.00", "abc", "1.999", "12345678", "-1", ".5", "1.", "1,5"}
+	invalid := []string{"", "0", "0.00", "abc", "1.9999", "12345678", "-1", ".5", "1.", "1,5"}
 
 	for _, input := range invalid {
 		t.Run("invalid "+input, func(t *testing.T) {
@@ -59,9 +60,11 @@ func TestParseQuantity(t *testing.T) {
 func TestLineTotal(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, int64(150_000), domain.LineTotal(150, 100_000))
+	assert.Equal(t, int64(150_000), domain.LineTotal(1500, 100_000))
 	assert.Equal(t, int64(0), domain.LineTotal(0, 100_000))
 	// Half a VND rounds up.
-	assert.Equal(t, int64(1), domain.LineTotal(1, 100))
-	assert.Equal(t, int64(0), domain.LineTotal(1, 49))
+	assert.Equal(t, int64(1), domain.LineTotal(5, 100))
+	assert.Equal(t, int64(0), domain.LineTotal(4, 100))
+	// 0.125 x 1,000 = 125.
+	assert.Equal(t, int64(125), domain.LineTotal(125, 1000))
 }

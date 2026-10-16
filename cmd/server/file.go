@@ -1,6 +1,7 @@
 package main
 
 import (
+	catalogueRepository "github.com/viettechno/vietgara-backend/internal/catalogue/repository"
 	fileHandler "github.com/viettechno/vietgara-backend/internal/file/handler"
 	fileRepository "github.com/viettechno/vietgara-backend/internal/file/repository"
 	fileUsecase "github.com/viettechno/vietgara-backend/internal/file/usecase"
@@ -16,8 +17,11 @@ type fileModule struct {
 	uc     *fileUsecase.UseCase
 }
 
-func buildFiles(pool *platformdb.Pool, store storage.Store, garages *tenantRepo.PostgresGarageRepository) *fileModule {
-	uc := fileUsecase.New(fileRepository.NewPostgresRepository(pool), store, fileUsage{garages: garages}, fileEntities{})
+func buildFiles(
+	pool *platformdb.Pool, store storage.Store, garages *tenantRepo.PostgresGarageRepository,
+	parts *catalogueRepository.PostgresRepository, entities *fileEntities,
+) *fileModule {
+	uc := fileUsecase.New(fileRepository.NewPostgresRepository(pool), store, fileUsage{garages: garages, parts: parts}, entities)
 
 	return &fileModule{server: fileHandler.NewServer(uc), uc: uc}
 }

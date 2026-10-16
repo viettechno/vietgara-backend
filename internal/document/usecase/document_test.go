@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/png"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -33,6 +34,7 @@ type deps struct {
 	RepairOrders   *mocks.MockDocumentRepairOrderReader
 	Settlements    *mocks.MockDocumentSettlementReader
 	StockMovements *mocks.MockDocumentStockMovementReader
+	Revenue        *mocks.MockDocumentRevenueReader
 	Garages        *mocks.MockDocumentGarageReader
 }
 
@@ -42,10 +44,10 @@ func newUseCase(t *testing.T) (*usecase.DocumentUseCase, *deps) {
 	d := &deps{
 		Quotes: mocks.NewMockDocumentQuoteReader(t), RepairOrders: mocks.NewMockDocumentRepairOrderReader(t),
 		Settlements: mocks.NewMockDocumentSettlementReader(t), StockMovements: mocks.NewMockDocumentStockMovementReader(t),
-		Garages: mocks.NewMockDocumentGarageReader(t),
+		Revenue: mocks.NewMockDocumentRevenueReader(t), Garages: mocks.NewMockDocumentGarageReader(t),
 	}
 
-	uc := usecase.NewDocumentUseCase(d.Quotes, d.RepairOrders, d.Settlements, d.StockMovements, d.Garages)
+	uc := usecase.NewDocumentUseCase(d.Quotes, d.RepairOrders, d.Settlements, d.StockMovements, d.Revenue, d.Garages)
 
 	return uc, d
 }
@@ -198,6 +200,35 @@ func TestDocumentUseCase_StockMovementsExcel(t *testing.T) {
 		d.StockMovements.EXPECT().List(mock.Anything, garageID, itemID).Return(nil, errBoom).Once()
 
 		_, err := uc.StockMovementsExcel(t.Context(), garageID, itemID)
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+}
+
+func TestDocumentUseCase_RevenueExcel(t *testing.T) {
+	t.Parallel()
+
+	from, to := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+
+	t.Run("renders a non-empty workbook", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Revenue.EXPECT().Revenue(mock.Anything, garageID, "month", from, to).Return(usecase.RevenueInfo{
+			Points: []render.RevenueRow{{Period: "2026-09", Amount: 1_500_000}}, TotalAmount: 1_500_000,
+		}, nil).Once()
+
+		workbook, err := uc.RevenueExcel(t.Context(), garageID, "month", from, to)
+		require.NoError(t, err)
+		require.Equal(t, "PK", string(workbook[:2]))
+	})
+
+	t.Run("reader failure", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Revenue.EXPECT().Revenue(mock.Anything, garageID, "month", from, to).Return(usecase.RevenueInfo{}, errBoom).Once()
+
+		_, err := uc.RevenueExcel(t.Context(), garageID, "month", from, to)
 		assertAppError(t, err, apperror.CodeInternal)
 	})
 }

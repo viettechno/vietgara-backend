@@ -75,7 +75,7 @@ var DefaultRoleTemplates = []DefaultRoleTemplate{
 		},
 		Permissions: []access.Permission{
 			access.CustomerRead, access.SupplierRead, access.SubscriptionRead, access.QuoteRead, access.RepairOrderRead,
-			access.InventoryRead, access.BillingRead, access.BillingWrite, access.ReportRead,
+			access.InventoryRead, access.CatalogueRead, access.BillingRead, access.BillingWrite, access.ReportRead,
 		},
 	},
 	{
@@ -87,7 +87,7 @@ var DefaultRoleTemplates = []DefaultRoleTemplate{
 		},
 		Permissions: []access.Permission{
 			access.CustomerRead, access.CustomerWrite, access.SupplierRead, access.QuoteRead, access.QuoteWrite,
-			access.RepairOrderRead, access.RepairOrderWrite, access.InventoryRead,
+			access.RepairOrderRead, access.RepairOrderWrite, access.InventoryRead, access.CatalogueRead,
 		},
 	},
 	{
@@ -97,7 +97,7 @@ var DefaultRoleTemplates = []DefaultRoleTemplate{
 			"vi": "Cập nhật tiến độ lệnh sửa chữa được giao.",
 			"en": "Updates the progress of assigned repair orders.",
 		},
-		Permissions: []access.Permission{access.RepairOrderRead, access.RepairOrderWrite, access.InventoryRead},
+		Permissions: []access.Permission{access.RepairOrderRead, access.RepairOrderWrite, access.InventoryRead, access.CatalogueRead},
 	},
 	{
 		Key:  DefaultInventoryStaff,
@@ -107,7 +107,8 @@ var DefaultRoleTemplates = []DefaultRoleTemplate{
 			"en": "Parts stock in, stock out and stock on hand.",
 		},
 		Permissions: []access.Permission{
-			access.InventoryRead, access.InventoryWrite, access.SupplierRead, access.SupplierWrite, access.RepairOrderRead,
+			access.InventoryRead, access.InventoryWrite, access.CatalogueRead, access.CatalogueWrite,
+			access.SupplierRead, access.SupplierWrite, access.RepairOrderRead,
 		},
 	},
 }

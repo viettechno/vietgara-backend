@@ -45,6 +45,7 @@ func lineToProto(line domain.Line) *repairorderv1.RepairOrderLine {
 		Id: line.ID, ItemType: itemTypeToProto(line.ItemType), ItemRefId: line.ItemRefID, Description: line.Description,
 		Quantity: line.Quantity, UnitPrice: line.UnitPrice, LineTotal: line.LineTotal, Status: lineStatusToProto(line.Status),
 		AssignedTechnicianIds: line.AssignedTechnicianIDs,
+		UnitId:                line.UnitID, EnteredQuantity: derefString(line.EnteredQuantity), UnitAbbreviation: line.UnitAbbreviation,
 	}
 }
 
@@ -142,7 +143,8 @@ func lineInputsFromProto(lines []*repairorderv1.RepairOrderLine) []usecase.LineI
 	for _, line := range lines {
 		out = append(out, usecase.LineInput{
 			ItemType: itemTypeFromProto(line.GetItemType()), ItemRefID: line.ItemRefId,
-			Description: line.GetDescription(), Quantity: line.GetQuantity(), UnitPrice: line.GetUnitPrice(),
+			Description: line.GetDescription(), Quantity: line.GetQuantity(), UnitID: line.GetUnitId(),
+			EnteredQuantity: line.GetEnteredQuantity(), UnitPrice: line.GetUnitPrice(),
 		})
 	}
 
@@ -167,4 +169,12 @@ func toInt32(n int) int32 {
 	}
 
 	return int32(n)
+}
+
+func derefString(s *string) string {
+	if s == nil {
+		return ""
+	}
+
+	return *s
 }

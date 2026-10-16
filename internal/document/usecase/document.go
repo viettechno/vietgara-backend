@@ -10,6 +10,7 @@ package usecase
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/viettechno/vietgara-backend/internal/document/render"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
@@ -98,6 +99,20 @@ type StockMovementReader interface {
 	List(ctx context.Context, garageID, itemID string) ([]render.StockMovementRow, error)
 }
 
+// RevenueInfo is a garage's revenue bucketed by period, as the Reporting
+// module reports it.
+type RevenueInfo struct {
+	Points      []render.RevenueRow
+	TotalAmount int64
+}
+
+// RevenueReader reads the revenue report for Excel export; implemented by an
+// adapter over the Reporting module in cmd/server. period is "day", "month",
+// "quarter" or "year"; from is inclusive, to exclusive.
+type RevenueReader interface {
+	Revenue(ctx context.Context, garageID, period string, from, to time.Time) (RevenueInfo, error)
+}
+
 // GarageHeaderInfo is the Tenant module's view of a garage that every
 // document's letterhead needs.
 type GarageHeaderInfo struct {
@@ -127,16 +142,18 @@ type DocumentUseCase struct {
 	RepairOrders   RepairOrderReader
 	Settlements    SettlementReader
 	StockMovements StockMovementReader
+	Revenue        RevenueReader
 	Garages        GarageReader
 }
 
 // NewDocumentUseCase wires the use case to its dependencies.
 func NewDocumentUseCase(
 	quotes QuoteReader, repairOrders RepairOrderReader, settlements SettlementReader, stockMovements StockMovementReader,
-	garages GarageReader,
+	revenue RevenueReader, garages GarageReader,
 ) *DocumentUseCase {
 	return &DocumentUseCase{
-		Quotes: quotes, RepairOrders: repairOrders, Settlements: settlements, StockMovements: stockMovements, Garages: garages,
+		Quotes: quotes, RepairOrders: repairOrders, Settlements: settlements, StockMovements: stockMovements,
+		Revenue: revenue, Garages: garages,
 	}
 }
 
@@ -268,6 +285,22 @@ func (uc *DocumentUseCase) StockMovementsExcel(ctx context.Context, garageID, it
 	workbook, err := render.StockMovementsExcel(rows)
 	if err != nil {
 		return nil, apperror.Internal("export stock movements excel", err)
+	}
+
+	return workbook, nil
+}
+
+// RevenueExcel renders the revenue-by-period report as an Excel workbook
+// (FR-DOC-02), the same data and range as ReportingService.GetRevenueReport.
+func (uc *DocumentUseCase) RevenueExcel(ctx context.Context, garageID, period string, from, to time.Time) ([]byte, error) {
+	info, err := uc.Revenue.Revenue(ctx, garageID, period, from, to)
+	if err != nil {
+		return nil, toAppError("export revenue excel", err)
+	}
+
+	workbook, err := render.RevenueExcel(info.Points, info.TotalAmount)
+	if err != nil {
+		return nil, apperror.Internal("export revenue excel", err)
 	}
 
 	return workbook, nil

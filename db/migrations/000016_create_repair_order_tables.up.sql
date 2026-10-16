@@ -87,6 +87,10 @@ CREATE TABLE repair_order_lines (
     quantity NUMERIC(14, 3) NOT NULL DEFAULT 1,
     unit_price BIGINT NOT NULL DEFAULT 0,
     line_total BIGINT NOT NULL DEFAULT 0,
+    -- As in quote_lines (Release 6.0): quantity is the base-unit amount;
+    -- the foreign key into units is added in migration 000017.
+    unit_id UUID,
+    entered_quantity NUMERIC(14, 3),
     status repair_order_line_status NOT NULL DEFAULT 'not_started',
     -- Technicia user ids assigned to this line (FR-REP-02); a garage
     -- membership is not enforced at the database level, the same way

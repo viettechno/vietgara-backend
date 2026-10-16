@@ -2,8 +2,10 @@ package handler
 
 import (
 	"context"
+	"time"
 
 	documentv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/document/v1"
+	reportingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/reporting/v1"
 	"google.golang.org/genproto/googleapis/api/httpbody"
 
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
@@ -68,4 +70,46 @@ func (s *Server) ExportStockMovementsExcel(
 	}
 
 	return excelBody(data), nil
+}
+
+// ExportRevenueExcel renders the revenue-by-period report as an Excel
+// workbook (FR-DOC-02).
+func (s *Server) ExportRevenueExcel(ctx context.Context, req *documentv1.ExportRevenueExcelRequest) (*httpbody.HttpBody, error) {
+	from, err := time.Parse(dateLayout, req.GetFrom())
+	if err != nil {
+		return nil, apperror.ToGRPCError(apperror.Validation("from", apperror.IssueInvalid, "from must be a valid date (YYYY-MM-DD)"))
+	}
+
+	to, err := time.Parse(dateLayout, req.GetTo())
+	if err != nil {
+		return nil, apperror.ToGRPCError(apperror.Validation("to", apperror.IssueInvalid, "to must be a valid date (YYYY-MM-DD)"))
+	}
+
+	data, err := s.uc.RevenueExcel(ctx, req.GetGarageId(), revenuePeriod(req.GetPeriod()), from, to)
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return excelBody(data), nil
+}
+
+const dateLayout = "2006-01-02"
+
+// revenuePeriod names a period for the use case; an unspecified one is
+// refused by the Reporting module.
+func revenuePeriod(p reportingv1.RevenuePeriod) string {
+	switch p {
+	case reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY:
+		return "day"
+	case reportingv1.RevenuePeriod_REVENUE_PERIOD_MONTH:
+		return "month"
+	case reportingv1.RevenuePeriod_REVENUE_PERIOD_QUARTER:
+		return "quarter"
+	case reportingv1.RevenuePeriod_REVENUE_PERIOD_YEAR:
+		return "year"
+	case reportingv1.RevenuePeriod_REVENUE_PERIOD_UNSPECIFIED:
+		return ""
+	default:
+		return ""
+	}
 }

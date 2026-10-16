@@ -2,6 +2,7 @@ package handler_test
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -10,6 +11,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	documentv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/document/v1"
+	reportingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/reporting/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/document/handler"
 	"github.com/viettechno/vietgara-backend/internal/document/render"
@@ -35,6 +37,7 @@ type env struct {
 	repairOrders   *mocks.MockDocumentRepairOrderReader
 	settlements    *mocks.MockDocumentSettlementReader
 	stockMovements *mocks.MockDocumentStockMovementReader
+	revenue        *mocks.MockDocumentRevenueReader
 	garages        *mocks.MockDocumentGarageReader
 }
 
@@ -44,10 +47,10 @@ func newEnv(t *testing.T) *env {
 	e := &env{
 		quotes: mocks.NewMockDocumentQuoteReader(t), repairOrders: mocks.NewMockDocumentRepairOrderReader(t),
 		settlements: mocks.NewMockDocumentSettlementReader(t), stockMovements: mocks.NewMockDocumentStockMovementReader(t),
-		garages: mocks.NewMockDocumentGarageReader(t),
+		revenue: mocks.NewMockDocumentRevenueReader(t), garages: mocks.NewMockDocumentGarageReader(t),
 	}
 
-	uc := usecase.NewDocumentUseCase(e.quotes, e.repairOrders, e.settlements, e.stockMovements, e.garages)
+	uc := usecase.NewDocumentUseCase(e.quotes, e.repairOrders, e.settlements, e.stockMovements, e.revenue, e.garages)
 	e.srv = handler.NewServer(uc)
 
 	return e
@@ -61,7 +64,7 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 5)
+	assert.Len(t, p, 6)
 	assert.NotNil(t, p[documentv1.DocumentService_ExportQuotePdf_FullMethodName].Garage)
 }
 
@@ -244,6 +247,68 @@ func TestExportStockMovementsExcel(t *testing.T) {
 		})
 		require.Error(t, err)
 		assert.Equal(t, codes.NotFound, status.Code(err))
+	})
+}
+
+func TestExportRevenueExcel(t *testing.T) {
+	t.Parallel()
+
+	req := func(period reportingv1.RevenuePeriod, from, to string) *documentv1.ExportRevenueExcelRequest {
+		return &documentv1.ExportRevenueExcelRequest{GarageId: garageID, Period: period, From: from, To: to}
+	}
+
+	t.Run("returns an Excel HttpBody", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+		from, to := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
+		e.revenue.EXPECT().Revenue(anyArg, garageID, "month", from, to).Return(usecase.RevenueInfo{
+			Points: []render.RevenueRow{{Period: "2026-09", Amount: 100}}, TotalAmount: 100,
+		}, nil).Once()
+
+		resp, err := e.srv.ExportRevenueExcel(t.Context(), req(reportingv1.RevenuePeriod_REVENUE_PERIOD_MONTH, "2026-09-01", "2026-10-01"))
+		require.NoError(t, err)
+		assert.Equal(t, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", resp.GetContentType())
+		assert.NotEmpty(t, resp.GetData())
+	})
+
+	t.Run("maps every period", func(t *testing.T) {
+		t.Parallel()
+
+		for period, want := range map[reportingv1.RevenuePeriod]string{
+			reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY:         "day",
+			reportingv1.RevenuePeriod_REVENUE_PERIOD_QUARTER:     "quarter",
+			reportingv1.RevenuePeriod_REVENUE_PERIOD_YEAR:        "year",
+			reportingv1.RevenuePeriod_REVENUE_PERIOD_UNSPECIFIED: "",
+		} {
+			e := newEnv(t)
+			e.revenue.EXPECT().Revenue(anyArg, garageID, want, anyArg, anyArg).Return(usecase.RevenueInfo{}, nil).Once()
+
+			_, err := e.srv.ExportRevenueExcel(t.Context(), req(period, "2026-09-01", "2026-10-01"))
+			require.NoError(t, err)
+		}
+	})
+
+	t.Run("rejects a bad date", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+
+		_, err := e.srv.ExportRevenueExcel(t.Context(), req(reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, "nope", "2026-10-01"))
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+
+		_, err = e.srv.ExportRevenueExcel(t.Context(), req(reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, "2026-09-01", "nope"))
+		assert.Equal(t, codes.InvalidArgument, status.Code(err))
+	})
+
+	t.Run("reader failure", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+		e.revenue.EXPECT().Revenue(anyArg, garageID, "day", anyArg, anyArg).Return(usecase.RevenueInfo{}, errDocumentTestBoom).Once()
+
+		_, err := e.srv.ExportRevenueExcel(t.Context(), req(reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, "2026-09-01", "2026-10-01"))
+		assert.Equal(t, codes.Internal, status.Code(err))
 	})
 }
 

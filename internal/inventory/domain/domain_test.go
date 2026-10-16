@@ -9,54 +9,60 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/inventory/domain"
 )
 
-func TestItem_LowStock(t *testing.T) {
+func TestIsLow(t *testing.T) {
 	t.Parallel()
 
-	assert.True(t, (&domain.Item{QuantityOnHand: "2", ReorderThreshold: 5}).LowStock())
-	assert.True(t, (&domain.Item{QuantityOnHand: "5", ReorderThreshold: 5}).LowStock())
-	assert.False(t, (&domain.Item{QuantityOnHand: "6", ReorderThreshold: 5}).LowStock())
-	assert.False(t, (&domain.Item{QuantityOnHand: "not-a-number", ReorderThreshold: 5}).LowStock())
-}
-
-func TestCheckLength(t *testing.T) {
-	t.Parallel()
-
-	require.NoError(t, domain.CheckLength("short", 10))
-	require.ErrorIs(t, domain.CheckLength("too long a value", 5), domain.ErrFieldTooLong)
+	assert.True(t, domain.IsLow("2", "5"))
+	assert.True(t, domain.IsLow("5", "5"))
+	assert.True(t, domain.IsLow("-1", "0"), "negative stock is low")
+	assert.False(t, domain.IsLow("5.001", "5"))
+	assert.False(t, domain.IsLow("not-a-number", "5"))
+	assert.False(t, domain.IsLow("5", "not-a-number"))
 }
 
 func TestParseQuantity(t *testing.T) {
 	t.Parallel()
 
+	for _, ok := range []string{"1", "0.001", "1.5", " 240 ", "9999999999"} {
+		got, err := domain.ParseQuantity(ok)
+		require.NoError(t, err, ok)
+		assert.NotEmpty(t, got)
+	}
+
+	for _, bad := range []string{"", "0", "0.000", "-1", "1.2345", "abc", "1e3", "12345678901"} {
+		_, err := domain.ParseQuantity(bad)
+		require.ErrorIs(t, err, domain.ErrInvalidQuantity, bad)
+	}
+}
+
+func TestCostPerBaseUnit(t *testing.T) {
+	t.Parallel()
+
 	tests := []struct {
-		name    string
-		in      string
-		want    string
-		wantErr bool
+		name          string
+		cost          int64
+		entered, base string
+		want          string
 	}{
-		{name: "integer", in: "3", want: "3"},
-		{name: "two decimals", in: "1.25", want: "1.25"},
-		{name: "trims whitespace", in: " 2 ", want: "2"},
-		{name: "zero rejected", in: "0", wantErr: true},
-		{name: "negative rejected", in: "-1", wantErr: true},
-		{name: "too many decimals rejected", in: "1.234", wantErr: true},
-		{name: "not a number rejected", in: "abc", wantErr: true},
-		{name: "empty rejected", in: "", wantErr: true},
+		{"base unit", 5_000, "10", "10", "5000"},
+		{"per case of 24", 120_000, "10", "240", "5000"},
+		{"keeps four decimals", 100_000, "1", "3", "33333.3333"},
+		{"rounds half up", 1, "1", "8", "0.125"},
+		{"fractional entered", 100, "0.5", "12", "4.1667"},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
-			got, err := domain.ParseQuantity(tt.in)
-			if tt.wantErr {
-				require.ErrorIs(t, err, domain.ErrInvalidQuantity)
-
-				return
-			}
-
-			require.NoError(t, err)
-			require.Equal(t, tt.want, got)
-		})
+		got, err := domain.CostPerBaseUnit(tt.cost, tt.entered, tt.base)
+		require.NoError(t, err, tt.name)
+		assert.Equal(t, tt.want, got, tt.name)
 	}
+
+	_, err := domain.CostPerBaseUnit(-1, "1", "1")
+	require.ErrorIs(t, err, domain.ErrInvalidCost)
+
+	_, err = domain.CostPerBaseUnit(1, "x", "1")
+	require.ErrorIs(t, err, domain.ErrInvalidQuantity)
+
+	_, err = domain.CostPerBaseUnit(1, "1", "0")
+	require.ErrorIs(t, err, domain.ErrInvalidQuantity)
 }

@@ -10,6 +10,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/quote/domain"
 	"github.com/viettechno/vietgara-backend/internal/quote/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/partquantity"
 )
 
 func TestQuoteUseCase_Create(t *testing.T) {
@@ -306,4 +307,85 @@ func TestQuoteUseCase_Delete(t *testing.T) {
 
 	require.NoError(t, uc.Delete(t.Context(), garageID, quoteID, actorID))
 	assertAppError(t, uc.Delete(t.Context(), garageID, "missing", actorID), apperror.CodeNotFound)
+}
+
+func TestQuoteUseCase_Create_PartLineInPackagingUnit(t *testing.T) {
+	t.Parallel()
+
+	const (
+		partID = "77777777-7777-7777-7777-777777777777"
+		unitID = "88888888-8888-8888-8888-888888888888"
+	)
+
+	line := func(mutate func(*usecase.LineInput)) []usecase.LineInput {
+		in := usecase.LineInput{
+			ItemType: domain.ItemTypePart, ItemRefID: &[]string{partID}[0], Description: "Beer", Quantity: "999",
+			UnitID: unitID, EnteredQuantity: "2", UnitPrice: 15_000,
+		}
+		mutate(&in)
+
+		return []usecase.LineInput{in}
+	}
+
+	expectCreate := func(d *deps) {
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+		d.Vehicles.EXPECT().Find(mock.Anything, garageID, customerID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
+		d.Sequences.EXPECT().Next(mock.Anything, garageID, "quote", "BG-202609-{SEQ:4}").Return(1, nil).Once()
+		d.Quotes.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+	}
+
+	t.Run("the base quantity is derived from the typed amount", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		unit, entered := unitID, "2"
+		d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, unitID, "2").
+			Return(partquantity.Resolved{Base: "48", UnitID: &unit, Entered: &entered}, nil).Once()
+		expectCreate(d)
+
+		q, err := uc.Create(t.Context(), usecase.CreateQuoteRequest{
+			GarageID: garageID, CustomerID: customerID, VehicleID: vehicleID, Lines: line(func(*usecase.LineInput) {}),
+		})
+		require.NoError(t, err)
+		require.Len(t, q.Lines, 1)
+		assert.Equal(t, "48", q.Lines[0].Quantity, "the client's quantity is replaced")
+		assert.Equal(t, unitID, *q.Lines[0].UnitID)
+		assert.Equal(t, "2", *q.Lines[0].EnteredQuantity)
+		assert.Equal(t, int64(720_000), q.Lines[0].LineTotal, "48 x 15,000")
+	})
+
+	t.Run("a unit needs a part, and an amount", func(t *testing.T) {
+		t.Parallel()
+
+		for name, mutate := range map[string]func(*usecase.LineInput){
+			"labor line": func(in *usecase.LineInput) { in.ItemType = domain.ItemTypeLabor },
+			"no part":    func(in *usecase.LineInput) { in.ItemRefID = nil },
+			"no amount":  func(in *usecase.LineInput) { in.EnteredQuantity = "" },
+		} {
+			uc, d := newUseCase(t)
+			d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+
+			_, err := uc.Create(t.Context(), usecase.CreateQuoteRequest{
+				GarageID: garageID, CustomerID: customerID, VehicleID: vehicleID, Lines: line(mutate),
+			})
+			assertAppError(t, err, apperror.CodeInvalidArgument)
+
+			_ = name
+		}
+	})
+
+	t.Run("the catalogue's refusal is passed on", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+		d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, unitID, "2").
+			Return(partquantity.Resolved{}, apperror.New(apperror.CodeNotFound, "part not found")).Once()
+
+		_, err := uc.Create(t.Context(), usecase.CreateQuoteRequest{
+			GarageID: garageID, CustomerID: customerID, VehicleID: vehicleID, Lines: line(func(*usecase.LineInput) {}),
+		})
+		assertAppError(t, err, apperror.CodeNotFound)
+	})
 }

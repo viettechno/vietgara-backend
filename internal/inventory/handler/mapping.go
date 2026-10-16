@@ -2,6 +2,7 @@ package handler
 
 import (
 	"math"
+	"math/big"
 
 	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
 	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
@@ -11,22 +12,27 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/converter"
 )
 
-func itemToProto(item *domain.Item) *inventoryv1.Item {
-	return &inventoryv1.Item{
-		Id: item.ID, GarageId: item.GarageID, Sku: item.SKU, Name: item.Name, Unit: item.Unit,
-		ReorderThreshold: toInt32(item.ReorderThreshold), QuantityOnHand: item.QuantityOnHand,
-		CreatedAt: converter.TimeToProto(item.CreatedAt), UpdatedAt: converter.TimeToProto(item.UpdatedAt),
+func stockLevelToProto(l *domain.StockLevel) *inventoryv1.StockLevel {
+	return &inventoryv1.StockLevel{
+		PartId: l.PartID, Sku: l.SKU, Name: l.Name, BaseUnitName: l.BaseUnitName, BaseUnitAbbreviation: l.BaseUnitAbbreviation,
+		CategoryName: l.CategoryName, Brand: l.Brand, IsActive: l.IsActive, ThumbnailUrl: l.ThumbnailURL,
+		QuantityOnHand: l.QuantityOnHand, ReorderThreshold: l.ReorderThreshold, LowStock: l.LowStock,
 	}
 }
 
 func transactionToProto(t *domain.StockTransaction) *inventoryv1.StockTransaction {
 	out := &inventoryv1.StockTransaction{
-		Id: t.ID, ItemId: t.ItemID, ItemSku: t.ItemSKU, ItemName: t.ItemName, Type: transactionTypeToProto(t.Type),
+		Id: t.ID, ItemId: t.PartID, ItemSku: t.PartSKU, ItemName: t.PartName, Type: transactionTypeToProto(t.Type),
 		Quantity: t.Quantity, RefType: refTypeToProto(t.RefType), CreatedAt: converter.TimeToProto(t.CreatedAt),
+		UnitId: t.UnitID, UnitAbbreviation: t.UnitAbbreviation, BaseUnitAbbreviation: t.BaseUnitAbbreviation,
+	}
+
+	if t.EnteredQuantity != nil {
+		out.EnteredQuantity = *t.EnteredQuantity
 	}
 
 	if t.UnitCost != nil {
-		out.UnitCost = t.UnitCost
+		out.UnitCost = wholeDong(*t.UnitCost)
 	}
 
 	if t.RefID != nil {
@@ -34,6 +40,20 @@ func transactionToProto(t *domain.StockTransaction) *inventoryv1.StockTransactio
 	}
 
 	return out
+}
+
+// wholeDong rounds a cost with up to four decimals to whole dong; nil when
+// it cannot be parsed.
+func wholeDong(cost string) *int64 {
+	r, ok := new(big.Rat).SetString(cost)
+	if !ok {
+		return nil
+	}
+
+	r.Add(r, big.NewRat(1, 2))
+	n := new(big.Int).Quo(r.Num(), r.Denom()).Int64()
+
+	return &n
 }
 
 func transactionTypeToProto(t domain.TransactionType) inventoryv1.StockTransactionType {
@@ -67,31 +87,7 @@ func refTypeToProto(t domain.RefType) inventoryv1.StockTransactionRefType {
 	return inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_PURCHASE
 }
 
-func itemFields(in *inventoryv1.Item, paths []string) usecase.ItemFields {
-	var f usecase.ItemFields
-
-	for _, path := range paths {
-		switch path {
-		case "sku":
-			f.SKU = new(in.GetSku())
-		case "name":
-			f.Name = new(in.GetName())
-		case "unit":
-			f.Unit = new(in.GetUnit())
-		case "reorder_threshold":
-			threshold := int(in.GetReorderThreshold())
-			f.ReorderThreshold = &threshold
-		}
-	}
-
-	return f
-}
-
-func itemPaginationToProto(p *usecase.Page[*domain.Item]) *commonv1.Pagination {
-	return &commonv1.Pagination{Total: toInt32(p.Total), Page: toInt32(p.Page), PageSize: toInt32(p.PageSize)}
-}
-
-func transactionPaginationToProto(p *usecase.Page[*domain.StockTransaction]) *commonv1.Pagination {
+func paginationToProto[T any](p *usecase.Page[T]) *commonv1.Pagination {
 	return &commonv1.Pagination{Total: toInt32(p.Total), Page: toInt32(p.Page), PageSize: toInt32(p.PageSize)}
 }
 

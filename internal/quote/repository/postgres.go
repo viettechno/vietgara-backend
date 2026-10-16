@@ -69,7 +69,12 @@ func scanQuote(row pgx.Row) (*domain.Quote, error) {
 	return &q, nil
 }
 
-const lineColumns = `id, position, item_type, item_ref_id, description, trim_scale(quantity)::text, unit_price, line_total, decision, decided_at`
+// lineColumns reads the packaging unit's abbreviation from the Catalogue's
+// units table (a foreign key points there already).
+const lineColumns = `id, position, item_type, item_ref_id, description, trim_scale(quantity)::text, unit_id,
+	trim_scale(entered_quantity)::text,
+	COALESCE((SELECT u.abbreviation FROM units u WHERE u.garage_id = quote_lines.garage_id AND u.id = quote_lines.unit_id), ''),
+	unit_price, line_total, decision, decided_at`
 
 func scanLine(row pgx.Row) (domain.Line, error) {
 	var (
@@ -79,7 +84,7 @@ func scanLine(row pgx.Row) (domain.Line, error) {
 	)
 
 	err := row.Scan(&line.ID, &line.Position, &itemType, &line.ItemRefID, &line.Description, &line.Quantity,
-		&line.UnitPrice, &line.LineTotal, &decision, &line.DecidedAt)
+		&line.UnitID, &line.EnteredQuantity, &line.UnitAbbreviation, &line.UnitPrice, &line.LineTotal, &decision, &line.DecidedAt)
 	if err != nil {
 		return domain.Line{}, err
 	}

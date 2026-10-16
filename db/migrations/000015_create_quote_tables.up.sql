@@ -108,6 +108,13 @@ CREATE TABLE quote_lines (
     quantity NUMERIC(14, 3) NOT NULL DEFAULT 1,
     unit_price BIGINT NOT NULL DEFAULT 0,
     line_total BIGINT NOT NULL DEFAULT 0,
+    -- Release 6.0 (FR-CAT-02): quantity is the base-unit amount; unit_id +
+    -- entered_quantity keep the packaging unit the user typed so documents
+    -- print it. Both NULL for labor lines and base-unit part lines. The
+    -- foreign key into units is added in migration 000017, where units are
+    -- created.
+    unit_id UUID,
+    entered_quantity NUMERIC(14, 3),
     -- The customer's decision (FR-QUO-03): pending until SendQuote/
     -- RecordQuoteDecision, then approved or rejected.
     decision quote_line_decision NOT NULL DEFAULT 'pending',

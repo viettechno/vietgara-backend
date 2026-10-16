@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	catalogueRepository "github.com/viettechno/vietgara-backend/internal/catalogue/repository"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,7 +48,7 @@ func TestGarageLogoFileLifecycle(t *testing.T) {
 	pool := pg.AppPool(t)
 	txm := dbpkg.NewTxManager(pool)
 	garages := tenantRepo.NewPostgresGarageRepository(pool)
-	files := buildFiles(pool, store, garages)
+	files := buildFiles(pool, store, garages, catalogueRepository.NewPostgresRepository(pool), &fileEntities{})
 	logos := tenantLogos{files: files.uc, store: store}
 
 	owner := func(ctx context.Context) context.Context {

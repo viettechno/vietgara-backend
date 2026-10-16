@@ -13,6 +13,8 @@ import (
 	billingDomain "github.com/viettechno/vietgara-backend/internal/billing/domain"
 	billingRepository "github.com/viettechno/vietgara-backend/internal/billing/repository"
 	billingUsecase "github.com/viettechno/vietgara-backend/internal/billing/usecase"
+	catalogueRepository "github.com/viettechno/vietgara-backend/internal/catalogue/repository"
+	catalogueUsecase "github.com/viettechno/vietgara-backend/internal/catalogue/usecase"
 	customerDomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
 	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
@@ -216,8 +218,8 @@ func (r quoteRepairOrders) Create(
 	for _, l := range lines {
 		roLines = append(roLines, repairorderDomain.Line{
 			Position: l.Position, ItemType: repairorderDomain.ItemType(l.ItemType), ItemRefID: l.ItemRefID,
-			Description: l.Description, Quantity: l.Quantity, UnitPrice: l.UnitPrice, LineTotal: l.LineTotal,
-			Status: repairorderDomain.LineNotStarted,
+			Description: l.Description, Quantity: l.Quantity, UnitID: l.UnitID, EnteredQuantity: l.EnteredQuantity,
+			UnitPrice: l.UnitPrice, LineTotal: l.LineTotal, Status: repairorderDomain.LineNotStarted,
 		})
 	}
 
@@ -464,9 +466,14 @@ func (l tenantLogos) PublicURL(key string) string { return l.files.PublicURL(key
 // file (the delete-or-deactivate rule, FR-CAT-07): today the garage's logo.
 type fileUsage struct {
 	garages *tenantRepo.PostgresGarageRepository
+	parts   *catalogueRepository.PostgresRepository
 }
 
 func (u fileUsage) FileInUse(ctx context.Context, garageID string, f *fileDomain.File) (bool, error) {
+	if f.Kind == fileDomain.KindPartImage {
+		return u.parts.FileAttached(ctx, garageID, f.ID)
+	}
+
 	g, err := u.garages.FindByID(ctx, garageID)
 	if err != nil {
 		return false, err
@@ -477,12 +484,18 @@ func (u fileUsage) FileInUse(ctx context.Context, garageID string, f *fileDomain
 
 // fileEntities tells the File module whether the entity a file is uploaded
 // for exists in the garage. The garage's own files are checked by the use
-// case; no other entity has a file kind yet, so each future kind (a part
-// image, a repair photo, ...) adds its case here, over the module that
-// owns the entity.
-type fileEntities struct{}
+// case; each other kind (a part image today, a repair photo later) adds its
+// case here, over the module that owns the entity. The Catalogue is set once
+// it is built, since it in turn stores its images through the File module.
+type fileEntities struct {
+	parts *catalogueUsecase.UseCase
+}
 
-func (fileEntities) EntityExists(context.Context, string, string, string) (bool, error) {
+func (e *fileEntities) EntityExists(ctx context.Context, garageID, entityType, entityID string) (bool, error) {
+	if entityType == fileDomain.EntityPart && e.parts != nil {
+		return e.parts.PartExists(ctx, garageID, entityID)
+	}
+
 	return false, nil
 }
 
@@ -573,7 +586,8 @@ func (q documentQuotes) Get(ctx context.Context, garageID, quoteID string) (docu
 	lines := make([]render.DocumentLine, 0, len(quote.Lines))
 	for _, line := range quote.Lines {
 		lines = append(lines, render.DocumentLine{
-			Description: line.Description, Quantity: line.Quantity, UnitPrice: line.UnitPrice, LineTotal: line.LineTotal,
+			Description: line.Description, Quantity: documentQuantity(line.Quantity, line.EnteredQuantity, line.UnitAbbreviation),
+			UnitPrice: line.UnitPrice, LineTotal: line.LineTotal,
 		})
 	}
 
@@ -582,6 +596,17 @@ func (q documentQuotes) Get(ctx context.Context, garageID, quoteID string) (docu
 		VehiclePlate: quote.VehicleLicensePlate, Notes: quote.Notes, Lines: lines, TotalAmount: quote.TotalAmount,
 		Issuer: quote.Issuer, BillingParty: quote.BillingParty,
 	}, nil
+}
+
+// documentQuantity is how a line's quantity prints: the base-unit amount the
+// price applies to, with what was typed when it was another unit
+// ("240 (10 case)").
+func documentQuantity(quantity string, entered *string, unit string) string {
+	if entered == nil || unit == "" {
+		return quantity
+	}
+
+	return quantity + " (" + *entered + " " + unit + ")"
 }
 
 // documentRepairOrders lets the Document/Print module render a repair
@@ -603,7 +628,8 @@ func (r documentRepairOrders) Get(ctx context.Context, garageID, repairOrderID s
 	lines := make([]render.DocumentLine, 0, len(ro.Lines))
 	for _, line := range ro.Lines {
 		lines = append(lines, render.DocumentLine{
-			Description: line.Description, Quantity: line.Quantity, UnitPrice: line.UnitPrice, LineTotal: line.LineTotal,
+			Description: line.Description, Quantity: documentQuantity(line.Quantity, line.EnteredQuantity, line.UnitAbbreviation),
+			UnitPrice: line.UnitPrice, LineTotal: line.LineTotal,
 		})
 	}
 
@@ -686,7 +712,7 @@ func (s documentStockMovements) List(ctx context.Context, garageID, itemID strin
 	for page := 1; ; page++ {
 		result, err := s.uc.ListTransactions(ctx, inventoryUsecase.ListTransactionsRequest{
 			PageRequest: inventoryUsecase.PageRequest{Page: page, PageSize: inventoryUsecase.MaxPageSize},
-			GarageID:    garageID, ItemID: itemID,
+			GarageID:    garageID, PartID: itemID,
 		})
 		if err != nil {
 			return nil, err
@@ -704,10 +730,16 @@ func (s documentStockMovements) List(ctx context.Context, garageID, itemID strin
 				reference = "Repair order " + *tx.RefID
 			}
 
-			rows = append(rows, render.StockMovementRow{
-				Date: tx.CreatedAt.Format("2006-01-02"), SKU: tx.ItemSKU, ItemName: tx.ItemName, Direction: direction,
-				Quantity: tx.Quantity, Reference: reference,
-			})
+			row := render.StockMovementRow{
+				Date: tx.CreatedAt.Format("2006-01-02"), SKU: tx.PartSKU, ItemName: tx.PartName, Direction: direction,
+				Quantity: tx.Quantity, BaseUnit: tx.BaseUnitAbbreviation, Reference: reference,
+			}
+
+			if tx.EnteredQuantity != nil {
+				row.EnteredQuantity, row.EnteredUnit = *tx.EnteredQuantity, tx.UnitAbbreviation
+			}
+
+			rows = append(rows, row)
 		}
 
 		if page*inventoryUsecase.MaxPageSize >= result.Total {
@@ -716,6 +748,30 @@ func (s documentStockMovements) List(ctx context.Context, garageID, itemID strin
 	}
 
 	return rows, nil
+}
+
+// documentRevenue lets the Document/Print module render the revenue report as
+// Excel (FR-DOC-02) without importing the Reporting module's use case.
+type documentRevenue struct {
+	uc *reportingUsecase.ReportingUseCase
+}
+
+func (r documentRevenue) Revenue(
+	ctx context.Context, garageID, period string, from, to time.Time,
+) (documentUsecase.RevenueInfo, error) {
+	report, err := r.uc.GetRevenueReport(ctx, reportingUsecase.GetRevenueReportRequest{
+		GarageID: garageID, Period: reportingUsecase.Period(period), From: from, To: to,
+	})
+	if err != nil {
+		return documentUsecase.RevenueInfo{}, err
+	}
+
+	rows := make([]render.RevenueRow, 0, len(report.Points))
+	for _, p := range report.Points {
+		rows = append(rows, render.RevenueRow{Period: p.PeriodLabel, Amount: p.Amount})
+	}
+
+	return documentUsecase.RevenueInfo{Points: rows, TotalAmount: report.TotalAmount}, nil
 }
 
 // documentGarages lets the Document/Print module read a garage's

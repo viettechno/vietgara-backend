@@ -7,6 +7,9 @@
 package reporting_test
 
 import (
+	"archive/zip"
+	"bytes"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -174,6 +177,59 @@ func TestStockMovementsExcelDownload(t *testing.T) {
 	apiErr := client.AsAPIError(err)
 	require.NotNil(t, apiErr)
 	assert.Contains(t, []int{http.StatusForbidden, http.StatusNotFound}, apiErr.Status)
+}
+
+// Scenario: E2E-CAT-008 (partial): the revenue Excel carries the same
+// figures as the revenue report — asserted at API level; opening the file
+// and the dashboard button are web-E2E.
+func TestRevenueExcelDownload(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	owner, garageID, _ := paidSettlement(t, "rep-revenue-xlsx")
+
+	today := time.Now().Format("2006-01-02")
+	tomorrow := time.Now().Add(24 * time.Hour).Format("2006-01-02")
+
+	report, err := owner.API.GetRevenueReport(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, today, tomorrow)
+	require.NoError(t, err)
+	require.EqualValues(t, 500000, report.GetTotalAmount())
+
+	contentType, body, err := owner.API.DownloadRevenueExcel(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, today, tomorrow)
+	require.NoError(t, err)
+	assert.Contains(t, contentType, "spreadsheet")
+	require.Greater(t, len(body), 100)
+	assert.Equal(t, "PK", string(body[:2]), "an .xlsx workbook is a zip archive")
+
+	// The workbook's total row carries the report's total.
+	archive, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	require.NoError(t, err)
+
+	var sheet string
+
+	for _, f := range archive.File {
+		if f.Name != "xl/worksheets/sheet1.xml" {
+			continue
+		}
+
+		r, err := f.Open()
+		require.NoError(t, err)
+
+		raw, err := io.ReadAll(r)
+		require.NoError(t, err)
+		require.NoError(t, r.Close())
+
+		sheet = string(raw)
+	}
+
+	assert.Contains(t, sheet, "<v>500000</v>")
+
+	// A bad range or a missing period is refused.
+	_, _, err = owner.API.DownloadRevenueExcel(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, tomorrow, today)
+	assert.Equal(t, http.StatusUnprocessableEntity, client.AsAPIError(err).Status)
+
+	_, _, err = owner.API.DownloadRevenueExcel(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_UNSPECIFIED, today, tomorrow)
+	assert.Equal(t, http.StatusUnprocessableEntity, client.AsAPIError(err).Status)
 }
 
 // assertPDF checks a downloaded PDF's content type and magic bytes.

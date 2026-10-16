@@ -6,7 +6,7 @@
 | --- | --- |
 | **Type** | Backend service (Go), deployed as a container image |
 | **Used by** | `vietgara-owner-web`, `vietgara-admin-web`, and the four Flutter apps (through Kong) |
-| **Does** | Identity and access, tenants and licensing, customers, quotes, repair orders, inventory, billing and settlement, documents, reporting, notifications |
+| **Does** | Identity and access, tenants and licensing, customers, the parts catalogue and units of measure, quotes, repair orders, inventory, billing and settlement, documents, reporting, notifications |
 | **Built with** | Go, gRPC + grpc-gateway, PostgreSQL (row-level security), Redis, Kafka, Mailjet |
 | **Depends on** | `vietgara-proto` (API contracts), Postgres, Redis, Kafka |
 | **Related** | `vietgara-infra` (how it is run), `vietgara-gitops-config` (target deployment), `vietgara-docs` (architecture) |

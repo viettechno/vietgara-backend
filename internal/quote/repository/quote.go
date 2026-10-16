@@ -45,10 +45,10 @@ func (r *PostgresRepository) insertLines(ctx context.Context, q platformdb.Queri
 	for _, line := range lines {
 		_, err := q.Exec(ctx, `
 			INSERT INTO quote_lines (id, garage_id, quote_id, position, item_type, item_ref_id, description, quantity,
-				unit_price, line_total, decision)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10, $11)`,
+				unit_id, entered_quantity, unit_price, line_total, decision)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10::numeric, $11, $12, $13)`,
 			line.ID, garageID, quoteID, line.Position, string(line.ItemType), line.ItemRefID, line.Description,
-			line.Quantity, line.UnitPrice, line.LineTotal, string(line.Decision),
+			line.Quantity, line.UnitID, line.EnteredQuantity, line.UnitPrice, line.LineTotal, string(line.Decision),
 		)
 		if err != nil {
 			return err
@@ -354,6 +354,23 @@ func (r *PostgresRepository) ExistsLive(ctx context.Context, garageID, customerI
 			WHERE garage_id = $1 AND deleted_at IS NULL
 			AND (customer_id = $2::uuid OR vehicle_id = ANY($3::uuid[])))`,
 		garageID, customer, vehicleIDs).Scan(&exists)
+
+	return exists, err
+}
+
+// LinesReference reports whether a line refers to the part (as its item_ref_id)
+// or uses the unit, in a live or a deleted document: a unit cannot be deleted
+// while any line keeps its foreign key, and a part that documents mention is
+// deactivated, not deleted (FR-CAT-07). partID or unitID may be "" to skip it.
+func (r *PostgresRepository) LinesReference(ctx context.Context, garageID, partID, unitID string) (bool, error) {
+	var exists bool
+
+	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM quote_lines
+			WHERE garage_id = $1 AND (($2::text <> '' AND item_ref_id = NULLIF($2, '')::uuid)
+				OR ($3::text <> '' AND unit_id = NULLIF($3, '')::uuid)))`,
+		garageID, partID, unitID).Scan(&exists)
 
 	return exists, err
 }

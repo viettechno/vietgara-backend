@@ -155,8 +155,9 @@ func TestQuoteValidation(t *testing.T) {
 	_, err = owner.API.CreateQuote(t.Context(), garage.GetId(), newQuote(laborLine("Brake pad", "0", 100000)))
 	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "")
 
-	// Three decimals are refused.
-	_, err = owner.API.CreateQuote(t.Context(), garage.GetId(), newQuote(laborLine("Brake pad", "1.999", 100000)))
+	// More than three decimals are refused (Release 6.0 keeps three, so a
+	// packaging unit converts exactly).
+	_, err = owner.API.CreateQuote(t.Context(), garage.GetId(), newQuote(laborLine("Brake pad", "1.9999", 100000)))
 	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "")
 
 	// Negative unit price is refused.

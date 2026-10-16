@@ -28,6 +28,20 @@ func TestLogoRule(t *testing.T) {
 	assert.Equal(t, "jpg", rule.ContentTypes["image/jpeg"])
 }
 
+func TestPartImageRule(t *testing.T) {
+	t.Parallel()
+
+	assert.True(t, domain.KindPartImage.IsValid())
+
+	rule := domain.Rules[domain.KindPartImage]
+	assert.True(t, rule.Public)
+	assert.True(t, rule.ImageOnly)
+	assert.False(t, rule.AttachedByModule, "the client uploads it, then attaches it through the Catalogue")
+	assert.Equal(t, domain.EntityPart, rule.EntityType)
+	assert.Equal(t, access.CatalogueWrite, rule.Write)
+	assert.Equal(t, "webp", rule.ContentTypes["image/webp"])
+}
+
 func TestObjectKey(t *testing.T) {
 	t.Parallel()
 

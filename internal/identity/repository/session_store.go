@@ -28,6 +28,8 @@ func refreshKey(token string) string       { return "identity:refresh:" + token 
 func userSessionsKey(userID string) string { return "identity:sessions:" + userID }
 func resetKey(token string) string         { return "identity:reset:" + token }
 func otpKey(key string) string             { return "identity:otp:" + key }
+func mfaChallengeKey(token string) string  { return "identity:mfa-challenge:" + token }
+func mfaFailuresKey(userID string) string  { return "identity:mfa-failures:" + userID }
 
 // SaveRefreshToken stores token for userID and indexes it by user so
 // every session can be revoked.
@@ -99,6 +101,55 @@ func (s *RedisStore) ConsumeResetToken(ctx context.Context, token string) (strin
 	return userID, err
 }
 
+// SaveMFAChallenge stores the token of a sign-in waiting for the second factor.
+func (s *RedisStore) SaveMFAChallenge(ctx context.Context, token, userID string, ttl time.Duration) error {
+	return s.client.Set(ctx, mfaChallengeKey(token), userID, ttl).Err()
+}
+
+// MFAChallengeUser returns the user of a live challenge token.
+func (s *RedisStore) MFAChallengeUser(ctx context.Context, token string) (string, error) {
+	userID, err := s.client.Get(ctx, mfaChallengeKey(token)).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", domain.ErrMFAChallengeInvalid
+	}
+
+	return userID, err
+}
+
+// DeleteMFAChallenge removes a challenge token.
+func (s *RedisStore) DeleteMFAChallenge(ctx context.Context, token string) error {
+	return s.client.Del(ctx, mfaChallengeKey(token)).Err()
+}
+
+// RecordMFAFailure counts a wrong code; the count lives until lockout after
+// the latest failure.
+func (s *RedisStore) RecordMFAFailure(ctx context.Context, userID string, lockout time.Duration) (int, error) {
+	pipe := s.client.TxPipeline()
+	incr := pipe.Incr(ctx, mfaFailuresKey(userID))
+	pipe.Expire(ctx, mfaFailuresKey(userID), lockout)
+
+	if _, err := pipe.Exec(ctx); err != nil {
+		return 0, err
+	}
+
+	return int(incr.Val()), nil
+}
+
+// MFAFailures returns the wrong codes counted for userID.
+func (s *RedisStore) MFAFailures(ctx context.Context, userID string) (int, error) {
+	n, err := s.client.Get(ctx, mfaFailuresKey(userID)).Int()
+	if errors.Is(err, redis.Nil) {
+		return 0, nil
+	}
+
+	return n, err
+}
+
+// ClearMFAFailures forgets the wrong codes of userID.
+func (s *RedisStore) ClearMFAFailures(ctx context.Context, userID string) error {
+	return s.client.Del(ctx, mfaFailuresKey(userID)).Err()
+}
+
 // Get returns the OTP stored under key.
 func (s *RedisStore) Get(ctx context.Context, key string) (*domain.OTP, error) {
 	fields, err := s.client.HGetAll(ctx, otpKey(key)).Result()
@@ -162,6 +213,15 @@ type MemoryStore struct {
 	resets   map[string]entry
 	otps     map[string]*domain.OTP
 	sessions map[string]map[string]bool
+	// challenges maps an MFA challenge token to its user.
+	challenges map[string]entry
+	// failures counts wrong second-factor codes per user.
+	failures map[string]mfaFailures
+}
+
+type mfaFailures struct {
+	count   int
+	expires time.Time
 }
 
 type entry struct {
@@ -174,6 +234,7 @@ func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
 		now: time.Now, refresh: map[string]entry{}, resets: map[string]entry{},
 		otps: map[string]*domain.OTP{}, sessions: map[string]map[string]bool{},
+		challenges: map[string]entry{}, failures: map[string]mfaFailures{},
 	}
 }
 
@@ -263,6 +324,80 @@ func (m *MemoryStore) ConsumeResetToken(_ context.Context, token string) (string
 	}
 
 	return "", domain.ErrResetTokenInvalid
+}
+
+// SaveMFAChallenge stores the token of a sign-in waiting for the second factor.
+func (m *MemoryStore) SaveMFAChallenge(_ context.Context, token, userID string, ttl time.Duration) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.challenges[token] = entry{value: userID, expires: m.now().Add(ttl)}
+
+	return nil
+}
+
+// MFAChallengeUser returns the user of a live challenge token.
+func (m *MemoryStore) MFAChallengeUser(_ context.Context, token string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	e, ok := m.challenges[token]
+	if userID, live := m.live(e, ok); live {
+		return userID, nil
+	}
+
+	return "", domain.ErrMFAChallengeInvalid
+}
+
+// DeleteMFAChallenge removes a challenge token.
+func (m *MemoryStore) DeleteMFAChallenge(_ context.Context, token string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.challenges, token)
+
+	return nil
+}
+
+// RecordMFAFailure counts a wrong code; the count lives until lockout after
+// the latest failure.
+func (m *MemoryStore) RecordMFAFailure(_ context.Context, userID string, lockout time.Duration) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	f := m.failures[userID]
+	if !m.now().Before(f.expires) {
+		f.count = 0
+	}
+
+	f.count++
+	f.expires = m.now().Add(lockout)
+	m.failures[userID] = f
+
+	return f.count, nil
+}
+
+// MFAFailures returns the wrong codes counted for userID.
+func (m *MemoryStore) MFAFailures(_ context.Context, userID string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	f := m.failures[userID]
+	if !m.now().Before(f.expires) {
+		return 0, nil
+	}
+
+	return f.count, nil
+}
+
+// ClearMFAFailures forgets the wrong codes of userID.
+func (m *MemoryStore) ClearMFAFailures(_ context.Context, userID string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	delete(m.failures, userID)
+
+	return nil
 }
 
 // Get returns a copy of the OTP under key.

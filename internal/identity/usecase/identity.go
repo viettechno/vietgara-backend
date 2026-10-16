@@ -29,6 +29,12 @@ type IdentityUseCase struct {
 	tx       Transactor
 	issuer   *auth.TokenIssuer
 	now      func() time.Time
+	// mfa and box are set by WithMFA; without them the MFA calls answer
+	// "not configured" and the sign-in never asks for a second factor.
+	mfa MFARepository
+	box SecretBox
+	// audit is optional (WithAudit).
+	audit AuditLogger
 	// platformAdminEmails grants platform admin to users registering
 	// with one of these e-mails (PLATFORM_ADMIN_EMAILS); verified at
 	// registration so a configured admin exists on a fresh database.
@@ -56,6 +62,17 @@ func WithPlatformAdminEmails(emails []string) Option {
 	}
 }
 
+// WithMFA enables the TOTP second factor (FR-IAM-09): its enrolment is
+// stored in repo and the secrets are encrypted with box.
+func WithMFA(repo MFARepository, box SecretBox) Option {
+	return func(uc *IdentityUseCase) { uc.mfa, uc.box = repo, box }
+}
+
+// WithAudit records MFA changes in the audit log.
+func WithAudit(logger AuditLogger) Option {
+	return func(uc *IdentityUseCase) { uc.audit = logger }
+}
+
 // NewIdentityUseCase wires the identity use case to its dependencies.
 func NewIdentityUseCase(
 	users UserRepository,
@@ -79,12 +96,18 @@ func NewIdentityUseCase(
 	return uc
 }
 
-// Session is a signed-in session.
+// Session is a signed-in session, or, when MFARequired is set, a sign-in
+// waiting for the second factor: it then carries a ChallengeToken for
+// VerifyMFAChallenge instead of tokens.
 type Session struct {
 	AccessToken  string
 	RefreshToken string
 	ExpiresAt    time.Time
 	User         *domain.User
+
+	MFARequired        bool
+	ChallengeToken     string
+	ChallengeExpiresAt time.Time
 }
 
 // Challenge tells the client how long an e-mailed OTP is valid.

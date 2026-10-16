@@ -21,7 +21,9 @@ func TestPolicies(t *testing.T) {
 	assert.True(t, p[identityv1.AuthService_VerifyEmail_FullMethodName].AllowUnverified)
 	assert.Equal(t, middleware.UnverifiedMethod(), p[identityv1.UserService_GetMe_FullMethodName])
 	assert.True(t, p[identityv1.AuthService_SignInWithGoogleIdToken_FullMethodName].Public)
-	assert.Len(t, p, 12)
+	assert.True(t, p[identityv1.AuthService_VerifyMfaChallenge_FullMethodName].Public)
+	assert.Equal(t, middleware.UserMethod(), p[identityv1.MfaService_EnrollMfa_FullMethodName])
+	assert.Len(t, p, 18)
 }
 
 func TestAuthFlow(t *testing.T) {
@@ -137,4 +139,37 @@ func TestProfileRPCs(t *testing.T) {
 
 	_, err = e.srv.GetMe(t.Context(), &identityv1.GetMeRequest{})
 	assert.Equal(t, "UNAUTHENTICATED", reason(err))
+}
+
+func TestLoginWithMFAAnswersChallenge(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t, handler.GoogleOAuthConfig{})
+	ctx := t.Context()
+
+	reg, err := e.srv.Register(ctx, &identityv1.RegisterRequest{Email: "a@b.vn", Password: "secret123", FullName: "A"})
+	require.NoError(t, err)
+
+	e.users.mu.Lock()
+	for _, user := range e.users.byID {
+		user.MFAEnabled = true
+	}
+	e.users.mu.Unlock()
+
+	login, err := e.srv.Login(ctx, &identityv1.LoginRequest{Email: "a@b.vn", Password: "secret123"})
+	require.NoError(t, err)
+
+	s := login.GetSession()
+	assert.True(t, s.GetMfaRequired())
+	assert.NotEmpty(t, s.GetChallengeToken())
+	assert.NotNil(t, s.GetChallengeExpiresAt())
+	assert.Empty(t, s.GetAccessToken())
+	assert.Empty(t, s.GetRefreshToken())
+	assert.True(t, s.GetUser().GetMfaEnabled())
+
+	_, err = e.srv.VerifyMfaChallenge(ctx, &identityv1.VerifyMfaChallengeRequest{ChallengeToken: "unknown", Code: "123456"})
+	assert.Equal(t, "MFA_CHALLENGE_INVALID", reason(err))
+
+	_, err = e.srv.EnrollMfa(e.as(t, reg.GetSession().GetAccessToken()), &identityv1.EnrollMfaRequest{})
+	assert.Equal(t, "MFA_NOT_CONFIGURED", reason(err), "the test server has no MFA key")
 }

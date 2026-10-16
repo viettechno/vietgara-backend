@@ -110,6 +110,7 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD:-vietgara_local}
       DATABASE_URL: postgres://${APP_DB_USER:-vietgara_local}:${APP_DB_PASSWORD:-vietgara_local}@vietgara-pgsql:5432/${POSTGRES_DB}?sslmode=disable
       JWT_SIGNING_KEY: ${JWT_SIGNING_KEY}
+      MFA_ENCRYPTION_KEY: ${MFA_ENCRYPTION_KEY:-}
       JWT_ACCESS_TTL: ${JWT_ACCESS_TTL:-20m}
       JWT_REFRESH_TTL: ${JWT_REFRESH_TTL:-720h}
       GRPC_PORT: 50051

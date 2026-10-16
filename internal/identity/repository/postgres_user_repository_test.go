@@ -20,7 +20,7 @@ var (
 )
 
 func userRow() []any {
-	return []any{"user-1", "owner@example.com", "+84901234567", "google", "g-sub", "Minh", "google", nil, "active", now, "en", true, now, now}
+	return []any{"user-1", "owner@example.com", "+84901234567", "google", "g-sub", "Minh", "google", nil, "active", now, "en", true, false, now, now}
 }
 
 func TestFinders(t *testing.T) {

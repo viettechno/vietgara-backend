@@ -133,6 +133,7 @@ local defaults.
 | Variable | Purpose |
 | --- | --- |
 | `JWT_SIGNING_KEY`, `JWT_ACCESS_TTL`, `JWT_REFRESH_TTL` | Token signing and lifetimes. Generate the key with `openssl rand -hex 32` |
+| `MFA_ENCRYPTION_KEY` | Key (64 hex characters, `openssl rand -hex 32`) that encrypts the TOTP secrets of two-factor authentication (FR-IAM-09) at rest. Empty turns MFA off: the sign-in never asks for a second factor and `/me/mfa` answers `MFA_NOT_CONFIGURED`. Changing the key makes the enrolled secrets unreadable, so keep it with the other secrets |
 | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google sign-in popup. Register `APP_BASE_URL` + `/api/v1/auth/google/callback` as the redirect URI |
 | `GOOGLE_MOBILE_CLIENT_IDS` | Google sign-in from the mobile apps (`POST /api/v1/auth/google/id-token`): comma-separated OAuth client IDs the apps' ID tokens are issued to (the Android "web/server" client and the iOS client). Empty disables it |
 | `GOOGLE_AUTH_ENDPOINT`, `GOOGLE_TOKEN_ENDPOINT`, `GOOGLE_USERINFO_URL`, `GOOGLE_CERTS_URL` | Google's OAuth endpoints and the JWKS that mobile ID tokens are verified against. Default to Google's own; override them only to point the backend at a Google stub (the blackbox tests) |

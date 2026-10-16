@@ -38,6 +38,8 @@ github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWD
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 github.com/viettechno/vietgara-proto v1.9.1-0.20261016122918-47bba8dae971 h1:wMeOWA4cf8e+Ui74YOjFmJuzX/PeVV+hUK2OpbT97YU=
 github.com/viettechno/vietgara-proto v1.9.1-0.20261016122918-47bba8dae971/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
+github.com/viettechno/vietgara-proto v1.10.1-0.20261016204050-a984ca2ffcb9 h1:Vn7n9vbRhl899RaOp/jQ+awq/IlV2f+sAaZAAZ7Z0es=
+github.com/viettechno/vietgara-proto v1.10.1-0.20261016204050-a984ca2ffcb9/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
 github.com/viettechno/vietgara-testdata v0.3.0 h1:ndr3rW5lPdypSW/OHR2B9icyAeWiL0+6HYTBPyfOwmk=
 github.com/viettechno/vietgara-testdata v0.3.0/go.mod h1:U0TReHiBgomNBgvyFNxgMpcvQA5V8CDaOiLmeOXr1W4=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=

@@ -18,6 +18,16 @@ var (
 	ErrOTPResendTooSoon     = errors.New("wait before requesting a new code")
 	ErrResetTokenInvalid    = errors.New("the password reset link is invalid or expired")
 	ErrRefreshTokenInvalid  = errors.New("invalid or revoked refresh token")
+
+	ErrMFAChallengeInvalid     = errors.New("the sign-in has expired, sign in again")
+	ErrMFACodeInvalid          = errors.New("the code is incorrect")
+	ErrMFALocked               = errors.New("too many wrong codes, try again later")
+	ErrMFAAlreadyEnabled       = errors.New("two-factor authentication is already on")
+	ErrMFANotEnabled           = errors.New("two-factor authentication is not on")
+	ErrMFAEnrollmentNotStarted = errors.New("start the enrolment first")
+	ErrMFANotAvailable         = errors.New("two-factor authentication needs an e-mail and password sign-in")
+	ErrMFANotConfigured        = errors.New("two-factor authentication is not configured on this server")
+	ErrMFANotFound             = errors.New("no two-factor enrolment")
 )
 
 // Client-facing reasons of the errors above.
@@ -35,4 +45,13 @@ const (
 	ReasonOTPResendTooSoon     = "OTP_RESEND_TOO_SOON"
 	ReasonResetTokenInvalid    = "RESET_TOKEN_INVALID"
 	ReasonRefreshTokenInvalid  = "REFRESH_TOKEN_INVALID"
+
+	ReasonMFAChallengeInvalid     = "MFA_CHALLENGE_INVALID"
+	ReasonMFACodeInvalid          = "MFA_CODE_INVALID"
+	ReasonMFALocked               = "MFA_LOCKED"
+	ReasonMFAAlreadyEnabled       = "MFA_ALREADY_ENABLED"
+	ReasonMFANotEnabled           = "MFA_NOT_ENABLED"
+	ReasonMFAEnrollmentNotStarted = "MFA_ENROLLMENT_NOT_STARTED"
+	ReasonMFANotAvailable         = "MFA_NOT_AVAILABLE"
+	ReasonMFANotConfigured        = "MFA_NOT_CONFIGURED"
 )

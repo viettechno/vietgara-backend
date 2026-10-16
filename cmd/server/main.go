@@ -240,8 +240,12 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		slog.Warn("REDIS_ADDR is not set: sessions, OTPs and the entitlement cache live in memory (single instance only)")
 	}
 
-	identityUC := identityUsecase.NewIdentityUseCase(users, sessions, sessions, mailer, events, tx, issuer,
-		identityUsecase.WithPlatformAdminEmails(envList("PLATFORM_ADMIN_EMAILS")))
+	identityOpts, err := identityOptions(pool, auditLog)
+	if err != nil {
+		return nil, err
+	}
+
+	identityUC := identityUsecase.NewIdentityUseCase(users, sessions, sessions, mailer, events, tx, issuer, identityOpts...)
 	if err := identityUC.GrantPlatformAdmins(ctx, envList("PLATFORM_ADMIN_EMAILS")); err != nil {
 		return nil, err
 	}
@@ -407,6 +411,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 
 	identityv1.RegisterAuthServiceServer(app.grpcServer, identitySrv)
 	identityv1.RegisterUserServiceServer(app.grpcServer, identitySrv)
+	identityv1.RegisterMfaServiceServer(app.grpcServer, identitySrv)
 	tenantv1.RegisterGarageServiceServer(app.grpcServer, tenantSrv)
 	tenantv1.RegisterStaffServiceServer(app.grpcServer, tenantSrv)
 	tenantv1.RegisterInvitationServiceServer(app.grpcServer, tenantSrv)
@@ -517,7 +522,7 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 	mux := httpapi.NewMux()
 
 	for _, register := range []func(context.Context, *runtime.ServeMux, *grpc.ClientConn) error{
-		identityv1.RegisterAuthServiceHandler, identityv1.RegisterUserServiceHandler,
+		identityv1.RegisterAuthServiceHandler, identityv1.RegisterUserServiceHandler, identityv1.RegisterMfaServiceHandler,
 		tenantv1.RegisterGarageServiceHandler, tenantv1.RegisterStaffServiceHandler,
 		tenantv1.RegisterInvitationServiceHandler, tenantv1.RegisterRoleServiceHandler,
 		tenantv1.RegisterStaffGroupServiceHandler,

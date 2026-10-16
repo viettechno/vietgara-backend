@@ -39,7 +39,8 @@ func NewPostgresUserRepository(pool *platformdb.Pool) *PostgresUserRepository {
 
 const userColumns = `a.id, COALESCE(a.email, ''), a.phone, a.auth_provider, a.identity_platform_uid, a.full_name,
 	a.full_name_source, a.password_hash, a.status, a.email_verified_at, a.locale,
-	EXISTS (SELECT 1 FROM platform_admins pa WHERE pa.user_id = a.id), a.created_at, a.updated_at`
+	EXISTS (SELECT 1 FROM platform_admins pa WHERE pa.user_id = a.id),
+	EXISTS (SELECT 1 FROM user_mfa m WHERE m.user_id = a.id AND m.enabled_at IS NOT NULL), a.created_at, a.updated_at`
 
 func scanUser(row pgx.Row) (*domain.User, error) {
 	var (
@@ -49,7 +50,7 @@ func scanUser(row pgx.Row) (*domain.User, error) {
 	)
 
 	err := row.Scan(&user.ID, &user.Email, &user.Phone, &authProvider, &user.GoogleSubject, &user.FullName,
-		&nameSource, &user.PasswordHash, &status, &user.EmailVerifiedAt, &locale, &user.PlatformAdmin, &user.CreatedAt, &user.UpdatedAt)
+		&nameSource, &user.PasswordHash, &status, &user.EmailVerifiedAt, &locale, &user.PlatformAdmin, &user.MFAEnabled, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrUserNotFound

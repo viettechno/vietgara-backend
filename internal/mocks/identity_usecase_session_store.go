@@ -38,6 +38,63 @@ func (_m *MockSessionStore) EXPECT() *MockSessionStore_Expecter {
 	return &MockSessionStore_Expecter{mock: &_m.Mock}
 }
 
+// ClearMFAFailures provides a mock function for the type MockSessionStore
+func (_mock *MockSessionStore) ClearMFAFailures(ctx context.Context, userID string) error {
+	ret := _mock.Called(ctx, userID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ClearMFAFailures")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = returnFunc(ctx, userID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockSessionStore_ClearMFAFailures_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ClearMFAFailures'
+type MockSessionStore_ClearMFAFailures_Call struct {
+	*mock.Call
+}
+
+// ClearMFAFailures is a helper method to define mock.On call
+//   - ctx context.Context
+//   - userID string
+func (_e *MockSessionStore_Expecter) ClearMFAFailures(ctx any, userID any) *MockSessionStore_ClearMFAFailures_Call {
+	return &MockSessionStore_ClearMFAFailures_Call{Call: _e.mock.On("ClearMFAFailures", ctx, userID)}
+}
+
+func (_c *MockSessionStore_ClearMFAFailures_Call) Run(run func(ctx context.Context, userID string)) *MockSessionStore_ClearMFAFailures_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSessionStore_ClearMFAFailures_Call) Return(err error) *MockSessionStore_ClearMFAFailures_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockSessionStore_ClearMFAFailures_Call) RunAndReturn(run func(ctx context.Context, userID string) error) *MockSessionStore_ClearMFAFailures_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ConsumeResetToken provides a mock function for the type MockSessionStore
 func (_mock *MockSessionStore) ConsumeResetToken(ctx context.Context, token string) (string, error) {
 	ret := _mock.Called(ctx, token)
@@ -100,6 +157,267 @@ func (_c *MockSessionStore_ConsumeResetToken_Call) Return(s string, err error) *
 }
 
 func (_c *MockSessionStore_ConsumeResetToken_Call) RunAndReturn(run func(ctx context.Context, token string) (string, error)) *MockSessionStore_ConsumeResetToken_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteMFAChallenge provides a mock function for the type MockSessionStore
+func (_mock *MockSessionStore) DeleteMFAChallenge(ctx context.Context, token string) error {
+	ret := _mock.Called(ctx, token)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteMFAChallenge")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = returnFunc(ctx, token)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockSessionStore_DeleteMFAChallenge_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteMFAChallenge'
+type MockSessionStore_DeleteMFAChallenge_Call struct {
+	*mock.Call
+}
+
+// DeleteMFAChallenge is a helper method to define mock.On call
+//   - ctx context.Context
+//   - token string
+func (_e *MockSessionStore_Expecter) DeleteMFAChallenge(ctx any, token any) *MockSessionStore_DeleteMFAChallenge_Call {
+	return &MockSessionStore_DeleteMFAChallenge_Call{Call: _e.mock.On("DeleteMFAChallenge", ctx, token)}
+}
+
+func (_c *MockSessionStore_DeleteMFAChallenge_Call) Run(run func(ctx context.Context, token string)) *MockSessionStore_DeleteMFAChallenge_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSessionStore_DeleteMFAChallenge_Call) Return(err error) *MockSessionStore_DeleteMFAChallenge_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockSessionStore_DeleteMFAChallenge_Call) RunAndReturn(run func(ctx context.Context, token string) error) *MockSessionStore_DeleteMFAChallenge_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MFAChallengeUser provides a mock function for the type MockSessionStore
+func (_mock *MockSessionStore) MFAChallengeUser(ctx context.Context, token string) (string, error) {
+	ret := _mock.Called(ctx, token)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MFAChallengeUser")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (string, error)); ok {
+		return returnFunc(ctx, token)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) string); ok {
+		r0 = returnFunc(ctx, token)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, token)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockSessionStore_MFAChallengeUser_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MFAChallengeUser'
+type MockSessionStore_MFAChallengeUser_Call struct {
+	*mock.Call
+}
+
+// MFAChallengeUser is a helper method to define mock.On call
+//   - ctx context.Context
+//   - token string
+func (_e *MockSessionStore_Expecter) MFAChallengeUser(ctx any, token any) *MockSessionStore_MFAChallengeUser_Call {
+	return &MockSessionStore_MFAChallengeUser_Call{Call: _e.mock.On("MFAChallengeUser", ctx, token)}
+}
+
+func (_c *MockSessionStore_MFAChallengeUser_Call) Run(run func(ctx context.Context, token string)) *MockSessionStore_MFAChallengeUser_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSessionStore_MFAChallengeUser_Call) Return(s string, err error) *MockSessionStore_MFAChallengeUser_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *MockSessionStore_MFAChallengeUser_Call) RunAndReturn(run func(ctx context.Context, token string) (string, error)) *MockSessionStore_MFAChallengeUser_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// MFAFailures provides a mock function for the type MockSessionStore
+func (_mock *MockSessionStore) MFAFailures(ctx context.Context, userID string) (int, error) {
+	ret := _mock.Called(ctx, userID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MFAFailures")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (int, error)); ok {
+		return returnFunc(ctx, userID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) int); ok {
+		r0 = returnFunc(ctx, userID)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, userID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockSessionStore_MFAFailures_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MFAFailures'
+type MockSessionStore_MFAFailures_Call struct {
+	*mock.Call
+}
+
+// MFAFailures is a helper method to define mock.On call
+//   - ctx context.Context
+//   - userID string
+func (_e *MockSessionStore_Expecter) MFAFailures(ctx any, userID any) *MockSessionStore_MFAFailures_Call {
+	return &MockSessionStore_MFAFailures_Call{Call: _e.mock.On("MFAFailures", ctx, userID)}
+}
+
+func (_c *MockSessionStore_MFAFailures_Call) Run(run func(ctx context.Context, userID string)) *MockSessionStore_MFAFailures_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSessionStore_MFAFailures_Call) Return(n int, err error) *MockSessionStore_MFAFailures_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockSessionStore_MFAFailures_Call) RunAndReturn(run func(ctx context.Context, userID string) (int, error)) *MockSessionStore_MFAFailures_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RecordMFAFailure provides a mock function for the type MockSessionStore
+func (_mock *MockSessionStore) RecordMFAFailure(ctx context.Context, userID string, lockout time.Duration) (int, error) {
+	ret := _mock.Called(ctx, userID, lockout)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RecordMFAFailure")
+	}
+
+	var r0 int
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Duration) (int, error)); ok {
+		return returnFunc(ctx, userID, lockout)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Duration) int); ok {
+		r0 = returnFunc(ctx, userID, lockout)
+	} else {
+		r0 = ret.Get(0).(int)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, time.Duration) error); ok {
+		r1 = returnFunc(ctx, userID, lockout)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockSessionStore_RecordMFAFailure_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RecordMFAFailure'
+type MockSessionStore_RecordMFAFailure_Call struct {
+	*mock.Call
+}
+
+// RecordMFAFailure is a helper method to define mock.On call
+//   - ctx context.Context
+//   - userID string
+//   - lockout time.Duration
+func (_e *MockSessionStore_Expecter) RecordMFAFailure(ctx any, userID any, lockout any) *MockSessionStore_RecordMFAFailure_Call {
+	return &MockSessionStore_RecordMFAFailure_Call{Call: _e.mock.On("RecordMFAFailure", ctx, userID, lockout)}
+}
+
+func (_c *MockSessionStore_RecordMFAFailure_Call) Run(run func(ctx context.Context, userID string, lockout time.Duration)) *MockSessionStore_RecordMFAFailure_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 time.Duration
+		if args[2] != nil {
+			arg2 = args[2].(time.Duration)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSessionStore_RecordMFAFailure_Call) Return(n int, err error) *MockSessionStore_RecordMFAFailure_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockSessionStore_RecordMFAFailure_Call) RunAndReturn(run func(ctx context.Context, userID string, lockout time.Duration) (int, error)) *MockSessionStore_RecordMFAFailure_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -280,6 +598,75 @@ func (_c *MockSessionStore_RevokeRefreshToken_Call) Return(err error) *MockSessi
 }
 
 func (_c *MockSessionStore_RevokeRefreshToken_Call) RunAndReturn(run func(ctx context.Context, token string) error) *MockSessionStore_RevokeRefreshToken_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SaveMFAChallenge provides a mock function for the type MockSessionStore
+func (_mock *MockSessionStore) SaveMFAChallenge(ctx context.Context, token string, userID string, ttl time.Duration) error {
+	ret := _mock.Called(ctx, token, userID, ttl)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SaveMFAChallenge")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, time.Duration) error); ok {
+		r0 = returnFunc(ctx, token, userID, ttl)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockSessionStore_SaveMFAChallenge_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SaveMFAChallenge'
+type MockSessionStore_SaveMFAChallenge_Call struct {
+	*mock.Call
+}
+
+// SaveMFAChallenge is a helper method to define mock.On call
+//   - ctx context.Context
+//   - token string
+//   - userID string
+//   - ttl time.Duration
+func (_e *MockSessionStore_Expecter) SaveMFAChallenge(ctx any, token any, userID any, ttl any) *MockSessionStore_SaveMFAChallenge_Call {
+	return &MockSessionStore_SaveMFAChallenge_Call{Call: _e.mock.On("SaveMFAChallenge", ctx, token, userID, ttl)}
+}
+
+func (_c *MockSessionStore_SaveMFAChallenge_Call) Run(run func(ctx context.Context, token string, userID string, ttl time.Duration)) *MockSessionStore_SaveMFAChallenge_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 time.Duration
+		if args[3] != nil {
+			arg3 = args[3].(time.Duration)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSessionStore_SaveMFAChallenge_Call) Return(err error) *MockSessionStore_SaveMFAChallenge_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockSessionStore_SaveMFAChallenge_Call) RunAndReturn(run func(ctx context.Context, token string, userID string, ttl time.Duration) error) *MockSessionStore_SaveMFAChallenge_Call {
 	_c.Call.Return(run)
 	return _c
 }

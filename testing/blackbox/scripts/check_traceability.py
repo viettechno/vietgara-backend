@@ -53,6 +53,11 @@ CALL_SITE_RE = re.compile(r"\.([A-Z][A-Za-z0-9_]*)\(")
 CLIENT_METHOD_RE = re.compile(r"^func \(c \*Client\) (\w+)\(", re.MULTILINE)
 HELPER_RE = re.compile(r"^func (\w+)\([^)]*\) string \{", re.MULTILINE)
 HTTP_VERBS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
+# Documented scenarios that cannot run against the shared blackbox stack and
+# stay manual, with the reason. They are reported but never count as missing.
+MANUAL_ONLY = {
+    "E2E-IAM-021": "edits PLATFORM_ADMIN_EMAILS and restarts the backend twice",
+}
 # Test-harness packages whose calls execute as part of a test run. seed/
 # is deliberately excluded: seeding is setup, not coverage.
 CALLER_DIRS = ("scenarios", "fixture")
@@ -467,7 +472,8 @@ def main():
 
     full = sorted(s for s, k in tags.items() if k == "full")
     partial = sorted(s for s, k in tags.items() if k == "partial")
-    missing = sorted(s for s in documented if s not in tags)
+    missing = sorted(s for s in documented if s not in tags and s not in MANUAL_ONLY)
+    manual = sorted(s for s in MANUAL_ONLY if s in documented and s not in tags)
     by_prio = {}
     for sid in missing:
         by_prio.setdefault(documented[sid], []).append(sid)
@@ -479,6 +485,9 @@ def main():
     for prio in ("P1", "P2", "P3", "?"):
         for sid in sorted(by_prio.get(prio, [])):
             print(f"  missing {prio}: {sid}")
+
+    for sid in manual:
+        print(f"  manual only: {sid} ({MANUAL_ONLY[sid]})")
 
     proto_dir = args.proto_dir
     if not proto_dir:

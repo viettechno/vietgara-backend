@@ -63,13 +63,14 @@ func TestParseQuantity(t *testing.T) {
 		want    int64
 		wantErr bool
 	}{
-		{name: "integer", in: "1", want: 100},
-		{name: "one decimal", in: "1.5", want: 150},
-		{name: "two decimals", in: "0.25", want: 25},
-		{name: "trims whitespace", in: " 2 ", want: 200},
+		{name: "integer", in: "1", want: 1000},
+		{name: "one decimal", in: "1.5", want: 1500},
+		{name: "two decimals", in: "0.25", want: 250},
+		{name: "three decimals", in: "0.125", want: 125},
+		{name: "trims whitespace", in: " 2 ", want: 2000},
 		{name: "zero rejected", in: "0", wantErr: true},
 		{name: "negative rejected", in: "-1", wantErr: true},
-		{name: "too many decimals rejected", in: "1.234", wantErr: true},
+		{name: "too many decimals rejected", in: "1.2345", wantErr: true},
 		{name: "not a number rejected", in: "abc", wantErr: true},
 		{name: "empty rejected", in: "", wantErr: true},
 	}
@@ -94,10 +95,11 @@ func TestParseQuantity(t *testing.T) {
 func TestLineTotal(t *testing.T) {
 	t.Parallel()
 
-	assert.Equal(t, int64(250_000), domain.LineTotal(100, 250_000)) // 1 x 250,000
-	assert.Equal(t, int64(375_000), domain.LineTotal(150, 250_000)) // 1.5 x 250,000
-	assert.Equal(t, int64(332_500), domain.LineTotal(133, 250_000)) // 1.33 x 250,000
-	assert.Equal(t, int64(443), domain.LineTotal(133, 333))         // 1.33 x 333 = 442.89, rounds to 443
+	assert.Equal(t, int64(250_000), domain.LineTotal(1000, 250_000)) // 1 x 250,000
+	assert.Equal(t, int64(375_000), domain.LineTotal(1500, 250_000)) // 1.5 x 250,000
+	assert.Equal(t, int64(332_500), domain.LineTotal(1330, 250_000)) // 1.33 x 250,000
+	assert.Equal(t, int64(443), domain.LineTotal(1330, 333))         // 1.33 x 333 = 442.89, rounds to 443
+	assert.Equal(t, int64(125), domain.LineTotal(125, 1000))         // 0.125 x 1,000
 }
 
 func TestQuote_Recalculate(t *testing.T) {

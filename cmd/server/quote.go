@@ -13,6 +13,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/numbering"
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
+	"github.com/viettechno/vietgara-backend/pkg/partquantity"
 )
 
 // quoteModule is the wired Quote & Pricing module (Release 1.2).
@@ -32,6 +33,7 @@ func buildQuote(
 	vehicles *customerRepository.PostgresVehicleRepository,
 	repairOrders *repairorderUsecase.RepairOrderUseCase,
 	billingParties quoteUsecase.BillingPartyResolver,
+	parts partquantity.Resolver,
 ) *quoteModule {
 	quotesRepo := quoteRepository.NewPostgresRepository(pool)
 	customerAdapter := quoteCustomers{customers: customers, vehicles: vehicles}
@@ -40,7 +42,7 @@ func buildQuote(
 		Quotes: quotesRepo, Vehicles: customerAdapter, Customers: customerAdapter, BillingParties: billingParties,
 		Garages: quoteGarages{garages: garages}, Limits: entitlements, Sequences: numbering.NewSequencer(pool),
 		RepairOrders: quoteRepairOrders{uc: repairOrders}, Mailer: mailer, Events: events, Tx: tx,
-		AppBaseURL: appBaseURL(),
+		AppBaseURL: appBaseURL(), Parts: parts,
 	})
 
 	return &quoteModule{server: quoteHandler.NewServer(quotes), quotes: quotesRepo}

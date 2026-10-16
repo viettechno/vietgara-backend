@@ -30,6 +30,7 @@ import (
 	"google.golang.org/grpc/test/bufconn"
 
 	billingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/billing/v1"
+	cataloguev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/catalogue/v1"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 	customerportalv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customerportal/v1"
 	documentv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/document/v1"
@@ -47,6 +48,8 @@ import (
 
 	appdb "github.com/viettechno/vietgara-backend/db"
 	billingHandler "github.com/viettechno/vietgara-backend/internal/billing/handler"
+	catalogueHandler "github.com/viettechno/vietgara-backend/internal/catalogue/handler"
+	catalogueRepository "github.com/viettechno/vietgara-backend/internal/catalogue/repository"
 	customerHandler "github.com/viettechno/vietgara-backend/internal/customer/handler"
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
 	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
@@ -256,7 +259,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// Tenant/Garage Management
 	garages := tenantRepo.NewPostgresGarageRepository(pool)
 	accessReader := tenantRepo.NewPostgresAccessReader(pool)
-	fileModule := buildFiles(pool, files, garages)
+	fileEntityChecks := &fileEntities{}
+	fileModule := buildFiles(pool, files, garages, catalogueRepository.NewPostgresRepository(pool), fileEntityChecks)
 	license := buildLicense(pool, tx, redisClient, events, auditLog, accessReader, garages, fileModule.uc)
 
 	// File registry (Release 5.0): the garage logo and every later upload.
@@ -280,6 +284,14 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	})
 	tenantSrv := tenantHandler.NewServer(tenantUC)
 
+	// Catalogue (Release 6.0): parts, units, categories and part images. What
+	// refers to a part or a unit is filled in once Inventory, Quote and
+	// Repair Order are built, since they convert quantities through it.
+	catalogueRefs := &catalogueUsage{}
+	catalogue := buildCatalogue(pool, fileModule, catalogueRefs)
+	fileEntityChecks.parts = catalogue.uc
+	quantities := partQuantities{uc: catalogue.uc}
+
 	// Customer & Vehicle
 	customerRepo := customerRepository.NewPostgresCustomerRepository(pool)
 	vehicleRepo := customerRepository.NewPostgresVehicleRepository(pool)
@@ -294,15 +306,16 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 
 	// Repair Order (Release 1.3): the Kanban board, plus the
 	// draft-creation-from-quote use case Quote depends on (FR-QUO-04).
-	repairOrder := buildRepairOrder(pool, events, garages, license.entitlements, repairOrderVehicles{vehicles: vehicleRepo})
+	repairOrder := buildRepairOrder(pool, events, garages, license.entitlements, repairOrderVehicles{vehicles: vehicleRepo}, quantities)
 
 	// Quote & Pricing (Release 1.2)
 	quote := buildQuote(pool, tx, events, mailer, garages, license.entitlements, customerRepo, vehicleRepo, repairOrder.uc,
-		quoteBillingParties{profiles: taxProfileUC})
+		quoteBillingParties{profiles: taxProfileUC}, quantities)
 
-	// Inventory (Release 1.3): items, stock receipts and the
+	// Inventory (Release 1.3): stock on hand, stock receipts and the
 	// repair_order.closed consumer that deducts stock (FR-INV-02).
-	inventory := buildInventory(pool, events)
+	inventory := buildInventory(pool, events, inventoryParts{partQuantities: quantities})
+	catalogueRefs.inventory, catalogueRefs.quotes, catalogueRefs.repairOrders = inventory.repo, quote.quotes, repairOrder.repo
 
 	supplierUC := supplierUsecase.NewUseCase(supplierRepository.NewPostgresRepository(pool), supplierUsage{})
 	supplierSrv := supplierHandler.NewServer(supplierUC)
@@ -330,11 +343,12 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 
 	// Document/Print (Release 1.4): quote, repair order and settlement
 	// receipt PDFs, the stock movement report as Excel.
-	document := buildDocument(quote.quotes, repairOrder.uc, billing.uc, inventory.uc, garages, files)
+	reporting := buildReporting(billing.settlements)
+
+	document := buildDocument(quote.quotes, repairOrder.uc, billing.uc, inventory.uc, reporting.uc, garages, files)
 
 	// Reporting (Release 1.5): revenue by period (FR-RPT-01), reusing
 	// Billing & Settlement's own repository -- no tables of its own.
-	reporting := buildReporting(billing.settlements)
 
 	// Notification (Release 1.5): the e-mail channel only (FR-NOT-04) --
 	// registration confirmation and license renewal reminders. No RPCs of
@@ -377,7 +391,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
 		customerHandler.LinkPolicies(), customerHandler.TaxProfilePolicies(),
 		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
-		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(), fileHandler.Policies(),
+		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(), fileHandler.Policies(), catalogueHandler.Policies(),
 		technicianHandler.Policies(), customerportalHandler.Policies(),
 	)
 	app.grpcServer = grpc.NewServer(
@@ -406,6 +420,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	customerv1.RegisterCustomerTaxProfileServiceServer(app.grpcServer, taxProfileSrv)
 	supplierv1.RegisterSupplierServiceServer(app.grpcServer, supplierSrv)
 	filev1.RegisterFileServiceServer(app.grpcServer, fileModule.server)
+	cataloguev1.RegisterCatalogueServiceServer(app.grpcServer, catalogue.server)
 	quotev1.RegisterQuoteServiceServer(app.grpcServer, quote.server)
 	quotev1.RegisterPublicQuoteServiceServer(app.grpcServer, quote.server)
 	repairorderv1.RegisterRepairOrderServiceServer(app.grpcServer, repairOrder.server)
@@ -510,6 +525,7 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 		customerv1.RegisterCustomerServiceHandler, customerv1.RegisterVehicleServiceHandler,
 		customerv1.RegisterCustomerLinkServiceHandler, customerv1.RegisterCustomerTaxProfileServiceHandler,
 		supplierv1.RegisterSupplierServiceHandler, filev1.RegisterFileServiceHandler,
+		cataloguev1.RegisterCatalogueServiceHandler,
 		quotev1.RegisterQuoteServiceHandler, quotev1.RegisterPublicQuoteServiceHandler,
 		repairorderv1.RegisterRepairOrderServiceHandler, inventoryv1.RegisterInventoryServiceHandler,
 		billingv1.RegisterSettlementServiceHandler, documentv1.RegisterDocumentServiceHandler,

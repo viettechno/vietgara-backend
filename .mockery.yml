@@ -326,6 +326,35 @@ packages:
           filename: "inventory_usecase_event_publisher.go"
           dir: "./internal/mocks"
           structname: "MockInventoryEventPublisher"
+      PartCatalogue:
+        config:
+          filename: "inventory_usecase_part_catalogue.go"
+          dir: "./internal/mocks"
+          structname: "MockInventoryPartCatalogue"
+  github.com/viettechno/vietgara-backend/internal/catalogue/usecase:
+    interfaces:
+      Repository:
+        config:
+          filename: "catalogue_usecase_repository.go"
+          dir: "./internal/mocks"
+          structname: "MockCatalogueRepository"
+      UsageChecker:
+        config:
+          filename: "catalogue_usecase_usage_checker.go"
+          dir: "./internal/mocks"
+          structname: "MockCatalogueUsageChecker"
+      Files:
+        config:
+          filename: "catalogue_usecase_files.go"
+          dir: "./internal/mocks"
+          structname: "MockCatalogueFiles"
+  github.com/viettechno/vietgara-backend/pkg/partquantity:
+    interfaces:
+      Resolver:
+        config:
+          filename: "partquantity_resolver.go"
+          dir: "./internal/mocks"
+          structname: "MockPartQuantityResolver"
   github.com/viettechno/vietgara-backend/internal/billing/usecase:
     interfaces:
       Repository:
@@ -395,6 +424,11 @@ packages:
           filename: "document_usecase_stock_movement_reader.go"
           dir: "./internal/mocks"
           structname: "MockDocumentStockMovementReader"
+      RevenueReader:
+        config:
+          filename: "document_usecase_revenue_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockDocumentRevenueReader"
       GarageReader:
         config:
           filename: "document_usecase_garage_reader.go"

@@ -9,6 +9,7 @@ import (
 	repairorderRepository "github.com/viettechno/vietgara-backend/internal/repairorder/repository"
 	repairorderUsecase "github.com/viettechno/vietgara-backend/internal/repairorder/usecase"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
+	"github.com/viettechno/vietgara-backend/pkg/partquantity"
 )
 
 // repairOrderModule is the wired Repair Order module (FRD 3.6, Release
@@ -18,6 +19,7 @@ import (
 type repairOrderModule struct {
 	server *repairorderHandler.Server
 	uc     *repairorderUsecase.RepairOrderUseCase
+	repo   *repairorderRepository.PostgresRepository
 }
 
 func buildRepairOrder(
@@ -26,12 +28,14 @@ func buildRepairOrder(
 	garages *tenantRepo.PostgresGarageRepository,
 	entitlements *licenseUsecase.EntitlementUseCase,
 	vehicles repairOrderVehicles,
+	parts partquantity.Resolver,
 ) *repairOrderModule {
+	repo := repairorderRepository.NewPostgresRepository(pool)
 	uc := repairorderUsecase.NewRepairOrderUseCase(repairorderUsecase.Deps{
-		RepairOrders: repairorderRepository.NewPostgresRepository(pool), Vehicles: vehicles,
+		RepairOrders: repo, Vehicles: vehicles,
 		Garages: repairOrderGarages{garages: garages}, Limits: entitlements, Sequences: numbering.NewSequencer(pool),
-		Events: events,
+		Events: events, Parts: parts,
 	})
 
-	return &repairOrderModule{server: repairorderHandler.NewServer(uc), uc: uc}
+	return &repairOrderModule{server: repairorderHandler.NewServer(uc), uc: uc, repo: repo}
 }

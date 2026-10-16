@@ -25,6 +25,10 @@ const (
 	// KindPlatformQR is the platform's bank QR code; it belongs to the
 	// platform admin who uploaded it (private, served by signed URL).
 	KindPlatformQR Kind = "platform_qr"
+	// KindPartImage is one of the one to three images of a part (public);
+	// it belongs to the part (EntityPart) and is attached through the
+	// Catalogue's AddPartImage.
+	KindPartImage Kind = "part_image"
 )
 
 // Entity types of a file owned by a user rather than a garage.
@@ -36,6 +40,9 @@ const (
 // EntityGarage is the entity type of a file that belongs to the garage
 // itself (its logo); its entity id is the garage's id.
 const EntityGarage = "garage"
+
+// EntityPart is the entity type of a part image; its entity id is the part's.
+const EntityPart = "part"
 
 // Rule is what one kind of file allows.
 type Rule struct {
@@ -64,26 +71,46 @@ type Rule struct {
 var Rules = map[Kind]Rule{
 	KindLogo: {
 		Public:           true,
-		ContentTypes:     map[string]string{"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"},
+		ContentTypes:     imageTypes(),
 		MaxBytes:         1 << 20,
 		ImageOnly:        true,
 		EntityType:       EntityGarage,
 		Write:            access.GarageWrite,
 		AttachedByModule: true,
 	},
+	KindPartImage: {
+		Public:       true,
+		ContentTypes: imageTypes(),
+		MaxBytes:     2 << 20,
+		ImageOnly:    true,
+		EntityType:   EntityPart,
+		Write:        access.CatalogueWrite,
+	},
 	KindPaymentEvidence: {
-		ContentTypes:     map[string]string{"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp", "application/pdf": "pdf"},
+		ContentTypes:     withPDF(imageTypes()),
 		MaxBytes:         5 << 20,
 		EntityType:       EntityUser,
 		AttachedByModule: true,
 	},
 	KindPlatformQR: {
-		ContentTypes:     map[string]string{"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"},
+		ContentTypes:     imageTypes(),
 		MaxBytes:         1 << 20,
 		ImageOnly:        true,
 		EntityType:       EntityPlatform,
 		AttachedByModule: true,
 	},
+}
+
+// imageTypes are the accepted image content types with their extensions.
+func imageTypes() map[string]string {
+	return map[string]string{"image/png": "png", "image/jpeg": "jpg", "image/webp": "webp"}
+}
+
+// withPDF adds PDF to a set of accepted content types.
+func withPDF(types map[string]string) map[string]string {
+	types["application/pdf"] = "pdf"
+
+	return types
 }
 
 // IsValid reports whether k is a defined Kind.

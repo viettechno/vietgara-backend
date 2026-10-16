@@ -31,16 +31,20 @@ const (
 	CustomerWrite Permission = "customer.write"
 	// CustomerCorrect corrects a locked identity field of a vehicle, or
 	// moves it to another customer (FR-CUS-09).
-	CustomerCorrect   Permission = "customer.correct"
-	SupplierRead      Permission = "supplier.read"
-	SupplierWrite     Permission = "supplier.write"
-	SubscriptionRead  Permission = "subscription.read"
-	QuoteRead         Permission = "quote.read"
-	QuoteWrite        Permission = "quote.write"
-	RepairOrderRead   Permission = "repair_order.read"
-	RepairOrderWrite  Permission = "repair_order.write"
-	InventoryRead     Permission = "inventory.read"
-	InventoryWrite    Permission = "inventory.write"
+	CustomerCorrect  Permission = "customer.correct"
+	SupplierRead     Permission = "supplier.read"
+	SupplierWrite    Permission = "supplier.write"
+	SubscriptionRead Permission = "subscription.read"
+	QuoteRead        Permission = "quote.read"
+	QuoteWrite       Permission = "quote.write"
+	RepairOrderRead  Permission = "repair_order.read"
+	RepairOrderWrite Permission = "repair_order.write"
+	InventoryRead    Permission = "inventory.read"
+	InventoryWrite   Permission = "inventory.write"
+	// CatalogueRead / CatalogueWrite cover the parts, units, packaging,
+	// categories, prices and images of the Catalogue module (Release 6.0).
+	CatalogueRead     Permission = "catalogue.read"
+	CatalogueWrite    Permission = "catalogue.write"
 	BillingRead       Permission = "billing.read"
 	BillingWrite      Permission = "billing.write"
 	ReportRead        Permission = "report.read"
@@ -64,6 +68,8 @@ var Catalog = []CatalogEntry{
 	{RepairOrderWrite, "repair_order"},
 	{InventoryRead, "inventory"},
 	{InventoryWrite, "inventory"},
+	{CatalogueRead, "catalogue"},
+	{CatalogueWrite, "catalogue"},
 	{BillingRead, "billing"},
 	{BillingWrite, "billing"},
 	{ReportRead, "report"},

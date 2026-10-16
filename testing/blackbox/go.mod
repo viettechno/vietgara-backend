@@ -6,8 +6,8 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.12.1
-	github.com/viettechno/vietgara-proto v1.9.0
-	github.com/viettechno/vietgara-testdata v0.2.0
+	github.com/viettechno/vietgara-proto v1.9.1-0.20261016113254-881c0a73396d
+	github.com/viettechno/vietgara-testdata v0.2.1-0.20261016113412-ffd7e7124cfd
 	google.golang.org/protobuf v1.36.12
 )
 

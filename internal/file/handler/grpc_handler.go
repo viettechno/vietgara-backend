@@ -51,19 +51,29 @@ func run[T any](ctx context.Context, fn func(actorID string) (T, error)) (T, err
 }
 
 func kindToProto(k domain.Kind) filev1.FileKind {
-	if k == domain.KindLogo {
+	switch k {
+	case domain.KindLogo:
 		return filev1.FileKind_FILE_KIND_LOGO
+	case domain.KindPartImage:
+		return filev1.FileKind_FILE_KIND_PART_IMAGE
+	case domain.KindPaymentEvidence, domain.KindPlatformQR:
+		return filev1.FileKind_FILE_KIND_UNSPECIFIED
+	default:
+		return filev1.FileKind_FILE_KIND_UNSPECIFIED
 	}
-
-	return filev1.FileKind_FILE_KIND_UNSPECIFIED
 }
 
 func kindFromProto(k filev1.FileKind) domain.Kind {
-	if k == filev1.FileKind_FILE_KIND_LOGO {
+	switch k {
+	case filev1.FileKind_FILE_KIND_LOGO:
 		return domain.KindLogo
+	case filev1.FileKind_FILE_KIND_PART_IMAGE:
+		return domain.KindPartImage
+	case filev1.FileKind_FILE_KIND_UNSPECIFIED, filev1.FileKind_FILE_KIND_PAYMENT_EVIDENCE, filev1.FileKind_FILE_KIND_PLATFORM_QR:
+		return ""
+	default:
+		return ""
 	}
-
-	return ""
 }
 
 func fileToProto(r *usecase.Result) *filev1.File {

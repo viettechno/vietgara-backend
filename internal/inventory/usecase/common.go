@@ -45,16 +45,14 @@ type Page[T any] struct {
 }
 
 var (
-	notFoundErrors = []error{domain.ErrItemNotFound}
-	conflictErrors = []error{domain.ErrSKUTaken}
-	invalidErrors  = []error{
-		domain.ErrSKURequired, domain.ErrNameRequired, domain.ErrInvalidQuantity, domain.ErrInvalidReorderThreshold,
-		domain.ErrFieldTooLong,
-	}
+	notFoundErrors     = []error{domain.ErrPartNotFound}
+	preconditionErrors = []error{domain.ErrPartInactive}
+	invalidErrors      = []error{domain.ErrInvalidQuantity, domain.ErrInvalidCost}
 )
 
 // toAppError classifies err into an *apperror.AppError; op names the
-// failed operation for unexpected (internal) errors.
+// failed operation for unexpected (internal) errors. Errors the Catalogue
+// already classified pass through.
 func toAppError(op string, err error) error {
 	if _, ok := apperror.As(err); ok {
 		return err
@@ -63,8 +61,8 @@ func toAppError(op string, err error) error {
 	switch {
 	case isAny(err, notFoundErrors):
 		return apperror.Wrap(apperror.CodeNotFound, err.Error(), err)
-	case isAny(err, conflictErrors):
-		return apperror.Wrap(apperror.CodeAlreadyExists, err.Error(), err)
+	case isAny(err, preconditionErrors):
+		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err)
 	case isAny(err, invalidErrors):
 		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err)
 	default:

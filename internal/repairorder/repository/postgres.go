@@ -75,7 +75,12 @@ func scanRepairOrder(row pgx.Row) (*domain.RepairOrder, error) {
 	return &ro, nil
 }
 
-const lineColumns = `id, position, item_type, item_ref_id, description, trim_scale(quantity)::text, unit_price, line_total, status, assigned_technicians`
+// lineColumns reads the packaging unit's abbreviation from the Catalogue's
+// units table (a foreign key points there already).
+const lineColumns = `id, position, item_type, item_ref_id, description, trim_scale(quantity)::text, unit_id,
+	trim_scale(entered_quantity)::text,
+	COALESCE((SELECT u.abbreviation FROM units u WHERE u.garage_id = repair_order_lines.garage_id AND u.id = repair_order_lines.unit_id), ''),
+	unit_price, line_total, status, assigned_technicians`
 
 func scanLine(row pgx.Row) (domain.Line, error) {
 	var (
@@ -85,7 +90,7 @@ func scanLine(row pgx.Row) (domain.Line, error) {
 	)
 
 	err := row.Scan(&line.ID, &line.Position, &itemType, &line.ItemRefID, &line.Description, &line.Quantity,
-		&line.UnitPrice, &line.LineTotal, &status, &line.AssignedTechnicianIDs)
+		&line.UnitID, &line.EnteredQuantity, &line.UnitAbbreviation, &line.UnitPrice, &line.LineTotal, &status, &line.AssignedTechnicianIDs)
 	if err != nil {
 		return domain.Line{}, err
 	}
@@ -135,11 +140,11 @@ func (r *PostgresRepository) insertLines(ctx context.Context, q platformdb.Queri
 	for _, line := range lines {
 		_, err := q.Exec(ctx, `
 			INSERT INTO repair_order_lines
-				(id, garage_id, repair_order_id, position, item_type, item_ref_id, description, quantity, unit_price,
-				 line_total, status, assigned_technicians)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10, $11, $12)`,
+				(id, garage_id, repair_order_id, position, item_type, item_ref_id, description, quantity, unit_id,
+				 entered_quantity, unit_price, line_total, status, assigned_technicians)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10::numeric, $11, $12, $13, $14)`,
 			line.ID, garageID, repairOrderID, line.Position, string(line.ItemType), line.ItemRefID, line.Description,
-			line.Quantity, line.UnitPrice, line.LineTotal, string(line.Status), technicianIDs(line.AssignedTechnicianIDs),
+			line.Quantity, line.UnitID, line.EnteredQuantity, line.UnitPrice, line.LineTotal, string(line.Status), technicianIDs(line.AssignedTechnicianIDs),
 		)
 		if err != nil {
 			return err
@@ -380,4 +385,21 @@ func isUniqueViolation(err error, constraint string) bool {
 	var pgErr *pgconn.PgError
 
 	return errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation && pgErr.ConstraintName == constraint
+}
+
+// LinesReference reports whether a line refers to the part (as its item_ref_id)
+// or uses the unit, in a live or a deleted document: a unit cannot be deleted
+// while any line keeps its foreign key, and a part that documents mention is
+// deactivated, not deleted (FR-CAT-07). partID or unitID may be "" to skip it.
+func (r *PostgresRepository) LinesReference(ctx context.Context, garageID, partID, unitID string) (bool, error) {
+	var exists bool
+
+	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM repair_order_lines
+			WHERE garage_id = $1 AND (($2::text <> '' AND item_ref_id = NULLIF($2, '')::uuid)
+				OR ($3::text <> '' AND unit_id = NULLIF($3, '')::uuid)))`,
+		garageID, partID, unitID).Scan(&exists)
+
+	return exists, err
 }

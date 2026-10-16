@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	catalogueDomain "github.com/viettechno/vietgara-backend/internal/catalogue/domain"
+	catalogueRepository "github.com/viettechno/vietgara-backend/internal/catalogue/repository"
 	inventoryDomain "github.com/viettechno/vietgara-backend/internal/inventory/domain"
 	inventoryRepository "github.com/viettechno/vietgara-backend/internal/inventory/repository"
 	inventoryUsecase "github.com/viettechno/vietgara-backend/internal/inventory/usecase"
@@ -26,6 +28,8 @@ import (
 // migrations 000015-000017) through the real repositories: a decimal
 // string goes in and comes back without padding zeros, and the stock
 // balance is exact arithmetic.
+//
+//nolint:funlen // one scenario through the real schema, read top to bottom
 func TestQuantitiesAreNumeric(t *testing.T) {
 	pg := pgtest.StartMigrated(t)
 	userID, garageID, customerID, vehicleID := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
@@ -108,27 +112,36 @@ func TestQuantitiesAreNumeric(t *testing.T) {
 		})
 	})
 
-	t.Run("stock quantities, threshold and unit cost", func(t *testing.T) {
+	t.Run("stock quantities and unit cost", func(t *testing.T) {
+		catalogue := catalogueRepository.NewPostgresRepository(pool)
 		inventory := inventoryRepository.NewPostgresRepository(pool)
-		item := &inventoryDomain.Item{ID: uuid.NewString(), GarageID: garageID, SKU: "OIL-5W30", Name: "Oil", Unit: "l", ReorderThreshold: 3}
-		cost := int64(125000)
+		unit := &catalogueDomain.Unit{ID: uuid.NewString(), GarageID: garageID, Name: "Litre", Abbreviation: "l", IsActive: true}
+		part := &catalogueDomain.Part{
+			ID: uuid.NewString(), GarageID: garageID, SKU: "OIL-5W30", Name: "Oil", BaseUnitID: unit.ID, IsActive: true,
+			ReorderThreshold: "3.5",
+		}
+		cost := "125000.5"
 
 		inGarage(func(ctx context.Context) {
-			require.NoError(t, inventory.CreateItem(ctx, item))
+			require.NoError(t, catalogue.CreateUnit(ctx, unit))
+			require.NoError(t, catalogue.CreatePart(ctx, part))
 
 			for _, tx := range []*inventoryDomain.StockTransaction{
-				{ID: uuid.NewString(), GarageID: garageID, ItemID: item.ID, Type: inventoryDomain.TransactionIn, Quantity: "10.5", UnitCost: &cost, RefType: inventoryDomain.RefPurchase},
-				{ID: uuid.NewString(), GarageID: garageID, ItemID: item.ID, Type: inventoryDomain.TransactionOut, Quantity: "2.25", RefType: inventoryDomain.RefRepairOrder},
+				{ID: uuid.NewString(), GarageID: garageID, PartID: part.ID, Type: inventoryDomain.TransactionIn, Quantity: "10.5", UnitCost: &cost, RefType: inventoryDomain.RefPurchase},
+				{ID: uuid.NewString(), GarageID: garageID, PartID: part.ID, Type: inventoryDomain.TransactionOut, Quantity: "2.25", RefType: inventoryDomain.RefRepairOrder},
 			} {
 				require.NoError(t, inventory.RecordTransaction(ctx, tx))
 			}
 
-			got, err := inventory.FindItemByID(ctx, garageID, item.ID)
+			balances, err := inventory.Balances(ctx, garageID, []string{part.ID})
 			require.NoError(t, err)
-			assert.Equal(t, "8.25", got.QuantityOnHand)
-			assert.Equal(t, 3, got.ReorderThreshold)
+			assert.Equal(t, map[string]string{part.ID: "8.25"}, balances)
 
-			transactions, total, err := inventory.ListTransactions(ctx, garageID, inventoryUsecase.TransactionFilter{ItemID: item.ID, Limit: 10})
+			got, err := catalogue.FindPart(ctx, garageID, part.ID)
+			require.NoError(t, err)
+			assert.Equal(t, "3.5", got.ReorderThreshold)
+
+			transactions, total, err := inventory.ListTransactions(ctx, garageID, inventoryUsecase.TransactionFilter{PartID: part.ID, Limit: 10})
 			require.NoError(t, err)
 			require.Equal(t, 2, total)
 
@@ -139,7 +152,7 @@ func TestQuantitiesAreNumeric(t *testing.T) {
 
 			assert.Equal(t, "10.5", byType[inventoryDomain.TransactionIn].Quantity)
 			require.NotNil(t, byType[inventoryDomain.TransactionIn].UnitCost)
-			assert.Equal(t, cost, *byType[inventoryDomain.TransactionIn].UnitCost)
+			assert.Equal(t, cost, *byType[inventoryDomain.TransactionIn].UnitCost, "the cost keeps its decimals")
 			assert.Equal(t, "2.25", byType[inventoryDomain.TransactionOut].Quantity)
 			assert.Nil(t, byType[inventoryDomain.TransactionOut].UnitCost)
 		})

@@ -12,7 +12,7 @@
 -- (is_active = false, FR-CAT-07); an unreferenced one is soft-deleted
 -- (deleted_at) and its object removed.
 
-CREATE TYPE file_kind AS ENUM ('logo', 'payment_evidence', 'platform_qr');
+CREATE TYPE file_kind AS ENUM ('logo', 'payment_evidence', 'platform_qr', 'part_image');
 
 CREATE TABLE files (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

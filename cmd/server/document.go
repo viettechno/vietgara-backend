@@ -8,6 +8,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/storage"
 	quoteRepository "github.com/viettechno/vietgara-backend/internal/quote/repository"
 	repairorderUsecase "github.com/viettechno/vietgara-backend/internal/repairorder/usecase"
+	reportingUsecase "github.com/viettechno/vietgara-backend/internal/reporting/usecase"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 )
 
@@ -25,12 +26,13 @@ func buildDocument(
 	repairOrders *repairorderUsecase.RepairOrderUseCase,
 	settlements *billingUsecase.SettlementUseCase,
 	inventory *inventoryUsecase.InventoryUseCase,
+	reporting *reportingUsecase.ReportingUseCase,
 	garages *tenantRepo.PostgresGarageRepository,
 	store storage.Store,
 ) *documentModule {
 	uc := documentUsecase.NewDocumentUseCase(
 		documentQuotes{quotes: quotes}, documentRepairOrders{uc: repairOrders}, documentSettlements{uc: settlements},
-		documentStockMovements{uc: inventory}, documentGarages{garages: garages, store: store},
+		documentStockMovements{uc: inventory}, documentRevenue{uc: reporting}, documentGarages{garages: garages, store: store},
 	)
 
 	return &documentModule{server: documentHandler.NewServer(uc)}

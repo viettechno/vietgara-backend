@@ -53,7 +53,7 @@ func repairOrderRow() []any {
 }
 
 func lineRow() []any {
-	return []any{"l-1", 1, "labor", nil, "Oil change", "1", int64(250_000), int64(250_000), "not_started", []string{}}
+	return []any{"l-1", 1, "labor", nil, "Oil change", "1", nil, nil, "", int64(250_000), int64(250_000), "not_started", []string{}}
 }
 
 func TestPostgresRepository_Create(t *testing.T) {
@@ -359,4 +359,21 @@ func TestPostgresRepository_LiveVehicleIDs(t *testing.T) {
 
 	_, err = repo.LiveVehicleIDs(ctx, garageID, []string{vehicleID})
 	require.Error(t, err)
+}
+
+func TestPostgresRepository_LinesReference(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+	tx := dbtest.New(t).
+		ExpectQueryRow("FROM repair_order_lines", dbtest.Row(true)).
+		ExpectQueryRow("FROM repair_order_lines", dbtest.ErrRow(errBoom))
+	ctx := tx.Context(t.Context())
+
+	used, err := repo.LinesReference(ctx, "g-1", "part-1", "")
+	require.NoError(t, err)
+	require.True(t, used)
+
+	_, err = repo.LinesReference(ctx, "g-1", "", "unit-1")
+	require.ErrorIs(t, err, errBoom)
 }

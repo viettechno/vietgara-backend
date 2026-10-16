@@ -362,3 +362,20 @@ func TestPostgresRepository_LiveVehicleIDs(t *testing.T) {
 	_, err = repo.LiveVehicleIDs(ctx, garageID, []string{vehicleID})
 	require.Error(t, err)
 }
+
+func TestPostgresRepository_LinesReference(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+	tx := dbtest.New(t).
+		ExpectQueryRow("FROM quote_lines", dbtest.Row(true)).
+		ExpectQueryRow("FROM quote_lines", dbtest.ErrRow(errBoom))
+	ctx := tx.Context(t.Context())
+
+	used, err := repo.LinesReference(ctx, garageID, "part-1", "")
+	require.NoError(t, err)
+	require.True(t, used)
+
+	_, err = repo.LinesReference(ctx, garageID, "", "unit-1")
+	require.ErrorIs(t, err, errBoom)
+}

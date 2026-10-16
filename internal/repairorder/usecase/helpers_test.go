@@ -36,6 +36,7 @@ type deps struct {
 	Limits       *mocks.MockRepairOrderTransactionLimiter
 	Sequences    *mocks.MockRepairOrderSequencer
 	Events       *mocks.MockRepairOrderEventPublisher
+	Parts        *mocks.MockPartQuantityResolver
 }
 
 func newUseCase(t *testing.T) (*usecase.RepairOrderUseCase, *deps) {
@@ -45,11 +46,12 @@ func newUseCase(t *testing.T) (*usecase.RepairOrderUseCase, *deps) {
 		RepairOrders: mocks.NewMockRepairOrderRepository(t), Vehicles: mocks.NewMockRepairOrderVehicleReader(t),
 		Garages: mocks.NewMockRepairOrderGarageReader(t), Limits: mocks.NewMockRepairOrderTransactionLimiter(t),
 		Sequences: mocks.NewMockRepairOrderSequencer(t), Events: mocks.NewMockRepairOrderEventPublisher(t),
+		Parts: mocks.NewMockPartQuantityResolver(t),
 	}
 
 	uc := usecase.NewRepairOrderUseCase(usecase.Deps{
 		RepairOrders: d.RepairOrders, Vehicles: d.Vehicles, Garages: d.Garages, Limits: d.Limits, Sequences: d.Sequences,
-		Events: d.Events, Now: func() time.Time { return now },
+		Events: d.Events, Parts: d.Parts, Now: func() time.Time { return now },
 	})
 
 	return uc, d

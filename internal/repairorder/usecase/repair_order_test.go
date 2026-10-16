@@ -9,6 +9,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/repairorder/domain"
 	"github.com/viettechno/vietgara-backend/internal/repairorder/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/partquantity"
 )
 
 func TestRepairOrderUseCase_Create(t *testing.T) {
@@ -193,4 +194,55 @@ func TestRepairOrderUseCase_ListForVehicle(t *testing.T) {
 	got, err := uc.ListForVehicle(t.Context(), garageID, vehicleID)
 	require.NoError(t, err)
 	require.Equal(t, want, got)
+}
+
+func TestRepairOrderUseCase_Create_PartLineInPackagingUnit(t *testing.T) {
+	t.Parallel()
+
+	const (
+		partID = "77777777-7777-7777-7777-777777777777"
+		unitID = "88888888-8888-8888-8888-888888888888"
+	)
+
+	lines := func() []usecase.LineInput {
+		return []usecase.LineInput{{
+			ItemType: domain.ItemTypePart, ItemRefID: &[]string{partID}[0], Description: "Beer", Quantity: "999",
+			UnitID: unitID, EnteredQuantity: "2", UnitPrice: 15_000,
+		}}
+	}
+
+	t.Run("the base quantity is derived from the typed amount", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		unit, entered := unitID, "2"
+
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+		d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, unitID, "2").
+			Return(partquantity.Resolved{Base: "48", UnitID: &unit, Entered: &entered}, nil).Once()
+		d.Vehicles.EXPECT().Find(mock.Anything, garageID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
+		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
+		d.RepairOrders.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+
+		ro, err := uc.Create(t.Context(), usecase.CreateRepairOrderRequest{GarageID: garageID, VehicleID: vehicleID, Lines: lines()})
+		require.NoError(t, err)
+		require.Equal(t, "48", ro.Lines[0].Quantity)
+		require.Equal(t, unitID, *ro.Lines[0].UnitID)
+		require.Equal(t, "2", *ro.Lines[0].EnteredQuantity)
+		require.Equal(t, int64(720_000), ro.Lines[0].LineTotal)
+	})
+
+	t.Run("a unit on a labor line is refused", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+
+		in := lines()
+		in[0].ItemType = domain.ItemTypeLabor
+
+		_, err := uc.Create(t.Context(), usecase.CreateRepairOrderRequest{GarageID: garageID, VehicleID: vehicleID, Lines: in})
+		assertAppError(t, err, apperror.CodeInvalidArgument)
+	})
 }

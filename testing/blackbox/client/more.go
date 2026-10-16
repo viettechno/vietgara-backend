@@ -557,66 +557,43 @@ func (c *Client) UpdateRepairOrderLineMasked(
 
 // ---- Inventory -------------------------------------------------------------
 
-// ListItems returns garageID's catalogue.
-func (c *Client) ListItems(ctx context.Context, garageID string) ([]*inventoryv1.Item, error) {
-	resp, err := call[inventoryv1.ListItemsResponse](ctx, c, http.MethodGet, garagePath(garageID)+"/inventory-items", nil)
-
-	return resp.GetData(), err
+// ListStockLevels returns garageID's parts with their stock on hand.
+func (c *Client) ListStockLevels(ctx context.Context, garageID string) ([]*inventoryv1.StockLevel, error) {
+	return c.SearchStockLevels(ctx, garageID, url.Values{})
 }
 
-// SearchItems returns garageID's catalogue items matching query (SKU or
-// name).
-func (c *Client) SearchItems(ctx context.Context, garageID, query string) ([]*inventoryv1.Item, error) {
+// SearchStockLevels returns garageID's stock levels filtered by query
+// parameters (query, categoryId, brand, lowStock, includeInactive, page,
+// pageSize).
+func (c *Client) SearchStockLevels(ctx context.Context, garageID string, query url.Values) ([]*inventoryv1.StockLevel, error) {
 	path := garagePath(garageID) + "/inventory-items"
-	if query != "" {
-		path += "?query=" + url.QueryEscape(query)
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
 	}
 
-	resp, err := call[inventoryv1.ListItemsResponse](ctx, c, http.MethodGet, path, nil)
+	resp, err := call[inventoryv1.ListStockLevelsResponse](ctx, c, http.MethodGet, path, nil)
 
 	return resp.GetData(), err
 }
 
-// CreateItem adds a part code to garageID's catalogue.
-func (c *Client) CreateItem(ctx context.Context, garageID string, item *inventoryv1.Item) (*inventoryv1.Item, error) {
-	return call[inventoryv1.Item](ctx, c, http.MethodPost, garagePath(garageID)+"/inventory-items", item)
+// GetStockLevel returns one part's stock on hand.
+func (c *Client) GetStockLevel(ctx context.Context, garageID, partID string) (*inventoryv1.StockLevel, error) {
+	return call[inventoryv1.StockLevel](ctx, c, http.MethodGet,
+		garagePath(garageID)+"/inventory-items/"+url.PathEscape(partID), nil)
 }
 
-// GetItem returns one catalogue item of garageID.
-func (c *Client) GetItem(ctx context.Context, garageID, itemID string) (*inventoryv1.Item, error) {
-	return call[inventoryv1.Item](ctx, c, http.MethodGet,
-		garagePath(garageID)+"/inventory-items/"+url.PathEscape(itemID), nil)
-}
-
-// UpdateItem patches a catalogue item (mask paths are proto field names).
-func (c *Client) UpdateItem(ctx context.Context, garageID, itemID string, item *inventoryv1.Item, paths ...string) (*inventoryv1.Item, error) {
-	path := garagePath(garageID) + "/inventory-items/" + url.PathEscape(itemID)
-	if len(paths) > 0 {
-		path += "?updateMask=" + url.QueryEscape(strings.Join(paths, ","))
+// CreateStockReceipt records a goods receipt against a part, increasing
+// stock on hand. quantity is typed in unitID (empty: the base unit) and
+// unitCost is per that unit; unitCost 0 is "not recorded".
+func (c *Client) CreateStockReceipt(
+	ctx context.Context, garageID, partID, quantity, unitID string, unitCost int64,
+) (*inventoryv1.CreateStockReceiptResponse, error) {
+	req := &inventoryv1.CreateStockReceiptRequest{GarageId: garageID, ItemId: partID, Quantity: quantity, UnitCost: unitCost}
+	if unitID != "" {
+		req.UnitId = &unitID
 	}
 
-	return call[inventoryv1.Item](ctx, c, http.MethodPatch, path, item)
-}
-
-// DeleteItem deletes a catalogue item; past transactions are kept.
-func (c *Client) DeleteItem(ctx context.Context, garageID, itemID string) error {
-	_, err := call[inventoryv1.DeleteItemResponse](ctx, c, http.MethodDelete,
-		garagePath(garageID)+"/inventory-items/"+url.PathEscape(itemID), nil)
-
-	return err
-}
-
-// CreateStockReceipt records a goods receipt against an item, increasing
-// stock on hand. UnitCost is optional per receipt.
-func (c *Client) CreateStockReceipt(ctx context.Context, garageID, itemID, quantity string, unitCost int64) (*inventoryv1.StockTransaction, error) {
-	resp, err := call[inventoryv1.CreateStockReceiptResponse](ctx, c, http.MethodPost,
-		garagePath(garageID)+"/stock-receipts",
-		&inventoryv1.CreateStockReceiptRequest{GarageId: garageID, ItemId: itemID, Quantity: quantity, UnitCost: unitCost})
-	if err != nil {
-		return nil, err
-	}
-
-	return resp.GetTransaction(), nil
+	return call[inventoryv1.CreateStockReceiptResponse](ctx, c, http.MethodPost, garagePath(garageID)+"/stock-receipts", req)
 }
 
 // ListStockTransactions returns garageID's stock movements, newest
@@ -844,3 +821,18 @@ func (c *Client) GetRole(ctx context.Context, roleID string) (*tenantv1.Role, er
 }
 
 var _ = commonv1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_UNSPECIFIED
+
+// DownloadRevenueExcel downloads the revenue report as an Excel workbook.
+func (c *Client) DownloadRevenueExcel(ctx context.Context, garageID string, period reportingv1.RevenuePeriod, from, to string) (string, []byte, error) {
+	query := url.Values{}
+	query.Set("period", strconv.Itoa(int(period.Number())))
+	query.Set("from", from)
+	query.Set("to", to)
+
+	path := garagePath(garageID) + "/reports/revenue/excel"
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+
+	return c.DownloadRaw(ctx, http.MethodGet, path)
+}

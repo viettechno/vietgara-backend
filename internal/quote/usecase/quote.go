@@ -10,6 +10,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/quote/domain"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 	"github.com/viettechno/vietgara-backend/pkg/numbering"
+	"github.com/viettechno/vietgara-backend/pkg/partquantity"
 )
 
 // Deps are the dependencies of QuoteUseCase.
@@ -25,6 +26,8 @@ type Deps struct {
 	Mailer         Mailer
 	Events         EventPublisher
 	Tx             Transactor
+	// Parts converts part-line quantities typed in a packaging unit.
+	Parts partquantity.Resolver
 	// AppBaseURL is the web admin origin the public approval link is
 	// built on, e.g. "https://vietgara.viettechno.com".
 	AppBaseURL string
@@ -52,7 +55,11 @@ type LineInput struct {
 	ItemRefID   *string
 	Description string
 	Quantity    string
-	UnitPrice   int64
+	// UnitID and EnteredQuantity are the packaging unit and the amount
+	// typed in it (FR-CAT-02); with a unit, Quantity is derived from them.
+	UnitID          string
+	EnteredQuantity string
+	UnitPrice       int64
 }
 
 // CreateQuoteRequest is the input for QuoteUseCase.Create.
@@ -81,7 +88,7 @@ func (uc *QuoteUseCase) Create(ctx context.Context, req CreateQuoteRequest) (*do
 		return nil, err
 	}
 
-	lines, err := buildLines(req.Lines)
+	lines, err := uc.buildLines(ctx, req.GarageID, req.Lines)
 	if err != nil {
 		return nil, toAppError("create quote", err)
 	}
@@ -198,7 +205,7 @@ func (uc *QuoteUseCase) Update(ctx context.Context, req UpdateQuoteRequest) (*do
 	}
 
 	if req.Lines != nil {
-		lines, err := buildLines(*req.Lines)
+		lines, err := uc.buildLines(ctx, req.GarageID, *req.Lines)
 		if err != nil {
 			return nil, toAppError("update quote", err)
 		}
@@ -335,7 +342,7 @@ func (uc *QuoteUseCase) nextDocumentNumber(ctx context.Context, garageID, docTyp
 
 // buildLines validates inputs and assigns each line an id, position and
 // computed total.
-func buildLines(inputs []LineInput) ([]domain.Line, error) {
+func (uc *QuoteUseCase) buildLines(ctx context.Context, garageID string, inputs []LineInput) ([]domain.Line, error) {
 	if len(inputs) == 0 {
 		return nil, domain.ErrNoLines
 	}
@@ -364,15 +371,23 @@ func buildLines(inputs []LineInput) ([]domain.Line, error) {
 			return nil, domain.ErrInvalidUnitPrice
 		}
 
-		scaled, err := domain.ParseQuantity(in.Quantity)
+		stored, err := partquantity.ForLine(ctx, uc.Parts, garageID, in.ItemType == domain.ItemTypePart, in.ItemRefID,
+			in.Quantity, in.UnitID, in.EnteredQuantity)
+		if err != nil {
+			return nil, err
+		}
+
+		scaled, err := domain.ParseQuantity(stored.Quantity)
 		if err != nil {
 			return nil, err
 		}
 
 		lines = append(lines, domain.Line{
 			ID: uuid.NewString(), Position: i + 1, ItemType: in.ItemType, ItemRefID: in.ItemRefID,
-			Description: description, Quantity: in.Quantity, UnitPrice: in.UnitPrice,
-			LineTotal: domain.LineTotal(scaled, in.UnitPrice), Decision: domain.DecisionPending,
+			Description: description, Quantity: stored.Quantity, UnitID: stored.UnitID, EnteredQuantity: stored.Entered,
+			UnitAbbreviation: stored.UnitAbbreviation,
+			UnitPrice:        in.UnitPrice,
+			LineTotal:        domain.LineTotal(scaled, in.UnitPrice), Decision: domain.DecisionPending,
 		})
 	}
 

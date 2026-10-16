@@ -36,6 +36,7 @@ type env struct {
 	files   *mocks.MockFileRepository
 	storage *mocks.MockFileStorage
 	usage   *mocks.MockFileUsageChecker
+	parts   *mocks.MockFileEntityChecker
 }
 
 func newEnv(t *testing.T) *env {
@@ -43,8 +44,9 @@ func newEnv(t *testing.T) *env {
 
 	e := &env{
 		files: mocks.NewMockFileRepository(t), storage: mocks.NewMockFileStorage(t), usage: mocks.NewMockFileUsageChecker(t),
+		parts: mocks.NewMockFileEntityChecker(t),
 	}
-	e.srv = handler.NewServer(usecase.New(e.files, e.storage, e.usage, mocks.NewMockFileEntityChecker(t)))
+	e.srv = handler.NewServer(usecase.New(e.files, e.storage, e.usage, e.parts))
 
 	return e
 }
@@ -107,6 +109,35 @@ func TestUploadFile(t *testing.T) {
 
 	_, err = e.srv.UploadFile(signedIn(t), &filev1.UploadFileRequest{GarageId: garageID})
 	assert.Equal(t, "VALIDATION_ERROR", reason(err), "unspecified kind")
+}
+
+func TestUploadPartImage(t *testing.T) {
+	t.Parallel()
+
+	const partID = "44444444-4444-4444-8444-444444444444"
+
+	png := append([]byte("\x89PNG\r\n\x1a\n"), make([]byte, 32)...)
+	e := newEnv(t)
+	e.parts.EXPECT().EntityExists(anyArg, garageID, "part", partID).Return(true, nil).Once()
+	e.storage.EXPECT().Put(anyArg, anyArg, "image/png", png).Return("https://cdn/part.png", nil).Once()
+	e.files.EXPECT().Create(anyArg, anyArg).Return(nil).Once()
+
+	resp, err := e.srv.UploadFile(signedIn(t), &filev1.UploadFileRequest{
+		GarageId: garageID, Kind: filev1.FileKind_FILE_KIND_PART_IMAGE, EntityType: "part", EntityId: partID,
+		Content: png, ContentType: "image/png",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, filev1.FileKind_FILE_KIND_PART_IMAGE, resp.GetFile().GetKind())
+	assert.Equal(t, "https://cdn/part.png", resp.GetFile().GetUrl())
+
+	// A part of another garage (or none) is refused.
+	e.parts.EXPECT().EntityExists(anyArg, garageID, "part", partID).Return(false, nil).Once()
+
+	_, err = e.srv.UploadFile(signedIn(t), &filev1.UploadFileRequest{
+		GarageId: garageID, Kind: filev1.FileKind_FILE_KIND_PART_IMAGE, EntityType: "part", EntityId: partID,
+		Content: png, ContentType: "image/png",
+	})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err))
 }
 
 func TestGetFileUrl(t *testing.T) {

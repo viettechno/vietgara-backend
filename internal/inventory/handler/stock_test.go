@@ -95,6 +95,7 @@ func TestCreateStockReceipt(t *testing.T) {
 	assert.Equal(t, "48", resp.GetTransaction().GetQuantity())
 	assert.Equal(t, "2", resp.GetTransaction().GetEnteredQuantity())
 	assert.Equal(t, "case", resp.GetTransaction().GetUnitAbbreviation())
+	assert.Equal(t, "can", resp.GetTransaction().GetBaseUnitAbbreviation())
 	assert.Equal(t, unitID, resp.GetTransaction().GetUnitId())
 	// 120,000 per case of 24 is 5,000 per can.
 	assert.Equal(t, int64(5_000), resp.GetTransaction().GetUnitCost())

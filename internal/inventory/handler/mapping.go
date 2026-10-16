@@ -24,7 +24,7 @@ func transactionToProto(t *domain.StockTransaction) *inventoryv1.StockTransactio
 	out := &inventoryv1.StockTransaction{
 		Id: t.ID, ItemId: t.PartID, ItemSku: t.PartSKU, ItemName: t.PartName, Type: transactionTypeToProto(t.Type),
 		Quantity: t.Quantity, RefType: refTypeToProto(t.RefType), CreatedAt: converter.TimeToProto(t.CreatedAt),
-		UnitId: t.UnitID, UnitAbbreviation: t.UnitAbbreviation,
+		UnitId: t.UnitID, UnitAbbreviation: t.UnitAbbreviation, BaseUnitAbbreviation: t.BaseUnitAbbreviation,
 	}
 
 	if t.EnteredQuantity != nil {

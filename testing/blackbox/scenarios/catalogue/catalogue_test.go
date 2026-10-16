@@ -184,6 +184,7 @@ func TestReceiveByTheCaseIssueByTheCan(t *testing.T) {
 	assert.Equal(t, "240", receipt.GetTransaction().GetQuantity())
 	assert.Equal(t, "10", receipt.GetTransaction().GetEnteredQuantity())
 	assert.Equal(t, "case", receipt.GetTransaction().GetUnitAbbreviation())
+	assert.Equal(t, "can", receipt.GetTransaction().GetBaseUnitAbbreviation())
 	assert.EqualValues(t, 6250, receipt.GetTransaction().GetUnitCost(), "150,000 per case of 24 is 6,250 per can")
 
 	// A unit that is not one of the part's units is refused.

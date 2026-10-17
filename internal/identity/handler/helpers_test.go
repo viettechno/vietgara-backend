@@ -118,6 +118,7 @@ type env struct {
 	srv    *handler.Server
 	issuer *auth.TokenIssuer
 	mail   *mailer
+	users  *users
 }
 
 func newEnv(t *testing.T, google handler.GoogleOAuthConfig) *env {
@@ -126,9 +127,10 @@ func newEnv(t *testing.T, google handler.GoogleOAuthConfig) *env {
 	issuer := auth.NewTokenIssuer([]byte("k"), 20*time.Minute, time.Hour)
 	store := repository.NewMemoryStore()
 	m := &mailer{}
-	uc := usecase.NewIdentityUseCase(&users{byID: map[string]*domain.User{}}, store, store, m, events{}, passTx{}, issuer)
+	repo := &users{byID: map[string]*domain.User{}}
+	uc := usecase.NewIdentityUseCase(repo, store, store, m, events{}, passTx{}, issuer)
 
-	return &env{srv: handler.NewServer(uc, 1200, google), issuer: issuer, mail: m}
+	return &env{srv: handler.NewServer(uc, 1200, google), issuer: issuer, mail: m, users: repo}
 }
 
 // as returns ctx signed in as the token's user.

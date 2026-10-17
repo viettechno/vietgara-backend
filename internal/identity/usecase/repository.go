@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/viettechno/vietgara-backend/internal/identity/domain"
+	"github.com/viettechno/vietgara-backend/internal/platform/audit"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 )
@@ -48,6 +49,52 @@ type SessionStore interface {
 	// ConsumeResetToken returns the user and deletes the token, or
 	// domain.ErrResetTokenInvalid.
 	ConsumeResetToken(ctx context.Context, token string) (string, error)
+	// SaveMFAChallenge stores the token of a sign-in waiting for the second
+	// factor (FR-IAM-09).
+	SaveMFAChallenge(ctx context.Context, token, userID string, ttl time.Duration) error
+	// MFAChallengeUser returns the user of a live challenge token, or
+	// domain.ErrMFAChallengeInvalid.
+	MFAChallengeUser(ctx context.Context, token string) (string, error)
+	DeleteMFAChallenge(ctx context.Context, token string) error
+	// RecordMFAFailure counts a wrong second-factor code of userID and
+	// keeps the count for lockout from now; it returns the new count.
+	RecordMFAFailure(ctx context.Context, userID string, lockout time.Duration) (int, error)
+	// MFAFailures returns the wrong codes counted for userID.
+	MFAFailures(ctx context.Context, userID string) (int, error)
+	ClearMFAFailures(ctx context.Context, userID string) error
+}
+
+// MFARepository is implemented by
+// internal/identity/repository.PostgresMFARepository.
+type MFARepository interface {
+	// Find returns domain.ErrMFANotFound when the user never started an
+	// enrolment.
+	Find(ctx context.Context, userID string) (*domain.MFA, error)
+	// SavePending stores the secret of a new enrolment; false when MFA is
+	// already enabled.
+	SavePending(ctx context.Context, userID string, secretEncrypted []byte) (bool, error)
+	// Enable confirms the pending enrolment and stores the recovery code
+	// hashes; domain.ErrMFAEnrollmentNotStarted when there is none pending.
+	Enable(ctx context.Context, userID string, enabledAt time.Time, step int64, codeHashes []string) error
+	ReplaceRecoveryCodes(ctx context.Context, userID string, codeHashes []string) error
+	// AdvanceStep records a TOTP step as used; false when it was already.
+	AdvanceStep(ctx context.Context, userID string, step int64) (bool, error)
+	// UseRecoveryCode spends a recovery code; false when unknown or spent.
+	UseRecoveryCode(ctx context.Context, userID, codeHash string) (bool, error)
+	RecoveryCodesRemaining(ctx context.Context, userID string) (int, error)
+	Delete(ctx context.Context, userID string) error
+}
+
+// SecretBox encrypts the TOTP secrets at rest (internal/platform/secretbox).
+type SecretBox interface {
+	Seal(plaintext []byte) ([]byte, error)
+	Open(sealed []byte) ([]byte, error)
+}
+
+// AuditLogger records audited changes in the caller's transaction
+// (internal/platform/audit).
+type AuditLogger interface {
+	Record(ctx context.Context, e audit.Entry) error
 }
 
 // OTPStore keeps issued OTPs until they expire.

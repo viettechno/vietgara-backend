@@ -14,12 +14,13 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/middleware"
 )
 
-// Server implements identityv1.AuthServiceServer and
-// identityv1.UserServiceServer. Embedding the Unimplemented servers
+// Server implements identityv1.AuthServiceServer,
+// identityv1.UserServiceServer and identityv1.MfaServiceServer. Embedding the Unimplemented servers
 // keeps it forward-compatible with new RPCs.
 type Server struct {
 	identityv1.UnimplementedAuthServiceServer
 	identityv1.UnimplementedUserServiceServer
+	identityv1.UnimplementedMfaServiceServer
 
 	uc          *usecase.IdentityUseCase
 	accessTTL   int64
@@ -47,7 +48,8 @@ func (s *Server) WithGoogleIDTokenVerifier(v GoogleIDTokenVerifier) *Server {
 }
 
 // Policies declares what every Identity RPC requires (see
-// middleware.Policy). Sign-in and password reset are public; the profile
+// middleware.Policy). Sign-in (with its MFA challenge) and password reset are
+// public; the profile
 // and e-mail verification work before the e-mail is verified.
 func Policies() middleware.Policies {
 	return middleware.Policies{
@@ -63,5 +65,11 @@ func Policies() middleware.Policies {
 		identityv1.AuthService_VerifyEmail_FullMethodName:              middleware.UnverifiedMethod(),
 		identityv1.UserService_GetMe_FullMethodName:                    middleware.UnverifiedMethod(),
 		identityv1.UserService_UpdateMe_FullMethodName:                 middleware.UnverifiedMethod(),
+		identityv1.AuthService_VerifyMfaChallenge_FullMethodName:       middleware.PublicMethod(),
+		identityv1.MfaService_GetMfaStatus_FullMethodName:              middleware.UserMethod(),
+		identityv1.MfaService_EnrollMfa_FullMethodName:                 middleware.UserMethod(),
+		identityv1.MfaService_ConfirmMfaEnrollment_FullMethodName:      middleware.UserMethod(),
+		identityv1.MfaService_RegenerateRecoveryCodes_FullMethodName:   middleware.UserMethod(),
+		identityv1.MfaService_DisableMfa_FullMethodName:                middleware.UserMethod(),
 	}
 }

@@ -7,7 +7,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.5.4
 	github.com/stretchr/testify v1.12.1
-	github.com/viettechno/vietgara-proto v1.9.1-0.20261016122918-47bba8dae971
+	github.com/viettechno/vietgara-proto v1.11.0
 	github.com/viettechno/vietgara-testdata v0.3.0
 	google.golang.org/protobuf v1.36.12
 )

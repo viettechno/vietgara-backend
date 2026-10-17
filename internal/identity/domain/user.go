@@ -99,8 +99,10 @@ type User struct {
 	Locale          Locale
 	// PlatformAdmin is loaded from platform_admins.
 	PlatformAdmin bool
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	// MFAEnabled is true when the user confirmed a TOTP second factor.
+	MFAEnabled bool
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 // EmailVerified reports whether the e-mail OTP was confirmed.

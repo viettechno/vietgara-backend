@@ -17,7 +17,8 @@ var dummyHash, _ = bcrypt.GenerateFromPassword([]byte("vietgara-timing-equalizer
 
 // Login authenticates a user by e-mail and password (FR-IAM-02).
 // Unknown e-mails and wrong passwords return the same error, so the API
-// cannot be used to enumerate users.
+// cannot be used to enumerate users. A user with MFA on gets a challenge
+// instead of tokens (VerifyMFAChallenge completes the sign-in).
 func (uc *IdentityUseCase) Login(ctx context.Context, rawEmail, password string) (*Session, error) {
 	addr, err := email.Normalize(rawEmail)
 	if err != nil || password == "" {
@@ -37,6 +38,10 @@ func (uc *IdentityUseCase) Login(ctx context.Context, rawEmail, password string)
 
 	if user.PasswordHash == nil || bcrypt.CompareHashAndPassword([]byte(*user.PasswordHash), []byte(password)) != nil {
 		return nil, invalidCredentials()
+	}
+
+	if user.MFAEnabled {
+		return uc.startMFAChallenge(ctx, user)
 	}
 
 	return uc.issueSession(ctx, user)

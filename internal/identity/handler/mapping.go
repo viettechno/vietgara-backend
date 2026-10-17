@@ -11,13 +11,22 @@ import (
 )
 
 func (s *Server) sessionToProto(session *usecase.Session) *identityv1.Session {
-	return &identityv1.Session{
+	out := &identityv1.Session{
 		AccessToken:  session.AccessToken,
 		RefreshToken: session.RefreshToken,
 		TokenType:    "Bearer",
 		ExpiresIn:    s.accessTTL,
 		User:         userToProto(session.User),
 	}
+
+	if session.MFARequired {
+		out.ExpiresIn = 0
+		out.MfaRequired = true
+		out.ChallengeToken = session.ChallengeToken
+		out.ChallengeExpiresAt = timestamppb.New(session.ChallengeExpiresAt)
+	}
+
+	return out
 }
 
 func challengeToProto(c usecase.Challenge) *identityv1.OtpChallenge {
@@ -38,6 +47,7 @@ func userToProto(user *domain.User) *identityv1.User {
 		EmailVerified: user.EmailVerified(),
 		Locale:        localeToProto(user.Locale),
 		PlatformAdmin: user.PlatformAdmin,
+		MfaEnabled:    user.MFAEnabled,
 		CreatedAt:     converter.TimeToProto(user.CreatedAt),
 		UpdatedAt:     converter.TimeToProto(user.UpdatedAt),
 	}

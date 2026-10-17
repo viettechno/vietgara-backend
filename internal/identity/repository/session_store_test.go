@@ -25,6 +25,12 @@ type store interface {
 	Put(ctx context.Context, key string, otp *domain.OTP) error
 	IncrementAttempts(ctx context.Context, key string) (int, error)
 	Delete(ctx context.Context, key string) error
+	SaveMFAChallenge(ctx context.Context, token, userID string, ttl time.Duration) error
+	MFAChallengeUser(ctx context.Context, token string) (string, error)
+	DeleteMFAChallenge(ctx context.Context, token string) error
+	RecordMFAFailure(ctx context.Context, userID string, lockout time.Duration) (int, error)
+	MFAFailures(ctx context.Context, userID string) (int, error)
+	ClearMFAFailures(ctx context.Context, userID string) error
 }
 
 func stores(t *testing.T) map[string]store {
@@ -142,4 +148,76 @@ func TestRedisStoreErrors(t *testing.T) {
 	require.Error(t, err)
 	_, err = s.Get(ctx, "x")
 	require.Error(t, err)
+}
+
+func TestMFAChallengeAndFailures(t *testing.T) {
+	t.Parallel()
+
+	for name, s := range stores(t) {
+		t.Run(name, func(t *testing.T) {
+			ctx := t.Context()
+
+			_, err := s.MFAChallengeUser(ctx, "c1")
+			require.ErrorIs(t, err, domain.ErrMFAChallengeInvalid)
+
+			require.NoError(t, s.SaveMFAChallenge(ctx, "c1", "user", time.Minute))
+
+			id, err := s.MFAChallengeUser(ctx, "c1")
+			require.NoError(t, err)
+			assert.Equal(t, "user", id)
+
+			require.NoError(t, s.DeleteMFAChallenge(ctx, "c1"))
+			require.NoError(t, s.DeleteMFAChallenge(ctx, "c1"), "deleting twice is fine")
+			_, err = s.MFAChallengeUser(ctx, "c1")
+			require.ErrorIs(t, err, domain.ErrMFAChallengeInvalid)
+
+			n, err := s.MFAFailures(ctx, "user")
+			require.NoError(t, err)
+			assert.Zero(t, n)
+
+			for want := 1; want <= 3; want++ {
+				n, err = s.RecordMFAFailure(ctx, "user", time.Minute)
+				require.NoError(t, err)
+				assert.Equal(t, want, n)
+			}
+
+			n, err = s.MFAFailures(ctx, "user")
+			require.NoError(t, err)
+			assert.Equal(t, 3, n)
+
+			n, err = s.MFAFailures(ctx, "other")
+			require.NoError(t, err)
+			assert.Zero(t, n, "failures are per user")
+
+			require.NoError(t, s.ClearMFAFailures(ctx, "user"))
+			n, err = s.MFAFailures(ctx, "user")
+			require.NoError(t, err)
+			assert.Zero(t, n)
+		})
+	}
+}
+
+func TestMFAChallengeExpires(t *testing.T) {
+	t.Parallel()
+
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
+	t.Cleanup(func() { _ = client.Close() })
+
+	s := repository.NewRedisStore(client)
+	ctx := t.Context()
+
+	require.NoError(t, s.SaveMFAChallenge(ctx, "c1", "user", time.Minute))
+	_, err := s.RecordMFAFailure(ctx, "user", time.Minute)
+	require.NoError(t, err)
+
+	mr.FastForward(2 * time.Minute)
+
+	_, err = s.MFAChallengeUser(ctx, "c1")
+	require.ErrorIs(t, err, domain.ErrMFAChallengeInvalid)
+
+	n, err := s.MFAFailures(ctx, "user")
+	require.NoError(t, err)
+	assert.Zero(t, n, "the lockout ends")
 }

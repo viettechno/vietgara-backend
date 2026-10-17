@@ -99,6 +99,7 @@ services:
       DATABASE_URL: postgres://vietgara_blackbox:vietgara_blackbox@vietgara-pgsql:5432/vietgara?sslmode=disable
       # Test-only key; never used outside this stack.
       JWT_SIGNING_KEY: 0000000000000000000000000000000000000000000000000000000000b1acb0
+      MFA_ENCRYPTION_KEY: 00000000000000000000000000000000000000000000000000000000b1acb0b1
       JWT_ACCESS_TTL: 20m
       JWT_REFRESH_TTL: 720h
       GRPC_PORT: 50051

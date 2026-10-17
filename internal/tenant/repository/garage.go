@@ -32,6 +32,7 @@ func NewPostgresGarageRepository(pool *platformdb.Pool) *PostgresGarageRepositor
 const garageColumns = `g.id, g.user_id, g.name, g.tax_code, g.legal_name, g.legal_address, g.representative, g.bank_details, g.address, g.phone,
 	g.email, g.logo_key, g.timezone, g.currency, g.status, g.operating_hours, g.quote_number_template,
 	g.repair_order_number_template, g.settlement_number_template, g.payment_voucher_number_template,
+	g.goods_receipt_number_template, g.stock_issue_number_template, g.stock_issue_mode,
 	g.default_quote_approval_mode, g.created_by, g.updated_by, g.created_at, g.updated_at`
 
 func scanGarage(row pgx.Row) (*domain.Garage, error) {
@@ -39,13 +40,15 @@ func scanGarage(row pgx.Row) (*domain.Garage, error) {
 		g            domain.Garage
 		status       string
 		approvalMode string
+		issueMode    string
 		hours        []byte
 		bank         []byte
 	)
 
 	err := row.Scan(&g.ID, &g.OwnerUserID, &g.Name, &g.TaxCode, &g.LegalName, &g.LegalAddress, &g.Representative, &bank,
 		&g.Address, &g.Phone, &g.Email, &g.LogoKey, &g.Timezone, &g.Currency, &status, &hours, &g.QuoteNumberTemplate,
-		&g.RepairOrderNumberTemplate, &g.SettlementNumberTemplate, &g.PaymentVoucherNumberTemplate, &approvalMode,
+		&g.RepairOrderNumberTemplate, &g.SettlementNumberTemplate, &g.PaymentVoucherNumberTemplate,
+		&g.GoodsReceiptNumberTemplate, &g.StockIssueNumberTemplate, &issueMode, &approvalMode,
 		&g.CreatedBy, &g.UpdatedBy, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -58,6 +61,8 @@ func scanGarage(row pgx.Row) (*domain.Garage, error) {
 	g.Status = domain.GarageStatus(status)
 
 	g.DefaultQuoteApprovalMode = domain.QuoteApprovalMode(approvalMode)
+
+	g.StockIssueMode = domain.StockIssueMode(issueMode)
 	if err := json.Unmarshal(hours, &g.OperatingHours); err != nil {
 		return nil, err
 	}
@@ -114,12 +119,14 @@ func (r *PostgresGarageRepository) Create(ctx context.Context, g *domain.Garage)
 		INSERT INTO garages (id, user_id, name, tax_code, legal_name, legal_address, representative, bank_details, address,
 			phone, email, logo_key, timezone, currency, status, operating_hours, quote_number_template,
 			repair_order_number_template, settlement_number_template, payment_voucher_number_template,
+			goods_receipt_number_template, stock_issue_number_template, stock_issue_mode,
 			default_quote_approval_mode, created_by, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
 		RETURNING created_at, updated_at`,
 		g.ID, g.OwnerUserID, g.Name, g.TaxCode, g.LegalName, g.LegalAddress, g.Representative, bank, g.Address, g.Phone,
 		g.Email, g.LogoKey, g.Timezone, g.Currency, string(g.Status), hours, g.QuoteNumberTemplate,
 		g.RepairOrderNumberTemplate, g.SettlementNumberTemplate, g.PaymentVoucherNumberTemplate,
+		g.GoodsReceiptNumberTemplate, g.StockIssueNumberTemplate, string(g.StockIssueMode),
 		string(g.DefaultQuoteApprovalMode), g.CreatedBy, g.UpdatedBy,
 	).Scan(&g.CreatedAt, &g.UpdatedAt)
 }
@@ -143,12 +150,14 @@ func (r *PostgresGarageRepository) Update(ctx context.Context, g *domain.Garage)
 			bank_details = $7, address = $8, phone = $9, email = $10, logo_key = $11, timezone = $12, currency = $13,
 			status = $14, operating_hours = $15, quote_number_template = $16, repair_order_number_template = $17,
 			settlement_number_template = $18, payment_voucher_number_template = $19, default_quote_approval_mode = $20,
-			updated_by = $21
+			goods_receipt_number_template = $21, stock_issue_number_template = $22, stock_issue_mode = $23,
+			updated_by = $24
 		WHERE id = $1
 		RETURNING updated_at`,
 		g.ID, g.Name, g.TaxCode, g.LegalName, g.LegalAddress, g.Representative, bank, g.Address, g.Phone, g.Email,
 		g.LogoKey, g.Timezone, g.Currency, string(g.Status), hours, g.QuoteNumberTemplate, g.RepairOrderNumberTemplate,
-		g.SettlementNumberTemplate, g.PaymentVoucherNumberTemplate, string(g.DefaultQuoteApprovalMode), g.UpdatedBy,
+		g.SettlementNumberTemplate, g.PaymentVoucherNumberTemplate, string(g.DefaultQuoteApprovalMode),
+		g.GoodsReceiptNumberTemplate, g.StockIssueNumberTemplate, string(g.StockIssueMode), g.UpdatedBy,
 	).Scan(&g.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.ErrGarageNotFound

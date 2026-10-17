@@ -39,7 +39,7 @@ func StockMovementsExcel(rows []StockMovementRow) ([]byte, error) {
 		return nil, fmt.Errorf("render stock movements excel: %w", err)
 	}
 
-	headers := []string{"Date", "SKU", "Part", "Direction", "Quantity", "Unit", "Entered quantity", "Entered unit", "Reference"}
+	headers := []string{"Date", headingSKU, headingPart, "Direction", headingQuantity, "Unit", "Entered quantity", "Entered unit", "Reference"}
 	if err := f.SetSheetRow(stockMovementsSheet, "A1", &headers); err != nil {
 		return nil, fmt.Errorf("render stock movements excel: %w", err)
 	}

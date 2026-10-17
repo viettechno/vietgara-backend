@@ -22,6 +22,10 @@ CREATE TYPE garage_status AS ENUM ('active', 'inactive');
 -- (000015), which a service advisor may set per quote.
 CREATE TYPE quote_approval_mode AS ENUM ('link', 'manual');
 
+-- When a repair order's draft stock issue posts (FR-INV-20, Release 7.0): on
+-- close by default, or when the order starts.
+CREATE TYPE stock_issue_mode AS ENUM ('on_close', 'on_start');
+
 -- operating_hours: [{"day": 1..7 (Monday..Sunday), "closed", "open", "close"}].
 -- The numbering templates use {YYYY}, {YY}, {MM}, {DD} and one {SEQ:n}.
 CREATE TABLE garages (
@@ -58,6 +62,9 @@ CREATE TABLE garages (
     repair_order_number_template VARCHAR(50) NOT NULL DEFAULT 'LSC-{YYYY}{MM}-{SEQ:4}',
     settlement_number_template VARCHAR(50) NOT NULL DEFAULT 'QT-{YYYY}{MM}-{SEQ:4}',
     payment_voucher_number_template VARCHAR(50) NOT NULL DEFAULT 'PT-{YYYY}{MM}-{SEQ:4}',
+    goods_receipt_number_template VARCHAR(50) NOT NULL DEFAULT 'PN-{YYYY}{MM}-{SEQ:4}',
+    stock_issue_number_template VARCHAR(50) NOT NULL DEFAULT 'PX-{YYYY}{MM}-{SEQ:4}',
+    stock_issue_mode stock_issue_mode NOT NULL DEFAULT 'on_close',
     default_quote_approval_mode quote_approval_mode NOT NULL DEFAULT 'link',
     created_by UUID,
     updated_by UUID,

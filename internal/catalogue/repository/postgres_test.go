@@ -143,8 +143,8 @@ func TestPostgresRepository_Units(t *testing.T) {
 			ExpectExec("UPDATE units SET is_active", dbtest.Tag(1), nil).
 			ExpectExec("UPDATE units SET is_active", dbtest.Tag(0), nil).
 			ExpectExec("UPDATE units SET is_active", dbtest.Tag(0), errBoom).
-			ExpectQueryRow("FROM items", dbtest.Row(true)).
-			ExpectQueryRow("FROM items", dbtest.ErrRow(errBoom))
+			ExpectQueryRow("FROM parts", dbtest.Row(true)).
+			ExpectQueryRow("FROM parts", dbtest.ErrRow(errBoom))
 		ctx := tx.Context(t.Context())
 		repo := newRepo()
 
@@ -187,8 +187,8 @@ func TestPostgresRepository_Categories(t *testing.T) {
 		ExpectQuery("FROM part_categories c", dbtest.NewRows(categoryRow()).WithScanError(errBoom), nil).
 		ExpectExec("UPDATE part_categories SET deleted_at", dbtest.Tag(1), nil).
 		ExpectExec("UPDATE part_categories SET is_active", dbtest.Tag(1), nil).
-		ExpectQueryRow("FROM items", dbtest.Row(true)).
-		ExpectQueryRow("FROM items", dbtest.ErrRow(errBoom))
+		ExpectQueryRow("FROM parts", dbtest.Row(true)).
+		ExpectQueryRow("FROM parts", dbtest.ErrRow(errBoom))
 	ctx := tx.Context(t.Context())
 	repo := newRepo()
 
@@ -250,9 +250,9 @@ func TestPostgresRepository_FindPart(t *testing.T) {
 		t.Parallel()
 
 		tx := dbtest.New(t).
-			ExpectQueryRow("FROM items i", dbtest.Row(partRow()...)).
-			ExpectQuery("FROM item_units iu", dbtest.NewRows(packagingRow(), overrideRow()), nil).
-			ExpectQuery("FROM item_images", dbtest.NewRows([]any{partID, fileID, 0}), nil)
+			ExpectQueryRow("FROM parts i", dbtest.Row(partRow()...)).
+			ExpectQuery("FROM part_units iu", dbtest.NewRows(packagingRow(), overrideRow()), nil).
+			ExpectQuery("FROM part_images", dbtest.NewRows([]any{partID, fileID, 0}), nil)
 
 		p, err := repo.FindPart(tx.Context(t.Context()), garageID, partID)
 		require.NoError(t, err)
@@ -271,18 +271,18 @@ func TestPostgresRepository_FindPart(t *testing.T) {
 		t.Parallel()
 
 		tx := dbtest.New(t).
-			ExpectQueryRow("FROM items i", dbtest.ErrRow(pgx.ErrNoRows)).
-			ExpectQueryRow("FROM items i", dbtest.ErrRow(errBoom)).
-			ExpectQueryRow("FROM items i", dbtest.Row(partRow()...)).
-			ExpectQuery("FROM item_units iu", nil, errBoom).
-			ExpectQueryRow("FROM items i", dbtest.Row(partRow()...)).
-			ExpectQuery("FROM item_units iu", dbtest.NewRows(packagingRow()).WithScanError(errBoom), nil).
-			ExpectQueryRow("FROM items i", dbtest.Row(partRow()...)).
-			ExpectQuery("FROM item_units iu", dbtest.NewRows(), nil).
-			ExpectQuery("FROM item_images", nil, errBoom).
-			ExpectQueryRow("FROM items i", dbtest.Row(partRow()...)).
-			ExpectQuery("FROM item_units iu", dbtest.NewRows(), nil).
-			ExpectQuery("FROM item_images", dbtest.NewRows([]any{partID, fileID, 0}).WithScanError(errBoom), nil)
+			ExpectQueryRow("FROM parts i", dbtest.ErrRow(pgx.ErrNoRows)).
+			ExpectQueryRow("FROM parts i", dbtest.ErrRow(errBoom)).
+			ExpectQueryRow("FROM parts i", dbtest.Row(partRow()...)).
+			ExpectQuery("FROM part_units iu", nil, errBoom).
+			ExpectQueryRow("FROM parts i", dbtest.Row(partRow()...)).
+			ExpectQuery("FROM part_units iu", dbtest.NewRows(packagingRow()).WithScanError(errBoom), nil).
+			ExpectQueryRow("FROM parts i", dbtest.Row(partRow()...)).
+			ExpectQuery("FROM part_units iu", dbtest.NewRows(), nil).
+			ExpectQuery("FROM part_images", nil, errBoom).
+			ExpectQueryRow("FROM parts i", dbtest.Row(partRow()...)).
+			ExpectQuery("FROM part_units iu", dbtest.NewRows(), nil).
+			ExpectQuery("FROM part_images", dbtest.NewRows([]any{partID, fileID, 0}).WithScanError(errBoom), nil)
 		ctx := tx.Context(t.Context())
 
 		_, err := repo.FindPart(ctx, garageID, partID)
@@ -308,11 +308,11 @@ func TestPostgresRepository_FindPartsByIDs(t *testing.T) {
 	assert.Empty(t, got, "malformed ids are skipped without a query")
 
 	tx := dbtest.New(t).
-		ExpectQuery("FROM items i", dbtest.NewRows(partRow()), nil).
-		ExpectQuery("FROM item_units iu", dbtest.NewRows(), nil).
-		ExpectQuery("FROM item_images", dbtest.NewRows(), nil).
-		ExpectQuery("FROM items i", nil, errBoom).
-		ExpectQuery("FROM items i", dbtest.NewRows(partRow()).WithScanError(errBoom), nil)
+		ExpectQuery("FROM parts i", dbtest.NewRows(partRow()), nil).
+		ExpectQuery("FROM part_units iu", dbtest.NewRows(), nil).
+		ExpectQuery("FROM part_images", dbtest.NewRows(), nil).
+		ExpectQuery("FROM parts i", nil, errBoom).
+		ExpectQuery("FROM parts i", dbtest.NewRows(partRow()).WithScanError(errBoom), nil)
 	ctx := tx.Context(t.Context())
 
 	got, err = repo.FindPartsByIDs(ctx, garageID, []string{partID, "bad"})
@@ -335,13 +335,13 @@ func TestPostgresRepository_PartWrites(t *testing.T) {
 	}
 
 	tx := dbtest.New(t).
-		ExpectQueryRow("INSERT INTO items", dbtest.Row(now, now)).
-		ExpectQueryRow("INSERT INTO items", dbtest.ErrRow(dbtest.UniqueViolation("idx_items_garage_sku_unique"))).
-		ExpectQueryRow("UPDATE items SET sku", dbtest.Row(now)).
-		ExpectQueryRow("UPDATE items SET sku", dbtest.ErrRow(pgx.ErrNoRows)).
-		ExpectQueryRow("UPDATE items SET sku", dbtest.ErrRow(dbtest.UniqueViolation("idx_items_garage_sku_unique"))).
-		ExpectExec("UPDATE items SET deleted_at", dbtest.Tag(1), nil).
-		ExpectExec("UPDATE items SET is_active", dbtest.Tag(0), nil)
+		ExpectQueryRow("INSERT INTO parts", dbtest.Row(now, now)).
+		ExpectQueryRow("INSERT INTO parts", dbtest.ErrRow(dbtest.UniqueViolation("idx_parts_garage_sku_unique"))).
+		ExpectQueryRow("UPDATE parts SET sku", dbtest.Row(now)).
+		ExpectQueryRow("UPDATE parts SET sku", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectQueryRow("UPDATE parts SET sku", dbtest.ErrRow(dbtest.UniqueViolation("idx_parts_garage_sku_unique"))).
+		ExpectExec("UPDATE parts SET deleted_at", dbtest.Tag(1), nil).
+		ExpectExec("UPDATE parts SET is_active", dbtest.Tag(0), nil)
 	ctx := tx.Context(t.Context())
 	repo := newRepo()
 
@@ -368,9 +368,9 @@ func TestPostgresRepository_ListParts(t *testing.T) {
 
 		tx := dbtest.New(t).
 			ExpectQueryRow("SELECT count(*)", dbtest.Row(1)).
-			ExpectQuery("FROM items i", dbtest.NewRows(partRow()), nil).
-			ExpectQuery("FROM item_units iu", dbtest.NewRows(packagingRow()), nil).
-			ExpectQuery("FROM item_images", dbtest.NewRows(), nil)
+			ExpectQuery("FROM parts i", dbtest.NewRows(partRow()), nil).
+			ExpectQuery("FROM part_units iu", dbtest.NewRows(packagingRow()), nil).
+			ExpectQuery("FROM part_images", dbtest.NewRows(), nil)
 
 		parts, total, err := repo.ListParts(tx.Context(t.Context()), garageID, filter)
 		require.NoError(t, err)
@@ -386,9 +386,9 @@ func TestPostgresRepository_ListParts(t *testing.T) {
 			ExpectQueryRow("SELECT count(*)", dbtest.Row(0)).
 			ExpectQueryRow("SELECT count(*)", dbtest.ErrRow(errBoom)).
 			ExpectQueryRow("SELECT count(*)", dbtest.Row(1)).
-			ExpectQuery("FROM items i", nil, errBoom).
+			ExpectQuery("FROM parts i", nil, errBoom).
 			ExpectQueryRow("SELECT count(*)", dbtest.Row(1)).
-			ExpectQuery("FROM items i", dbtest.NewRows(partRow()).WithScanError(errBoom), nil)
+			ExpectQuery("FROM parts i", dbtest.NewRows(partRow()).WithScanError(errBoom), nil)
 		ctx := tx.Context(t.Context())
 
 		parts, total, err := repo.ListParts(ctx, garageID, usecase.PartFilter{Limit: 20})
@@ -411,13 +411,13 @@ func TestPostgresRepository_Packaging(t *testing.T) {
 	repo := newRepo()
 
 	tx := dbtest.New(t).
-		ExpectExec("DELETE FROM item_units", dbtest.Tag(2), nil).
-		ExpectExec("INSERT INTO item_units", dbtest.Tag(1), nil).
-		ExpectExec("INSERT INTO item_units", dbtest.Tag(1), nil).
-		ExpectExec("UPDATE items SET updated_by", dbtest.Tag(1), nil).
-		ExpectExec("DELETE FROM item_units", dbtest.Tag(0), errBoom).
-		ExpectExec("DELETE FROM item_units", dbtest.Tag(0), nil).
-		ExpectExec("INSERT INTO item_units", dbtest.Tag(0), errBoom)
+		ExpectExec("DELETE FROM part_units", dbtest.Tag(2), nil).
+		ExpectExec("INSERT INTO part_units", dbtest.Tag(1), nil).
+		ExpectExec("INSERT INTO part_units", dbtest.Tag(1), nil).
+		ExpectExec("UPDATE parts SET updated_by", dbtest.Tag(1), nil).
+		ExpectExec("DELETE FROM part_units", dbtest.Tag(0), errBoom).
+		ExpectExec("DELETE FROM part_units", dbtest.Tag(0), nil).
+		ExpectExec("INSERT INTO part_units", dbtest.Tag(0), errBoom)
 	ctx := tx.Context(t.Context())
 
 	require.NoError(t, repo.ReplacePackaging(ctx, garageID, partID, "actor", units))
@@ -431,15 +431,15 @@ func TestPostgresRepository_Images(t *testing.T) {
 	repo := newRepo()
 
 	tx := dbtest.New(t).
-		ExpectQuery("FROM item_images", dbtest.NewRows([]any{fileID, 0}, []any{"f2", 1}), nil).
-		ExpectQuery("FROM item_images", nil, errBoom).
-		ExpectQuery("FROM item_images", dbtest.NewRows([]any{fileID, 0}).WithScanError(errBoom), nil).
-		ExpectExec("INSERT INTO item_images", dbtest.Tag(1), nil).
-		ExpectExec("DELETE FROM item_images", dbtest.Tag(1), nil).
-		ExpectExec("DELETE FROM item_images", dbtest.Tag(0), nil).
-		ExpectExec("DELETE FROM item_images", dbtest.Tag(0), errBoom).
-		ExpectQueryRow("FROM item_images", dbtest.Row(true)).
-		ExpectQueryRow("FROM item_images", dbtest.ErrRow(errBoom))
+		ExpectQuery("FROM part_images", dbtest.NewRows([]any{fileID, 0}, []any{"f2", 1}), nil).
+		ExpectQuery("FROM part_images", nil, errBoom).
+		ExpectQuery("FROM part_images", dbtest.NewRows([]any{fileID, 0}).WithScanError(errBoom), nil).
+		ExpectExec("INSERT INTO part_images", dbtest.Tag(1), nil).
+		ExpectExec("DELETE FROM part_images", dbtest.Tag(1), nil).
+		ExpectExec("DELETE FROM part_images", dbtest.Tag(0), nil).
+		ExpectExec("DELETE FROM part_images", dbtest.Tag(0), errBoom).
+		ExpectQueryRow("FROM part_images", dbtest.Row(true)).
+		ExpectQueryRow("FROM part_images", dbtest.ErrRow(errBoom))
 	ctx := tx.Context(t.Context())
 
 	images, err := repo.ListImages(ctx, garageID, partID)

@@ -31,7 +31,13 @@ type GarageFields struct {
 	SettlementNumberTemplate  *string
 	// PaymentVoucherNumberTemplate numbers payment vouchers (FR-BIL-05).
 	PaymentVoucherNumberTemplate *string
-	DefaultQuoteApprovalMode     *domain.QuoteApprovalMode
+	// GoodsReceiptNumberTemplate and StockIssueNumberTemplate number goods
+	// receipts and stock issues (FR-INV-06/20).
+	GoodsReceiptNumberTemplate *string
+	StockIssueNumberTemplate   *string
+	// StockIssueMode is when a repair order's draft stock issue posts.
+	StockIssueMode           *domain.StockIssueMode
+	DefaultQuoteApprovalMode *domain.QuoteApprovalMode
 	// Legal profile (FR-TEN-06): a blank value clears it, and a non-nil Bank
 	// replaces the whole account.
 	LegalName      *string
@@ -83,6 +89,9 @@ func (uc *TenantUseCase) CreateGarage(ctx context.Context, ownerID string, field
 		RepairOrderNumberTemplate:    domain.DefaultRepairOrderNumberTemplate,
 		SettlementNumberTemplate:     domain.DefaultSettlementNumberTemplate,
 		PaymentVoucherNumberTemplate: domain.DefaultPaymentVoucherNumberTemplate,
+		GoodsReceiptNumberTemplate:   domain.DefaultGoodsReceiptNumberTemplate,
+		StockIssueNumberTemplate:     domain.DefaultStockIssueNumberTemplate,
+		StockIssueMode:               domain.StockIssueModeOnClose,
 		DefaultQuoteApprovalMode:     domain.QuoteApprovalModeLink,
 		CreatedBy:                    &ownerID,
 		UpdatedBy:                    &ownerID,
@@ -467,6 +476,10 @@ func applyDocumentConfiguration(g *domain.Garage, f GarageFields) error {
 		g.PaymentVoucherNumberTemplate = *f.PaymentVoucherNumberTemplate
 	}
 
+	if err := applyStockConfiguration(g, f); err != nil {
+		return err
+	}
+
 	if f.DefaultQuoteApprovalMode != nil {
 		if !f.DefaultQuoteApprovalMode.IsValid() {
 			return apperror.Validation("defaultQuoteApprovalMode", apperror.IssueInvalid, "quote approval mode is invalid")
@@ -486,4 +499,35 @@ func optional(s string) *string {
 	}
 
 	return &s
+}
+
+// applyStockConfiguration sets the Release 7.0 fields: the goods receipt and
+// stock issue numbering templates (FR-TEN-05) and when a stock issue posts
+// (FR-INV-20).
+func applyStockConfiguration(g *domain.Garage, f GarageFields) error {
+	if f.GoodsReceiptNumberTemplate != nil {
+		if !domain.ValidNumberingTemplate(*f.GoodsReceiptNumberTemplate) {
+			return apperror.Validation("numbering.goodsReceipt", apperror.IssueInvalid, "numbering template is invalid")
+		}
+
+		g.GoodsReceiptNumberTemplate = *f.GoodsReceiptNumberTemplate
+	}
+
+	if f.StockIssueNumberTemplate != nil {
+		if !domain.ValidNumberingTemplate(*f.StockIssueNumberTemplate) {
+			return apperror.Validation("numbering.stockIssue", apperror.IssueInvalid, "numbering template is invalid")
+		}
+
+		g.StockIssueNumberTemplate = *f.StockIssueNumberTemplate
+	}
+
+	if f.StockIssueMode != nil {
+		if !f.StockIssueMode.IsValid() {
+			return apperror.Validation("stockIssueMode", apperror.IssueInvalid, "stock issue mode is invalid")
+		}
+
+		g.StockIssueMode = *f.StockIssueMode
+	}
+
+	return nil
 }

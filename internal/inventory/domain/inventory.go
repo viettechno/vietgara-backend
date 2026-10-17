@@ -30,6 +30,17 @@ type StockLevel struct {
 	// part's base unit.
 	QuantityOnHand   string
 	ReorderThreshold string
+	// QuantityReserved is held by the part's draft stock issues and
+	// QuantityAvailable is QuantityOnHand minus it (FR-INV-20); both are
+	// decimal strings in the base unit.
+	QuantityReserved  string
+	QuantityAvailable string
+	// AverageCost is the weighted-average cost per base unit, VND with up to
+	// four decimals (FR-INV-07); StockValue is AverageCost times
+	// QuantityOnHand. Both are cleared for a caller without
+	// inventory.cost.read.
+	AverageCost *string
+	StockValue  *string
 	// LowStock is true when the quantity is at or below the threshold
 	// (FR-INV-04's display half).
 	LowStock bool
@@ -67,9 +78,15 @@ type RefType string
 const (
 	// RefPurchase is a manual stock receipt from a supplier (FR-INV-01).
 	RefPurchase RefType = "purchase"
-	// RefRepairOrder is an automatic deduction when a repair order with
-	// part lines closes (FR-INV-02).
+	// RefRepairOrder is the pre-7.0 automatic deduction when a repair order
+	// with part lines closed (FR-INV-02); superseded by RefStockIssue.
 	RefRepairOrder RefType = "repair_order"
+	// RefGoodsReceipt is a completed goods receipt, or the reversal of a
+	// cancelled one (FR-INV-06); RefID is the receipt's id.
+	RefGoodsReceipt RefType = "goods_receipt"
+	// RefStockIssue is a posted stock issue (FR-INV-20); RefID is the issue's
+	// id.
+	RefStockIssue RefType = "stock_issue"
 )
 
 // StockTransaction is one recorded stock movement.
@@ -91,13 +108,18 @@ type StockTransaction struct {
 	UnitID           *string
 	EnteredQuantity  *string
 	UnitAbbreviation string
-	// UnitCost is the cost of one base unit (VND, up to four decimals) of a
-	// purchase receipt, nil for a repair-order issue or an unrecorded cost.
-	UnitCost  *string
-	RefType   RefType
-	RefID     *string
-	CreatedBy *string
-	CreatedAt time.Time
+	// UnitCost is the cost of one base unit (VND, up to four decimals): the
+	// line cost of a goods receipt, or the average-cost snapshot of an issue.
+	// Nil when no cost was recorded; a stock issue is stamped with the
+	// average cost at the time it is recorded.
+	UnitCost *string
+	RefType  RefType
+	RefID    *string
+	// SupplierID is the supplier of the goods receipt line behind an IN
+	// movement.
+	SupplierID *string
+	CreatedBy  *string
+	CreatedAt  time.Time
 }
 
 // Sentinel errors for business-rule violations in the Inventory module.
@@ -106,13 +128,6 @@ var (
 	ErrPartInactive    = errors.New("the part is not active")
 	ErrInvalidQuantity = errors.New("quantity must be a positive number with at most 3 decimal places")
 	ErrInvalidCost     = errors.New("unit cost must not be negative")
-
-	// ErrAlreadyIssued is returned when a repair order's stock issue for
-	// a part was already recorded (the unique index on
-	// (garage_id, item_id, ref_id) where ref_type = 'repair_order'),
-	// guarding a redelivered repair_order.closed event on top of the
-	// generic processed_events check.
-	ErrAlreadyIssued = errors.New("stock for this repair order and part was already issued")
 )
 
 var quantityPattern = regexp.MustCompile(`^\d{1,10}(\.\d{1,3})?$`)

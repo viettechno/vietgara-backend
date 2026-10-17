@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/mock"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/inventory/usecase"
 	"github.com/viettechno/vietgara-backend/internal/middleware"
 	"github.com/viettechno/vietgara-backend/internal/mocks"
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
 )
 
@@ -27,10 +29,14 @@ var (
 )
 
 type env struct {
-	srv    *handler.Server
-	repo   *mocks.MockInventoryRepository
-	parts  *mocks.MockInventoryPartCatalogue
-	events *mocks.MockInventoryEventPublisher
+	srv       *handler.Server
+	repo      *mocks.MockInventoryRepository
+	parts     *mocks.MockInventoryPartCatalogue
+	events    *mocks.MockInventoryEventPublisher
+	garages   *mocks.MockInventoryGarages
+	directory *mocks.MockInventoryDirectory
+	sequences *mocks.MockInventorySequencer
+	audit     *mocks.MockInventoryAuditLogger
 }
 
 func newEnv(t *testing.T) *env {
@@ -38,9 +44,14 @@ func newEnv(t *testing.T) *env {
 
 	e := &env{
 		repo: mocks.NewMockInventoryRepository(t), parts: mocks.NewMockInventoryPartCatalogue(t),
-		events: mocks.NewMockInventoryEventPublisher(t),
+		events: mocks.NewMockInventoryEventPublisher(t), garages: mocks.NewMockInventoryGarages(t),
+		directory: mocks.NewMockInventoryDirectory(t), sequences: mocks.NewMockInventorySequencer(t),
+		audit: mocks.NewMockInventoryAuditLogger(t),
 	}
-	e.srv = handler.NewServer(usecase.NewInventoryUseCase(e.repo, e.parts, e.events))
+	e.srv = handler.NewServer(usecase.NewInventoryUseCase(usecase.Dependencies{
+		Repo: e.repo, Parts: e.parts, Events: e.events, Garages: e.garages, Directory: e.directory, Sequences: e.sequences,
+		Audit: e.audit, Now: func() time.Time { return time.Date(2026, time.October, 15, 3, 0, 0, 0, time.UTC) },
+	}))
 
 	return e
 }
@@ -59,4 +70,11 @@ func signedIn(t *testing.T) context.Context {
 	claims.Subject = actorID
 
 	return middleware.WithClaims(t.Context(), claims)
+}
+
+// signedInWithCost is a caller who holds inventory.cost.read.
+func signedInWithCost(t *testing.T) context.Context {
+	t.Helper()
+
+	return access.WithAccess(signedIn(t), &access.Access{Permissions: []access.Permission{access.InventoryRead, access.InventoryCostRead}})
 }

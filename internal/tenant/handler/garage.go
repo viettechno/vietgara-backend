@@ -94,7 +94,7 @@ const pathName = "name"
 
 var garageSettable = []string{
 	pathName, "tax_code", "address", "phone", "email", "timezone", "currency", "status", "operating_hours", "numbering",
-	"default_quote_approval_mode", "legal_name", "legal_address", "representative", "bank",
+	"default_quote_approval_mode", "legal_name", "legal_address", "representative", "bank", "stock_issue_mode",
 }
 
 // garageSetters copy one masked field of the API garage into GarageFields.
@@ -120,6 +120,14 @@ var garageSetters = map[string]func(f *usecase.GarageFields, in *tenantv1.Garage
 		if v := in.GetNumbering().GetPaymentVoucher(); v != "" {
 			f.PaymentVoucherNumberTemplate = new(v)
 		}
+
+		if v := in.GetNumbering().GetGoodsReceipt(); v != "" {
+			f.GoodsReceiptNumberTemplate = new(v)
+		}
+
+		if v := in.GetNumbering().GetStockIssue(); v != "" {
+			f.StockIssueNumberTemplate = new(v)
+		}
 	},
 	"numbering.quote": func(f *usecase.GarageFields, in *tenantv1.Garage) {
 		f.QuoteNumberTemplate = new(in.GetNumbering().GetQuote())
@@ -132,6 +140,15 @@ var garageSetters = map[string]func(f *usecase.GarageFields, in *tenantv1.Garage
 	},
 	"numbering.payment_voucher": func(f *usecase.GarageFields, in *tenantv1.Garage) {
 		f.PaymentVoucherNumberTemplate = new(in.GetNumbering().GetPaymentVoucher())
+	},
+	"numbering.goods_receipt": func(f *usecase.GarageFields, in *tenantv1.Garage) {
+		f.GoodsReceiptNumberTemplate = new(in.GetNumbering().GetGoodsReceipt())
+	},
+	"numbering.stock_issue": func(f *usecase.GarageFields, in *tenantv1.Garage) {
+		f.StockIssueNumberTemplate = new(in.GetNumbering().GetStockIssue())
+	},
+	"stock_issue_mode": func(f *usecase.GarageFields, in *tenantv1.Garage) {
+		f.StockIssueMode = new(stockIssueModeFromProto(in.GetStockIssueMode()))
 	},
 	"legal_name":     func(f *usecase.GarageFields, in *tenantv1.Garage) { f.LegalName = new(in.GetLegalName()) },
 	"legal_address":  func(f *usecase.GarageFields, in *tenantv1.Garage) { f.LegalAddress = new(in.GetLegalAddress()) },
@@ -180,7 +197,9 @@ func presentGarageFields(in *tenantv1.Garage) []string {
 		"operating_hours": len(in.GetOperatingHours()) > 0,
 		"numbering.quote": in.GetNumbering().GetQuote() != "", "numbering.repair_order": in.GetNumbering().GetRepairOrder() != "",
 		"numbering.settlement": in.GetNumbering().GetSettlement() != "", "numbering.payment_voucher": in.GetNumbering().GetPaymentVoucher() != "",
-		"legal_name": in.LegalName != nil, "legal_address": in.LegalAddress != nil, "representative": in.Representative != nil,
+		"numbering.goods_receipt": in.GetNumbering().GetGoodsReceipt() != "", "numbering.stock_issue": in.GetNumbering().GetStockIssue() != "",
+		"stock_issue_mode": in.GetStockIssueMode() != tenantv1.StockIssueMode_STOCK_ISSUE_MODE_UNSPECIFIED,
+		"legal_name":       in.LegalName != nil, "legal_address": in.LegalAddress != nil, "representative": in.Representative != nil,
 		"bank":                        in.GetBank() != nil,
 		"default_quote_approval_mode": in.GetDefaultQuoteApprovalMode() != commonv1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_UNSPECIFIED,
 	} {

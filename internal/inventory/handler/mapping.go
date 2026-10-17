@@ -1,28 +1,44 @@
 package handler
 
 import (
+	"context"
 	"math"
-	"math/big"
 
 	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
 	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/inventory/domain"
 	"github.com/viettechno/vietgara-backend/internal/inventory/usecase"
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
 	"github.com/viettechno/vietgara-backend/pkg/converter"
 )
 
-func stockLevelToProto(l *domain.StockLevel) *inventoryv1.StockLevel {
-	return &inventoryv1.StockLevel{
+func stockLevelToProto(ctx context.Context, l *domain.StockLevel) *inventoryv1.StockLevel {
+	out := &inventoryv1.StockLevel{
 		PartId: l.PartID, Sku: l.SKU, Name: l.Name, BaseUnitName: l.BaseUnitName, BaseUnitAbbreviation: l.BaseUnitAbbreviation,
 		CategoryName: l.CategoryName, Brand: l.Brand, IsActive: l.IsActive, ThumbnailUrl: l.ThumbnailURL,
 		QuantityOnHand: l.QuantityOnHand, ReorderThreshold: l.ReorderThreshold, LowStock: l.LowStock,
+		QuantityReserved: l.QuantityReserved, QuantityAvailable: l.QuantityAvailable,
 	}
+
+	if canSeeCost(ctx) {
+		out.AverageCost, out.StockValue = wholeDongRef(l.AverageCost), wholeDongRef(l.StockValue)
+	}
+
+	return out
 }
 
-func transactionToProto(t *domain.StockTransaction) *inventoryv1.StockTransaction {
+// canSeeCost reports whether the caller holds inventory.cost.read (FR-INV-08);
+// responses omit every cost field without it.
+func canSeeCost(ctx context.Context) bool {
+	a, ok := access.FromContext(ctx)
+
+	return ok && a.Has(access.InventoryCostRead)
+}
+
+func transactionToProto(ctx context.Context, t *domain.StockTransaction) *inventoryv1.StockTransaction {
 	out := &inventoryv1.StockTransaction{
-		Id: t.ID, ItemId: t.PartID, ItemSku: t.PartSKU, ItemName: t.PartName, Type: transactionTypeToProto(t.Type),
+		Id: t.ID, PartId: t.PartID, PartSku: t.PartSKU, PartName: t.PartName, Type: transactionTypeToProto(t.Type),
 		Quantity: t.Quantity, RefType: refTypeToProto(t.RefType), CreatedAt: converter.TimeToProto(t.CreatedAt),
 		UnitId: t.UnitID, UnitAbbreviation: t.UnitAbbreviation, BaseUnitAbbreviation: t.BaseUnitAbbreviation,
 	}
@@ -31,8 +47,8 @@ func transactionToProto(t *domain.StockTransaction) *inventoryv1.StockTransactio
 		out.EnteredQuantity = *t.EnteredQuantity
 	}
 
-	if t.UnitCost != nil {
-		out.UnitCost = wholeDong(*t.UnitCost)
+	if canSeeCost(ctx) {
+		out.UnitCost = wholeDongRef(t.UnitCost)
 	}
 
 	if t.RefID != nil {
@@ -42,16 +58,17 @@ func transactionToProto(t *domain.StockTransaction) *inventoryv1.StockTransactio
 	return out
 }
 
-// wholeDong rounds a cost with up to four decimals to whole dong; nil when
-// it cannot be parsed.
-func wholeDong(cost string) *int64 {
-	r, ok := new(big.Rat).SetString(cost)
-	if !ok {
+// wholeDongRef rounds a cost with up to four decimals to whole dong; nil when
+// it is absent or cannot be parsed.
+func wholeDongRef(cost *string) *int64 {
+	if cost == nil {
 		return nil
 	}
 
-	r.Add(r, big.NewRat(1, 2))
-	n := new(big.Int).Quo(r.Num(), r.Denom()).Int64()
+	n, ok := domain.WholeDong(*cost)
+	if !ok {
+		return nil
+	}
 
 	return &n
 }
@@ -80,11 +97,18 @@ func transactionTypeFromProto(t inventoryv1.StockTransactionType) domain.Transac
 }
 
 func refTypeToProto(t domain.RefType) inventoryv1.StockTransactionRefType {
-	if t == domain.RefRepairOrder {
+	switch t {
+	case domain.RefRepairOrder:
 		return inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_REPAIR_ORDER
+	case domain.RefGoodsReceipt:
+		return inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_GOODS_RECEIPT
+	case domain.RefStockIssue:
+		return inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_STOCK_ISSUE
+	case domain.RefPurchase:
+		return inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_PURCHASE
+	default:
+		return inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_UNSPECIFIED
 	}
-
-	return inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_PURCHASE
 }
 
 func paginationToProto[T any](p *usecase.Page[T]) *commonv1.Pagination {

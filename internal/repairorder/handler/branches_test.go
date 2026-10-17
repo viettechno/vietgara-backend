@@ -150,6 +150,7 @@ func TestCreateRepairOrderPartLine(t *testing.T) {
 	e.limits.EXPECT().ConsumeTransaction(anyArg, ownerID).Return(nil).Once()
 	e.sequences.EXPECT().Next(anyArg, garageID, "repair_order", "LSC-{SEQ:4}").Return(2, nil).Once()
 	e.repairOrders.EXPECT().Create(anyArg, anyArg).Return(nil).Once()
+	e.events.EXPECT().Publish(anyArg, anyArg, anyArg, anyArg, anyArg).Return(nil).Once()
 
 	resp, err := e.srv.CreateRepairOrder(signedIn(t), &repairorderv1.CreateRepairOrderRequest{
 		GarageId: garageID,
@@ -235,6 +236,7 @@ func TestUpdateRepairOrderLineStatuses(t *testing.T) {
 			e := newEnv(t)
 			e.repairOrders.EXPECT().FindByID(anyArg, garageID, repairOrderID).Return(openRepairOrder(), nil).Once()
 			e.repairOrders.EXPECT().Save(anyArg, anyArg).Return(nil).Once()
+			e.events.EXPECT().Publish(anyArg, anyArg, anyArg, anyArg, anyArg).Return(nil).Maybe()
 
 			resp, err := e.srv.UpdateRepairOrderLine(signedIn(t), &repairorderv1.UpdateRepairOrderLineRequest{
 				GarageId: garageID, RepairOrderId: repairOrderID, LineId: "line-1",
@@ -252,6 +254,7 @@ func TestUpdateRepairOrderLineMaskedStatus(t *testing.T) {
 	e := newEnv(t)
 	e.repairOrders.EXPECT().FindByID(anyArg, garageID, repairOrderID).Return(openRepairOrder(), nil).Once()
 	e.repairOrders.EXPECT().Save(anyArg, anyArg).Return(nil).Once()
+	e.events.EXPECT().Publish(anyArg, anyArg, anyArg, anyArg, anyArg).Return(nil).Maybe()
 
 	resp, err := e.srv.UpdateRepairOrderLine(signedIn(t), &repairorderv1.UpdateRepairOrderLineRequest{
 		GarageId: garageID, RepairOrderId: repairOrderID, LineId: "line-1",

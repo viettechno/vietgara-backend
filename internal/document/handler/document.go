@@ -64,7 +64,7 @@ func (s *Server) ExportPaymentVoucherPdf(
 func (s *Server) ExportStockMovementsExcel(
 	ctx context.Context, req *documentv1.ExportStockMovementsExcelRequest,
 ) (*httpbody.HttpBody, error) {
-	data, err := s.uc.StockMovementsExcel(ctx, req.GetGarageId(), req.GetItemId())
+	data, err := s.uc.StockMovementsExcel(ctx, req.GetGarageId(), req.GetPartId())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -112,4 +112,47 @@ func revenuePeriod(p reportingv1.RevenuePeriod) string {
 	default:
 		return ""
 	}
+}
+
+// ExportGoodsReceiptPdf renders a goods receipt as a PDF (FR-INV-06).
+func (s *Server) ExportGoodsReceiptPdf(ctx context.Context, req *documentv1.ExportGoodsReceiptPdfRequest) (*httpbody.HttpBody, error) {
+	data, err := s.uc.GoodsReceiptPDF(ctx, req.GetGarageId(), req.GetGoodsReceiptId())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return pdfBody(data), nil
+}
+
+// ExportStockIssuePdf renders a repair order's stock issue as a PDF
+// (FR-INV-20).
+func (s *Server) ExportStockIssuePdf(ctx context.Context, req *documentv1.ExportStockIssuePdfRequest) (*httpbody.HttpBody, error) {
+	data, err := s.uc.StockIssuePDF(ctx, req.GetGarageId(), req.GetRepairOrderId())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return pdfBody(data), nil
+}
+
+// ExportPurchasesExcel renders the purchases-by-supplier report as an Excel
+// workbook (FR-INV-19).
+func (s *Server) ExportPurchasesExcel(ctx context.Context, req *documentv1.ExportPurchasesExcelRequest) (*httpbody.HttpBody, error) {
+	data, err := s.uc.PurchasesExcel(ctx, req.GetGarageId(), req.GetSupplierId(), req.GetFrom(), req.GetTo())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return excelBody(data), nil
+}
+
+// ExportStockValuationExcel renders the stock valuation report as an Excel
+// workbook (FR-INV-07).
+func (s *Server) ExportStockValuationExcel(ctx context.Context, req *documentv1.ExportStockValuationExcelRequest) (*httpbody.HttpBody, error) {
+	data, err := s.uc.StockValuationExcel(ctx, req.GetGarageId(), req.GetAt())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return excelBody(data), nil
 }

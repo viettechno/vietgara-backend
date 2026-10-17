@@ -75,7 +75,8 @@ var DefaultRoleTemplates = []DefaultRoleTemplate{
 		},
 		Permissions: []access.Permission{
 			access.CustomerRead, access.SupplierRead, access.SubscriptionRead, access.QuoteRead, access.RepairOrderRead,
-			access.InventoryRead, access.CatalogueRead, access.BillingRead, access.BillingWrite, access.ReportRead,
+			access.InventoryRead, access.InventoryCostRead, access.CatalogueRead, access.BillingRead, access.BillingWrite,
+			access.ReportRead,
 		},
 	},
 	{
@@ -107,7 +108,7 @@ var DefaultRoleTemplates = []DefaultRoleTemplate{
 			"en": "Parts stock in, stock out and stock on hand.",
 		},
 		Permissions: []access.Permission{
-			access.InventoryRead, access.InventoryWrite, access.CatalogueRead, access.CatalogueWrite,
+			access.InventoryRead, access.InventoryWrite, access.InventoryCostRead, access.CatalogueRead, access.CatalogueWrite,
 			access.SupplierRead, access.SupplierWrite, access.RepairOrderRead,
 		},
 	},

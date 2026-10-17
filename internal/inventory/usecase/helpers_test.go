@@ -3,6 +3,7 @@ package usecase_test
 import (
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/viettechno/vietgara-backend/internal/inventory/usecase"
 	"github.com/viettechno/vietgara-backend/internal/mocks"
@@ -21,20 +22,32 @@ const (
 var errBoom = errors.New("boom")
 
 type deps struct {
-	Repo   *mocks.MockInventoryRepository
-	Parts  *mocks.MockInventoryPartCatalogue
-	Events *mocks.MockInventoryEventPublisher
+	Repo      *mocks.MockInventoryRepository
+	Parts     *mocks.MockInventoryPartCatalogue
+	Events    *mocks.MockInventoryEventPublisher
+	Garages   *mocks.MockInventoryGarages
+	Directory *mocks.MockInventoryDirectory
+	Sequences *mocks.MockInventorySequencer
+	Audit     *mocks.MockInventoryAuditLogger
 }
+
+// now is the fixed clock of the tests: a Thursday morning in Ho Chi Minh City.
+var now = time.Date(2026, time.October, 15, 3, 0, 0, 0, time.UTC)
 
 func newUseCase(t *testing.T) (*usecase.InventoryUseCase, *deps) {
 	t.Helper()
 
 	d := &deps{
 		Repo: mocks.NewMockInventoryRepository(t), Parts: mocks.NewMockInventoryPartCatalogue(t),
-		Events: mocks.NewMockInventoryEventPublisher(t),
+		Events: mocks.NewMockInventoryEventPublisher(t), Garages: mocks.NewMockInventoryGarages(t),
+		Directory: mocks.NewMockInventoryDirectory(t), Sequences: mocks.NewMockInventorySequencer(t),
+		Audit: mocks.NewMockInventoryAuditLogger(t),
 	}
 
-	return usecase.NewInventoryUseCase(d.Repo, d.Parts, d.Events), d
+	return usecase.NewInventoryUseCase(usecase.Dependencies{
+		Repo: d.Repo, Parts: d.Parts, Events: d.Events, Garages: d.Garages, Directory: d.Directory,
+		Sequences: d.Sequences, Audit: d.Audit, Now: func() time.Time { return now },
+	}), d
 }
 
 func samplePart() usecase.PartInfo {

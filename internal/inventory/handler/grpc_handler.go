@@ -29,12 +29,24 @@ func NewServer(uc *usecase.InventoryUseCase) *Server {
 // Policies declares the permission every RPC requires in its garage.
 func Policies() middleware.Policies {
 	read, write := access.Requires(access.InventoryRead), access.Requires(access.InventoryWrite)
+	cost := access.Requires(access.InventoryCostRead)
 
 	return middleware.Policies{
-		inventoryv1.InventoryService_ListStockLevels_FullMethodName:       middleware.GarageMethod(read),
-		inventoryv1.InventoryService_GetStockLevel_FullMethodName:         middleware.GarageMethod(read),
-		inventoryv1.InventoryService_CreateStockReceipt_FullMethodName:    middleware.GarageMethod(write),
-		inventoryv1.InventoryService_ListStockTransactions_FullMethodName: middleware.GarageMethod(read),
+		inventoryv1.InventoryService_ListStockLevels_FullMethodName:          middleware.GarageMethod(read),
+		inventoryv1.InventoryService_GetStockLevel_FullMethodName:            middleware.GarageMethod(read),
+		inventoryv1.InventoryService_ListStockTransactions_FullMethodName:    middleware.GarageMethod(read),
+		inventoryv1.InventoryService_ListGoodsReceipts_FullMethodName:        middleware.GarageMethod(read),
+		inventoryv1.InventoryService_GetGoodsReceipt_FullMethodName:          middleware.GarageMethod(read),
+		inventoryv1.InventoryService_CreateGoodsReceipt_FullMethodName:       middleware.GarageMethod(write),
+		inventoryv1.InventoryService_UpdateGoodsReceipt_FullMethodName:       middleware.GarageMethod(write),
+		inventoryv1.InventoryService_CompleteGoodsReceipt_FullMethodName:     middleware.GarageMethod(write),
+		inventoryv1.InventoryService_CancelGoodsReceipt_FullMethodName:       middleware.GarageMethod(write),
+		inventoryv1.InventoryService_GetPartSuppliers_FullMethodName:         middleware.GarageMethod(read),
+		inventoryv1.InventoryService_PutPartSuppliers_FullMethodName:         middleware.GarageMethod(write),
+		inventoryv1.InventoryService_GetRepairOrderStockIssue_FullMethodName: middleware.GarageMethod(read),
+		inventoryv1.InventoryService_PostStockIssue_FullMethodName:           middleware.GarageMethod(write),
+		inventoryv1.InventoryService_GetPurchasesReport_FullMethodName:       middleware.GarageMethod(cost),
+		inventoryv1.InventoryService_GetStockValuationReport_FullMethodName:  middleware.GarageMethod(cost),
 	}
 }
 

@@ -122,17 +122,23 @@ func TestGoodsReceiptIncreasesStock(t *testing.T) {
 	part := fixture.NewPart(t, owner.API, garage.GetId(), sku(), "Engine oil 5W-30", litre(t, owner, garage.GetId()),
 		fixture.WithThreshold("5"))
 
-	first, err := owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "10", "", 150000)
+	first, err := owner.API.ReceiveStock(ctx, garage.GetId(), part.GetId(), "10", "", 150000)
 	require.NoError(t, err)
-	assert.Equal(t, inventoryv1.StockTransactionType_STOCK_TRANSACTION_TYPE_IN, first.GetTransaction().GetType())
-	assert.Equal(t, "10", first.GetTransaction().GetQuantity())
-	assert.EqualValues(t, 150000, first.GetTransaction().GetUnitCost())
-	assert.Equal(t, "10", first.GetStockLevel().GetQuantityOnHand())
+	assert.Equal(t, inventoryv1.GoodsReceiptStatus_GOODS_RECEIPT_STATUS_COMPLETED, first.GetStatus())
+	assert.Equal(t, "10", first.GetLines()[0].GetQuantity())
+	assert.EqualValues(t, 150000, first.GetLines()[0].GetUnitCost())
+
+	level, err := owner.API.GetStockLevel(ctx, garage.GetId(), part.GetId())
+	require.NoError(t, err)
+	assert.Equal(t, "10", level.GetQuantityOnHand())
 
 	// Unit cost is optional per receipt.
-	second, err := owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "5", "", 0)
+	_, err = owner.API.ReceiveStock(ctx, garage.GetId(), part.GetId(), "5", "", 0)
 	require.NoError(t, err)
-	assert.Equal(t, "15", second.GetStockLevel().GetQuantityOnHand())
+
+	level, err = owner.API.GetStockLevel(ctx, garage.GetId(), part.GetId())
+	require.NoError(t, err)
+	assert.Equal(t, "15", level.GetQuantityOnHand())
 
 	movements, err := owner.API.ListStockTransactions(ctx, garage.GetId())
 	require.NoError(t, err)
@@ -151,7 +157,7 @@ func TestLowStockThreshold(t *testing.T) {
 	part := fixture.NewPart(t, owner.API, garage.GetId(), sku(), "Engine oil", litre(t, owner, garage.GetId()),
 		fixture.WithThreshold("5"))
 
-	_, err := owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "15", "", 0)
+	_, err := owner.API.ReceiveStock(ctx, garage.GetId(), part.GetId(), "15", "", 0)
 	require.NoError(t, err)
 
 	for _, tc := range []struct {
@@ -212,7 +218,7 @@ func TestEditAndDeleteItem(t *testing.T) {
 
 	part := fixture.NewPart(t, owner.API, garage.GetId(), "TEST-PART-01", "QA Test Part", piece)
 
-	_, err := owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "3", "", 0)
+	_, err := owner.API.ReceiveStock(ctx, garage.GetId(), part.GetId(), "3", "", 0)
 	require.NoError(t, err)
 
 	renamed, err := owner.API.UpdatePart(ctx, garage.GetId(), part.GetId(), &cataloguev1.Part{Name: "QA Test Part Renamed"}, "name")
@@ -242,10 +248,10 @@ func TestEditAndDeleteItem(t *testing.T) {
 	movements, err := owner.API.ListStockTransactions(ctx, garage.GetId())
 	require.NoError(t, err)
 	require.NotEmpty(t, movements)
-	assert.Equal(t, "TEST-PART-01", movements[0].GetItemSku())
+	assert.Equal(t, "TEST-PART-01", movements[0].GetPartSku())
 
 	// A deactivated part cannot be received into until it is reactivated.
-	_, err = owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "1", "", 0)
+	_, err = owner.API.ReceiveStock(ctx, garage.GetId(), part.GetId(), "1", "", 0)
 	fixture.RequireAPIError(t, err, http.StatusConflict, "")
 
 	reactivated, err := owner.API.ActivatePart(ctx, garage.GetId(), part.GetId())
@@ -263,7 +269,7 @@ func TestStockMovementReportFilters(t *testing.T) {
 
 	part := fixture.NewPart(t, owner.API, garage.GetId(), sku(), "Engine oil", litre(t, owner, garage.GetId()))
 
-	_, err := owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "10", "", 0)
+	_, err := owner.API.ReceiveStock(ctx, garage.GetId(), part.GetId(), "10", "", 0)
 	require.NoError(t, err)
 
 	closeOrderWithPart(t, owner.API, garage.GetId(), part.GetId(), "4")
@@ -304,7 +310,7 @@ func TestCloseDeductsStock(t *testing.T) {
 
 	part := fixture.NewPart(t, owner.API, garage.GetId(), sku(), "Engine oil", litre(t, owner, garage.GetId()))
 
-	_, err := owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "10", "", 0)
+	_, err := owner.API.ReceiveStock(ctx, garage.GetId(), part.GetId(), "10", "", 0)
 	require.NoError(t, err)
 
 	closeOrderWithPart(t, owner.API, garage.GetId(), part.GetId(), "4")
@@ -323,7 +329,7 @@ func TestCloseWithoutCatalogueItemDeductsNothing(t *testing.T) {
 
 	part := fixture.NewPart(t, owner.API, garage.GetId(), sku(), "Engine oil", litre(t, owner, garage.GetId()))
 
-	_, err := owner.API.CreateStockReceipt(ctx, garage.GetId(), part.GetId(), "10", "", 0)
+	_, err := owner.API.ReceiveStock(ctx, garage.GetId(), part.GetId(), "10", "", 0)
 	require.NoError(t, err)
 
 	vehicle := vehicleFor(t, owner.API, garage.GetId())

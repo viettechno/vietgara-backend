@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/genproto/googleapis/type/dayofweek"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
@@ -100,7 +101,7 @@ func TestGarageRPCs(t *testing.T) {
 	assert.Equal(t, "LSC-{YYYY}{MM}-{SEQ:4}", g.GetNumbering().GetRepairOrder())
 	assert.Equal(t, tenantv1.GarageStatus_GARAGE_STATUS_ACTIVE, g.GetStatus())
 	assert.True(t, g.GetAccess().GetOwner())
-	assert.Len(t, g.GetAccess().GetPermissions(), 20)
+	assert.Len(t, g.GetAccess().GetPermissions(), 21)
 	assert.Len(t, g.GetOperatingHours(), 1)
 
 	_, err = e.srv.CreateGarage(ownerCtx, &tenantv1.CreateGarageRequest{Garage: &tenantv1.Garage{}})
@@ -235,7 +236,7 @@ func TestStaffAndInvitationRPCs(t *testing.T) {
 	require.Len(t, members.GetData(), 2)
 	ownerRow, member := members.GetData()[0], members.GetData()[1]
 	assert.True(t, ownerRow.GetOwner())
-	assert.Len(t, ownerRow.GetPermissions(), 20)
+	assert.Len(t, ownerRow.GetPermissions(), 21)
 	assert.Equal(t, []string{groupID}, member.GetGroupIds())
 
 	updated, err := e.srv.UpdateStaff(ctx, &tenantv1.UpdateStaffRequest{
@@ -293,7 +294,7 @@ func TestRoleAndGroupRPCs(t *testing.T) {
 
 	perms, err := e.srv.ListPermissions(ownerCtx, &tenantv1.ListPermissionsRequest{})
 	require.NoError(t, err)
-	assert.Len(t, perms.GetData(), 20)
+	assert.Len(t, perms.GetData(), 21)
 	assert.Equal(t, "garage", perms.GetData()[0].GetModule())
 	assert.Equal(t, "write", perms.GetData()[0].GetAction())
 	assert.Equal(t, "read", perms.GetData()[1].GetAction())
@@ -432,4 +433,53 @@ func TestLegalProfileRPCs(t *testing.T) {
 		UpdateMask: mask("numbering.payment_voucher"),
 	})
 	assert.Equal(t, "VALIDATION_ERROR", reason(err))
+}
+
+// TestStockSettingsRPCs covers the Release 7.0 garage configuration through
+// the API: numbering by mask and when a stock issue posts.
+func TestStockSettingsRPCs(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv()
+	ownerCtx := e.as(t, tenanttest.Owner, "")
+
+	created, err := e.srv.CreateGarage(ownerCtx, &tenantv1.CreateGarageRequest{Garage: &tenantv1.Garage{
+		Name: "Gara", Numbering: &tenantv1.NumberingTemplates{GoodsReceipt: "NK-{SEQ:3}", StockIssue: "XK-{SEQ:3}"},
+		StockIssueMode: tenantv1.StockIssueMode_STOCK_ISSUE_MODE_ON_START,
+	}})
+	require.NoError(t, err)
+
+	g := created.GetGarage()
+	assert.Equal(t, "NK-{SEQ:3}", g.GetNumbering().GetGoodsReceipt())
+	assert.Equal(t, "XK-{SEQ:3}", g.GetNumbering().GetStockIssue())
+	assert.Equal(t, tenantv1.StockIssueMode_STOCK_ISSUE_MODE_ON_START, g.GetStockIssueMode())
+
+	gctx := e.as(t, tenanttest.Owner, g.GetId())
+
+	updated, err := e.srv.UpdateGarage(gctx, &tenantv1.UpdateGarageRequest{
+		GarageId: g.GetId(),
+		Garage: &tenantv1.Garage{
+			Numbering:      &tenantv1.NumberingTemplates{GoodsReceipt: "PN-{YY}{SEQ:4}"},
+			StockIssueMode: tenantv1.StockIssueMode_STOCK_ISSUE_MODE_ON_CLOSE,
+		},
+		UpdateMask: mask("numbering.goods_receipt", "stock_issue_mode"),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "PN-{YY}{SEQ:4}", updated.GetGarage().GetNumbering().GetGoodsReceipt())
+	assert.Equal(t, "XK-{SEQ:3}", updated.GetGarage().GetNumbering().GetStockIssue(), "unnamed fields are kept")
+	assert.Equal(t, tenantv1.StockIssueMode_STOCK_ISSUE_MODE_ON_CLOSE, updated.GetGarage().GetStockIssueMode())
+
+	// The whole numbering block keeps what a client that predates the new templates leaves out.
+	whole, err := e.srv.UpdateGarage(gctx, &tenantv1.UpdateGarageRequest{
+		GarageId: g.GetId(), Garage: &tenantv1.Garage{Numbering: &tenantv1.NumberingTemplates{Quote: "B-{SEQ:2}", RepairOrder: "R-{SEQ:2}", Settlement: "S-{SEQ:2}"}},
+		UpdateMask: mask("numbering"),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "PN-{YY}{SEQ:4}", whole.GetGarage().GetNumbering().GetGoodsReceipt())
+	assert.Equal(t, "XK-{SEQ:3}", whole.GetGarage().GetNumbering().GetStockIssue())
+
+	_, err = e.srv.UpdateGarage(gctx, &tenantv1.UpdateGarageRequest{
+		GarageId: g.GetId(), Garage: &tenantv1.Garage{}, UpdateMask: mask("stock_issue_mode"),
+	})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err), "an unspecified mode is invalid")
 }

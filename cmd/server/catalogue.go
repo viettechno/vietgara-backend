@@ -183,6 +183,10 @@ func partInfos(parts []*catalogueDomain.Part) []inventoryUsecase.PartInfo {
 			CategoryName: p.CategoryName, Brand: p.Brand, IsActive: p.IsActive, ReorderThreshold: p.ReorderThreshold,
 		}
 
+		if p.CategoryID != nil {
+			info.CategoryID = *p.CategoryID
+		}
+
 		if len(p.Images) > 0 {
 			info.ThumbnailURL = p.Images[0].URL
 		}

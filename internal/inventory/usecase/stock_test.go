@@ -21,7 +21,7 @@ func TestInventoryUseCase_GetStockLevel(t *testing.T) {
 
 		uc, d := newUseCase(t)
 		d.Parts.EXPECT().Parts(mock.Anything, garageID, []string{partID}).Return([]usecase.PartInfo{samplePart()}, nil).Once()
-		d.Repo.EXPECT().Balances(mock.Anything, garageID, []string{partID}).Return(map[string]string{partID: "12"}, nil).Once()
+		d.Repo.EXPECT().Balances(mock.Anything, garageID, []string{partID}).Return(map[string]usecase.Balance{partID: {OnHand: "12"}}, nil).Once()
 
 		level, err := uc.GetStockLevel(t.Context(), garageID, partID)
 		require.NoError(t, err)
@@ -35,7 +35,7 @@ func TestInventoryUseCase_GetStockLevel(t *testing.T) {
 
 		uc, d := newUseCase(t)
 		d.Parts.EXPECT().Parts(mock.Anything, garageID, []string{partID}).Return([]usecase.PartInfo{samplePart()}, nil).Once()
-		d.Repo.EXPECT().Balances(mock.Anything, garageID, []string{partID}).Return(map[string]string{}, nil).Once()
+		d.Repo.EXPECT().Balances(mock.Anything, garageID, []string{partID}).Return(map[string]usecase.Balance{}, nil).Once()
 
 		level, err := uc.GetStockLevel(t.Context(), garageID, partID)
 		require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestInventoryUseCase_ListStockLevels(t *testing.T) {
 		d.Parts.EXPECT().
 			SearchParts(mock.Anything, garageID, usecase.PartQuery{Query: "b", CategoryID: "cat", Brand: "Tiger", Limit: 20}).
 			Return([]usecase.PartInfo{samplePart(), other}, 2, nil).Once()
-		d.Repo.EXPECT().Balances(mock.Anything, garageID, []string{partID, "other"}).Return(map[string]string{partID: "9"}, nil).Once()
+		d.Repo.EXPECT().Balances(mock.Anything, garageID, []string{partID, "other"}).Return(map[string]usecase.Balance{partID: {OnHand: "9"}}, nil).Once()
 
 		page, err := uc.ListStockLevels(t.Context(), usecase.ListStockLevelsRequest{
 			GarageID: garageID, Query: "b", CategoryID: "cat", Brand: "Tiger",
@@ -162,7 +162,7 @@ func TestInventoryUseCase_ListStockLevels_LowStock(t *testing.T) {
 		uc, d := newUseCase(t)
 		// 3 parts: p0 has 1 (low), p1 has 5 (low), p2 has 6 (fine).
 		d.Repo.EXPECT().Balances(mock.Anything, garageID, []string(nil)).
-			Return(map[string]string{"p0": "1", "p1": "5", "p2": "6"}, nil).Once()
+			Return(map[string]usecase.Balance{"p0": {OnHand: "1"}, "p1": {OnHand: "5"}, "p2": {OnHand: "6"}}, nil).Once()
 		d.Parts.EXPECT().SearchParts(mock.Anything, garageID, usecase.PartQuery{Limit: usecase.MaxPageSize}).
 			Return(parts(0, 3), 3, nil).Once()
 
@@ -175,7 +175,7 @@ func TestInventoryUseCase_ListStockLevels_LowStock(t *testing.T) {
 		assert.Equal(t, "p0", page.Items[0].PartID)
 
 		uc, d = newUseCase(t)
-		d.Repo.EXPECT().Balances(mock.Anything, garageID, []string(nil)).Return(map[string]string{"p0": "1", "p1": "5"}, nil).Once()
+		d.Repo.EXPECT().Balances(mock.Anything, garageID, []string(nil)).Return(map[string]usecase.Balance{"p0": {OnHand: "1"}, "p1": {OnHand: "5"}}, nil).Once()
 		d.Parts.EXPECT().SearchParts(mock.Anything, garageID, mock.Anything).Return(parts(0, 3), 3, nil).Once()
 
 		page, err = uc.ListStockLevels(t.Context(), usecase.ListStockLevelsRequest{
@@ -231,141 +231,6 @@ func TestInventoryUseCase_ListStockLevels_LowStock(t *testing.T) {
 		d.Parts.EXPECT().SearchParts(mock.Anything, garageID, mock.Anything).Return(nil, 0, errBoom).Once()
 
 		_, err = uc.ListStockLevels(t.Context(), usecase.ListStockLevelsRequest{GarageID: garageID, LowStock: true})
-		assertAppError(t, err, apperror.CodeInternal)
-	})
-}
-
-//nolint:funlen // one table of receipt cases
-func TestInventoryUseCase_CreateStockReceipt(t *testing.T) {
-	t.Parallel()
-
-	expectPart := func(d *deps) {
-		d.Parts.EXPECT().Parts(mock.Anything, garageID, []string{partID}).Return([]usecase.PartInfo{samplePart()}, nil).Once()
-	}
-
-	t.Run("base unit with cost", func(t *testing.T) {
-		t.Parallel()
-
-		uc, d := newUseCase(t)
-		expectPart(d)
-		d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, "", "10").
-			Return(usecase.ResolvedQuantity{Base: "10"}, nil).Once()
-		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.MatchedBy(func(tx *domain.StockTransaction) bool {
-			return tx.Type == domain.TransactionIn && tx.RefType == domain.RefPurchase && tx.Quantity == "10" &&
-				tx.UnitID == nil && tx.EnteredQuantity == nil && *tx.UnitCost == "5000" && *tx.CreatedBy == actorID
-		})).Return(nil).Once()
-		d.Repo.EXPECT().Balances(mock.Anything, garageID, []string{partID}).Return(map[string]string{partID: "10"}, nil).Once()
-
-		result, err := uc.CreateStockReceipt(t.Context(), usecase.CreateStockReceiptRequest{
-			GarageID: garageID, ActorID: actorID, PartID: partID, Quantity: "10", UnitCost: 5_000,
-		})
-		require.NoError(t, err)
-		assert.Equal(t, "10", result.StockLevel.QuantityOnHand)
-		assert.Equal(t, "BEER-330", result.Transaction.PartSKU)
-		assert.Equal(t, "can", result.Transaction.BaseUnitAbbreviation)
-	})
-
-	t.Run("packaging unit converts the quantity and the cost", func(t *testing.T) {
-		t.Parallel()
-
-		uc, d := newUseCase(t)
-		expectPart(d)
-
-		unit, entered := unitID, "10"
-		d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, unitID, "10").
-			Return(usecase.ResolvedQuantity{Base: "240", UnitID: &unit, Entered: &entered}, nil).Once()
-		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.MatchedBy(func(tx *domain.StockTransaction) bool {
-			return tx.Quantity == "240" && *tx.UnitID == unitID && *tx.EnteredQuantity == "10" && *tx.UnitCost == "5000"
-		})).Return(nil).Once()
-		d.Parts.EXPECT().UnitAbbreviations(mock.Anything, garageID, []string{unitID}).
-			Return(map[string]string{unitID: "case"}, nil).Once()
-		d.Repo.EXPECT().Balances(mock.Anything, garageID, []string{partID}).Return(map[string]string{partID: "240"}, nil).Once()
-
-		result, err := uc.CreateStockReceipt(t.Context(), usecase.CreateStockReceiptRequest{
-			GarageID: garageID, PartID: partID, Quantity: "10", UnitID: unitID, UnitCost: 120_000,
-		})
-		require.NoError(t, err)
-		assert.Equal(t, "case", result.Transaction.UnitAbbreviation)
-		assert.Equal(t, "240", result.StockLevel.QuantityOnHand)
-	})
-
-	t.Run("no cost recorded", func(t *testing.T) {
-		t.Parallel()
-
-		uc, d := newUseCase(t)
-		expectPart(d)
-		d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, "", "1").Return(usecase.ResolvedQuantity{Base: "1"}, nil).Once()
-		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.MatchedBy(func(tx *domain.StockTransaction) bool {
-			return tx.UnitCost == nil && tx.CreatedBy == nil
-		})).Return(nil).Once()
-		d.Repo.EXPECT().Balances(mock.Anything, garageID, mock.Anything).Return(nil, nil).Once()
-
-		_, err := uc.CreateStockReceipt(t.Context(), usecase.CreateStockReceiptRequest{GarageID: garageID, PartID: partID, Quantity: "1"})
-		require.NoError(t, err)
-	})
-
-	t.Run("rejections", func(t *testing.T) {
-		t.Parallel()
-
-		uc, d := newUseCase(t)
-		d.Parts.EXPECT().Parts(mock.Anything, garageID, []string{partID}).Return(nil, nil).Once()
-
-		_, err := uc.CreateStockReceipt(t.Context(), usecase.CreateStockReceiptRequest{GarageID: garageID, PartID: partID, Quantity: "1"})
-		assertAppError(t, err, apperror.CodeNotFound)
-
-		uc, d = newUseCase(t)
-		inactive := samplePart()
-		inactive.IsActive = false
-		d.Parts.EXPECT().Parts(mock.Anything, garageID, []string{partID}).Return([]usecase.PartInfo{inactive}, nil).Once()
-
-		_, err = uc.CreateStockReceipt(t.Context(), usecase.CreateStockReceiptRequest{GarageID: garageID, PartID: partID, Quantity: "1"})
-		assertAppError(t, err, apperror.CodeFailedPrecondition)
-
-		uc, d = newUseCase(t)
-		expectPart(d)
-
-		_, err = uc.CreateStockReceipt(t.Context(), usecase.CreateStockReceiptRequest{
-			GarageID: garageID, PartID: partID, Quantity: "1", UnitCost: -1,
-		})
-		assertAppError(t, err, apperror.CodeInvalidArgument)
-
-		uc, d = newUseCase(t)
-		expectPart(d)
-		d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, "", "1.2345").
-			Return(usecase.ResolvedQuantity{}, apperror.New(apperror.CodeInvalidArgument, "too many decimals")).Once()
-
-		_, err = uc.CreateStockReceipt(t.Context(), usecase.CreateStockReceiptRequest{GarageID: garageID, PartID: partID, Quantity: "1.2345"})
-		assertAppError(t, err, apperror.CodeInvalidArgument)
-	})
-
-	t.Run("storage failures", func(t *testing.T) {
-		t.Parallel()
-
-		uc, d := newUseCase(t)
-		expectPart(d)
-		d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, "", "1").Return(usecase.ResolvedQuantity{Base: "1"}, nil).Once()
-		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.Anything).Return(errBoom).Once()
-
-		_, err := uc.CreateStockReceipt(t.Context(), usecase.CreateStockReceiptRequest{GarageID: garageID, PartID: partID, Quantity: "1"})
-		assertAppError(t, err, apperror.CodeInternal)
-
-		unitCopy, enteredCopy := unitID, "1"
-		uc, d = newUseCase(t)
-		expectPart(d)
-		d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, unitID, "1").Return(usecase.ResolvedQuantity{Base: "1", UnitID: &unitCopy, Entered: &enteredCopy}, nil).Once()
-		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.Anything).Return(nil).Once()
-		d.Parts.EXPECT().UnitAbbreviations(mock.Anything, garageID, []string{unitID}).Return(nil, errBoom).Once()
-
-		_, err = uc.CreateStockReceipt(t.Context(), usecase.CreateStockReceiptRequest{GarageID: garageID, PartID: partID, Quantity: "1", UnitID: unitID})
-		assertAppError(t, err, apperror.CodeInternal)
-
-		uc, d = newUseCase(t)
-		expectPart(d)
-		d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, "", "1").Return(usecase.ResolvedQuantity{Base: "1"}, nil).Once()
-		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.Anything).Return(nil).Once()
-		d.Repo.EXPECT().Balances(mock.Anything, garageID, mock.Anything).Return(nil, errBoom).Once()
-
-		_, err = uc.CreateStockReceipt(t.Context(), usecase.CreateStockReceiptRequest{GarageID: garageID, PartID: partID, Quantity: "1"})
 		assertAppError(t, err, apperror.CodeInternal)
 	})
 }
@@ -436,76 +301,5 @@ func TestInventoryUseCase_ListTransactions(t *testing.T) {
 
 		_, err = uc.ListTransactions(t.Context(), usecase.ListTransactionsRequest{GarageID: garageID})
 		assertAppError(t, err, apperror.CodeInternal)
-	})
-}
-
-func TestInventoryUseCase_IssueStock(t *testing.T) {
-	t.Parallel()
-
-	t.Run("deducts stock and publishes stock.issued", func(t *testing.T) {
-		t.Parallel()
-
-		uc, d := newUseCase(t)
-		d.Parts.EXPECT().Parts(mock.Anything, garageID, []string{partID}).Return([]usecase.PartInfo{samplePart()}, nil).Once()
-		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.MatchedBy(func(tx *domain.StockTransaction) bool {
-			return tx.Type == domain.TransactionOut && tx.RefType == domain.RefRepairOrder && *tx.RefID == "ro-1" && tx.Quantity == "2.5"
-		})).Return(nil).Once()
-		d.Events.EXPECT().Publish(mock.Anything, usecase.EventStockIssued, garageID, "", mock.Anything).Return(nil).Once()
-
-		require.NoError(t, uc.IssueStock(t.Context(), garageID, partID, "2.5", "ro-1"))
-	})
-
-	t.Run("a deactivated part still issues", func(t *testing.T) {
-		t.Parallel()
-
-		uc, d := newUseCase(t)
-		inactive := samplePart()
-		inactive.IsActive = false
-		d.Parts.EXPECT().Parts(mock.Anything, garageID, []string{partID}).Return([]usecase.PartInfo{inactive}, nil).Once()
-		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.Anything).Return(nil).Once()
-		d.Events.EXPECT().Publish(mock.Anything, usecase.EventStockIssued, garageID, "", mock.Anything).Return(nil).Once()
-
-		require.NoError(t, uc.IssueStock(t.Context(), garageID, partID, "1", "ro-1"))
-	})
-
-	t.Run("already issued is a no-op", func(t *testing.T) {
-		t.Parallel()
-
-		uc, d := newUseCase(t)
-		d.Parts.EXPECT().Parts(mock.Anything, garageID, []string{partID}).Return([]usecase.PartInfo{samplePart()}, nil).Once()
-		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.Anything).Return(domain.ErrAlreadyIssued).Once()
-
-		require.NoError(t, uc.IssueStock(t.Context(), garageID, partID, "2", "ro-1"))
-	})
-
-	t.Run("unknown part, bad quantity, storage failure", func(t *testing.T) {
-		t.Parallel()
-
-		uc, d := newUseCase(t)
-		d.Parts.EXPECT().Parts(mock.Anything, garageID, []string{partID}).Return(nil, nil).Once()
-
-		assertAppError(t, uc.IssueStock(t.Context(), garageID, partID, "2", "ro-1"), apperror.CodeNotFound)
-
-		uc, d = newUseCase(t)
-		d.Parts.EXPECT().Parts(mock.Anything, garageID, []string{partID}).Return([]usecase.PartInfo{samplePart()}, nil).Once()
-
-		assertAppError(t, uc.IssueStock(t.Context(), garageID, partID, "0", "ro-1"), apperror.CodeInvalidArgument)
-
-		uc, d = newUseCase(t)
-		d.Parts.EXPECT().Parts(mock.Anything, garageID, []string{partID}).Return([]usecase.PartInfo{samplePart()}, nil).Once()
-		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.Anything).Return(errBoom).Once()
-
-		assertAppError(t, uc.IssueStock(t.Context(), garageID, partID, "2", "ro-1"), apperror.CodeInternal)
-	})
-
-	t.Run("publish failure", func(t *testing.T) {
-		t.Parallel()
-
-		uc, d := newUseCase(t)
-		d.Parts.EXPECT().Parts(mock.Anything, garageID, []string{partID}).Return([]usecase.PartInfo{samplePart()}, nil).Once()
-		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.Anything).Return(nil).Once()
-		d.Events.EXPECT().Publish(mock.Anything, usecase.EventStockIssued, garageID, "", mock.Anything).Return(errBoom).Once()
-
-		require.ErrorIs(t, uc.IssueStock(t.Context(), garageID, partID, "2", "ro-1"), errBoom)
 	})
 }

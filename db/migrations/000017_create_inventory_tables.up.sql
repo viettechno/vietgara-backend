@@ -1,12 +1,16 @@
 -- Catalogue (HLD module #18) and Inventory (HLD module #7), Database Design
 -- Section 5 (FR-CAT-01..04/09, FR-INV-01..03/05). One migration file for both
 -- modules because the Inventory tables refer to the Catalogue ones; ownership
--- is by module: Catalogue owns units, part_categories, items (the part),
--- item_units and item_images; Inventory owns stock_balance and
+-- is by module: Catalogue owns units, part_categories, parts (the part),
+-- part_units and part_images; Inventory owns stock_balance and
 -- stock_transactions. Foreign keys only point towards Catalogue.
 
 CREATE TYPE stock_transaction_type AS ENUM ('in', 'out');
-CREATE TYPE stock_transaction_ref_type AS ENUM ('purchase', 'repair_order');
+-- 'purchase' and 'repair_order' are the pre-7.0 references, kept so old
+-- movements stay readable; new movements use 'goods_receipt' (a completed
+-- receipt, or the reversal of a cancelled one) and 'stock_issue' (a posted
+-- stock issue).
+CREATE TYPE stock_transaction_ref_type AS ENUM ('purchase', 'repair_order', 'goods_receipt', 'stock_issue');
 
 -- ---------------------------------------------------------------------------
 -- units: the garage's units of measure (FR-CAT-01). A unit in use is
@@ -77,11 +81,11 @@ COMMENT ON POLICY part_categories_rls_policy ON part_categories IS
 'Restricts access to the transaction''s garage (app.current_garage_id, see app_current_garage_id()).';
 
 -- ---------------------------------------------------------------------------
--- items: the part (FR-INV-01, FR-CAT-01..04/09). Soft-deleted (deleted_at)
+-- parts: the part (FR-INV-01, FR-CAT-01..04/09). Soft-deleted (deleted_at)
 -- because stock_transactions and document lines keep referencing them. Stock
 -- is always kept in base_unit_id; the quantities live in Inventory.
 -- ---------------------------------------------------------------------------
-CREATE TABLE items (
+CREATE TABLE parts (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     garage_id UUID NOT NULL REFERENCES garages(id) ON DELETE CASCADE,
     sku VARCHAR(50) NOT NULL,
@@ -99,93 +103,93 @@ CREATE TABLE items (
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMP WITH TIME ZONE,
-    -- Target of the stock_transactions (garage_id, item_id) foreign keys and
-    -- of item_units / item_images.
-    CONSTRAINT items_garage_id_id_key UNIQUE (garage_id, id),
-    CONSTRAINT items_garage_base_unit_fkey FOREIGN KEY (garage_id, base_unit_id)
+    -- Target of the stock_transactions (garage_id, part_id) foreign keys and
+    -- of part_units / part_images.
+    CONSTRAINT parts_garage_id_id_key UNIQUE (garage_id, id),
+    CONSTRAINT parts_garage_base_unit_fkey FOREIGN KEY (garage_id, base_unit_id)
         REFERENCES units (garage_id, id) ON DELETE RESTRICT,
     -- Only category_id is set to NULL: a plain SET NULL would null garage_id.
-    CONSTRAINT items_garage_category_fkey FOREIGN KEY (garage_id, category_id)
+    CONSTRAINT parts_garage_category_fkey FOREIGN KEY (garage_id, category_id)
         REFERENCES part_categories (garage_id, id) ON DELETE SET NULL (category_id)
 );
 
-CREATE UNIQUE INDEX idx_items_garage_sku_unique ON items (garage_id, sku) WHERE deleted_at IS NULL;
-CREATE INDEX idx_items_garage_created_at ON items (garage_id, created_at DESC) WHERE deleted_at IS NULL;
-CREATE INDEX idx_items_garage_category ON items (garage_id, category_id) WHERE deleted_at IS NULL;
-CREATE INDEX idx_items_name_trgm ON items USING gin (name gin_trgm_ops);
-CREATE INDEX idx_items_sku_trgm ON items USING gin (sku gin_trgm_ops);
-CREATE INDEX idx_items_brand_trgm ON items USING gin (brand gin_trgm_ops);
+CREATE UNIQUE INDEX idx_parts_garage_sku_unique ON parts (garage_id, sku) WHERE deleted_at IS NULL;
+CREATE INDEX idx_parts_garage_created_at ON parts (garage_id, created_at DESC) WHERE deleted_at IS NULL;
+CREATE INDEX idx_parts_garage_category ON parts (garage_id, category_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_parts_name_trgm ON parts USING gin (name gin_trgm_ops);
+CREATE INDEX idx_parts_sku_trgm ON parts USING gin (sku gin_trgm_ops);
+CREATE INDEX idx_parts_brand_trgm ON parts USING gin (brand gin_trgm_ops);
 
-ALTER TABLE items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE items FORCE ROW LEVEL SECURITY;
+ALTER TABLE parts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE parts FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY items_rls_policy ON items
+CREATE POLICY parts_rls_policy ON parts
 FOR ALL
 USING (garage_id = app_current_garage_id())
 WITH CHECK (garage_id = app_current_garage_id());
 
-COMMENT ON POLICY items_rls_policy ON items IS
+COMMENT ON POLICY parts_rls_policy ON parts IS
 'Restricts access to the transaction''s garage (app.current_garage_id, see app_current_garage_id()).';
 
 -- ---------------------------------------------------------------------------
--- item_units: the packaging units of a part with their factor to the base
+-- part_units: the packaging units of a part with their factor to the base
 -- unit (FR-CAT-02): 1 case = 24 cans is factor 24 when the base unit is the
 -- can. The base unit has no row. sale_price overrides base price * factor.
 -- ---------------------------------------------------------------------------
-CREATE TABLE item_units (
+CREATE TABLE part_units (
     garage_id UUID NOT NULL,
-    item_id UUID NOT NULL,
+    part_id UUID NOT NULL,
     unit_id UUID NOT NULL,
     factor NUMERIC(18, 6) NOT NULL CHECK (factor > 0),
     sale_price BIGINT CHECK (sale_price IS NULL OR sale_price >= 0),
     created_by UUID,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (garage_id, item_id, unit_id),
-    CONSTRAINT item_units_garage_item_fkey FOREIGN KEY (garage_id, item_id)
-        REFERENCES items (garage_id, id) ON DELETE CASCADE,
-    CONSTRAINT item_units_garage_unit_fkey FOREIGN KEY (garage_id, unit_id)
+    PRIMARY KEY (garage_id, part_id, unit_id),
+    CONSTRAINT part_units_garage_part_fkey FOREIGN KEY (garage_id, part_id)
+        REFERENCES parts (garage_id, id) ON DELETE CASCADE,
+    CONSTRAINT part_units_garage_unit_fkey FOREIGN KEY (garage_id, unit_id)
         REFERENCES units (garage_id, id) ON DELETE RESTRICT
 );
 
-ALTER TABLE item_units ENABLE ROW LEVEL SECURITY;
-ALTER TABLE item_units FORCE ROW LEVEL SECURITY;
+ALTER TABLE part_units ENABLE ROW LEVEL SECURITY;
+ALTER TABLE part_units FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY item_units_rls_policy ON item_units
+CREATE POLICY part_units_rls_policy ON part_units
 FOR ALL
 USING (garage_id = app_current_garage_id())
 WITH CHECK (garage_id = app_current_garage_id());
 
-COMMENT ON POLICY item_units_rls_policy ON item_units IS
+COMMENT ON POLICY part_units_rls_policy ON part_units IS
 'Restricts access to the transaction''s garage (app.current_garage_id, see app_current_garage_id()).';
 
 -- ---------------------------------------------------------------------------
--- item_images: the one to three images of a part (FR-CAT-04), files of kind
+-- part_images: the one to three images of a part (FR-CAT-04), files of kind
 -- part_image in display order. file_id is checked by the use case (the File
 -- module is another module, so there is no foreign key).
 -- ---------------------------------------------------------------------------
-CREATE TABLE item_images (
+CREATE TABLE part_images (
     garage_id UUID NOT NULL,
-    item_id UUID NOT NULL,
+    part_id UUID NOT NULL,
     file_id UUID NOT NULL,
     position INTEGER NOT NULL DEFAULT 0,
     created_by UUID,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    PRIMARY KEY (garage_id, item_id, file_id),
-    CONSTRAINT item_images_garage_item_fkey FOREIGN KEY (garage_id, item_id)
-        REFERENCES items (garage_id, id) ON DELETE CASCADE
+    PRIMARY KEY (garage_id, part_id, file_id),
+    CONSTRAINT part_images_garage_part_fkey FOREIGN KEY (garage_id, part_id)
+        REFERENCES parts (garage_id, id) ON DELETE CASCADE
 );
 
-CREATE INDEX idx_item_images_item ON item_images (garage_id, item_id, position);
+CREATE INDEX idx_part_images_part ON part_images (garage_id, part_id, position);
 
-ALTER TABLE item_images ENABLE ROW LEVEL SECURITY;
-ALTER TABLE item_images FORCE ROW LEVEL SECURITY;
+ALTER TABLE part_images ENABLE ROW LEVEL SECURITY;
+ALTER TABLE part_images FORCE ROW LEVEL SECURITY;
 
-CREATE POLICY item_images_rls_policy ON item_images
+CREATE POLICY part_images_rls_policy ON part_images
 FOR ALL
 USING (garage_id = app_current_garage_id())
 WITH CHECK (garage_id = app_current_garage_id());
 
-COMMENT ON POLICY item_images_rls_policy ON item_images IS
+COMMENT ON POLICY part_images_rls_policy ON part_images IS
 'Restricts access to the transaction''s garage (app.current_garage_id, see app_current_garage_id()).';
 
 -- Quote and repair-order lines keep the packaging unit the user typed
@@ -196,26 +200,29 @@ ALTER TABLE repair_order_lines ADD CONSTRAINT repair_order_lines_garage_unit_fke
     FOREIGN KEY (garage_id, unit_id) REFERENCES units (garage_id, id) ON DELETE RESTRICT;
 
 -- ---------------------------------------------------------------------------
--- stock_balance: current on-hand quantity per item (FR-INV-03), kept
+-- stock_balance: current on-hand quantity per part (FR-INV-03), kept
 -- current by an atomic upsert alongside each stock_transactions insert,
 -- in the same application transaction (the same pattern as
 -- document_sequences.next_seq, migration 000014). quantity_on_hand is
 -- updated with in-database arithmetic ("+= delta") for correctness under
--- concurrent receipts/issues of the same item; the Go layer only ever
+-- concurrent receipts/issues of the same part; the Go layer only ever
 -- sees it as a decimal string (cast to/from text at the query boundary),
 -- matching every other quantity in the API.
 -- ---------------------------------------------------------------------------
 CREATE TABLE stock_balance (
     garage_id UUID NOT NULL,
-    item_id UUID NOT NULL,
+    part_id UUID NOT NULL,
     quantity_on_hand NUMERIC(14, 3) NOT NULL DEFAULT 0,
+    -- Weighted-average cost per base unit, VND (FR-INV-07): changed by each
+    -- completed receipt that records a cost, never by an issue.
+    average_cost NUMERIC(18, 4) NOT NULL DEFAULT 0 CHECK (average_cost >= 0),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     created_by UUID,
     updated_by UUID,
-    PRIMARY KEY (garage_id, item_id),
-    CONSTRAINT stock_balance_garage_item_fkey FOREIGN KEY (garage_id, item_id)
-        REFERENCES items (garage_id, id) ON DELETE CASCADE
+    PRIMARY KEY (garage_id, part_id),
+    CONSTRAINT stock_balance_garage_part_fkey FOREIGN KEY (garage_id, part_id)
+        REFERENCES parts (garage_id, id) ON DELETE CASCADE
 );
 
 ALTER TABLE stock_balance ENABLE ROW LEVEL SECURITY;
@@ -237,37 +244,52 @@ COMMENT ON POLICY stock_balance_rls_policy ON stock_balance IS
 -- ---------------------------------------------------------------------------
 CREATE TABLE stock_transactions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    -- Total order of the movements (created_at is the transaction's start
+    -- time, equal for movements written together).
+    seq BIGINT GENERATED ALWAYS AS IDENTITY,
     garage_id UUID NOT NULL,
-    item_id UUID NOT NULL,
+    part_id UUID NOT NULL,
     type stock_transaction_type NOT NULL,
     quantity NUMERIC(14, 3) NOT NULL,
-    -- VND; set for a 'purchase' receipt, NULL for a 'repair_order' issue.
-    -- Four decimals: a cost rounded to whole dong would drift once average
-    -- cost arrives (Phase 7).
+    -- VND per base unit, four decimals so rounding does not drift the
+    -- average: the line cost of a goods receipt, or the average-cost
+    -- snapshot of a stock issue; NULL when no cost was recorded.
     unit_cost NUMERIC(18, 4),
     -- The packaging unit the user entered and the typed amount (Release 6.0);
     -- NULL when the base unit was used. quantity is always the base amount.
     unit_id UUID,
     entered_quantity NUMERIC(14, 3),
     ref_type stock_transaction_ref_type NOT NULL,
-    -- The repair order id for a 'repair_order' issue; NULL for a purchase.
+    -- The goods receipt id for 'goods_receipt', the stock issue id for
+    -- 'stock_issue'.
     ref_id UUID,
+    -- The supplier of the goods receipt line this movement came from.
+    supplier_id UUID,
+    -- The part's quantity on hand and average cost right after this
+    -- movement, so the valuation report can answer "at a date" (FR-INV-07).
+    quantity_after NUMERIC(14, 3) NOT NULL DEFAULT 0,
+    average_cost_after NUMERIC(18, 4) NOT NULL DEFAULT 0,
     created_by UUID,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    CONSTRAINT stock_transactions_garage_item_fkey FOREIGN KEY (garage_id, item_id)
-        REFERENCES items (garage_id, id),
+    CONSTRAINT stock_transactions_garage_part_fkey FOREIGN KEY (garage_id, part_id)
+        REFERENCES parts (garage_id, id),
     CONSTRAINT stock_transactions_garage_unit_fkey FOREIGN KEY (garage_id, unit_id)
-        REFERENCES units (garage_id, id) ON DELETE RESTRICT
+        REFERENCES units (garage_id, id) ON DELETE RESTRICT,
+    CONSTRAINT stock_transactions_garage_supplier_fkey FOREIGN KEY (garage_id, supplier_id)
+        REFERENCES suppliers (garage_id, id) ON DELETE RESTRICT
 );
 
-CREATE INDEX idx_stock_transactions_garage_item_created_at ON stock_transactions (garage_id, item_id, created_at DESC);
+CREATE INDEX idx_stock_transactions_garage_part_created_at ON stock_transactions (garage_id, part_id, created_at DESC);
+CREATE INDEX idx_stock_transactions_garage_part_seq ON stock_transactions (garage_id, part_id, seq DESC);
 CREATE INDEX idx_stock_transactions_garage_type_created_at ON stock_transactions (garage_id, type, created_at DESC);
--- Idempotency guard: the repair_order.closed consumer processes each part
--- line's issue at most once per (item, repair order), on top of the
--- generic processed_events check -- see internal/inventory's consumer.
-CREATE UNIQUE INDEX idx_stock_transactions_repair_order_item_unique
-    ON stock_transactions (garage_id, item_id, ref_id)
-    WHERE ref_type = 'repair_order';
+-- Idempotency guard: a stock issue writes each part's movement at most once,
+-- on top of the generic processed_events check -- see internal/inventory's
+-- consumer.
+CREATE UNIQUE INDEX idx_stock_transactions_stock_issue_part_unique
+    ON stock_transactions (garage_id, part_id, ref_id)
+    WHERE ref_type = 'stock_issue';
+CREATE INDEX idx_stock_transactions_supplier ON stock_transactions (garage_id, supplier_id)
+    WHERE supplier_id IS NOT NULL;
 
 ALTER TABLE stock_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_transactions FORCE ROW LEVEL SECURITY;

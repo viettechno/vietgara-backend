@@ -25,10 +25,12 @@ import (
 	identityDomain "github.com/viettechno/vietgara-backend/internal/identity/domain"
 	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
 	inventoryDomain "github.com/viettechno/vietgara-backend/internal/inventory/domain"
+	inventoryRepository "github.com/viettechno/vietgara-backend/internal/inventory/repository"
 	inventoryUsecase "github.com/viettechno/vietgara-backend/internal/inventory/usecase"
 	licenseDomain "github.com/viettechno/vietgara-backend/internal/license/domain"
 	licenseUsecase "github.com/viettechno/vietgara-backend/internal/license/usecase"
 	notificationUsecase "github.com/viettechno/vietgara-backend/internal/notification/usecase"
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
 	"github.com/viettechno/vietgara-backend/internal/platform/storage"
 	quoteDomain "github.com/viettechno/vietgara-backend/internal/quote/domain"
 	quoteRepository "github.com/viettechno/vietgara-backend/internal/quote/repository"
@@ -36,6 +38,8 @@ import (
 	repairorderDomain "github.com/viettechno/vietgara-backend/internal/repairorder/domain"
 	repairorderUsecase "github.com/viettechno/vietgara-backend/internal/repairorder/usecase"
 	reportingUsecase "github.com/viettechno/vietgara-backend/internal/reporting/usecase"
+	supplierDomain "github.com/viettechno/vietgara-backend/internal/supplier/domain"
+	supplierRepository "github.com/viettechno/vietgara-backend/internal/supplier/repository"
 	tenantDomain "github.com/viettechno/vietgara-backend/internal/tenant/domain"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 	tenantUsecase "github.com/viettechno/vietgara-backend/internal/tenant/usecase"
@@ -427,11 +431,72 @@ func (b billingBillingParties) Resolve(ctx context.Context, garageID, vehicleID 
 }
 
 // supplierUsage tells the Supplier module whether documents refer to a
-// supplier. Nothing does until goods receipts arrive (Phase 7), so a
-// supplier is always deleted for now; the goods receipt check is added here.
-type supplierUsage struct{}
+// supplier (FR-CAT-07): a goods receipt line, a part's supplier list or a
+// stock movement does, and then the supplier is deactivated, not deleted.
+type supplierUsage struct {
+	inventory *inventoryRepository.PostgresRepository
+}
 
-func (supplierUsage) SupplierInUse(context.Context, string, string) (bool, error) { return false, nil }
+func (u supplierUsage) SupplierInUse(ctx context.Context, garageID, supplierID string) (bool, error) {
+	return u.inventory.SupplierReferenced(ctx, garageID, supplierID)
+}
+
+// inventoryGarages lets the Inventory module read a garage's time zone and
+// its numbering and stock issue configuration without importing Tenant.
+type inventoryGarages struct {
+	garages *tenantRepo.PostgresGarageRepository
+}
+
+func (g inventoryGarages) Get(ctx context.Context, garageID string) (inventoryUsecase.GarageSettings, error) {
+	garage, err := g.garages.FindByID(ctx, garageID)
+	if err != nil {
+		return inventoryUsecase.GarageSettings{}, err
+	}
+
+	return inventoryUsecase.GarageSettings{
+		Timezone: garage.Timezone, GoodsReceiptNumberTemplate: garage.GoodsReceiptNumberTemplate,
+		StockIssueNumberTemplate: garage.StockIssueNumberTemplate, StockIssueMode: string(garage.StockIssueMode),
+	}, nil
+}
+
+// inventoryDirectory lets the Inventory module name suppliers and users on
+// its documents without importing the Supplier or Identity modules.
+type inventoryDirectory struct {
+	suppliers *supplierRepository.PostgresRepository
+	users     *identityRepo.PostgresUserRepository
+}
+
+func (d inventoryDirectory) SupplierNames(ctx context.Context, garageID string, ids []string) (map[string]string, error) {
+	names := make(map[string]string, len(ids))
+
+	for _, id := range ids {
+		s, err := d.suppliers.FindByID(ctx, garageID, id)
+		if errors.Is(err, supplierDomain.ErrSupplierNotFound) {
+			continue
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		names[id] = s.Name
+	}
+
+	return names, nil
+}
+
+func (d inventoryDirectory) UserName(ctx context.Context, userID string) (string, error) {
+	if userID == "" {
+		return "", nil
+	}
+
+	user, err := d.users.FindByID(ctx, userID)
+	if err != nil {
+		return "", err
+	}
+
+	return user.FullName, nil
+}
 
 // tenantLogos lets the Tenant module keep garage logos in the file registry
 // without importing the File module.
@@ -726,7 +791,12 @@ func (s documentStockMovements) List(ctx context.Context, garageID, itemID strin
 				direction = "Out"
 			}
 
-			if tx.RefType == inventoryDomain.RefRepairOrder && tx.RefID != nil {
+			switch {
+			case tx.RefType == inventoryDomain.RefStockIssue && tx.RefID != nil:
+				reference = "Stock issue " + *tx.RefID
+			case tx.RefType == inventoryDomain.RefGoodsReceipt && tx.RefID != nil:
+				reference = "Goods receipt " + *tx.RefID
+			case tx.RefType == inventoryDomain.RefRepairOrder && tx.RefID != nil:
 				reference = "Repair order " + *tx.RefID
 			}
 
@@ -748,6 +818,105 @@ func (s documentStockMovements) List(ctx context.Context, garageID, itemID strin
 	}
 
 	return rows, nil
+}
+
+// documentInventory lets the Document/Print module render the goods receipt
+// and stock issue PDFs and the purchases and valuation workbooks without
+// importing the Inventory module's use case directly. The goods receipt
+// prints its costs only for a caller who holds inventory.cost.read.
+type documentInventory struct {
+	uc *inventoryUsecase.InventoryUseCase
+}
+
+func (d documentInventory) GoodsReceipt(ctx context.Context, garageID, receiptID string) (documentUsecase.GoodsReceiptInfo, error) {
+	r, err := d.uc.GetGoodsReceipt(ctx, garageID, receiptID)
+	if err != nil {
+		return documentUsecase.GoodsReceiptInfo{}, err
+	}
+
+	a, ok := access.FromContext(ctx)
+	showCost := ok && a.Has(access.InventoryCostRead)
+
+	info := documentUsecase.GoodsReceiptInfo{
+		Number: r.Number, Status: string(r.Status), Date: r.ReceiptDate, DeliveryNoteNumber: r.DeliveryNoteNumber,
+		Notes: r.Notes, ShowCost: showCost, TotalAmount: r.TotalAmount,
+	}
+
+	for _, l := range r.Lines {
+		unit := l.BaseUnitAbbreviation
+		if l.UnitID != nil {
+			unit = l.UnitAbbreviation
+		}
+
+		info.Lines = append(info.Lines, render.GoodsReceiptRow{
+			SKU: l.PartSKU, Name: l.PartName, Quantity: l.EnteredQuantity, Unit: unit, Supplier: l.SupplierName,
+			UnitCost: l.UnitCost, Amount: l.Amount(),
+		})
+	}
+
+	return info, nil
+}
+
+func (d documentInventory) StockIssue(ctx context.Context, garageID, repairOrderID string) (documentUsecase.StockIssueInfo, error) {
+	issue, err := d.uc.GetRepairOrderStockIssue(ctx, garageID, repairOrderID)
+	if err != nil {
+		return documentUsecase.StockIssueInfo{}, err
+	}
+
+	info := documentUsecase.StockIssueInfo{
+		Number: issue.Number, Status: string(issue.Status), RepairOrderNumber: issue.RepairOrderNumber, PostedBy: issue.PostedByName,
+	}
+
+	if issue.PostedAt != nil {
+		info.PostedAt = issue.PostedAt.Format(time.DateOnly)
+	}
+
+	for _, l := range issue.Lines {
+		unit := l.BaseUnitAbbreviation
+		if l.UnitID != nil {
+			unit = l.UnitAbbreviation
+		}
+
+		info.Lines = append(info.Lines, render.StockIssueRow{SKU: l.PartSKU, Name: l.PartName, Quantity: l.EnteredQuantity, Unit: unit})
+	}
+
+	return info, nil
+}
+
+func (d documentInventory) Purchases(ctx context.Context, garageID, supplierID, from, to string) ([]render.PurchaseRow, int64, error) {
+	report, err := d.uc.PurchasesReport(ctx, inventoryUsecase.PurchasesReportRequest{
+		GarageID: garageID, SupplierID: supplierID, From: from, To: to,
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows := make([]render.PurchaseRow, 0, len(report.Lines))
+	for _, l := range report.Lines {
+		rows = append(rows, render.PurchaseRow{
+			Date: l.ReceiptDate, Receipt: l.GoodsReceiptNumber, Supplier: l.SupplierName, SKU: l.PartSKU, Part: l.PartName,
+			Quantity: l.Quantity, Unit: l.BaseUnitAbbreviation, UnitCost: l.UnitCost, Amount: l.Amount,
+		})
+	}
+
+	return rows, report.TotalAmount, nil
+}
+
+func (d documentInventory) Valuation(ctx context.Context, garageID, at string) ([]render.ValuationRow, int64, error) {
+	report, err := d.uc.StockValuation(ctx, garageID, at)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	rows := make([]render.ValuationRow, 0, len(report.Lines))
+	for _, l := range report.Lines {
+		rows = append(rows, render.ValuationRow{
+			Category: l.CategoryName, SKU: l.PartSKU, Part: l.PartName, Quantity: l.QuantityOnHand, Unit: l.BaseUnitAbbreviation,
+			AverageCost: l.AverageCost, Value: l.Value,
+		})
+	}
+
+	return rows, report.TotalValue, nil
 }
 
 // documentRevenue lets the Document/Print module render the revenue report as

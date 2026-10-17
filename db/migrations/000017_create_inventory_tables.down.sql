@@ -3,9 +3,9 @@ ALTER TABLE IF EXISTS quote_lines DROP CONSTRAINT IF EXISTS quote_lines_garage_u
 
 DROP TABLE IF EXISTS stock_transactions;
 DROP TABLE IF EXISTS stock_balance;
-DROP TABLE IF EXISTS item_images;
-DROP TABLE IF EXISTS item_units;
-DROP TABLE IF EXISTS items;
+DROP TABLE IF EXISTS part_images;
+DROP TABLE IF EXISTS part_units;
+DROP TABLE IF EXISTS parts;
 DROP TABLE IF EXISTS part_categories;
 DROP TABLE IF EXISTS units;
 

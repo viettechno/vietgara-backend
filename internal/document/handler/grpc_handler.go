@@ -39,6 +39,7 @@ func Policies() middleware.Policies {
 	billingRead := access.Requires(access.BillingRead)
 	inventoryRead := access.Requires(access.InventoryRead)
 	reportRead := access.Requires(access.ReportRead)
+	costRead := access.Requires(access.InventoryCostRead)
 
 	return middleware.Policies{
 		documentv1.DocumentService_ExportQuotePdf_FullMethodName:             middleware.GarageMethod(quoteRead),
@@ -47,6 +48,10 @@ func Policies() middleware.Policies {
 		documentv1.DocumentService_ExportPaymentVoucherPdf_FullMethodName:    middleware.GarageMethod(billingRead),
 		documentv1.DocumentService_ExportStockMovementsExcel_FullMethodName:  middleware.GarageMethod(inventoryRead),
 		documentv1.DocumentService_ExportRevenueExcel_FullMethodName:         middleware.GarageMethod(reportRead),
+		documentv1.DocumentService_ExportGoodsReceiptPdf_FullMethodName:      middleware.GarageMethod(inventoryRead),
+		documentv1.DocumentService_ExportStockIssuePdf_FullMethodName:        middleware.GarageMethod(inventoryRead),
+		documentv1.DocumentService_ExportPurchasesExcel_FullMethodName:       middleware.GarageMethod(costRead),
+		documentv1.DocumentService_ExportStockValuationExcel_FullMethodName:  middleware.GarageMethod(costRead),
 	}
 }
 

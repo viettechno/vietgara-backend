@@ -15,7 +15,7 @@ func TestCatalog(t *testing.T) {
 	t.Parallel()
 
 	all := access.All()
-	require.Len(t, all, 20)
+	require.Len(t, all, 21)
 	assert.Equal(t, access.GarageWrite, all[0])
 	assert.True(t, access.CustomerRead.IsValid())
 	assert.False(t, access.Permission("customer.delete").IsValid())
@@ -29,6 +29,12 @@ func TestCatalog(t *testing.T) {
 	assert.Equal(t,
 		[]access.Permission{access.GarageWrite, access.StaffRead, access.StaffWrite, access.BillingRead, access.BillingWrite},
 		access.Normalize([]access.Permission{access.BillingWrite, access.StaffWrite, access.GarageWrite}))
+
+	// Seeing cost needs the module's read permission too.
+	assert.Equal(t,
+		[]access.Permission{access.InventoryRead, access.InventoryCostRead},
+		access.Normalize([]access.Permission{access.InventoryCostRead}))
+	assert.Equal(t, "cost.read", access.InventoryCostRead.Action())
 
 	assert.Equal(t, "read", access.CustomerRead.Action())
 	assert.Equal(t, "write", access.GarageWrite.Action())
@@ -87,7 +93,7 @@ func TestAccessCheck(t *testing.T) {
 	}
 
 	assert.True(t, owner.Has(access.BillingWrite))
-	assert.Len(t, owner.Effective(), 20)
+	assert.Len(t, owner.Effective(), 21)
 	assert.Equal(t, []access.Permission{access.CustomerRead}, member.Effective())
 }
 

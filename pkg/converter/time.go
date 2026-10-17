@@ -14,3 +14,12 @@ func TimeToProto(t time.Time) *timestamppb.Timestamp {
 
 	return timestamppb.New(t)
 }
+
+// TimePtrToProto converts t, or returns nil when t is nil.
+func TimePtrToProto(t *time.Time) *timestamppb.Timestamp {
+	if t == nil {
+		return nil
+	}
+
+	return TimeToProto(*t)
+}

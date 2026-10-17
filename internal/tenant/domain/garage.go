@@ -43,6 +43,21 @@ func (m QuoteApprovalMode) IsValid() bool {
 	return m == QuoteApprovalModeLink || m == QuoteApprovalModeManual
 }
 
+// StockIssueMode is when a repair order's draft stock issue posts
+// (FR-INV-20): on close by default, or when the order starts.
+type StockIssueMode string
+
+// Valid StockIssueMode values.
+const (
+	StockIssueModeOnClose StockIssueMode = "on_close"
+	StockIssueModeOnStart StockIssueMode = "on_start"
+)
+
+// IsValid reports whether m is one of the defined StockIssueMode values.
+func (m StockIssueMode) IsValid() bool {
+	return m == StockIssueModeOnClose || m == StockIssueModeOnStart
+}
+
 // Defaults of a new garage (Database Design 2.2).
 const (
 	DefaultTimezone                     = "Asia/Ho_Chi_Minh"
@@ -51,6 +66,8 @@ const (
 	DefaultRepairOrderNumberTemplate    = "LSC-{YYYY}{MM}-{SEQ:4}"
 	DefaultSettlementNumberTemplate     = "QT-{YYYY}{MM}-{SEQ:4}"
 	DefaultPaymentVoucherNumberTemplate = "PT-{YYYY}{MM}-{SEQ:4}"
+	DefaultGoodsReceiptNumberTemplate   = "PN-{YYYY}{MM}-{SEQ:4}"
+	DefaultStockIssueNumberTemplate     = "PX-{YYYY}{MM}-{SEQ:4}"
 	MaxGarageNameLength                 = 255
 	MaxTaxCodeLength                    = 20
 	MaxTemplateLength                   = 50
@@ -118,11 +135,17 @@ type Garage struct {
 	SettlementNumberTemplate  string
 	// PaymentVoucherNumberTemplate numbers payment vouchers (FR-BIL-05).
 	PaymentVoucherNumberTemplate string
-	DefaultQuoteApprovalMode     QuoteApprovalMode
-	CreatedBy                    *string
-	UpdatedBy                    *string
-	CreatedAt                    time.Time
-	UpdatedAt                    time.Time
+	// GoodsReceiptNumberTemplate and StockIssueNumberTemplate number goods
+	// receipts and stock issues (FR-INV-06/20, Release 7.0).
+	GoodsReceiptNumberTemplate string
+	StockIssueNumberTemplate   string
+	// StockIssueMode is when a repair order's draft stock issue posts.
+	StockIssueMode           StockIssueMode
+	DefaultQuoteApprovalMode QuoteApprovalMode
+	CreatedBy                *string
+	UpdatedBy                *string
+	CreatedAt                time.Time
+	UpdatedAt                time.Time
 }
 
 // ValidName reports whether name is a usable garage name.

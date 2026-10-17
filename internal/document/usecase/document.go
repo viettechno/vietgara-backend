@@ -1,6 +1,8 @@
 // Package usecase renders the documents of the Document/Print module
-// (FRD 3.13): a quote PDF, a settlement receipt PDF (FR-DOC-01), and the
-// stock movement report as an Excel workbook (FR-DOC-02). It owns no
+// (FRD 3.13): a quote PDF, a settlement receipt PDF (FR-DOC-01), the
+// goods receipt and stock issue PDFs and the inventory reports as Excel
+// workbooks (FR-INV-06/07/19/20), and the stock movement report as an Excel
+// workbook (FR-DOC-02). It owns no
 // tables of its own -- every document is generated fresh from the owning
 // module's own data, read through narrow reader interfaces implemented
 // by adapters in cmd/server, the same cross-module decoupling pattern
@@ -93,6 +95,40 @@ type SettlementReader interface {
 	Get(ctx context.Context, garageID, settlementID string) (SettlementInfo, error)
 }
 
+// GoodsReceiptInfo is the Inventory module's view of a goods receipt that
+// Document/Print needs to render its PDF.
+type GoodsReceiptInfo struct {
+	Number, Status, Date, DeliveryNoteNumber, Notes string
+	Lines                                           []render.GoodsReceiptRow
+	// ShowCost is false for a caller without inventory.cost.read: the
+	// document then prints quantities only (FR-INV-08).
+	ShowCost    bool
+	TotalAmount int64
+}
+
+// StockIssueInfo is the Inventory module's view of a stock issue that
+// Document/Print needs to render its PDF.
+type StockIssueInfo struct {
+	Number, Status, RepairOrderNumber, PostedAt, PostedBy string
+	Lines                                                 []render.StockIssueRow
+}
+
+// InventoryDocumentReader reads the Release 7.0 inventory documents and
+// reports; implemented by an adapter over the Inventory module in
+// cmd/server. The two reports need inventory.cost.read, which the RPC
+// policy checks.
+type InventoryDocumentReader interface {
+	GoodsReceipt(ctx context.Context, garageID, receiptID string) (GoodsReceiptInfo, error)
+	// StockIssue returns the stock issue of a repair order.
+	StockIssue(ctx context.Context, garageID, repairOrderID string) (StockIssueInfo, error)
+	// Purchases lists the purchases report; from is inclusive and to
+	// exclusive, "YYYY-MM-DD" or empty.
+	Purchases(ctx context.Context, garageID, supplierID, from, to string) ([]render.PurchaseRow, int64, error)
+	// Valuation lists the stock valuation at a date ("YYYY-MM-DD", empty for
+	// today).
+	Valuation(ctx context.Context, garageID, at string) ([]render.ValuationRow, int64, error)
+}
+
 // StockMovementReader reads the stock movement report for Excel export;
 // implemented by an adapter over the Inventory module in cmd/server.
 type StockMovementReader interface {
@@ -144,16 +180,17 @@ type DocumentUseCase struct {
 	StockMovements StockMovementReader
 	Revenue        RevenueReader
 	Garages        GarageReader
+	Inventory      InventoryDocumentReader
 }
 
 // NewDocumentUseCase wires the use case to its dependencies.
 func NewDocumentUseCase(
 	quotes QuoteReader, repairOrders RepairOrderReader, settlements SettlementReader, stockMovements StockMovementReader,
-	revenue RevenueReader, garages GarageReader,
+	revenue RevenueReader, garages GarageReader, inventory InventoryDocumentReader,
 ) *DocumentUseCase {
 	return &DocumentUseCase{
 		Quotes: quotes, RepairOrders: repairOrders, Settlements: settlements, StockMovements: stockMovements,
-		Revenue: revenue, Garages: garages,
+		Revenue: revenue, Garages: garages, Inventory: inventory,
 	}
 }
 
@@ -301,6 +338,88 @@ func (uc *DocumentUseCase) RevenueExcel(ctx context.Context, garageID, period st
 	workbook, err := render.RevenueExcel(info.Points, info.TotalAmount)
 	if err != nil {
 		return nil, apperror.Internal("export revenue excel", err)
+	}
+
+	return workbook, nil
+}
+
+// GoodsReceiptPDF renders a goods receipt as a PDF (FR-INV-06).
+func (uc *DocumentUseCase) GoodsReceiptPDF(ctx context.Context, garageID, receiptID string) ([]byte, error) {
+	receipt, err := uc.Inventory.GoodsReceipt(ctx, garageID, receiptID)
+	if err != nil {
+		return nil, toAppError("export goods receipt pdf", err)
+	}
+
+	garage, err := uc.letterhead(ctx, garageID, issuer.Issuer{})
+	if err != nil {
+		return nil, err
+	}
+
+	pdf, err := render.GoodsReceiptPDF(render.GoodsReceiptPDFData{
+		Garage: garage, Number: receipt.Number, Status: receipt.Status, Date: receipt.Date,
+		DeliveryNoteNumber: receipt.DeliveryNoteNumber, Notes: receipt.Notes, Lines: receipt.Lines,
+		ShowCost: receipt.ShowCost, TotalAmount: receipt.TotalAmount,
+	})
+	if err != nil {
+		return nil, apperror.Internal("export goods receipt pdf", err)
+	}
+
+	return pdf, nil
+}
+
+// StockIssuePDF renders a repair order's stock issue (phiếu xuất kho) as a
+// PDF (FR-INV-20).
+func (uc *DocumentUseCase) StockIssuePDF(ctx context.Context, garageID, repairOrderID string) ([]byte, error) {
+	issue, err := uc.Inventory.StockIssue(ctx, garageID, repairOrderID)
+	if err != nil {
+		return nil, toAppError("export stock issue pdf", err)
+	}
+
+	garage, err := uc.letterhead(ctx, garageID, issuer.Issuer{})
+	if err != nil {
+		return nil, err
+	}
+
+	pdf, err := render.StockIssuePDF(render.StockIssuePDFData{
+		Garage: garage, Number: issue.Number, Status: issue.Status, RepairOrderNumber: issue.RepairOrderNumber,
+		PostedAt: issue.PostedAt, PostedBy: issue.PostedBy, Lines: issue.Lines,
+	})
+	if err != nil {
+		return nil, apperror.Internal("export stock issue pdf", err)
+	}
+
+	return pdf, nil
+}
+
+// PurchasesExcel renders the purchases-by-supplier report as an Excel
+// workbook (FR-INV-19), the same data and filters as
+// InventoryService.GetPurchasesReport.
+func (uc *DocumentUseCase) PurchasesExcel(ctx context.Context, garageID, supplierID, from, to string) ([]byte, error) {
+	rows, total, err := uc.Inventory.Purchases(ctx, garageID, supplierID, from, to)
+	if err != nil {
+		return nil, toAppError("export purchases excel", err)
+	}
+
+	workbook, err := render.PurchasesExcel(rows, total)
+	if err != nil {
+		return nil, apperror.Internal("export purchases excel", err)
+	}
+
+	return workbook, nil
+}
+
+// StockValuationExcel renders the stock valuation report as an Excel
+// workbook (FR-INV-07), the same data as
+// InventoryService.GetStockValuationReport.
+func (uc *DocumentUseCase) StockValuationExcel(ctx context.Context, garageID, at string) ([]byte, error) {
+	rows, total, err := uc.Inventory.Valuation(ctx, garageID, at)
+	if err != nil {
+		return nil, toAppError("export stock valuation excel", err)
+	}
+
+	workbook, err := render.StockValuationExcel(rows, total)
+	if err != nil {
+		return nil, apperror.Internal("export stock valuation excel", err)
 	}
 
 	return workbook, nil

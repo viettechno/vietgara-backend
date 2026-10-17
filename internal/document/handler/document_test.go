@@ -17,6 +17,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/document/render"
 	"github.com/viettechno/vietgara-backend/internal/document/usecase"
 	"github.com/viettechno/vietgara-backend/internal/mocks"
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
@@ -39,6 +40,7 @@ type env struct {
 	stockMovements *mocks.MockDocumentStockMovementReader
 	revenue        *mocks.MockDocumentRevenueReader
 	garages        *mocks.MockDocumentGarageReader
+	inventory      *mocks.MockDocumentInventoryReader
 }
 
 func newEnv(t *testing.T) *env {
@@ -48,9 +50,10 @@ func newEnv(t *testing.T) *env {
 		quotes: mocks.NewMockDocumentQuoteReader(t), repairOrders: mocks.NewMockDocumentRepairOrderReader(t),
 		settlements: mocks.NewMockDocumentSettlementReader(t), stockMovements: mocks.NewMockDocumentStockMovementReader(t),
 		revenue: mocks.NewMockDocumentRevenueReader(t), garages: mocks.NewMockDocumentGarageReader(t),
+		inventory: mocks.NewMockDocumentInventoryReader(t),
 	}
 
-	uc := usecase.NewDocumentUseCase(e.quotes, e.repairOrders, e.settlements, e.stockMovements, e.revenue, e.garages)
+	uc := usecase.NewDocumentUseCase(e.quotes, e.repairOrders, e.settlements, e.stockMovements, e.revenue, e.garages, e.inventory)
 	e.srv = handler.NewServer(uc)
 
 	return e
@@ -64,7 +67,11 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 6)
+	assert.Len(t, p, 10)
+	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportGoodsReceiptPdf_FullMethodName].Garage.Permission)
+	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportStockIssuePdf_FullMethodName].Garage.Permission)
+	assert.Equal(t, access.InventoryCostRead, p[documentv1.DocumentService_ExportPurchasesExcel_FullMethodName].Garage.Permission)
+	assert.Equal(t, access.InventoryCostRead, p[documentv1.DocumentService_ExportStockValuationExcel_FullMethodName].Garage.Permission)
 	assert.NotNil(t, p[documentv1.DocumentService_ExportQuotePdf_FullMethodName].Garage)
 }
 
@@ -227,7 +234,7 @@ func TestExportStockMovementsExcel(t *testing.T) {
 		}, nil).Once()
 
 		resp, err := e.srv.ExportStockMovementsExcel(t.Context(), &documentv1.ExportStockMovementsExcelRequest{
-			GarageId: garageID, ItemId: itemID,
+			GarageId: garageID, PartId: itemID,
 		})
 		require.NoError(t, err)
 		assert.Equal(t, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", resp.GetContentType())
@@ -243,7 +250,7 @@ func TestExportStockMovementsExcel(t *testing.T) {
 		e.stockMovements.EXPECT().List(anyArg, garageID, itemID).Return(nil, notFound).Once()
 
 		_, err := e.srv.ExportStockMovementsExcel(t.Context(), &documentv1.ExportStockMovementsExcelRequest{
-			GarageId: garageID, ItemId: itemID,
+			GarageId: garageID, PartId: itemID,
 		})
 		require.Error(t, err)
 		assert.Equal(t, codes.NotFound, status.Code(err))
@@ -357,4 +364,50 @@ func TestExportPaymentVoucherPdf(t *testing.T) {
 		require.Error(t, err)
 		assert.Equal(t, codes.NotFound, status.Code(err))
 	})
+}
+
+func TestExportInventoryDocuments(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t)
+	e.garages.EXPECT().Get(anyArg, garageID).Return(defaultGarage(), nil).Twice()
+	e.inventory.EXPECT().GoodsReceipt(anyArg, garageID, "r-1").Return(usecase.GoodsReceiptInfo{Number: "PN-1"}, nil).Once()
+	e.inventory.EXPECT().StockIssue(anyArg, garageID, repairOrderID).Return(usecase.StockIssueInfo{Number: "PX-1"}, nil).Once()
+	e.inventory.EXPECT().Purchases(anyArg, garageID, "s-1", "2026-10-01", "2026-11-01").Return(nil, int64(0), nil).Once()
+	e.inventory.EXPECT().Valuation(anyArg, garageID, "2026-10-15").Return(nil, int64(0), nil).Once()
+
+	receipt, err := e.srv.ExportGoodsReceiptPdf(t.Context(), &documentv1.ExportGoodsReceiptPdfRequest{GarageId: garageID, GoodsReceiptId: "r-1"})
+	require.NoError(t, err)
+	assert.Equal(t, "application/pdf", receipt.GetContentType())
+
+	issue, err := e.srv.ExportStockIssuePdf(t.Context(), &documentv1.ExportStockIssuePdfRequest{GarageId: garageID, RepairOrderId: repairOrderID})
+	require.NoError(t, err)
+	assert.Equal(t, "application/pdf", issue.GetContentType())
+
+	purchases, err := e.srv.ExportPurchasesExcel(t.Context(), &documentv1.ExportPurchasesExcelRequest{
+		GarageId: garageID, SupplierId: "s-1", From: "2026-10-01", To: "2026-11-01",
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, purchases.GetData())
+
+	valuation, err := e.srv.ExportStockValuationExcel(t.Context(), &documentv1.ExportStockValuationExcelRequest{GarageId: garageID, At: "2026-10-15"})
+	require.NoError(t, err)
+	assert.NotEmpty(t, valuation.GetData())
+
+	e.inventory.EXPECT().GoodsReceipt(anyArg, garageID, "r-2").Return(usecase.GoodsReceiptInfo{}, apperror.New(apperror.CodeNotFound, "gone")).Once()
+	e.inventory.EXPECT().StockIssue(anyArg, garageID, "ro-2").Return(usecase.StockIssueInfo{}, apperror.New(apperror.CodeNotFound, "gone")).Once()
+	e.inventory.EXPECT().Purchases(anyArg, garageID, "", "", "").Return(nil, int64(0), apperror.New(apperror.CodeNotFound, "gone")).Once()
+	e.inventory.EXPECT().Valuation(anyArg, garageID, "").Return(nil, int64(0), apperror.New(apperror.CodeNotFound, "gone")).Once()
+
+	_, err = e.srv.ExportGoodsReceiptPdf(t.Context(), &documentv1.ExportGoodsReceiptPdfRequest{GarageId: garageID, GoodsReceiptId: "r-2"})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	_, err = e.srv.ExportStockIssuePdf(t.Context(), &documentv1.ExportStockIssuePdfRequest{GarageId: garageID, RepairOrderId: "ro-2"})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	_, err = e.srv.ExportPurchasesExcel(t.Context(), &documentv1.ExportPurchasesExcelRequest{GarageId: garageID})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	_, err = e.srv.ExportStockValuationExcel(t.Context(), &documentv1.ExportStockValuationExcelRequest{GarageId: garageID})
+	assert.Equal(t, codes.NotFound, status.Code(err))
 }

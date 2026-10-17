@@ -54,6 +54,7 @@ func garageToProto(uc *usecase.TenantUseCase, g *usecase.GarageWithAccess) *tena
 		Numbering: &tenantv1.NumberingTemplates{
 			Quote: g.Garage.QuoteNumberTemplate, RepairOrder: g.Garage.RepairOrderNumberTemplate,
 			Settlement: g.Garage.SettlementNumberTemplate, PaymentVoucher: g.Garage.PaymentVoucherNumberTemplate,
+			GoodsReceipt: g.Garage.GoodsReceiptNumberTemplate, StockIssue: g.Garage.StockIssueNumberTemplate,
 		},
 		LegalName:      g.Garage.LegalName,
 		LegalAddress:   g.Garage.LegalAddress,
@@ -62,6 +63,7 @@ func garageToProto(uc *usecase.TenantUseCase, g *usecase.GarageWithAccess) *tena
 			BankName: g.Garage.Bank.BankName, AccountNumber: g.Garage.Bank.AccountNumber, AccountHolder: g.Garage.Bank.AccountHolder,
 		},
 		DefaultQuoteApprovalMode: quoteApprovalModeToProto(g.Garage.DefaultQuoteApprovalMode),
+		StockIssueMode:           stockIssueModeToProto(g.Garage.StockIssueMode),
 		CreatedAt:                converter.TimeToProto(g.Garage.CreatedAt),
 		UpdatedAt:                converter.TimeToProto(g.Garage.UpdatedAt),
 	}
@@ -254,4 +256,27 @@ func maskPaths(paths []string, settable ...string) []string {
 	}
 
 	return paths
+}
+
+func stockIssueModeToProto(m domain.StockIssueMode) tenantv1.StockIssueMode {
+	if m == domain.StockIssueModeOnStart {
+		return tenantv1.StockIssueMode_STOCK_ISSUE_MODE_ON_START
+	}
+
+	return tenantv1.StockIssueMode_STOCK_ISSUE_MODE_ON_CLOSE
+}
+
+// stockIssueModeFromProto maps UNSPECIFIED (and unknown values) to "", which
+// the use case rejects as invalid.
+func stockIssueModeFromProto(m tenantv1.StockIssueMode) domain.StockIssueMode {
+	switch m {
+	case tenantv1.StockIssueMode_STOCK_ISSUE_MODE_ON_CLOSE:
+		return domain.StockIssueModeOnClose
+	case tenantv1.StockIssueMode_STOCK_ISSUE_MODE_ON_START:
+		return domain.StockIssueModeOnStart
+	case tenantv1.StockIssueMode_STOCK_ISSUE_MODE_UNSPECIFIED:
+		return ""
+	default:
+		return ""
+	}
 }

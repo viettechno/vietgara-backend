@@ -15,7 +15,7 @@ func garageRow() []any {
 		"g-1", "owner", "Gara", "0101", "Gara Co., Ltd", nil, nil, []byte(`{"bank_name":"VCB","account_number":"001"}`),
 		nil, nil, "a@b.vn", nil, "Asia/Ho_Chi_Minh", "VND", "active",
 		[]byte(`[{"day":1,"closed":false,"open":"08:00","close":"17:00"}]`), "BG-{SEQ:4}", "LSC-{SEQ:4}", "QT-{SEQ:4}",
-		"PT-{SEQ:4}", "link", "owner", nil, now, now,
+		"PT-{SEQ:4}", "PN-{SEQ:4}", "PX-{SEQ:4}", "on_start", "link", "owner", nil, now, now,
 	}
 }
 

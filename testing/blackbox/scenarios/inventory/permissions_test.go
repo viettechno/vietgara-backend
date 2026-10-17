@@ -30,7 +30,7 @@ func createInventoryTestEnv(t *testing.T) (context.Context, *fixture.Actor, stri
 		fixture.NewUnit(t, owner.API, garageID, "Piece", "pcs"), fixture.WithThreshold("10"))
 
 	// Record stock receipt
-	_, err = owner.API.CreateStockReceipt(t.Context(), garageID, part.GetId(), "100", "", 50000)
+	_, err = owner.API.ReceiveStock(t.Context(), garageID, part.GetId(), "100", "", 50000)
 	require.NoError(t, err)
 
 	groups, err := owner.API.ListStaffGroups(t.Context(), garageID)
@@ -92,7 +92,7 @@ func TestInventoryPermissionsNoAccess(t *testing.T) {
 		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
 
 		// Technician CANNOT record stock receipt
-		_, err = tech.API.CreateStockReceipt(ctx, garageID, levels[0].GetPartId(), "50", "", 0)
+		_, err = tech.API.ReceiveStock(ctx, garageID, levels[0].GetPartId(), "50", "", 0)
 		require.Error(t, err)
 		fixture.RequireAPIError(t, err, http.StatusForbidden, "")
 
@@ -157,7 +157,7 @@ func TestInventoryPermissionsReadWrite(t *testing.T) {
 		assert.Equal(t, "STAFF-TEST", newPart.GetSku())
 
 		// Inventory Staff CAN record stock receipt
-		_, err = staff.API.CreateStockReceipt(ctx, garageID, newPart.GetId(), "50", "", 10000)
+		_, err = staff.API.ReceiveStock(ctx, garageID, newPart.GetId(), "50", "", 10000)
 		require.NoError(t, err)
 
 		// Inventory Staff CAN delete a part (it has stock history, so it is deactivated)
@@ -178,7 +178,7 @@ func TestInventoryPermissionsOwner(t *testing.T) {
 			&cataloguev1.Unit{Id: part.GetBaseUnitId()})
 
 		// Owner records stock
-		_, err := owner.API.CreateStockReceipt(ctx, garageID, part2.GetId(), "200", "", 60000)
+		_, err := owner.API.ReceiveStock(ctx, garageID, part2.GetId(), "200", "", 60000)
 		require.NoError(t, err)
 
 		// Owner updates the part
@@ -211,7 +211,7 @@ func TestInventoryPermissionsOwner(t *testing.T) {
 		hasReceipt := false
 
 		for _, m := range movements {
-			if m.GetItemId() == part2.GetId() {
+			if m.GetPartId() == part2.GetId() {
 				hasReceipt = true
 				break
 			}

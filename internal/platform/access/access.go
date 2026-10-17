@@ -41,6 +41,9 @@ const (
 	RepairOrderWrite Permission = "repair_order.write"
 	InventoryRead    Permission = "inventory.read"
 	InventoryWrite   Permission = "inventory.write"
+	// InventoryCostRead shows a part's cost, average cost and the valuation
+	// and purchases reports (FR-INV-08, Release 7.0).
+	InventoryCostRead Permission = "inventory.cost.read"
 	// CatalogueRead / CatalogueWrite cover the parts, units, packaging,
 	// categories, prices and images of the Catalogue module (Release 6.0).
 	CatalogueRead     Permission = "catalogue.read"
@@ -68,6 +71,7 @@ var Catalog = []CatalogEntry{
 	{RepairOrderWrite, "repair_order"},
 	{InventoryRead, "inventory"},
 	{InventoryWrite, "inventory"},
+	{InventoryCostRead, "inventory"},
 	{CatalogueRead, "catalogue"},
 	{CatalogueWrite, "catalogue"},
 	{BillingRead, "billing"},
@@ -81,7 +85,8 @@ type CatalogEntry struct {
 	Module     string
 }
 
-// Action returns the part after the module: "read", "write" or "correct".
+// Action returns the part after the module: "read", "write", "correct" or
+// "cost.read".
 func (p Permission) Action() string {
 	_, action, _ := strings.Cut(string(p), ".")
 
@@ -124,7 +129,7 @@ func Normalize(perms []Permission) []Permission {
 	for _, p := range perms {
 		add(p)
 
-		if module, action, _ := strings.Cut(string(p), "."); action == "write" || action == "correct" {
+		if module, action, _ := strings.Cut(string(p), "."); action == "write" || action == "correct" || action == "cost.read" {
 			add(Permission(module + ".read"))
 		}
 	}

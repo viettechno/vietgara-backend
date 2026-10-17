@@ -62,7 +62,7 @@ CREATE TRIGGER trigger_repair_orders_row_audit BEFORE INSERT OR UPDATE ON repair
 CREATE TRIGGER trigger_repair_order_lines_row_audit BEFORE INSERT OR UPDATE ON repair_order_lines FOR EACH ROW EXECUTE FUNCTION set_row_audit();
 CREATE TRIGGER trigger_units_row_audit BEFORE INSERT OR UPDATE ON units FOR EACH ROW EXECUTE FUNCTION set_row_audit();
 CREATE TRIGGER trigger_part_categories_row_audit BEFORE INSERT OR UPDATE ON part_categories FOR EACH ROW EXECUTE FUNCTION set_row_audit();
-CREATE TRIGGER trigger_items_row_audit BEFORE INSERT OR UPDATE ON items FOR EACH ROW EXECUTE FUNCTION set_row_audit();
+CREATE TRIGGER trigger_parts_row_audit BEFORE INSERT OR UPDATE ON parts FOR EACH ROW EXECUTE FUNCTION set_row_audit();
 CREATE TRIGGER trigger_stock_balance_row_audit BEFORE INSERT OR UPDATE ON stock_balance FOR EACH ROW EXECUTE FUNCTION set_row_audit();
 CREATE TRIGGER trigger_settlements_row_audit BEFORE INSERT OR UPDATE ON settlements FOR EACH ROW EXECUTE FUNCTION set_row_audit();
 CREATE TRIGGER trigger_settlement_payments_row_audit BEFORE INSERT OR UPDATE ON settlement_payments FOR EACH ROW EXECUTE FUNCTION set_row_audit();
@@ -71,8 +71,8 @@ CREATE TRIGGER trigger_document_sequences_row_audit BEFORE INSERT OR UPDATE ON d
 -- Append-only tables (and link tables whose rows are only added or removed).
 CREATE TRIGGER trigger_platform_admins_created_audit BEFORE INSERT ON platform_admins FOR EACH ROW EXECUTE FUNCTION set_created_audit();
 CREATE TRIGGER trigger_role_permissions_created_audit BEFORE INSERT ON role_permissions FOR EACH ROW EXECUTE FUNCTION set_created_audit();
-CREATE TRIGGER trigger_item_units_created_audit BEFORE INSERT ON item_units FOR EACH ROW EXECUTE FUNCTION set_created_audit();
-CREATE TRIGGER trigger_item_images_created_audit BEFORE INSERT ON item_images FOR EACH ROW EXECUTE FUNCTION set_created_audit();
+CREATE TRIGGER trigger_part_units_created_audit BEFORE INSERT ON part_units FOR EACH ROW EXECUTE FUNCTION set_created_audit();
+CREATE TRIGGER trigger_part_images_created_audit BEFORE INSERT ON part_images FOR EACH ROW EXECUTE FUNCTION set_created_audit();
 CREATE TRIGGER trigger_staff_group_members_created_audit BEFORE INSERT ON staff_group_members FOR EACH ROW EXECUTE FUNCTION set_created_audit();
 CREATE TRIGGER trigger_outbox_events_created_audit BEFORE INSERT ON outbox_events FOR EACH ROW EXECUTE FUNCTION set_created_audit();
 CREATE TRIGGER trigger_audit_log_created_audit BEFORE INSERT ON audit_log FOR EACH ROW EXECUTE FUNCTION set_created_audit();

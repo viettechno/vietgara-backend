@@ -128,14 +128,14 @@ func TestQuantitiesAreNumeric(t *testing.T) {
 
 			for _, tx := range []*inventoryDomain.StockTransaction{
 				{ID: uuid.NewString(), GarageID: garageID, PartID: part.ID, Type: inventoryDomain.TransactionIn, Quantity: "10.5", UnitCost: &cost, RefType: inventoryDomain.RefPurchase},
-				{ID: uuid.NewString(), GarageID: garageID, PartID: part.ID, Type: inventoryDomain.TransactionOut, Quantity: "2.25", RefType: inventoryDomain.RefRepairOrder},
+				{ID: uuid.NewString(), GarageID: garageID, PartID: part.ID, Type: inventoryDomain.TransactionOut, Quantity: "2.25", RefType: inventoryDomain.RefStockIssue},
 			} {
 				require.NoError(t, inventory.RecordTransaction(ctx, tx))
 			}
 
 			balances, err := inventory.Balances(ctx, garageID, []string{part.ID})
 			require.NoError(t, err)
-			assert.Equal(t, map[string]string{part.ID: "8.25"}, balances)
+			assert.Equal(t, map[string]inventoryUsecase.Balance{part.ID: {OnHand: "8.25", Reserved: "0", AverageCost: cost}}, balances)
 
 			got, err := catalogue.FindPart(ctx, garageID, part.ID)
 			require.NoError(t, err)
@@ -154,7 +154,8 @@ func TestQuantitiesAreNumeric(t *testing.T) {
 			require.NotNil(t, byType[inventoryDomain.TransactionIn].UnitCost)
 			assert.Equal(t, cost, *byType[inventoryDomain.TransactionIn].UnitCost, "the cost keeps its decimals")
 			assert.Equal(t, "2.25", byType[inventoryDomain.TransactionOut].Quantity)
-			assert.Nil(t, byType[inventoryDomain.TransactionOut].UnitCost)
+			require.NotNil(t, byType[inventoryDomain.TransactionOut].UnitCost)
+			assert.Equal(t, cost, *byType[inventoryDomain.TransactionOut].UnitCost, "an issue is stamped with the average cost")
 		})
 	})
 }

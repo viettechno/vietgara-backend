@@ -21,7 +21,10 @@ CREATE TABLE suppliers (
     updated_by UUID,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    deleted_at TIMESTAMP WITH TIME ZONE
+    deleted_at TIMESTAMP WITH TIME ZONE,
+    -- Target of the (garage_id, supplier_id) foreign keys of goods receipt
+    -- lines and part suppliers (Release 7.0).
+    CONSTRAINT suppliers_garage_id_id_key UNIQUE (garage_id, id)
 );
 
 -- Listing of a garage's live suppliers

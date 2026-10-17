@@ -175,21 +175,32 @@ func TestReceiveByTheCaseIssueByTheCan(t *testing.T) {
 	part, _, caseUnit := beer(t, owner.API, garageID)
 
 	// More than three decimals after conversion is refused, never rounded.
-	_, err := owner.API.CreateStockReceipt(ctx, garageID, part.GetId(), "0.0001", caseUnit.GetId(), 0)
+	_, err := owner.API.ReceiveStock(ctx, garageID, part.GetId(), "0.0001", caseUnit.GetId(), 0)
 	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "")
 
-	receipt, err := owner.API.CreateStockReceipt(ctx, garageID, part.GetId(), "10", caseUnit.GetId(), 150_000)
+	receipt, err := owner.API.ReceiveStock(ctx, garageID, part.GetId(), "10", caseUnit.GetId(), 150_000)
 	require.NoError(t, err)
-	assert.Equal(t, "240", receipt.GetStockLevel().GetQuantityOnHand())
-	assert.Equal(t, "240", receipt.GetTransaction().GetQuantity())
-	assert.Equal(t, "10", receipt.GetTransaction().GetEnteredQuantity())
-	assert.Equal(t, "case", receipt.GetTransaction().GetUnitAbbreviation())
-	assert.Equal(t, "can", receipt.GetTransaction().GetBaseUnitAbbreviation())
-	assert.EqualValues(t, 6250, receipt.GetTransaction().GetUnitCost(), "150,000 per case of 24 is 6,250 per can")
+	require.Len(t, receipt.GetLines(), 1)
+	assert.Equal(t, "240", receipt.GetLines()[0].GetQuantity())
+	assert.Equal(t, "10", receipt.GetLines()[0].GetEnteredQuantity())
+	assert.Equal(t, "case", receipt.GetLines()[0].GetUnitAbbreviation())
+	assert.Equal(t, "can", receipt.GetLines()[0].GetBaseUnitAbbreviation())
+
+	level, err := owner.API.GetStockLevel(ctx, garageID, part.GetId())
+	require.NoError(t, err)
+	assert.Equal(t, "240", level.GetQuantityOnHand())
+	assert.EqualValues(t, 6250, level.GetAverageCost(), "150,000 per case of 24 is 6,250 per can")
+
+	movements, err := owner.API.ListStockTransactions(ctx, garageID)
+	require.NoError(t, err)
+	require.Len(t, movements, 1)
+	assert.Equal(t, "240", movements[0].GetQuantity())
+	assert.Equal(t, "10", movements[0].GetEnteredQuantity())
+	assert.EqualValues(t, 6250, movements[0].GetUnitCost())
 
 	// A unit that is not one of the part's units is refused.
 	other := fixture.NewUnit(t, owner.API, garageID, "Crate", "crt")
-	_, err = owner.API.CreateStockReceipt(ctx, garageID, part.GetId(), "1", other.GetId(), 0)
+	_, err = owner.API.ReceiveStock(ctx, garageID, part.GetId(), "1", other.GetId(), 0)
 	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "")
 
 	// 30 cans on a repair order.
@@ -490,7 +501,7 @@ func TestDeleteOrDeactivate(t *testing.T) {
 	owner, garageID := setup(t, "cat-deactivate")
 	part, _, caseUnit := beer(t, owner.API, garageID)
 
-	_, err := owner.API.CreateStockReceipt(ctx, garageID, part.GetId(), "1", caseUnit.GetId(), 0)
+	_, err := owner.API.ReceiveStock(ctx, garageID, part.GetId(), "1", caseUnit.GetId(), 0)
 	require.NoError(t, err)
 
 	// The case unit is used by the part's packaging and a stock movement.
@@ -565,7 +576,7 @@ func TestStockMovementsExcelHasBothUnits(t *testing.T) {
 	owner, garageID := setup(t, "cat-excel")
 	part, _, caseUnit := beer(t, owner.API, garageID)
 
-	_, err := owner.API.CreateStockReceipt(ctx, garageID, part.GetId(), "10", caseUnit.GetId(), 150_000)
+	_, err := owner.API.ReceiveStock(ctx, garageID, part.GetId(), "10", caseUnit.GetId(), 150_000)
 	require.NoError(t, err)
 
 	contentType, body, err := owner.API.DownloadStockMovementsExcel(ctx, garageID)

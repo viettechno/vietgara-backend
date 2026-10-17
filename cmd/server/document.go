@@ -33,6 +33,7 @@ func buildDocument(
 	uc := documentUsecase.NewDocumentUseCase(
 		documentQuotes{quotes: quotes}, documentRepairOrders{uc: repairOrders}, documentSettlements{uc: settlements},
 		documentStockMovements{uc: inventory}, documentRevenue{uc: reporting}, documentGarages{garages: garages, store: store},
+		documentInventory{uc: inventory},
 	)
 
 	return &documentModule{server: documentHandler.NewServer(uc)}

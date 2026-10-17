@@ -30,11 +30,11 @@ func TestPostgresRepository_Balances(t *testing.T) {
 		t.Parallel()
 
 		repo := repository.NewPostgresRepository(nil)
-		tx := dbtest.New(t).ExpectQuery("FROM stock_balance", dbtest.NewRows([]any{partID, "12.5"}), nil)
+		tx := dbtest.New(t).ExpectQuery("FROM stock_balance", dbtest.NewRows([]any{partID, "12.5", "2", "100.5"}), nil)
 
 		got, err := repo.Balances(tx.Context(t.Context()), garageID, []string{partID})
 		require.NoError(t, err)
-		require.Equal(t, map[string]string{partID: "12.5"}, got)
+		require.Equal(t, map[string]usecase.Balance{partID: {OnHand: "12.5", Reserved: "2", AverageCost: "100.5"}}, got)
 	})
 
 	t.Run("every part", func(t *testing.T) {
@@ -54,7 +54,7 @@ func TestPostgresRepository_Balances(t *testing.T) {
 		repo := repository.NewPostgresRepository(nil)
 		tx := dbtest.New(t).
 			ExpectQuery("FROM stock_balance", nil, errBoom).
-			ExpectQuery("FROM stock_balance", dbtest.NewRows([]any{partID, "1"}).WithScanError(errBoom), nil)
+			ExpectQuery("FROM stock_balance", dbtest.NewRows([]any{partID, "1", "0", "0"}).WithScanError(errBoom), nil)
 		ctx := tx.Context(t.Context())
 
 		_, err := repo.Balances(ctx, garageID, nil)
@@ -77,13 +77,13 @@ func TestPostgresRepository_RecordTransaction(t *testing.T) {
 		}
 	}
 
-	t.Run("success", func(t *testing.T) {
+	t.Run("a receipt with a cost moves the average", func(t *testing.T) {
 		t.Parallel()
 
 		repo := repository.NewPostgresRepository(nil)
 		tx := dbtest.New(t).
-			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.Row(now)).
-			ExpectExec("INSERT INTO stock_balance", dbtest.Tag(1), nil)
+			ExpectQueryRow("average_cost = CASE", dbtest.Row("96", "5000")).
+			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.Row(now))
 		ctx := tx.Context(t.Context())
 
 		in := newTx()
@@ -91,49 +91,72 @@ func TestPostgresRepository_RecordTransaction(t *testing.T) {
 		require.Equal(t, now, in.CreatedAt)
 	})
 
-	t.Run("an issue subtracts", func(t *testing.T) {
+	t.Run("an issue subtracts and is stamped with the average cost", func(t *testing.T) {
 		t.Parallel()
 
 		repo := repository.NewPostgresRepository(nil)
 		tx := dbtest.New(t).
-			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.Row(now)).
-			ExpectExec("quantity_on_hand - ", dbtest.Tag(1), nil)
+			ExpectQueryRow("quantity_on_hand - ", dbtest.Row("46", "5000")).
+			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.Row(now))
 		ctx := tx.Context(t.Context())
 
 		out := newTx()
-		out.Type = domain.TransactionOut
+		out.Type, out.RefType, out.UnitCost = domain.TransactionOut, domain.RefStockIssue, nil
 
 		require.NoError(t, repo.RecordTransaction(ctx, out))
+		require.NotNil(t, out.UnitCost)
+		require.Equal(t, "5000", *out.UnitCost)
 	})
 
-	t.Run("already issued", func(t *testing.T) {
+	t.Run("an issue before any cost is known stays unstamped", func(t *testing.T) {
 		t.Parallel()
 
 		repo := repository.NewPostgresRepository(nil)
 		tx := dbtest.New(t).
-			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.ErrRow(dbtest.UniqueViolation("idx_stock_transactions_repair_order_item_unique")))
+			ExpectQueryRow("quantity_on_hand - ", dbtest.Row("-2", "0")).
+			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.Row(now))
 		ctx := tx.Context(t.Context())
 
-		require.ErrorIs(t, repo.RecordTransaction(ctx, newTx()), domain.ErrAlreadyIssued)
+		out := newTx()
+		out.Type, out.RefType, out.UnitCost = domain.TransactionOut, domain.RefStockIssue, nil
+
+		require.NoError(t, repo.RecordTransaction(ctx, out))
+		require.Nil(t, out.UnitCost)
 	})
 
-	t.Run("insert failure", func(t *testing.T) {
+	t.Run("the reversal of a receipt line unwinds its cost", func(t *testing.T) {
 		t.Parallel()
 
 		repo := repository.NewPostgresRepository(nil)
-		tx := dbtest.New(t).ExpectQueryRow("INSERT INTO stock_transactions", dbtest.ErrRow(errBoom))
+		tx := dbtest.New(t).
+			ExpectQueryRow("greatest(round(", dbtest.Row("10", "100")).
+			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.Row(now))
 		ctx := tx.Context(t.Context())
 
-		require.ErrorIs(t, repo.RecordTransaction(ctx, newTx()), errBoom)
+		out := newTx()
+		out.Type, out.RefType = domain.TransactionOut, domain.RefGoodsReceipt
+
+		require.NoError(t, repo.RecordTransaction(ctx, out))
+		require.Equal(t, "5000", *out.UnitCost, "the line's own cost is kept")
 	})
 
 	t.Run("balance update failure", func(t *testing.T) {
 		t.Parallel()
 
 		repo := repository.NewPostgresRepository(nil)
+		tx := dbtest.New(t).ExpectQueryRow("INSERT INTO stock_balance", dbtest.ErrRow(errBoom))
+		ctx := tx.Context(t.Context())
+
+		require.ErrorIs(t, repo.RecordTransaction(ctx, newTx()), errBoom)
+	})
+
+	t.Run("insert failure", func(t *testing.T) {
+		t.Parallel()
+
+		repo := repository.NewPostgresRepository(nil)
 		tx := dbtest.New(t).
-			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.Row(now)).
-			ExpectExec("INSERT INTO stock_balance", dbtest.Tag(0), errBoom)
+			ExpectQueryRow("INSERT INTO stock_balance", dbtest.Row("1", "1")).
+			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.ErrRow(errBoom))
 		ctx := tx.Context(t.Context())
 
 		require.ErrorIs(t, repo.RecordTransaction(ctx, newTx()), errBoom)
@@ -156,13 +179,13 @@ func TestPostgresRepository_ListTransactions(t *testing.T) {
 			ExpectQuery("FROM stock_transactions t", dbtest.NewRows(transactionRow()), nil)
 		ctx := tx.Context(t.Context())
 
-		items, total, err := repo.ListTransactions(ctx, garageID, usecase.TransactionFilter{Limit: 20, PartID: partID, Type: domain.TransactionIn})
+		parts, total, err := repo.ListTransactions(ctx, garageID, usecase.TransactionFilter{Limit: 20, PartID: partID, Type: domain.TransactionIn})
 		require.NoError(t, err)
 		require.Equal(t, 1, total)
-		require.Len(t, items, 1)
-		require.Equal(t, domain.TransactionIn, items[0].Type)
-		require.Equal(t, "5000", *items[0].UnitCost)
-		require.Equal(t, "2", *items[0].EnteredQuantity)
+		require.Len(t, parts, 1)
+		require.Equal(t, domain.TransactionIn, parts[0].Type)
+		require.Equal(t, "5000", *parts[0].UnitCost)
+		require.Equal(t, "2", *parts[0].EnteredQuantity)
 	})
 
 	t.Run("no matches", func(t *testing.T) {
@@ -172,10 +195,10 @@ func TestPostgresRepository_ListTransactions(t *testing.T) {
 		tx := dbtest.New(t).ExpectQueryRow("SELECT count(*)", dbtest.Row(0))
 		ctx := tx.Context(t.Context())
 
-		items, total, err := repo.ListTransactions(ctx, garageID, usecase.TransactionFilter{Limit: 20})
+		parts, total, err := repo.ListTransactions(ctx, garageID, usecase.TransactionFilter{Limit: 20})
 		require.NoError(t, err)
 		require.Equal(t, 0, total)
-		require.Empty(t, items)
+		require.Empty(t, parts)
 	})
 
 	t.Run("failures", func(t *testing.T) {

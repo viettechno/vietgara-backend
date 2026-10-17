@@ -15,7 +15,7 @@ CREATE TYPE permission AS ENUM (
     'subscription.read',
     'quote.read', 'quote.write',
     'repair_order.read', 'repair_order.write',
-    'inventory.read', 'inventory.write',
+    'inventory.read', 'inventory.write', 'inventory.cost.read',
     'catalogue.read', 'catalogue.write',
     'billing.read', 'billing.write',
     'report.read'

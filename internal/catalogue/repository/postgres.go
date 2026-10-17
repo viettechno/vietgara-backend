@@ -29,7 +29,7 @@ const (
 		i.category_id, COALESCE(pc.name, ''), i.brand, i.is_active, i.reorder_threshold::text,
 		i.created_by, i.updated_by, i.created_at, i.updated_at`
 
-	partFrom = ` FROM items i
+	partFrom = ` FROM parts i
 		JOIN units bu ON bu.garage_id = i.garage_id AND bu.id = i.base_unit_id
 		LEFT JOIN part_categories pc ON pc.garage_id = i.garage_id AND pc.id = i.category_id`
 
@@ -77,7 +77,7 @@ func translate(err error) error {
 	}
 
 	switch pgErr.ConstraintName {
-	case "idx_items_garage_sku_unique":
+	case "idx_parts_garage_sku_unique":
 		return domain.ErrSKUTaken
 	case "idx_units_garage_name_unique":
 		return domain.ErrUnitNameTaken
@@ -215,8 +215,8 @@ func (r *PostgresRepository) UnitUsedByParts(ctx context.Context, garageID, unit
 	var used bool
 
 	err := r.q(ctx).QueryRow(ctx, `
-		SELECT EXISTS (SELECT 1 FROM items i WHERE i.garage_id = $1 AND i.deleted_at IS NULL AND i.base_unit_id = $2)
-		    OR EXISTS (SELECT 1 FROM item_units iu JOIN items i ON i.garage_id = iu.garage_id AND i.id = iu.item_id
+		SELECT EXISTS (SELECT 1 FROM parts i WHERE i.garage_id = $1 AND i.deleted_at IS NULL AND i.base_unit_id = $2)
+		    OR EXISTS (SELECT 1 FROM part_units iu JOIN parts i ON i.garage_id = iu.garage_id AND i.id = iu.part_id
 		               WHERE iu.garage_id = $1 AND iu.unit_id = $2 AND i.deleted_at IS NULL)`,
 		garageID, unitID).Scan(&used)
 
@@ -320,7 +320,7 @@ func (r *PostgresRepository) CategoryHasParts(ctx context.Context, garageID, cat
 	var has bool
 
 	err := r.q(ctx).QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM items WHERE garage_id = $1 AND category_id = $2 AND deleted_at IS NULL)`,
+		`SELECT EXISTS (SELECT 1 FROM parts WHERE garage_id = $1 AND category_id = $2 AND deleted_at IS NULL)`,
 		garageID, categoryID).Scan(&has)
 
 	return has, err
@@ -348,7 +348,7 @@ func scanPart(row pgx.Row) (*domain.Part, error) {
 // CreatePart inserts p and scans back the timestamps.
 func (r *PostgresRepository) CreatePart(ctx context.Context, p *domain.Part) error {
 	row := r.q(ctx).QueryRow(ctx, `
-		INSERT INTO items (id, garage_id, sku, name, base_unit_id, sale_price, category_id, brand, is_active,
+		INSERT INTO parts (id, garage_id, sku, name, base_unit_id, sale_price, category_id, brand, is_active,
 		                   reorder_threshold, created_by, updated_by)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::numeric, $11, $12)
 		RETURNING created_at, updated_at`,
@@ -431,7 +431,7 @@ func collectParts(rows pgx.Rows) ([]*domain.Part, error) {
 // UpdatePart persists the editable fields of p.
 func (r *PostgresRepository) UpdatePart(ctx context.Context, p *domain.Part) error {
 	err := r.q(ctx).QueryRow(ctx, `
-		UPDATE items SET sku = $3, name = $4, base_unit_id = $5, sale_price = $6, category_id = $7, brand = $8,
+		UPDATE parts SET sku = $3, name = $4, base_unit_id = $5, sale_price = $6, category_id = $7, brand = $8,
 		                 is_active = $9, reorder_threshold = $10::numeric, updated_by = $11
 		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL
 		RETURNING updated_at`,
@@ -482,13 +482,13 @@ func (r *PostgresRepository) ListParts(ctx context.Context, garageID string, f u
 
 // SoftDeletePart marks the part deleted.
 func (r *PostgresRepository) SoftDeletePart(ctx context.Context, garageID, partID, actorID string) error {
-	return r.touch(ctx, `UPDATE items SET deleted_at = now(), updated_by = $3 WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL`,
+	return r.touch(ctx, `UPDATE parts SET deleted_at = now(), updated_by = $3 WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL`,
 		garageID, partID, actorID, domain.ErrPartNotFound)
 }
 
 // SetPartActive deactivates or reactivates the part.
 func (r *PostgresRepository) SetPartActive(ctx context.Context, garageID, partID string, active bool, actorID string) error {
-	return r.setActive(ctx, "items", garageID, partID, active, actorID, domain.ErrPartNotFound)
+	return r.setActive(ctx, "parts", garageID, partID, active, actorID, domain.ErrPartNotFound)
 }
 
 // fillChildren loads the packaging units and image links of parts.
@@ -506,9 +506,9 @@ func (r *PostgresRepository) fillChildren(ctx context.Context, garageID string, 
 	}
 
 	rows, err := r.q(ctx).Query(ctx, `
-		SELECT iu.item_id, iu.unit_id, u.name, u.abbreviation, iu.factor::text, iu.sale_price
-		FROM item_units iu JOIN units u ON u.garage_id = iu.garage_id AND u.id = iu.unit_id
-		WHERE iu.garage_id = $1 AND iu.item_id = ANY($2::uuid[])
+		SELECT iu.part_id, iu.unit_id, u.name, u.abbreviation, iu.factor::text, iu.sale_price
+		FROM part_units iu JOIN units u ON u.garage_id = iu.garage_id AND u.id = iu.unit_id
+		WHERE iu.garage_id = $1 AND iu.part_id = ANY($2::uuid[])
 		ORDER BY iu.factor, lower(u.name)`, garageID, ids)
 	if err != nil {
 		return err
@@ -517,17 +517,17 @@ func (r *PostgresRepository) fillChildren(ctx context.Context, garageID string, 
 
 	for rows.Next() {
 		var (
-			itemID string
+			partID string
 			pu     domain.PackagingUnit
 		)
 
-		if err := rows.Scan(&itemID, &pu.UnitID, &pu.UnitName, &pu.UnitAbbreviation, &pu.Factor, &pu.SalePrice); err != nil {
+		if err := rows.Scan(&partID, &pu.UnitID, &pu.UnitName, &pu.UnitAbbreviation, &pu.Factor, &pu.SalePrice); err != nil {
 			return err
 		}
 
 		pu.Factor = trimNumeric(pu.Factor)
 
-		p := byID[itemID]
+		p := byID[partID]
 
 		if pu.SalePrice != nil {
 			pu.EffectivePrice = *pu.SalePrice
@@ -543,8 +543,8 @@ func (r *PostgresRepository) fillChildren(ctx context.Context, garageID string, 
 	}
 
 	imgs, err := r.q(ctx).Query(ctx, `
-		SELECT item_id, file_id, position FROM item_images
-		WHERE garage_id = $1 AND item_id = ANY($2::uuid[]) ORDER BY position, created_at, file_id`, garageID, ids)
+		SELECT part_id, file_id, position FROM part_images
+		WHERE garage_id = $1 AND part_id = ANY($2::uuid[]) ORDER BY position, created_at, file_id`, garageID, ids)
 	if err != nil {
 		return err
 	}
@@ -552,15 +552,15 @@ func (r *PostgresRepository) fillChildren(ctx context.Context, garageID string, 
 
 	for imgs.Next() {
 		var (
-			itemID string
+			partID string
 			img    domain.Image
 		)
 
-		if err := imgs.Scan(&itemID, &img.FileID, &img.Position); err != nil {
+		if err := imgs.Scan(&partID, &img.FileID, &img.Position); err != nil {
 			return err
 		}
 
-		byID[itemID].Images = append(byID[itemID].Images, img)
+		byID[partID].Images = append(byID[partID].Images, img)
 	}
 
 	return imgs.Err()
@@ -570,20 +570,20 @@ func (r *PostgresRepository) fillChildren(ctx context.Context, garageID string, 
 func (r *PostgresRepository) ReplacePackaging(ctx context.Context, garageID, partID, actorID string, units []domain.PackagingUnit) error {
 	q := r.q(ctx)
 
-	if _, err := q.Exec(ctx, `DELETE FROM item_units WHERE garage_id = $1 AND item_id = $2`, garageID, partID); err != nil {
+	if _, err := q.Exec(ctx, `DELETE FROM part_units WHERE garage_id = $1 AND part_id = $2`, garageID, partID); err != nil {
 		return err
 	}
 
 	for _, u := range units {
 		if _, err := q.Exec(ctx, `
-			INSERT INTO item_units (garage_id, item_id, unit_id, factor, sale_price, created_by)
+			INSERT INTO part_units (garage_id, part_id, unit_id, factor, sale_price, created_by)
 			VALUES ($1, $2, $3, $4::numeric, $5, $6)`,
 			garageID, partID, u.UnitID, u.Factor, u.SalePrice, nullable(actorID)); err != nil {
 			return err
 		}
 	}
 
-	_, err := q.Exec(ctx, `UPDATE items SET updated_by = $3 WHERE garage_id = $1 AND id = $2`, garageID, partID, nullable(actorID))
+	_, err := q.Exec(ctx, `UPDATE parts SET updated_by = $3 WHERE garage_id = $1 AND id = $2`, garageID, partID, nullable(actorID))
 
 	return err
 }
@@ -591,7 +591,7 @@ func (r *PostgresRepository) ReplacePackaging(ctx context.Context, garageID, par
 // ListImages returns the image links of a part in display order.
 func (r *PostgresRepository) ListImages(ctx context.Context, garageID, partID string) ([]usecase.ImageRef, error) {
 	rows, err := r.q(ctx).Query(ctx,
-		`SELECT file_id, position FROM item_images WHERE garage_id = $1 AND item_id = $2 ORDER BY position, created_at, file_id`,
+		`SELECT file_id, position FROM part_images WHERE garage_id = $1 AND part_id = $2 ORDER BY position, created_at, file_id`,
 		garageID, partID)
 	if err != nil {
 		return nil, err
@@ -615,9 +615,9 @@ func (r *PostgresRepository) ListImages(ctx context.Context, garageID, partID st
 // AddImage links a file to the part after its existing images.
 func (r *PostgresRepository) AddImage(ctx context.Context, garageID, partID, fileID, actorID string) error {
 	_, err := r.q(ctx).Exec(ctx, `
-		INSERT INTO item_images (garage_id, item_id, file_id, position, created_by)
+		INSERT INTO part_images (garage_id, part_id, file_id, position, created_by)
 		VALUES ($1, $2, $3,
-			(SELECT COALESCE(max(position) + 1, 0) FROM item_images WHERE garage_id = $1 AND item_id = $2), $4)`,
+			(SELECT COALESCE(max(position) + 1, 0) FROM part_images WHERE garage_id = $1 AND part_id = $2), $4)`,
 		garageID, partID, fileID, nullable(actorID))
 
 	return err
@@ -631,7 +631,7 @@ func (r *PostgresRepository) RemoveImage(ctx context.Context, garageID, partID, 
 	}
 
 	tag, err := r.q(ctx).Exec(ctx,
-		`DELETE FROM item_images WHERE garage_id = $1 AND item_id = $2 AND file_id = $3`, garageID, partID, fileID)
+		`DELETE FROM part_images WHERE garage_id = $1 AND part_id = $2 AND file_id = $3`, garageID, partID, fileID)
 	if err != nil {
 		return err
 	}
@@ -652,7 +652,7 @@ func (r *PostgresRepository) FileAttached(ctx context.Context, garageID, fileID 
 	var used bool
 
 	err := r.q(ctx).QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM item_images WHERE garage_id = $1 AND file_id = $2)`, garageID, fileID).Scan(&used)
+		`SELECT EXISTS (SELECT 1 FROM part_images WHERE garage_id = $1 AND file_id = $2)`, garageID, fileID).Scan(&used)
 
 	return used, err
 }

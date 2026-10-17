@@ -16,15 +16,20 @@ import (
 	catalogueUsecase "github.com/viettechno/vietgara-backend/internal/catalogue/usecase"
 	fileDomain "github.com/viettechno/vietgara-backend/internal/file/domain"
 	fileUsecase "github.com/viettechno/vietgara-backend/internal/file/usecase"
+	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
+	inventoryDomain "github.com/viettechno/vietgara-backend/internal/inventory/domain"
 	inventoryRepository "github.com/viettechno/vietgara-backend/internal/inventory/repository"
 	inventoryUsecase "github.com/viettechno/vietgara-backend/internal/inventory/usecase"
 	"github.com/viettechno/vietgara-backend/internal/platform/access"
+	"github.com/viettechno/vietgara-backend/internal/platform/audit"
 	dbpkg "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/platform/db/pgtest"
+	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
 	"github.com/viettechno/vietgara-backend/internal/platform/storage"
 	quoteDomain "github.com/viettechno/vietgara-backend/internal/quote/domain"
 	quoteRepository "github.com/viettechno/vietgara-backend/internal/quote/repository"
 	repairorderRepository "github.com/viettechno/vietgara-backend/internal/repairorder/repository"
+	supplierRepository "github.com/viettechno/vietgara-backend/internal/supplier/repository"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 	"github.com/viettechno/vietgara-backend/pkg/lifecycle"
 )
@@ -68,7 +73,26 @@ func TestCatalogueModule(t *testing.T) {
 	usage.inventory, usage.quotes, usage.repairOrders = inventory, quotes, repairorderRepository.NewPostgresRepository(pool)
 
 	uc := catalogue.uc
-	inv := inventoryUsecase.NewInventoryUseCase(inventory, inventoryParts{partQuantities{uc: uc}}, nil)
+	supplierID := uuid.NewString()
+	exec(`INSERT INTO suppliers (id, garage_id, name) VALUES ($1, $2, 'Supplier A')`, supplierID, garageID)
+
+	inv := buildInventory(pool, outbox.NewEventPublisher(pool), inventoryParts{partQuantities{uc: uc}},
+		inventoryGarages{garages: tenantRepo.NewPostgresGarageRepository(pool)},
+		inventoryDirectory{suppliers: supplierRepository.NewPostgresRepository(pool), users: identityRepo.NewPostgresUserRepository(pool)},
+		audit.NewLogger(pool)).uc
+
+	// receive records a completed goods receipt of one part line.
+	receive := func(ctx context.Context, partID, unitID, quantity string, cost int64) (*inventoryDomain.GoodsReceipt, error) {
+		r, err := inv.CreateGoodsReceipt(ctx, inventoryUsecase.CreateGoodsReceiptRequest{
+			GarageID: garageID, ActorID: userID, CanSetCost: true, DefaultSupplierID: supplierID,
+			Lines: []inventoryUsecase.ReceiptLineInput{{PartID: partID, UnitID: unitID, EnteredQuantity: quantity, UnitCost: cost}},
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		return inv.CompleteGoodsReceipt(ctx, garageID, r.ID, userID)
+	}
 
 	inGarage := func(id string, fn func(ctx context.Context)) {
 		t.Helper()
@@ -284,14 +308,15 @@ func TestCatalogueModule(t *testing.T) {
 
 	t.Run("stock receipt in a packaging unit, cost per base unit", func(t *testing.T) {
 		inGarage(garageID, func(ctx context.Context) {
-			result, err := inv.CreateStockReceipt(ctx, inventoryUsecase.CreateStockReceiptRequest{
-				GarageID: garageID, ActorID: userID, PartID: beer.ID, Quantity: "10", UnitID: carton.ID, UnitCost: 240_000,
-			})
+			receipt, err := receive(ctx, beer.ID, carton.ID, "10", 240_000)
 			require.NoError(t, err)
-			assert.Equal(t, "240", result.Transaction.Quantity)
-			assert.Equal(t, "ctn", result.Transaction.UnitAbbreviation)
-			assert.Equal(t, "10000", *result.Transaction.UnitCost, "240,000 per carton of 24 is 10,000 per can")
-			assert.Equal(t, "240", result.StockLevel.QuantityOnHand)
+			assert.Equal(t, "240", receipt.Lines[0].Quantity)
+			assert.Equal(t, "ctn", receipt.Lines[0].UnitAbbreviation)
+
+			level, err := inv.GetStockLevel(ctx, garageID, beer.ID)
+			require.NoError(t, err)
+			assert.Equal(t, "240", level.QuantityOnHand)
+			assert.Equal(t, "10000", *level.AverageCost, "240,000 per carton of 24 is 10,000 per can")
 
 			low, err := inv.ListStockLevels(ctx, inventoryUsecase.ListStockLevelsRequest{GarageID: garageID, LowStock: true})
 			require.NoError(t, err)
@@ -302,6 +327,8 @@ func TestCatalogueModule(t *testing.T) {
 			require.Len(t, page.Items, 1)
 			assert.Equal(t, "10", *page.Items[0].EnteredQuantity)
 			assert.Equal(t, "BEER-330", page.Items[0].PartSKU)
+			assert.Equal(t, "10000", *page.Items[0].UnitCost)
+			assert.Equal(t, inventoryDomain.RefGoodsReceipt, page.Items[0].RefType)
 		})
 	})
 
@@ -324,9 +351,7 @@ func TestCatalogueModule(t *testing.T) {
 			require.NoError(t, err)
 			assert.False(t, p.IsActive)
 
-			_, err = inv.CreateStockReceipt(ctx, inventoryUsecase.CreateStockReceiptRequest{
-				GarageID: garageID, PartID: beer.ID, Quantity: "1",
-			})
+			_, err = receive(ctx, beer.ID, "", "1", 0)
 			require.ErrorContains(t, err, "not active")
 
 			p, err = uc.ActivatePart(ctx, garageID, beer.ID, userID)

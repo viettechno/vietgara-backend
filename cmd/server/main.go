@@ -316,12 +316,15 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	quote := buildQuote(pool, tx, events, mailer, garages, license.entitlements, customerRepo, vehicleRepo, repairOrder.uc,
 		quoteBillingParties{profiles: taxProfileUC}, quantities)
 
-	// Inventory (Release 1.3): stock on hand, stock receipts and the
-	// repair_order.closed consumer that deducts stock (FR-INV-02).
-	inventory := buildInventory(pool, events, inventoryParts{partQuantities: quantities})
+	// Inventory (Release 7.0): stock on hand, goods receipts with average
+	// cost, part suppliers and the repair order stock issues kept by the
+	// repair_order.* consumers (FR-INV-02/06/07/19/20).
+	supplierRepo := supplierRepository.NewPostgresRepository(pool)
+	inventory := buildInventory(pool, events, inventoryParts{partQuantities: quantities},
+		inventoryGarages{garages: garages}, inventoryDirectory{suppliers: supplierRepo, users: users}, auditLog)
 	catalogueRefs.inventory, catalogueRefs.quotes, catalogueRefs.repairOrders = inventory.repo, quote.quotes, repairOrder.repo
 
-	supplierUC := supplierUsecase.NewUseCase(supplierRepository.NewPostgresRepository(pool), supplierUsage{})
+	supplierUC := supplierUsecase.NewUseCase(supplierRepo, supplierUsage{inventory: inventory.repo})
 	supplierSrv := supplierHandler.NewServer(supplierUC)
 
 	usage := customerUsage{quotes: quote.quotes, repairOrders: repairOrder.uc}

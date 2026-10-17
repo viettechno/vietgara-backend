@@ -1,6 +1,7 @@
 package usecase_test
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -24,6 +25,7 @@ func TestRepairOrderUseCase_Create(t *testing.T) {
 		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
 		d.RepairOrders.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderCreated, garageID, "", mock.Anything).Return(nil).Once()
 
 		ro, err := uc.Create(t.Context(), usecase.CreateRepairOrderRequest{
 			GarageID: garageID, ActorID: actorID, VehicleID: vehicleID, Lines: oneLine(),
@@ -118,6 +120,7 @@ func TestRepairOrderUseCase_CreateFromQuote(t *testing.T) {
 		uc, d := newUseCase(t)
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.RepairOrders.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderCreated, garageID, "", mock.Anything).Return(nil).Once()
 
 		ro, err := uc.CreateFromQuote(t.Context(), usecase.CreateFromQuoteRequest{
 			GarageID: garageID, QuoteID: quoteID, ActorID: actorID, VehicleID: vehicleID, CustomerName: "An Nguyen",
@@ -224,6 +227,7 @@ func TestRepairOrderUseCase_Create_PartLineInPackagingUnit(t *testing.T) {
 		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
 		d.RepairOrders.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderCreated, garageID, "", mock.Anything).Return(nil).Once()
 
 		ro, err := uc.Create(t.Context(), usecase.CreateRepairOrderRequest{GarageID: garageID, VehicleID: vehicleID, Lines: lines()})
 		require.NoError(t, err)
@@ -245,4 +249,61 @@ func TestRepairOrderUseCase_Create_PartLineInPackagingUnit(t *testing.T) {
 		_, err := uc.Create(t.Context(), usecase.CreateRepairOrderRequest{GarageID: garageID, VehicleID: vehicleID, Lines: in})
 		assertAppError(t, err, apperror.CodeInvalidArgument)
 	})
+}
+
+func TestRepairOrderUseCase_Create_EventPayload(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+	d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+	d.Vehicles.EXPECT().Find(mock.Anything, garageID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
+	d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
+	d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
+	d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, "part-1", "unit-1", "2").
+		Return(partquantity.Resolved{Base: "48", UnitID: new("unit-1"), Entered: new("2")}, nil).Once()
+	d.RepairOrders.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+	d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderCreated, garageID, "", mock.MatchedBy(func(p map[string]any) bool {
+		raw, err := json.Marshal(p)
+		if err != nil {
+			return false
+		}
+
+		var got struct {
+			Number string `json:"repair_order_number"`
+			Lines  []struct {
+				LineID          string `json:"line_id"`
+				ItemRefID       string `json:"item_ref_id"`
+				Quantity        string `json:"quantity"`
+				UnitID          string `json:"unit_id"`
+				EnteredQuantity string `json:"entered_quantity"`
+			} `json:"part_lines"`
+		}
+
+		return json.Unmarshal(raw, &got) == nil && got.Number == "LSC-202609-0001" && len(got.Lines) == 1 &&
+			got.Lines[0].Quantity == "48" && got.Lines[0].UnitID == "unit-1" &&
+			got.Lines[0].EnteredQuantity == "2" && got.Lines[0].ItemRefID == "part-1" && got.Lines[0].LineID != ""
+	})).Return(nil).Once()
+
+	_, err := uc.Create(t.Context(), usecase.CreateRepairOrderRequest{
+		GarageID: garageID, ActorID: actorID, VehicleID: vehicleID,
+		Lines: []usecase.LineInput{{
+			ItemType: domain.ItemTypePart, ItemRefID: new("part-1"), Description: "Oil", Quantity: "1", UnitID: "unit-1", EnteredQuantity: "2", UnitPrice: 1000,
+		}},
+	})
+	require.NoError(t, err)
+}
+
+func TestRepairOrderUseCase_Create_PublishFailure(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+	d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+	d.Vehicles.EXPECT().Find(mock.Anything, garageID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
+	d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
+	d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
+	d.RepairOrders.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
+	d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderCreated, garageID, "", mock.Anything).Return(errBoom).Once()
+
+	_, err := uc.Create(t.Context(), usecase.CreateRepairOrderRequest{GarageID: garageID, ActorID: actorID, VehicleID: vehicleID, Lines: oneLine()})
+	assertAppError(t, err, apperror.CodeInternal)
 }

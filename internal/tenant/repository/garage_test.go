@@ -46,6 +46,9 @@ func TestGarageRepository(t *testing.T) {
 	assert.Equal(t, "001", *g.Bank.AccountNumber)
 	assert.Nil(t, g.Bank.AccountHolder)
 	assert.Equal(t, "PT-{SEQ:4}", g.PaymentVoucherNumberTemplate)
+	assert.Equal(t, "PN-{SEQ:4}", g.GoodsReceiptNumberTemplate)
+	assert.Equal(t, "PX-{SEQ:4}", g.StockIssueNumberTemplate)
+	assert.Equal(t, domain.StockIssueModeOnStart, g.StockIssueMode)
 
 	_, err = repo.FindByID(ctx, "x")
 	require.ErrorIs(t, err, domain.ErrGarageNotFound)

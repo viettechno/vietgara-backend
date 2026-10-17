@@ -21,6 +21,7 @@ func TestRepairOrderUseCase_UpdateLine(t *testing.T) {
 		ro := openRepairOrder()
 		d.RepairOrders.EXPECT().FindByID(mock.Anything, garageID, repairOrderID).Return(ro, nil).Once()
 		d.RepairOrders.EXPECT().Save(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderStarted, garageID, "", mock.Anything).Return(nil).Once()
 
 		status := domain.LineCompleted
 		ids := []string{actorID}
@@ -96,5 +97,58 @@ func TestRepairOrderUseCase_UpdateLine(t *testing.T) {
 			GarageID: garageID, RepairOrderID: repairOrderID, LineID: "line-1", Status: &status,
 		})
 		assertAppError(t, err, apperror.CodeInternal)
+	})
+}
+
+func TestRepairOrderUseCase_UpdateLine_StartedEvent(t *testing.T) {
+	t.Parallel()
+
+	update := func(uc *usecase.RepairOrderUseCase, status domain.LineStatus) error {
+		_, err := uc.UpdateLine(t.Context(), usecase.UpdateLineRequest{
+			GarageID: garageID, RepairOrderID: repairOrderID, LineID: "line-1", ActorID: actorID, Status: &status,
+		})
+
+		return err
+	}
+
+	t.Run("is published once, with the part lines, when the order leaves Open", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		ro := openRepairOrder()
+		part := "part-1"
+		ro.Lines = append(ro.Lines, domain.Line{
+			ID: "line-2", Position: 2, ItemType: domain.ItemTypePart, ItemRefID: &part, Quantity: "48", UnitID: new("unit-1"),
+			EnteredQuantity: new("2"), Status: domain.LineNotStarted,
+		})
+
+		d.RepairOrders.EXPECT().FindByID(mock.Anything, garageID, repairOrderID).Return(ro, nil).Twice()
+		d.RepairOrders.EXPECT().Save(mock.Anything, mock.Anything).Return(nil).Twice()
+		d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderStarted, garageID, "", mock.MatchedBy(func(p map[string]any) bool { return p["repair_order_id"] == repairOrderID })).Return(nil).Once()
+
+		require.NoError(t, update(uc, domain.LineInProgress))
+		// The order is already in progress now: no second event.
+		require.NoError(t, update(uc, domain.LineInProgress))
+	})
+
+	t.Run("a failure to publish fails the update", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.RepairOrders.EXPECT().FindByID(mock.Anything, garageID, repairOrderID).Return(openRepairOrder(), nil).Once()
+		d.RepairOrders.EXPECT().Save(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderStarted, garageID, "", mock.Anything).Return(errBoom).Once()
+
+		assertAppError(t, update(uc, domain.LineInProgress), apperror.CodeInternal)
+	})
+
+	t.Run("an update that leaves the order Open publishes nothing", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.RepairOrders.EXPECT().FindByID(mock.Anything, garageID, repairOrderID).Return(openRepairOrder(), nil).Once()
+		d.RepairOrders.EXPECT().Save(mock.Anything, mock.Anything).Return(nil).Once()
+
+		require.NoError(t, update(uc, domain.LineNotStarted))
 	})
 }

@@ -331,6 +331,26 @@ packages:
           filename: "inventory_usecase_part_catalogue.go"
           dir: "./internal/mocks"
           structname: "MockInventoryPartCatalogue"
+      Garages:
+        config:
+          filename: "inventory_usecase_garages.go"
+          dir: "./internal/mocks"
+          structname: "MockInventoryGarages"
+      Directory:
+        config:
+          filename: "inventory_usecase_directory.go"
+          dir: "./internal/mocks"
+          structname: "MockInventoryDirectory"
+      Sequencer:
+        config:
+          filename: "inventory_usecase_sequencer.go"
+          dir: "./internal/mocks"
+          structname: "MockInventorySequencer"
+      AuditLogger:
+        config:
+          filename: "inventory_usecase_audit_logger.go"
+          dir: "./internal/mocks"
+          structname: "MockInventoryAuditLogger"
   github.com/viettechno/vietgara-backend/internal/catalogue/usecase:
     interfaces:
       Repository:
@@ -434,6 +454,11 @@ packages:
           filename: "document_usecase_garage_reader.go"
           dir: "./internal/mocks"
           structname: "MockDocumentGarageReader"
+      InventoryDocumentReader:
+        config:
+          filename: "document_usecase_inventory_document_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockDocumentInventoryReader"
   github.com/viettechno/vietgara-backend/internal/reporting/usecase:
     interfaces:
       SettlementReader:

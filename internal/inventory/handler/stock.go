@@ -25,7 +25,7 @@ func (s *Server) ListStockLevels(ctx context.Context, req *inventoryv1.ListStock
 			Data: make([]*inventoryv1.StockLevel, 0, len(page.Items)), Pagination: paginationToProto(page),
 		}
 		for _, level := range page.Items {
-			resp.Data = append(resp.Data, stockLevelToProto(level))
+			resp.Data = append(resp.Data, stockLevelToProto(ctx, level))
 		}
 
 		return resp, nil
@@ -40,25 +40,7 @@ func (s *Server) GetStockLevel(ctx context.Context, req *inventoryv1.GetStockLev
 			return nil, err
 		}
 
-		return &inventoryv1.GetStockLevelResponse{StockLevel: stockLevelToProto(level)}, nil
-	})
-}
-
-// CreateStockReceipt records a goods-receipt note from a supplier
-// (FR-INV-01).
-func (s *Server) CreateStockReceipt(ctx context.Context, req *inventoryv1.CreateStockReceiptRequest) (*inventoryv1.CreateStockReceiptResponse, error) {
-	return run(ctx, func(actorID string) (*inventoryv1.CreateStockReceiptResponse, error) {
-		result, err := s.uc.CreateStockReceipt(ctx, usecase.CreateStockReceiptRequest{
-			GarageID: req.GetGarageId(), ActorID: actorID, PartID: req.GetItemId(), Quantity: req.GetQuantity(),
-			UnitID: req.GetUnitId(), UnitCost: req.GetUnitCost(),
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		return &inventoryv1.CreateStockReceiptResponse{
-			Transaction: transactionToProto(result.Transaction), StockLevel: stockLevelToProto(result.StockLevel),
-		}, nil
+		return &inventoryv1.GetStockLevelResponse{StockLevel: stockLevelToProto(ctx, level)}, nil
 	})
 }
 
@@ -68,7 +50,7 @@ func (s *Server) ListStockTransactions(ctx context.Context, req *inventoryv1.Lis
 	return run(ctx, func(string) (*inventoryv1.ListStockTransactionsResponse, error) {
 		page, err := s.uc.ListTransactions(ctx, usecase.ListTransactionsRequest{
 			PageRequest: pageRequest(req.GetPage(), req.GetPageSize()), GarageID: req.GetGarageId(),
-			PartID: req.GetItemId(), Type: transactionTypeFromProto(req.GetType()),
+			PartID: req.GetPartId(), Type: transactionTypeFromProto(req.GetType()),
 		})
 		if err != nil {
 			return nil, err
@@ -78,7 +60,7 @@ func (s *Server) ListStockTransactions(ctx context.Context, req *inventoryv1.Lis
 			Data: make([]*inventoryv1.StockTransaction, 0, len(page.Items)), Pagination: paginationToProto(page),
 		}
 		for _, item := range page.Items {
-			resp.Data = append(resp.Data, transactionToProto(item))
+			resp.Data = append(resp.Data, transactionToProto(ctx, item))
 		}
 
 		return resp, nil

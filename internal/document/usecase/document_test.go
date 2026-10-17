@@ -36,6 +36,7 @@ type deps struct {
 	StockMovements *mocks.MockDocumentStockMovementReader
 	Revenue        *mocks.MockDocumentRevenueReader
 	Garages        *mocks.MockDocumentGarageReader
+	Inventory      *mocks.MockDocumentInventoryReader
 }
 
 func newUseCase(t *testing.T) (*usecase.DocumentUseCase, *deps) {
@@ -45,9 +46,10 @@ func newUseCase(t *testing.T) (*usecase.DocumentUseCase, *deps) {
 		Quotes: mocks.NewMockDocumentQuoteReader(t), RepairOrders: mocks.NewMockDocumentRepairOrderReader(t),
 		Settlements: mocks.NewMockDocumentSettlementReader(t), StockMovements: mocks.NewMockDocumentStockMovementReader(t),
 		Revenue: mocks.NewMockDocumentRevenueReader(t), Garages: mocks.NewMockDocumentGarageReader(t),
+		Inventory: mocks.NewMockDocumentInventoryReader(t),
 	}
 
-	uc := usecase.NewDocumentUseCase(d.Quotes, d.RepairOrders, d.Settlements, d.StockMovements, d.Revenue, d.Garages)
+	uc := usecase.NewDocumentUseCase(d.Quotes, d.RepairOrders, d.Settlements, d.StockMovements, d.Revenue, d.Garages, d.Inventory)
 
 	return uc, d
 }
@@ -301,4 +303,92 @@ func logoPNG(t *testing.T) []byte {
 	require.NoError(t, png.Encode(&buf, img))
 
 	return buf.Bytes()
+}
+
+func TestDocumentUseCase_InventoryDocuments(t *testing.T) {
+	t.Parallel()
+
+	t.Run("goods receipt pdf prints the current garage letterhead", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Inventory.EXPECT().GoodsReceipt(mock.Anything, garageID, "r-1").Return(usecase.GoodsReceiptInfo{
+			Number: "PN-1", Status: "completed", Date: "2026-10-15", ShowCost: true, TotalAmount: 1000,
+			Lines: []render.GoodsReceiptRow{{SKU: "OIL", Name: "Oil", Quantity: "1", Supplier: "A", UnitCost: 1000, Amount: 1000}},
+		}, nil).Once()
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+
+		pdf, err := uc.GoodsReceiptPDF(t.Context(), garageID, "r-1")
+		require.NoError(t, err)
+		require.Equal(t, "%PDF", string(pdf[:4]))
+	})
+
+	t.Run("stock issue pdf", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Inventory.EXPECT().StockIssue(mock.Anything, garageID, repairOrderID).Return(usecase.StockIssueInfo{
+			Number: "PX-1", Status: "draft", RepairOrderNumber: "LSC-1",
+			Lines: []render.StockIssueRow{{SKU: "OIL", Name: "Oil", Quantity: "1"}},
+		}, nil).Once()
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+
+		pdf, err := uc.StockIssuePDF(t.Context(), garageID, repairOrderID)
+		require.NoError(t, err)
+		require.Equal(t, "%PDF", string(pdf[:4]))
+	})
+
+	t.Run("purchases and valuation workbooks", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Inventory.EXPECT().Purchases(mock.Anything, garageID, "s-1", "2026-10-01", "2026-11-01").
+			Return([]render.PurchaseRow{{Receipt: "PN-1", Amount: 5}}, int64(5), nil).Once()
+		d.Inventory.EXPECT().Valuation(mock.Anything, garageID, "2026-10-15").
+			Return([]render.ValuationRow{{SKU: "OIL", Value: 7}}, int64(7), nil).Once()
+
+		purchases, err := uc.PurchasesExcel(t.Context(), garageID, "s-1", "2026-10-01", "2026-11-01")
+		require.NoError(t, err)
+		require.Equal(t, "PK", string(purchases[:2]))
+
+		valuation, err := uc.StockValuationExcel(t.Context(), garageID, "2026-10-15")
+		require.NoError(t, err)
+		require.Equal(t, "PK", string(valuation[:2]))
+	})
+
+	t.Run("reader failures", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Inventory.EXPECT().GoodsReceipt(mock.Anything, garageID, "r-1").Return(usecase.GoodsReceiptInfo{}, errBoom).Once()
+		_, err := uc.GoodsReceiptPDF(t.Context(), garageID, "r-1")
+		assertAppError(t, err, apperror.CodeInternal)
+
+		d.Inventory.EXPECT().StockIssue(mock.Anything, garageID, repairOrderID).Return(usecase.StockIssueInfo{}, errBoom).Once()
+		_, err = uc.StockIssuePDF(t.Context(), garageID, repairOrderID)
+		assertAppError(t, err, apperror.CodeInternal)
+
+		d.Inventory.EXPECT().Purchases(mock.Anything, garageID, "", "", "").Return(nil, 0, errBoom).Once()
+		_, err = uc.PurchasesExcel(t.Context(), garageID, "", "", "")
+		assertAppError(t, err, apperror.CodeInternal)
+
+		d.Inventory.EXPECT().Valuation(mock.Anything, garageID, "").Return(nil, 0, errBoom).Once()
+		_, err = uc.StockValuationExcel(t.Context(), garageID, "")
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+
+	t.Run("letterhead failures", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Inventory.EXPECT().GoodsReceipt(mock.Anything, garageID, "r-1").Return(usecase.GoodsReceiptInfo{}, nil).Once()
+		d.Inventory.EXPECT().StockIssue(mock.Anything, garageID, repairOrderID).Return(usecase.StockIssueInfo{}, nil).Once()
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(usecase.GarageHeaderInfo{}, errBoom).Twice()
+
+		_, err := uc.GoodsReceiptPDF(t.Context(), garageID, "r-1")
+		assertAppError(t, err, apperror.CodeInternal)
+
+		_, err = uc.StockIssuePDF(t.Context(), garageID, repairOrderID)
+		assertAppError(t, err, apperror.CodeInternal)
+	})
 }

@@ -566,7 +566,7 @@ func (c *Client) ListStockLevels(ctx context.Context, garageID string) ([]*inven
 // parameters (query, categoryId, brand, lowStock, includeInactive, page,
 // pageSize).
 func (c *Client) SearchStockLevels(ctx context.Context, garageID string, query url.Values) ([]*inventoryv1.StockLevel, error) {
-	path := garagePath(garageID) + "/inventory-items"
+	path := garagePath(garageID) + "/stock-levels"
 	if encoded := query.Encode(); encoded != "" {
 		path += "?" + encoded
 	}
@@ -579,21 +579,7 @@ func (c *Client) SearchStockLevels(ctx context.Context, garageID string, query u
 // GetStockLevel returns one part's stock on hand.
 func (c *Client) GetStockLevel(ctx context.Context, garageID, partID string) (*inventoryv1.StockLevel, error) {
 	return call[inventoryv1.StockLevel](ctx, c, http.MethodGet,
-		garagePath(garageID)+"/inventory-items/"+url.PathEscape(partID), nil)
-}
-
-// CreateStockReceipt records a goods receipt against a part, increasing
-// stock on hand. quantity is typed in unitID (empty: the base unit) and
-// unitCost is per that unit; unitCost 0 is "not recorded".
-func (c *Client) CreateStockReceipt(
-	ctx context.Context, garageID, partID, quantity, unitID string, unitCost int64,
-) (*inventoryv1.CreateStockReceiptResponse, error) {
-	req := &inventoryv1.CreateStockReceiptRequest{GarageId: garageID, ItemId: partID, Quantity: quantity, UnitCost: unitCost}
-	if unitID != "" {
-		req.UnitId = &unitID
-	}
-
-	return call[inventoryv1.CreateStockReceiptResponse](ctx, c, http.MethodPost, garagePath(garageID)+"/stock-receipts", req)
+		garagePath(garageID)+"/stock-levels/"+url.PathEscape(partID), nil)
 }
 
 // ListStockTransactions returns garageID's stock movements, newest

@@ -56,11 +56,21 @@ func (uc *RepairOrderUseCase) UpdateLine(ctx context.Context, req UpdateLineRequ
 		ro.Lines[index].AssignedTechnicianIDs = *req.AssignedTechnicianIDs
 	}
 
+	was := ro.Status
+
 	ro.DeriveStatus()
 	ro.UpdatedBy = actorRef(req.ActorID)
 
 	if err := uc.RepairOrders.Save(ctx, ro); err != nil {
 		return nil, toAppError("update repair order line", err)
+	}
+
+	// The first move out of Open is the order starting; Inventory may post
+	// its stock issue then (FR-INV-20).
+	if was == domain.StatusOpen && ro.Status != domain.StatusOpen {
+		if err := uc.publish(ctx, EventRepairOrderStarted, ro); err != nil {
+			return nil, toAppError("update repair order line", err)
+		}
 	}
 
 	return ro, nil

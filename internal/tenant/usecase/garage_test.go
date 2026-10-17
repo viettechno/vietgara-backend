@@ -271,3 +271,40 @@ func TestLegalProfile(t *testing.T) {
 		requireReason(t, err, apperror.ReasonValidation, name)
 	}
 }
+
+// TestStockSettings covers the Release 7.0 garage configuration: the goods
+// receipt and stock issue numbering templates and when a stock issue posts.
+func TestStockSettings(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t, limits{Garages: 1, Staff: 5})
+	id := e.garage(t)
+	ctx := e.as(t, owner, id)
+
+	g, err := e.UC.GetGarage(ctx, id)
+	require.NoError(t, err)
+	assert.Equal(t, domain.DefaultGoodsReceiptNumberTemplate, g.Garage.GoodsReceiptNumberTemplate)
+	assert.Equal(t, domain.DefaultStockIssueNumberTemplate, g.Garage.StockIssueNumberTemplate)
+	assert.Equal(t, domain.StockIssueModeOnClose, g.Garage.StockIssueMode)
+
+	mode := domain.StockIssueModeOnStart
+
+	g, err = e.UC.UpdateGarage(ctx, id, usecase.GarageFields{
+		GoodsReceiptNumberTemplate: new("NK-{YYYY}-{SEQ:5}"), StockIssueNumberTemplate: new("XK-{SEQ:3}"), StockIssueMode: &mode,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "NK-{YYYY}-{SEQ:5}", g.Garage.GoodsReceiptNumberTemplate)
+	assert.Equal(t, "XK-{SEQ:3}", g.Garage.StockIssueNumberTemplate)
+	assert.Equal(t, domain.StockIssueModeOnStart, g.Garage.StockIssueMode)
+
+	bad := domain.StockIssueMode("sometimes")
+
+	for name, fields := range map[string]usecase.GarageFields{
+		"goods receipt numbers": {GoodsReceiptNumberTemplate: new("NK-no-sequence")},
+		"stock issue numbers":   {StockIssueNumberTemplate: new("XK-no-sequence")},
+		"stock issue mode":      {StockIssueMode: &bad},
+	} {
+		_, err := e.UC.UpdateGarage(ctx, id, fields)
+		requireReason(t, err, apperror.ReasonValidation, name)
+	}
+}

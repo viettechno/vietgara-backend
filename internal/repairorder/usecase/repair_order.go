@@ -18,8 +18,10 @@ const docTypeRepairOrder = "repair_order"
 
 // Events published by the Repair Order module (Event Design Section 4).
 const (
-	EventRepairOrderClosed = "repair_order.closed"
-	keyGarageID            = "garage_id"
+	EventRepairOrderCreated = "repair_order.created"
+	EventRepairOrderStarted = "repair_order.started"
+	EventRepairOrderClosed  = "repair_order.closed"
+	keyGarageID             = "garage_id"
 )
 
 // Deps are the dependencies of RepairOrderUseCase.
@@ -110,6 +112,10 @@ func (uc *RepairOrderUseCase) Create(ctx context.Context, req CreateRepairOrderR
 		return nil, toAppError("create repair order", err)
 	}
 
+	if err := uc.publish(ctx, EventRepairOrderCreated, ro); err != nil {
+		return nil, toAppError("create repair order", err)
+	}
+
 	return ro, nil
 }
 
@@ -160,6 +166,10 @@ func (uc *RepairOrderUseCase) CreateFromQuote(ctx context.Context, req CreateFro
 
 	if err := uc.RepairOrders.Create(ctx, ro); err != nil {
 		return nil, err
+	}
+
+	if err := uc.publish(ctx, EventRepairOrderCreated, ro); err != nil {
+		return nil, toAppError("create repair order from quote", err)
 	}
 
 	return ro, nil

@@ -112,7 +112,8 @@ func (r *PostgresRepository) SupplierReferenced(ctx context.Context, garageID, s
 		SELECT EXISTS (SELECT 1 FROM goods_receipt_lines WHERE garage_id = $1 AND supplier_id = $2)
 		    OR EXISTS (SELECT 1 FROM goods_receipts WHERE garage_id = $1 AND default_supplier_id = $2)
 		    OR EXISTS (SELECT 1 FROM part_suppliers WHERE garage_id = $1 AND supplier_id = $2)
-		    OR EXISTS (SELECT 1 FROM stock_transactions WHERE garage_id = $1 AND supplier_id = $2)`,
+		    OR EXISTS (SELECT 1 FROM stock_transactions WHERE garage_id = $1 AND supplier_id = $2)
+		    OR EXISTS (SELECT 1 FROM supplier_returns WHERE garage_id = $1 AND supplier_id = $2)`,
 		garageID, supplierID).Scan(&exists)
 
 	return exists, err

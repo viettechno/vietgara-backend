@@ -155,6 +155,19 @@ func StockValue(quantity, averageCost string) string {
 	return trimDecimal(new(big.Rat).Mul(q, a).FloatString(4))
 }
 
+// ValueDong is quantity times cost rounded once, half up, to whole VND; both
+// are decimal strings and ok is false when either cannot be parsed.
+func ValueDong(quantity, cost string) (n int64, ok bool) {
+	q, ok1 := new(big.Rat).SetString(quantity)
+	c, ok2 := new(big.Rat).SetString(cost)
+
+	if !ok1 || !ok2 {
+		return 0, false
+	}
+
+	return roundHalfUp(new(big.Rat).Mul(q, c)), true
+}
+
 // WholeDong rounds a cost with up to four decimals half up to whole VND; ok
 // is false when cost cannot be parsed.
 func WholeDong(cost string) (n int64, ok bool) {

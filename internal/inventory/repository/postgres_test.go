@@ -164,7 +164,7 @@ func TestPostgresRepository_RecordTransaction(t *testing.T) {
 }
 
 func transactionRow() []any {
-	return []any{"tx-1", partID, "in", "48", "5000", "unit-1", "2", "purchase", nil, nil, now}
+	return []any{"tx-1", partID, "in", "48", "5000", "unit-1", "2", "purchase", nil, nil, now, "", "10", "PN-1"}
 }
 
 func TestPostgresRepository_ListTransactions(t *testing.T) {
@@ -186,6 +186,8 @@ func TestPostgresRepository_ListTransactions(t *testing.T) {
 		require.Equal(t, domain.TransactionIn, parts[0].Type)
 		require.Equal(t, "5000", *parts[0].UnitCost)
 		require.Equal(t, "2", *parts[0].EnteredQuantity)
+		require.Equal(t, "PN-1", parts[0].RefNumber)
+		require.Equal(t, "10", parts[0].QuantityAfter)
 	})
 
 	t.Run("no matches", func(t *testing.T) {

@@ -87,7 +87,43 @@ const (
 	// RefStockIssue is a posted stock issue (FR-INV-20); RefID is the issue's
 	// id.
 	RefStockIssue RefType = "stock_issue"
+	// RefStockCount is the adjustment a completed stock count posted, or its
+	// reversal (FR-INV-12); RefID is the count's id.
+	RefStockCount RefType = "stock_count"
+	// RefWriteOff is a write-off, or the reversal of a cancelled one
+	// (FR-INV-09).
+	RefWriteOff RefType = "write_off"
+	// RefSupplierReturn is a return to supplier, or the reversal of a
+	// cancelled one (FR-INV-10).
+	RefSupplierReturn RefType = "supplier_return"
+	// RefRepairOrderReturn is unused parts returned from a repair order
+	// (FR-INV-11); RefID is the part return's id.
+	RefRepairOrderReturn RefType = "repair_order_return"
 )
+
+// IsValid reports whether t is one of the defined reference types.
+func (t RefType) IsValid() bool {
+	switch t {
+	case RefPurchase, RefRepairOrder, RefGoodsReceipt, RefStockIssue, RefStockCount, RefWriteOff, RefSupplierReturn,
+		RefRepairOrderReturn:
+		return true
+	default:
+		return false
+	}
+}
+
+// IsAdjustment reports whether t is a Release 7.1 adjustment, whose movements
+// are valued at the average cost of the moment and so never move it.
+func (t RefType) IsAdjustment() bool {
+	switch t {
+	case RefStockCount, RefWriteOff, RefSupplierReturn:
+		return true
+	case RefPurchase, RefRepairOrder, RefGoodsReceipt, RefStockIssue, RefRepairOrderReturn:
+		return false
+	default:
+		return false
+	}
+}
 
 // StockTransaction is one recorded stock movement.
 type StockTransaction struct {
@@ -115,6 +151,14 @@ type StockTransaction struct {
 	UnitCost *string
 	RefType  RefType
 	RefID    *string
+	// RefNumber is the number of the document behind the movement and
+	// Reason why an adjustment happened; QuantityAfter is the part's quantity
+	// on hand right after the movement. All three are derived when reading.
+	RefNumber     string
+	Reason        string
+	QuantityAfter string
+	// CreatedByName names CreatedBy, derived when reading.
+	CreatedByName string
 	// SupplierID is the supplier of the goods receipt line behind an IN
 	// movement.
 	SupplierID *string

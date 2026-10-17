@@ -24,6 +24,10 @@ const (
 
 	// keyStatus is the audit key of a document's status.
 	keyStatus = "status"
+	// keyLines is the audit key of a document's number of lines.
+	keyLines = "lines"
+	// keyNumber is the audit key of a document's number.
+	keyNumber = "number"
 )
 
 // ReceiptLineInput is one line typed on a goods receipt.
@@ -674,7 +678,7 @@ func (uc *InventoryUseCase) auditReceipt(ctx context.Context, actorID, action st
 	err := uc.audit.Record(ctx, audit.Entry{
 		Actor: actorID, GarageID: r.GarageID, Action: action, EntityType: entityGoodsReceipt, EntityID: r.ID,
 		Before: map[string]any{keyStatus: before},
-		After:  map[string]any{"number": r.Number, keyStatus: r.Status, "total_amount": r.Total(), "lines": len(r.Lines)},
+		After:  map[string]any{keyNumber: r.Number, keyStatus: r.Status, "total_amount": r.Total(), keyLines: len(r.Lines)},
 		IP:     middleware.ClientIP(ctx),
 	})
 	if err != nil {

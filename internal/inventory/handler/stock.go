@@ -50,7 +50,7 @@ func (s *Server) ListStockTransactions(ctx context.Context, req *inventoryv1.Lis
 	return run(ctx, func(string) (*inventoryv1.ListStockTransactionsResponse, error) {
 		page, err := s.uc.ListTransactions(ctx, usecase.ListTransactionsRequest{
 			PageRequest: pageRequest(req.GetPage(), req.GetPageSize()), GarageID: req.GetGarageId(),
-			PartID: req.GetPartId(), Type: transactionTypeFromProto(req.GetType()),
+			PartID: req.GetPartId(), Type: transactionTypeFromProto(req.GetType()), RefType: refTypeFromProto(req.GetRefType()),
 		})
 		if err != nil {
 			return nil, err

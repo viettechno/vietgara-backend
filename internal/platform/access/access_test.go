@@ -15,7 +15,7 @@ func TestCatalog(t *testing.T) {
 	t.Parallel()
 
 	all := access.All()
-	require.Len(t, all, 21)
+	require.Len(t, all, 23)
 	assert.Equal(t, access.GarageWrite, all[0])
 	assert.True(t, access.CustomerRead.IsValid())
 	assert.False(t, access.Permission("customer.delete").IsValid())
@@ -93,7 +93,7 @@ func TestAccessCheck(t *testing.T) {
 	}
 
 	assert.True(t, owner.Has(access.BillingWrite))
-	assert.Len(t, owner.Effective(), 21)
+	assert.Len(t, owner.Effective(), 23)
 	assert.Equal(t, []access.Permission{access.CustomerRead}, member.Effective())
 }
 

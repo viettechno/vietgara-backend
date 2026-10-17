@@ -33,6 +33,7 @@ const garageColumns = `g.id, g.user_id, g.name, g.tax_code, g.legal_name, g.lega
 	g.email, g.logo_key, g.timezone, g.currency, g.status, g.operating_hours, g.quote_number_template,
 	g.repair_order_number_template, g.settlement_number_template, g.payment_voucher_number_template,
 	g.goods_receipt_number_template, g.stock_issue_number_template, g.stock_issue_mode,
+	g.stock_count_number_template, g.write_off_number_template, g.supplier_return_number_template,
 	g.default_quote_approval_mode, g.created_by, g.updated_by, g.created_at, g.updated_at`
 
 func scanGarage(row pgx.Row) (*domain.Garage, error) {
@@ -48,7 +49,8 @@ func scanGarage(row pgx.Row) (*domain.Garage, error) {
 	err := row.Scan(&g.ID, &g.OwnerUserID, &g.Name, &g.TaxCode, &g.LegalName, &g.LegalAddress, &g.Representative, &bank,
 		&g.Address, &g.Phone, &g.Email, &g.LogoKey, &g.Timezone, &g.Currency, &status, &hours, &g.QuoteNumberTemplate,
 		&g.RepairOrderNumberTemplate, &g.SettlementNumberTemplate, &g.PaymentVoucherNumberTemplate,
-		&g.GoodsReceiptNumberTemplate, &g.StockIssueNumberTemplate, &issueMode, &approvalMode,
+		&g.GoodsReceiptNumberTemplate, &g.StockIssueNumberTemplate, &issueMode, &g.StockCountNumberTemplate,
+		&g.WriteOffNumberTemplate, &g.SupplierReturnNumberTemplate, &approvalMode,
 		&g.CreatedBy, &g.UpdatedBy, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -120,13 +122,16 @@ func (r *PostgresGarageRepository) Create(ctx context.Context, g *domain.Garage)
 			phone, email, logo_key, timezone, currency, status, operating_hours, quote_number_template,
 			repair_order_number_template, settlement_number_template, payment_voucher_number_template,
 			goods_receipt_number_template, stock_issue_number_template, stock_issue_mode,
+			stock_count_number_template, write_off_number_template, supplier_return_number_template,
 			default_quote_approval_mode, created_by, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26,
+			$27, $28, $29)
 		RETURNING created_at, updated_at`,
 		g.ID, g.OwnerUserID, g.Name, g.TaxCode, g.LegalName, g.LegalAddress, g.Representative, bank, g.Address, g.Phone,
 		g.Email, g.LogoKey, g.Timezone, g.Currency, string(g.Status), hours, g.QuoteNumberTemplate,
 		g.RepairOrderNumberTemplate, g.SettlementNumberTemplate, g.PaymentVoucherNumberTemplate,
 		g.GoodsReceiptNumberTemplate, g.StockIssueNumberTemplate, string(g.StockIssueMode),
+		g.StockCountNumberTemplate, g.WriteOffNumberTemplate, g.SupplierReturnNumberTemplate,
 		string(g.DefaultQuoteApprovalMode), g.CreatedBy, g.UpdatedBy,
 	).Scan(&g.CreatedAt, &g.UpdatedAt)
 }
@@ -151,13 +156,15 @@ func (r *PostgresGarageRepository) Update(ctx context.Context, g *domain.Garage)
 			status = $14, operating_hours = $15, quote_number_template = $16, repair_order_number_template = $17,
 			settlement_number_template = $18, payment_voucher_number_template = $19, default_quote_approval_mode = $20,
 			goods_receipt_number_template = $21, stock_issue_number_template = $22, stock_issue_mode = $23,
-			updated_by = $24
+			stock_count_number_template = $24, write_off_number_template = $25, supplier_return_number_template = $26,
+			updated_by = $27
 		WHERE id = $1
 		RETURNING updated_at`,
 		g.ID, g.Name, g.TaxCode, g.LegalName, g.LegalAddress, g.Representative, bank, g.Address, g.Phone, g.Email,
 		g.LogoKey, g.Timezone, g.Currency, string(g.Status), hours, g.QuoteNumberTemplate, g.RepairOrderNumberTemplate,
 		g.SettlementNumberTemplate, g.PaymentVoucherNumberTemplate, string(g.DefaultQuoteApprovalMode),
-		g.GoodsReceiptNumberTemplate, g.StockIssueNumberTemplate, string(g.StockIssueMode), g.UpdatedBy,
+		g.GoodsReceiptNumberTemplate, g.StockIssueNumberTemplate, string(g.StockIssueMode),
+		g.StockCountNumberTemplate, g.WriteOffNumberTemplate, g.SupplierReturnNumberTemplate, g.UpdatedBy,
 	).Scan(&g.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.ErrGarageNotFound

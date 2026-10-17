@@ -135,8 +135,10 @@ func TestRLS_TenantModel(t *testing.T) {
 			SettlementNumberTemplate: domain.DefaultSettlementNumberTemplate, DefaultQuoteApprovalMode: domain.QuoteApprovalModeLink,
 			PaymentVoucherNumberTemplate: domain.DefaultPaymentVoucherNumberTemplate,
 			GoodsReceiptNumberTemplate:   domain.DefaultGoodsReceiptNumberTemplate, StockIssueNumberTemplate: domain.DefaultStockIssueNumberTemplate,
-			StockIssueMode: domain.StockIssueModeOnClose,
-			LegalName:      new("Cong ty TNHH New"), LegalAddress: new("12 Nguyen Hue"), Representative: new("An"),
+			StockCountNumberTemplate: domain.DefaultStockCountNumberTemplate, WriteOffNumberTemplate: domain.DefaultWriteOffNumberTemplate,
+			SupplierReturnNumberTemplate: domain.DefaultSupplierReturnNumberTemplate,
+			StockIssueMode:               domain.StockIssueModeOnClose,
+			LegalName:                    new("Cong ty TNHH New"), LegalAddress: new("12 Nguyen Hue"), Representative: new("An"),
 			Bank: domain.BankDetails{BankName: new("VCB"), AccountNumber: new("001")},
 		}
 

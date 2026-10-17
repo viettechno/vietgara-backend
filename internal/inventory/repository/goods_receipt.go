@@ -78,7 +78,7 @@ func (r *PostgresRepository) FindGoodsReceipt(ctx context.Context, garageID, rec
 
 	lock := ""
 	if forUpdate {
-		lock = " FOR UPDATE"
+		lock = forUpdateClause
 	}
 
 	receipt, err := scanReceipt(q.QueryRow(ctx,

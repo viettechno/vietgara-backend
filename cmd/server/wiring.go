@@ -456,6 +456,8 @@ func (g inventoryGarages) Get(ctx context.Context, garageID string) (inventoryUs
 	return inventoryUsecase.GarageSettings{
 		Timezone: garage.Timezone, GoodsReceiptNumberTemplate: garage.GoodsReceiptNumberTemplate,
 		StockIssueNumberTemplate: garage.StockIssueNumberTemplate, StockIssueMode: string(garage.StockIssueMode),
+		StockCountNumberTemplate: garage.StockCountNumberTemplate, WriteOffNumberTemplate: garage.WriteOffNumberTemplate,
+		SupplierReturnNumberTemplate: garage.SupplierReturnNumberTemplate,
 	}, nil
 }
 
@@ -785,24 +787,14 @@ func (s documentStockMovements) List(ctx context.Context, garageID, itemID strin
 
 		for _, tx := range result.Items {
 			direction := "In"
-			reference := "Purchase"
 
 			if tx.Type == inventoryDomain.TransactionOut {
 				direction = "Out"
 			}
 
-			switch {
-			case tx.RefType == inventoryDomain.RefStockIssue && tx.RefID != nil:
-				reference = "Stock issue " + *tx.RefID
-			case tx.RefType == inventoryDomain.RefGoodsReceipt && tx.RefID != nil:
-				reference = "Goods receipt " + *tx.RefID
-			case tx.RefType == inventoryDomain.RefRepairOrder && tx.RefID != nil:
-				reference = "Repair order " + *tx.RefID
-			}
-
 			row := render.StockMovementRow{
 				Date: tx.CreatedAt.Format("2006-01-02"), SKU: tx.PartSKU, ItemName: tx.PartName, Direction: direction,
-				Quantity: tx.Quantity, BaseUnit: tx.BaseUnitAbbreviation, Reference: reference,
+				Quantity: tx.Quantity, BaseUnit: tx.BaseUnitAbbreviation, Reference: movementReference(tx),
 			}
 
 			if tx.EnteredQuantity != nil {
@@ -883,6 +875,43 @@ func (d documentInventory) StockIssue(ctx context.Context, garageID, repairOrder
 	return info, nil
 }
 
+func (d documentInventory) StockCount(ctx context.Context, garageID, countID string) (documentUsecase.StockCountInfo, error) {
+	c, err := d.uc.GetStockCount(ctx, garageID, countID)
+	if err != nil {
+		return documentUsecase.StockCountInfo{}, err
+	}
+
+	a, ok := access.FromContext(ctx)
+	info := documentUsecase.StockCountInfo{Number: c.Number, ShowCost: ok && a.Has(access.InventoryCostRead), TotalValue: c.TotalDifferenceValue}
+
+	for i := range c.Lines {
+		l := &c.Lines[i]
+		row := render.StockCountRow{
+			SKU: l.PartSKU, Part: l.PartName, Unit: l.BaseUnitAbbreviation, System: l.SystemQuantity, Result: string(l.Result()),
+		}
+
+		if l.Counted != nil {
+			row.Counted = *l.Counted
+		}
+
+		if diff, counted := l.Difference(); counted {
+			row.Difference = diff
+		}
+
+		if l.AverageCost != nil {
+			row.AverageCost, _ = inventoryDomain.WholeDong(*l.AverageCost)
+		}
+
+		if v := l.DifferenceValue(); v != nil {
+			row.Value = *v
+		}
+
+		info.Rows = append(info.Rows, row)
+	}
+
+	return info, nil
+}
+
 func (d documentInventory) Purchases(ctx context.Context, garageID, supplierID, from, to string) ([]render.PurchaseRow, int64, error) {
 	report, err := d.uc.PurchasesReport(ctx, inventoryUsecase.PurchasesReportRequest{
 		GarageID: garageID, SupplierID: supplierID, From: from, To: to,
@@ -917,6 +946,32 @@ func (d documentInventory) Valuation(ctx context.Context, garageID, at string) (
 	}
 
 	return rows, report.TotalValue, nil
+}
+
+// movementReference names the document behind a stock movement for the Excel
+// report: its kind and number (the id for movements that have no numbered
+// document).
+func movementReference(tx *inventoryDomain.StockTransaction) string {
+	labels := map[inventoryDomain.RefType]string{
+		inventoryDomain.RefStockIssue: "Stock issue", inventoryDomain.RefGoodsReceipt: "Goods receipt",
+		inventoryDomain.RefRepairOrder: "Repair order", inventoryDomain.RefStockCount: "Stock count",
+		inventoryDomain.RefWriteOff: "Write-off", inventoryDomain.RefSupplierReturn: "Return to supplier",
+		inventoryDomain.RefRepairOrderReturn: "Repair order return",
+	}
+
+	label, ok := labels[tx.RefType]
+	if !ok {
+		return "Purchase"
+	}
+
+	switch {
+	case tx.RefNumber != "":
+		return label + " " + tx.RefNumber
+	case tx.RefID != nil:
+		return label + " " + *tx.RefID
+	default:
+		return label
+	}
 }
 
 // documentRevenue lets the Document/Print module render the revenue report as

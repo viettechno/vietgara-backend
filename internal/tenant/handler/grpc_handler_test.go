@@ -101,7 +101,7 @@ func TestGarageRPCs(t *testing.T) {
 	assert.Equal(t, "LSC-{YYYY}{MM}-{SEQ:4}", g.GetNumbering().GetRepairOrder())
 	assert.Equal(t, tenantv1.GarageStatus_GARAGE_STATUS_ACTIVE, g.GetStatus())
 	assert.True(t, g.GetAccess().GetOwner())
-	assert.Len(t, g.GetAccess().GetPermissions(), 21)
+	assert.Len(t, g.GetAccess().GetPermissions(), 23)
 	assert.Len(t, g.GetOperatingHours(), 1)
 
 	_, err = e.srv.CreateGarage(ownerCtx, &tenantv1.CreateGarageRequest{Garage: &tenantv1.Garage{}})
@@ -236,7 +236,7 @@ func TestStaffAndInvitationRPCs(t *testing.T) {
 	require.Len(t, members.GetData(), 2)
 	ownerRow, member := members.GetData()[0], members.GetData()[1]
 	assert.True(t, ownerRow.GetOwner())
-	assert.Len(t, ownerRow.GetPermissions(), 21)
+	assert.Len(t, ownerRow.GetPermissions(), 23)
 	assert.Equal(t, []string{groupID}, member.GetGroupIds())
 
 	updated, err := e.srv.UpdateStaff(ctx, &tenantv1.UpdateStaffRequest{
@@ -294,7 +294,7 @@ func TestRoleAndGroupRPCs(t *testing.T) {
 
 	perms, err := e.srv.ListPermissions(ownerCtx, &tenantv1.ListPermissionsRequest{})
 	require.NoError(t, err)
-	assert.Len(t, perms.GetData(), 21)
+	assert.Len(t, perms.GetData(), 23)
 	assert.Equal(t, "garage", perms.GetData()[0].GetModule())
 	assert.Equal(t, "write", perms.GetData()[0].GetAction())
 	assert.Equal(t, "read", perms.GetData()[1].GetAction())
@@ -444,7 +444,9 @@ func TestStockSettingsRPCs(t *testing.T) {
 	ownerCtx := e.as(t, tenanttest.Owner, "")
 
 	created, err := e.srv.CreateGarage(ownerCtx, &tenantv1.CreateGarageRequest{Garage: &tenantv1.Garage{
-		Name: "Gara", Numbering: &tenantv1.NumberingTemplates{GoodsReceipt: "NK-{SEQ:3}", StockIssue: "XK-{SEQ:3}"},
+		Name: "Gara", Numbering: &tenantv1.NumberingTemplates{
+			GoodsReceipt: "NK-{SEQ:3}", StockIssue: "XK-{SEQ:3}", StockCount: "KK-{SEQ:3}", WriteOff: "XH-{SEQ:3}", SupplierReturn: "TN-{SEQ:3}",
+		},
 		StockIssueMode: tenantv1.StockIssueMode_STOCK_ISSUE_MODE_ON_START,
 	}})
 	require.NoError(t, err)
@@ -453,6 +455,9 @@ func TestStockSettingsRPCs(t *testing.T) {
 	assert.Equal(t, "NK-{SEQ:3}", g.GetNumbering().GetGoodsReceipt())
 	assert.Equal(t, "XK-{SEQ:3}", g.GetNumbering().GetStockIssue())
 	assert.Equal(t, tenantv1.StockIssueMode_STOCK_ISSUE_MODE_ON_START, g.GetStockIssueMode())
+	assert.Equal(t, "KK-{SEQ:3}", g.GetNumbering().GetStockCount())
+	assert.Equal(t, "XH-{SEQ:3}", g.GetNumbering().GetWriteOff())
+	assert.Equal(t, "TN-{SEQ:3}", g.GetNumbering().GetSupplierReturn())
 
 	gctx := e.as(t, tenanttest.Owner, g.GetId())
 
@@ -468,6 +473,22 @@ func TestStockSettingsRPCs(t *testing.T) {
 	assert.Equal(t, "PN-{YY}{SEQ:4}", updated.GetGarage().GetNumbering().GetGoodsReceipt())
 	assert.Equal(t, "XK-{SEQ:3}", updated.GetGarage().GetNumbering().GetStockIssue(), "unnamed fields are kept")
 	assert.Equal(t, tenantv1.StockIssueMode_STOCK_ISSUE_MODE_ON_CLOSE, updated.GetGarage().GetStockIssueMode())
+
+	// Each Release 7.1 template can be named on its own.
+	for path, template := range map[string]*tenantv1.NumberingTemplates{
+		"numbering.stock_count":     {StockCount: "K2-{SEQ:3}"},
+		"numbering.write_off":       {WriteOff: "X2-{SEQ:3}"},
+		"numbering.supplier_return": {SupplierReturn: "T2-{SEQ:3}"},
+	} {
+		_, err = e.srv.UpdateGarage(gctx, &tenantv1.UpdateGarageRequest{GarageId: g.GetId(), Garage: &tenantv1.Garage{Numbering: template}, UpdateMask: mask(path)})
+		require.NoError(t, err, path)
+	}
+
+	read, err := e.srv.GetGarage(gctx, &tenantv1.GetGarageRequest{GarageId: g.GetId()})
+	require.NoError(t, err)
+	assert.Equal(t, "K2-{SEQ:3}", read.GetGarage().GetNumbering().GetStockCount())
+	assert.Equal(t, "X2-{SEQ:3}", read.GetGarage().GetNumbering().GetWriteOff())
+	assert.Equal(t, "T2-{SEQ:3}", read.GetGarage().GetNumbering().GetSupplierReturn())
 
 	// The whole numbering block keeps what a client that predates the new templates leaves out.
 	whole, err := e.srv.UpdateGarage(gctx, &tenantv1.UpdateGarageRequest{

@@ -356,6 +356,22 @@ func TestDocumentUseCase_InventoryDocuments(t *testing.T) {
 		require.Equal(t, "PK", string(valuation[:2]))
 	})
 
+	t.Run("stock count workbook", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Inventory.EXPECT().StockCount(mock.Anything, garageID, "c-1").
+			Return(usecase.StockCountInfo{Number: "KK-1", Rows: []render.StockCountRow{{SKU: "OIL", Result: "matched"}}, ShowCost: true}, nil).Once()
+
+		count, err := uc.StockCountExcel(t.Context(), garageID, "c-1")
+		require.NoError(t, err)
+		require.Equal(t, "PK", string(count[:2]))
+
+		d.Inventory.EXPECT().StockCount(mock.Anything, garageID, "c-2").Return(usecase.StockCountInfo{}, errBoom).Once()
+		_, err = uc.StockCountExcel(t.Context(), garageID, "c-2")
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+
 	t.Run("reader failures", func(t *testing.T) {
 		t.Parallel()
 

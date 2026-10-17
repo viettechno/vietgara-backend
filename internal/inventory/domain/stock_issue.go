@@ -35,6 +35,9 @@ type StockIssueLine struct {
 	// UnitCost is the average-cost snapshot per base unit taken on posting;
 	// nil for a draft or an unknown cost.
 	UnitCost *string
+	// ReturnedQuantity is the base-unit amount already returned to stock
+	// from this line (FR-INV-11), derived when reading.
+	ReturnedQuantity string
 }
 
 // StockIssue is the numbered stock-out document of a repair order.
@@ -61,4 +64,13 @@ var (
 	ErrStockIssueNotFound = errors.New("stock issue not found")
 	// ErrStockIssueNotDraft is returned when a change needs a draft.
 	ErrStockIssueNotDraft = errors.New("only a draft stock issue can be changed")
+	// ErrStockIssueNotPosted is returned when parts are returned from an
+	// order whose stock issue is still a draft (nothing has left stock yet).
+	ErrStockIssueNotPosted = errors.New("the stock issue is not posted, so nothing has left stock to return")
+	// ErrStockIssueLineNotFound is returned for a repair order line the stock
+	// issue has no line for.
+	ErrStockIssueLineNotFound = errors.New("the repair order line is not on the stock issue")
+	// ErrReturnExceedsIssued is returned when more would be returned than the
+	// line issued.
+	ErrReturnExceedsIssued = errors.New("the quantity returned from a line cannot exceed what was issued")
 )

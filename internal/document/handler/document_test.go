@@ -67,9 +67,10 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 10)
+	assert.Len(t, p, 11)
 	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportGoodsReceiptPdf_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportStockIssuePdf_FullMethodName].Garage.Permission)
+	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportStockCountExcel_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.InventoryCostRead, p[documentv1.DocumentService_ExportPurchasesExcel_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.InventoryCostRead, p[documentv1.DocumentService_ExportStockValuationExcel_FullMethodName].Garage.Permission)
 	assert.NotNil(t, p[documentv1.DocumentService_ExportQuotePdf_FullMethodName].Garage)
@@ -375,6 +376,15 @@ func TestExportInventoryDocuments(t *testing.T) {
 	e.inventory.EXPECT().StockIssue(anyArg, garageID, repairOrderID).Return(usecase.StockIssueInfo{Number: "PX-1"}, nil).Once()
 	e.inventory.EXPECT().Purchases(anyArg, garageID, "s-1", "2026-10-01", "2026-11-01").Return(nil, int64(0), nil).Once()
 	e.inventory.EXPECT().Valuation(anyArg, garageID, "2026-10-15").Return(nil, int64(0), nil).Once()
+	e.inventory.EXPECT().StockCount(anyArg, garageID, "c-1").Return(usecase.StockCountInfo{Number: "KK-1"}, nil).Once()
+	e.inventory.EXPECT().StockCount(anyArg, garageID, "c-2").Return(usecase.StockCountInfo{}, apperror.New(apperror.CodeNotFound, "gone")).Once()
+
+	count, err := e.srv.ExportStockCountExcel(t.Context(), &documentv1.ExportStockCountExcelRequest{GarageId: garageID, StockCountId: "c-1"})
+	require.NoError(t, err)
+	assert.NotEmpty(t, count.GetData())
+
+	_, err = e.srv.ExportStockCountExcel(t.Context(), &documentv1.ExportStockCountExcelRequest{GarageId: garageID, StockCountId: "c-2"})
+	assert.Equal(t, codes.NotFound, status.Code(err))
 
 	receipt, err := e.srv.ExportGoodsReceiptPdf(t.Context(), &documentv1.ExportGoodsReceiptPdfRequest{GarageId: garageID, GoodsReceiptId: "r-1"})
 	require.NoError(t, err)

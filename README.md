@@ -57,25 +57,6 @@ Shared infrastructure (db, access, mail, storage, kafka, outbox, audit,
 httpapi, auth) is in `internal/platform`. The gRPC interceptors are in
 `internal/middleware`.
 
-## Roadmap
-
-The plan is in `vietgara-docs` (Release Plan, Phases 3-17). What changes in this repository:
-
-| When | Change |
-| --- | --- |
-| Phase 3 | `account` becomes `user` in the database, proto, events, tokens and configuration (the backend part is merged in #20; proto and the clients follow); migrations are edited in place |
-| Phase 4 | The blackbox suite reads a shared dataset from `vietgara-testdata` and grows to every P1 scenario and at least 80% of API operations; a test-only purge of the test users (see `testing/blackbox/README.md`) |
-| Release 5.0 | Done: insurance code is removed (insurer split, insurer partner type), `partners` becomes the Supplier module (`suppliers`, `supplier.*`), the delete-or-deactivate rule (`pkg/lifecycle`, applied to customers, vehicles and suppliers; each later entity adopts it), shared E.164 phone and e-mail normalization (`pkg/phone`, `pkg/email`). quantities and stock cost are numeric (`NUMERIC(14,3)`, `NUMERIC(18,4)`), the file registry (`internal/file`, `files`, private kinds served through signed URLs; the garage logo moves into it). row audit columns on every business table filled by triggers from the session user (migration 000022), edited user names kept (`users.full_name_source`). the garage's legal profile (legal name, address, representative, bank, voucher numbering; printed with the logo in every PDF header), a snapshot of that identity kept on every quote, repair order, settlement and payment voucher (`pkg/issuer`; a replaced logo is retired, not deleted, so issued documents still print it), and payment vouchers issued with each payment (numbered, payer, reason, collector). Planned: void and the voucher PDF (B9b, B9c) |
-| Release 5.1 | Customers without a user, user links, tax profiles by kind with an invoice-requested check, vehicle identity fields locked while live documents use them (`customer.correct` to correct) |
-| Release 5.2 | Plan changes (upgrade and downgrade) take effect at the end of the billing period: pending change, applied by the daily job |
-| Releases 6.0, 6.1 | Units, selling price per part, part categories and images, Excel exports; MFA |
-| Phase 7 | A draft stock issue (phiếu xuất kho) created with each repair order, posted on close; goods receipt documents with a supplier on each line, average cost, stock count, write-off and returns, barcodes, import; job catalogue and stock reservation (Release 7.3) |
-| Phase 8 | Kong rate limiting and security headers; platform roles and groups; read-only support access |
-| Phase 9 | Load test, metrics and alerts, off-site backups, Terraform (the gate for an open launch) |
-| Release 10.2 | Public contact request: `POST /api/v1/public/contact-requests` (server to server from the website's function; strict rate-limit profile), the `contact_requests` table and the support e-mail through Notification |
-| Phases 10-15 | Print templates and e-mail; push and mobile sync; booking; receivables, payables and purchase orders; thermal printing and the template designer; service split (Repair Order, Inventory, Quote first), silos, CQRS |
-| Phases 16-17 | Payment gateway, e-invoices, SMS/Zalo; insurers directory, claims, supplier portal |
-
 ## Run locally
 
 Start the full stack with Docker Compose:

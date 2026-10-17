@@ -20,12 +20,18 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 15)
+	assert.Len(t, p, 35)
 	assert.Equal(t, access.InventoryRead, p[inventoryv1.InventoryService_ListStockLevels_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.InventoryWrite, p[inventoryv1.InventoryService_CompleteGoodsReceipt_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.InventoryWrite, p[inventoryv1.InventoryService_PostStockIssue_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.InventoryCostRead, p[inventoryv1.InventoryService_GetPurchasesReport_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.InventoryCostRead, p[inventoryv1.InventoryService_GetStockValuationReport_FullMethodName].Garage.Permission)
+	assert.Equal(t, access.InventoryRead, p[inventoryv1.InventoryService_GetStockCount_FullMethodName].Garage.Permission)
+	assert.Equal(t, access.InventoryCount, p[inventoryv1.InventoryService_CompleteStockCount_FullMethodName].Garage.Permission)
+	assert.Equal(t, access.InventoryCount, p[inventoryv1.InventoryService_MergeStockCounts_FullMethodName].Garage.Permission)
+	assert.Equal(t, access.InventoryAdjust, p[inventoryv1.InventoryService_CreateWriteOff_FullMethodName].Garage.Permission)
+	assert.Equal(t, access.InventoryAdjust, p[inventoryv1.InventoryService_CreateSupplierReturn_FullMethodName].Garage.Permission)
+	assert.Equal(t, access.InventoryAdjust, p[inventoryv1.InventoryService_ReturnRepairOrderPart_FullMethodName].Garage.Permission)
 }
 
 func TestListStockLevels(t *testing.T) {

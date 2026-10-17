@@ -113,6 +113,17 @@ type StockIssueInfo struct {
 	Lines                                                 []render.StockIssueRow
 }
 
+// StockCountInfo is the Inventory module's view of a stock count that
+// Document/Print needs to render its workbook.
+type StockCountInfo struct {
+	Number string
+	Rows   []render.StockCountRow
+	// ShowCost is false for a caller without inventory.cost.read: the sheet
+	// then has no cost columns (FR-INV-08).
+	ShowCost   bool
+	TotalValue int64
+}
+
 // InventoryDocumentReader reads the Release 7.0 inventory documents and
 // reports; implemented by an adapter over the Inventory module in
 // cmd/server. The two reports need inventory.cost.read, which the RPC
@@ -124,6 +135,8 @@ type InventoryDocumentReader interface {
 	// Purchases lists the purchases report; from is inclusive and to
 	// exclusive, "YYYY-MM-DD" or empty.
 	Purchases(ctx context.Context, garageID, supplierID, from, to string) ([]render.PurchaseRow, int64, error)
+	// StockCount returns a stock count for its Excel export (FR-INV-12).
+	StockCount(ctx context.Context, garageID, countID string) (StockCountInfo, error)
 	// Valuation lists the stock valuation at a date ("YYYY-MM-DD", empty for
 	// today).
 	Valuation(ctx context.Context, garageID, at string) ([]render.ValuationRow, int64, error)
@@ -389,6 +402,22 @@ func (uc *DocumentUseCase) StockIssuePDF(ctx context.Context, garageID, repairOr
 	}
 
 	return pdf, nil
+}
+
+// StockCountExcel renders a stock count as an Excel workbook for review
+// (FR-INV-12).
+func (uc *DocumentUseCase) StockCountExcel(ctx context.Context, garageID, countID string) ([]byte, error) {
+	count, err := uc.Inventory.StockCount(ctx, garageID, countID)
+	if err != nil {
+		return nil, toAppError("export stock count excel", err)
+	}
+
+	workbook, err := render.StockCountExcel(count.Rows, count.ShowCost, count.TotalValue)
+	if err != nil {
+		return nil, apperror.Internal("export stock count excel", err)
+	}
+
+	return workbook, nil
 }
 
 // PurchasesExcel renders the purchases-by-supplier report as an Excel

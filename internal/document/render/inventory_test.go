@@ -66,6 +66,45 @@ func TestPurchasesExcel(t *testing.T) {
 	assert.Equal(t, "62500", rows[2][8])
 }
 
+func TestStockCountExcel(t *testing.T) {
+	t.Parallel()
+
+	counted := []render.StockCountRow{
+		{SKU: "OIL", Part: "Oil", Unit: "can", System: "10", Counted: "12", Difference: "2", Result: "over", AverageCost: 50, Value: 100},
+		{SKU: "FLT", Part: "Filter", Unit: "pc", System: "3", Result: "uncounted"},
+	}
+
+	read := func(data []byte) [][]string {
+		t.Helper()
+
+		f, err := excelize.OpenReader(bytes.NewReader(data))
+		require.NoError(t, err)
+
+		defer func() { _ = f.Close() }()
+
+		rows, err := f.GetRows("Stock Count")
+		require.NoError(t, err)
+
+		return rows
+	}
+
+	withCost, err := render.StockCountExcel(counted, true, 100)
+	require.NoError(t, err)
+
+	rows := read(withCost)
+	require.Len(t, rows, 4)
+	assert.Equal(t, []string{"OIL", "Oil", "can", "10", "12", "2", "over", "50", "100"}, rows[1])
+	assert.Equal(t, "Difference value (VND)", rows[0][8])
+	assert.Equal(t, "100", rows[3][8])
+
+	withoutCost, err := render.StockCountExcel(counted, false, 100)
+	require.NoError(t, err)
+
+	rows = read(withoutCost)
+	assert.Equal(t, []string{"OIL", "Oil", "can", "10", "12", "2", "over"}, rows[1])
+	assert.Len(t, rows[0], 7, "no cost columns without inventory.cost.read")
+}
+
 func TestStockValuationExcel(t *testing.T) {
 	t.Parallel()
 

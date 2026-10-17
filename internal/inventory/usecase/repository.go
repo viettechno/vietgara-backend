@@ -3,7 +3,9 @@
 // goods receipt documents that post stock and the weighted-average cost
 // (FR-INV-06/07), the usual suppliers of a part (FR-INV-19), the stock issue
 // document of each repair order, drafted when the order is created and posted
-// when it starts or closes (FR-INV-02/20), the stock movement report
+// when it starts or closes (FR-INV-02/20), stock counts, write-offs, returns to
+// supplier and returns of unused repair order parts (FR-INV-09..12), the
+// stock movement report
 // (FR-INV-05) and the purchases and valuation reports (FR-INV-07/19). Every
 // method expects to run inside a garage-scoped transaction (see
 // middleware.Garage) so Row-Level Security applies. What a part is, and how a
@@ -25,8 +27,40 @@ import (
 type TransactionFilter struct {
 	PartID string
 	Type   domain.TransactionType
+	// RefType keeps the movements caused by one kind of document; "" keeps
+	// them all.
+	RefType domain.RefType
+	Limit   int
+	Offset  int
+}
+
+// StockCountFilter selects one page of a garage's stock counts.
+type StockCountFilter struct {
+	// Query matches the number, name or notes.
+	Query  string
+	Status domain.StockCountStatus
 	Limit  int
 	Offset int
+}
+
+// WriteOffFilter selects one page of a garage's write-offs.
+type WriteOffFilter struct {
+	// Query matches the number or notes.
+	Query  string
+	Reason domain.WriteOffReason
+	Status domain.AdjustmentStatus
+	Limit  int
+	Offset int
+}
+
+// SupplierReturnFilter selects one page of a garage's returns to supplier.
+type SupplierReturnFilter struct {
+	// Query matches the number, credit note number or notes.
+	Query      string
+	SupplierID string
+	Status     domain.AdjustmentStatus
+	Limit      int
+	Offset     int
 }
 
 // Balance is the stock position of one part, in the base unit.
@@ -83,8 +117,13 @@ type Repository interface {
 	// (RefGoodsReceipt with a UnitCost) unwinds it. Any other OUT leaves the
 	// average alone and, when tx has no UnitCost, is stamped with it.
 	RecordTransaction(ctx context.Context, tx *domain.StockTransaction) error
+	// LockBalances locks the balance rows of these parts until the
+	// transaction ends, so a stock check followed by a movement is not
+	// overtaken by another movement of the same part.
+	LockBalances(ctx context.Context, garageID string, partIDs []string) error
 	// ListTransactions returns one page of transactions (FR-INV-05),
-	// newest first, without the derived part and unit descriptions.
+	// newest first, with the number of their document, reason and running
+	// quantity but without the derived part and unit descriptions.
 	ListTransactions(ctx context.Context, garageID string, filter TransactionFilter) ([]*domain.StockTransaction, int, error)
 
 	// CreateGoodsReceipt inserts the receipt header and its lines.
@@ -124,6 +163,59 @@ type Repository interface {
 	FindStockIssueByRepairOrder(ctx context.Context, garageID, repairOrderID string, forUpdate bool) (*domain.StockIssue, error)
 	// SaveStockIssue persists the status, posting and line costs.
 	SaveStockIssue(ctx context.Context, issue *domain.StockIssue) error
+
+	// CreateStockCount inserts the count header and its lines.
+	CreateStockCount(ctx context.Context, c *domain.StockCount) error
+	// FindStockCount returns the count with its lines in order, or
+	// domain.ErrStockCountNotFound. Lines carry their stored average cost, or
+	// the part's live one while it is not stored yet. forUpdate locks the
+	// header until the transaction ends.
+	FindStockCount(ctx context.Context, garageID, countID string, forUpdate bool) (*domain.StockCount, error)
+	// SaveStockCount persists the header (name, notes, status, timestamps),
+	// not the lines.
+	SaveStockCount(ctx context.Context, c *domain.StockCount) error
+	// ListStockCounts returns one page of counts, newest first, without lines
+	// but with Tally and TotalDifferenceValue.
+	ListStockCounts(ctx context.Context, garageID string, filter StockCountFilter) ([]*domain.StockCount, int, error)
+	// InsertStockCountLines adds lines to a count.
+	InsertStockCountLines(ctx context.Context, garageID, countID string, actor *string, lines []domain.StockCountLine) error
+	// SaveStockCountLine persists the counted, system and cost fields of a
+	// line, or domain.ErrStockCountLineNotFound.
+	SaveStockCountLine(ctx context.Context, garageID, countID string, l *domain.StockCountLine) error
+	// DeleteStockCountLine removes a line, or domain.ErrStockCountLineNotFound.
+	DeleteStockCountLine(ctx context.Context, garageID, countID, lineID string) error
+	// ClearStockCountLines removes every line of a count.
+	ClearStockCountLines(ctx context.Context, garageID, countID string) error
+
+	// CreateWriteOff inserts the write-off and its lines.
+	CreateWriteOff(ctx context.Context, w *domain.WriteOff) error
+	// FindWriteOff returns the write-off with its lines, or
+	// domain.ErrWriteOffNotFound.
+	FindWriteOff(ctx context.Context, garageID, writeOffID string, forUpdate bool) (*domain.WriteOff, error)
+	// SaveWriteOff persists the status and timestamps.
+	SaveWriteOff(ctx context.Context, w *domain.WriteOff) error
+	// ListWriteOffs returns one page, newest first, without lines but with
+	// TotalValue.
+	ListWriteOffs(ctx context.Context, garageID string, filter WriteOffFilter) ([]*domain.WriteOff, int, error)
+
+	// CreateSupplierReturn inserts the return and its lines.
+	CreateSupplierReturn(ctx context.Context, s *domain.SupplierReturn) error
+	// FindSupplierReturn returns the return with its lines, or
+	// domain.ErrSupplierReturnNotFound.
+	FindSupplierReturn(ctx context.Context, garageID, returnID string, forUpdate bool) (*domain.SupplierReturn, error)
+	// SaveSupplierReturn persists the status and timestamps.
+	SaveSupplierReturn(ctx context.Context, s *domain.SupplierReturn) error
+	// ListSupplierReturns returns one page, newest first, without lines but
+	// with CreditAmount.
+	ListSupplierReturns(ctx context.Context, garageID string, filter SupplierReturnFilter) ([]*domain.SupplierReturn, int, error)
+	// GoodsReceiptNumbers returns the number per goods receipt id.
+	GoodsReceiptNumbers(ctx context.Context, garageID string, ids []string) (map[string]string, error)
+
+	// CreatePartReturn records unused parts returned from a repair order.
+	CreatePartReturn(ctx context.Context, r *domain.RepairOrderPartReturn) error
+	// ListPartReturns returns the part returns of a repair order, oldest
+	// first, without the derived part and unit descriptions.
+	ListPartReturns(ctx context.Context, garageID, repairOrderID string) ([]domain.RepairOrderPartReturn, error)
 
 	// PurchasesReport returns the lines of completed receipts, newest first.
 	PurchasesReport(ctx context.Context, garageID string, filter PurchaseFilter) ([]domain.PurchaseLine, error)
@@ -193,6 +285,11 @@ type GarageSettings struct {
 	Timezone                   string
 	GoodsReceiptNumberTemplate string
 	StockIssueNumberTemplate   string
+	// StockCountNumberTemplate, WriteOffNumberTemplate and
+	// SupplierReturnNumberTemplate number the Release 7.1 documents.
+	StockCountNumberTemplate     string
+	WriteOffNumberTemplate       string
+	SupplierReturnNumberTemplate string
 	// StockIssueMode is "on_close" or "on_start" (FR-INV-20).
 	StockIssueMode string
 }

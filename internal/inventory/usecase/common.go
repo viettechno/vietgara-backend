@@ -60,6 +60,28 @@ var classified = []struct {
 	{domain.ErrSupplierRequired, apperror.CodeFailedPrecondition, ReasonSupplierRequired},
 	{domain.ErrInsufficientStockToReverse, apperror.CodeFailedPrecondition, ReasonInsufficientStockToReverse},
 	{domain.ErrStockIssueNotDraft, apperror.CodeFailedPrecondition, ReasonStockIssueNotDraft},
+	{domain.ErrStockCountNotFound, apperror.CodeNotFound, ""},
+	{domain.ErrStockCountLineNotFound, apperror.CodeNotFound, ""},
+	{domain.ErrWriteOffNotFound, apperror.CodeNotFound, ""},
+	{domain.ErrSupplierReturnNotFound, apperror.CodeNotFound, ""},
+	{domain.ErrStockIssueLineNotFound, apperror.CodeNotFound, ""},
+	{domain.ErrStockCountNotDraft, apperror.CodeFailedPrecondition, ReasonStockCountNotDraft},
+	{domain.ErrStockCountAlreadyCancelled, apperror.CodeFailedPrecondition, ReasonStockCountAlreadyCancelled},
+	{domain.ErrStockCountUncounted, apperror.CodeFailedPrecondition, ReasonStockCountHasUncountedLines},
+	{domain.ErrWriteOffAlreadyCancelled, apperror.CodeFailedPrecondition, ReasonWriteOffAlreadyCancelled},
+	{domain.ErrSupplierReturnAlreadyCancelled, apperror.CodeFailedPrecondition, ReasonSupplierReturnAlreadyCancelled},
+	{domain.ErrGoodsReceiptNotCompleted, apperror.CodeFailedPrecondition, ReasonGoodsReceiptNotCompleted},
+	{domain.ErrInsufficientStock, apperror.CodeFailedPrecondition, ReasonInsufficientStock},
+	{domain.ErrStockIssueNotPosted, apperror.CodeFailedPrecondition, ReasonStockIssueNotPosted},
+	{domain.ErrReturnExceedsIssued, apperror.CodeFailedPrecondition, ReasonReturnExceedsIssued},
+	{domain.ErrInvalidMerge, apperror.CodeInvalidArgument, ""},
+	{domain.ErrNoParts, apperror.CodeInvalidArgument, ""},
+	{domain.ErrStockCountEmpty, apperror.CodeInvalidArgument, ""},
+	{domain.ErrInvalidWriteOffReason, apperror.CodeInvalidArgument, ""},
+	{domain.ErrReceiptSupplierMismatch, apperror.CodeInvalidArgument, ""},
+	{domain.ErrReasonRequired, apperror.CodeInvalidArgument, ""},
+	{domain.ErrReasonTooLong, apperror.CodeInvalidArgument, ""},
+	{domain.ErrNameTooLong, apperror.CodeInvalidArgument, ""},
 	{domain.ErrNoLines, apperror.CodeInvalidArgument, ""},
 	{domain.ErrSupplierNotFound, apperror.CodeInvalidArgument, ""},
 	{domain.ErrInvalidReceiptDate, apperror.CodeInvalidArgument, ""},
@@ -77,6 +99,17 @@ const (
 	ReasonSupplierRequired             = "SUPPLIER_REQUIRED"
 	ReasonInsufficientStockToReverse   = "INSUFFICIENT_STOCK_TO_REVERSE"
 	ReasonStockIssueNotDraft           = "STOCK_ISSUE_NOT_DRAFT"
+
+	// Release 7.1.
+	ReasonStockCountNotDraft             = "STOCK_COUNT_NOT_DRAFT"
+	ReasonStockCountAlreadyCancelled     = "STOCK_COUNT_ALREADY_CANCELLED"
+	ReasonStockCountHasUncountedLines    = "STOCK_COUNT_HAS_UNCOUNTED_LINES"
+	ReasonWriteOffAlreadyCancelled       = "WRITE_OFF_ALREADY_CANCELLED"
+	ReasonSupplierReturnAlreadyCancelled = "SUPPLIER_RETURN_ALREADY_CANCELLED"
+	ReasonGoodsReceiptNotCompleted       = "GOODS_RECEIPT_NOT_COMPLETED"
+	ReasonInsufficientStock              = "INSUFFICIENT_STOCK"
+	ReasonStockIssueNotPosted            = "STOCK_ISSUE_NOT_POSTED"
+	ReasonReturnExceedsIssued            = "RETURN_EXCEEDS_ISSUED"
 )
 
 // toAppError classifies err into an *apperror.AppError; op names the

@@ -55,6 +55,8 @@ func garageToProto(uc *usecase.TenantUseCase, g *usecase.GarageWithAccess) *tena
 			Quote: g.Garage.QuoteNumberTemplate, RepairOrder: g.Garage.RepairOrderNumberTemplate,
 			Settlement: g.Garage.SettlementNumberTemplate, PaymentVoucher: g.Garage.PaymentVoucherNumberTemplate,
 			GoodsReceipt: g.Garage.GoodsReceiptNumberTemplate, StockIssue: g.Garage.StockIssueNumberTemplate,
+			StockCount: g.Garage.StockCountNumberTemplate, WriteOff: g.Garage.WriteOffNumberTemplate,
+			SupplierReturn: g.Garage.SupplierReturnNumberTemplate,
 		},
 		LegalName:      g.Garage.LegalName,
 		LegalAddress:   g.Garage.LegalAddress,

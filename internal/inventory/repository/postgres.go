@@ -16,6 +16,9 @@ import (
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 )
 
+// forUpdateClause locks the selected row until the transaction ends.
+const forUpdateClause = " FOR UPDATE"
+
 // PostgresRepository implements usecase.Repository over the shared pgx
 // pool.
 type PostgresRepository struct {
@@ -74,6 +77,19 @@ func (r *PostgresRepository) Balances(ctx context.Context, garageID string, ids 
 	}
 
 	return out, rows.Err()
+}
+
+// LockBalances locks the balance rows of the parts until the transaction ends.
+func (r *PostgresRepository) LockBalances(ctx context.Context, garageID string, partIDs []string) error {
+	if len(partIDs) == 0 {
+		return nil
+	}
+
+	_, err := platformdb.QuerierFromContext(ctx, r.pool).Exec(ctx, `
+		SELECT 1 FROM stock_balance WHERE garage_id = $1 AND part_id = ANY($2::uuid[]) ORDER BY part_id FOR UPDATE`,
+		garageID, partIDs)
+
+	return err
 }
 
 // applyBalance upserts the part's balance for transaction and returns the
@@ -149,23 +165,39 @@ func (r *PostgresRepository) RecordTransaction(ctx context.Context, transaction 
 		return err
 	}
 
-	if transaction.Type == domain.TransactionOut && transaction.UnitCost == nil && !domain.IsZero(average) {
+	// A movement without a cost is valued at the average of the moment: an
+	// issue always, an adjustment's IN as well (which left the average alone).
+	if transaction.UnitCost == nil && !domain.IsZero(average) &&
+		(transaction.Type == domain.TransactionOut || transaction.RefType.IsAdjustment()) {
 		transaction.UnitCost = &average
 	}
 
+	transaction.QuantityAfter = quantity
+
 	return q.QueryRow(ctx, `
 		INSERT INTO stock_transactions (id, garage_id, part_id, type, quantity, unit_cost, unit_id, entered_quantity,
-		                                ref_type, ref_id, supplier_id, quantity_after, average_cost_after, created_by)
-		VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7, $8::numeric, $9, $10, $11, $12::numeric, $13::numeric, $14)
+		                                ref_type, ref_id, supplier_id, quantity_after, average_cost_after, created_by, reason)
+		VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7, $8::numeric, $9, $10, $11, $12::numeric, $13::numeric, $14, $15)
 		RETURNING created_at`,
 		transaction.ID, transaction.GarageID, transaction.PartID, string(transaction.Type), transaction.Quantity,
 		transaction.UnitCost, transaction.UnitID, transaction.EnteredQuantity, string(transaction.RefType),
-		transaction.RefID, transaction.SupplierID, quantity, average, transaction.CreatedBy,
+		transaction.RefID, transaction.SupplierID, quantity, average, transaction.CreatedBy, transaction.Reason,
 	).Scan(&transaction.CreatedAt)
 }
 
+// transactionColumns and transactionJoins select a movement with the number of
+// the document behind it; the joins only add columns, never rows.
 const transactionColumns = `t.id, t.part_id, t.type, trim_scale(t.quantity)::text, trim_scale(t.unit_cost)::text, t.unit_id,
-	trim_scale(t.entered_quantity)::text, t.ref_type, t.ref_id, t.created_by, t.created_at`
+	trim_scale(t.entered_quantity)::text, t.ref_type, t.ref_id, t.created_by, t.created_at, t.reason,
+	trim_scale(t.quantity_after)::text,
+	COALESCE(gr.number, si.number, sc.number, wo.number, sr.number, '')`
+
+const transactionJoins = `
+	LEFT JOIN goods_receipts gr ON t.ref_type = 'goods_receipt' AND gr.garage_id = t.garage_id AND gr.id = t.ref_id
+	LEFT JOIN stock_issues si ON t.ref_type = 'stock_issue' AND si.garage_id = t.garage_id AND si.id = t.ref_id
+	LEFT JOIN stock_counts sc ON t.ref_type = 'stock_count' AND sc.garage_id = t.garage_id AND sc.id = t.ref_id
+	LEFT JOIN write_offs wo ON t.ref_type = 'write_off' AND wo.garage_id = t.garage_id AND wo.id = t.ref_id
+	LEFT JOIN supplier_returns sr ON t.ref_type = 'supplier_return' AND sr.garage_id = t.garage_id AND sr.id = t.ref_id`
 
 func scanTransaction(row pgx.Row) (*domain.StockTransaction, error) {
 	var (
@@ -176,7 +208,7 @@ func scanTransaction(row pgx.Row) (*domain.StockTransaction, error) {
 
 	err := row.Scan(&transaction.ID, &transaction.PartID, &txType, &transaction.Quantity, &transaction.UnitCost,
 		&transaction.UnitID, &transaction.EnteredQuantity, &refType, &transaction.RefID, &transaction.CreatedBy,
-		&transaction.CreatedAt)
+		&transaction.CreatedAt, &transaction.Reason, &transaction.QuantityAfter, &transaction.RefNumber)
 	if err != nil {
 		return nil, err
 	}
@@ -193,8 +225,9 @@ func (r *PostgresRepository) ListTransactions(ctx context.Context, garageID stri
 
 	where := ` FROM stock_transactions t WHERE t.garage_id = $1
 		AND ($2::uuid IS NULL OR t.part_id = $2::uuid)
-		AND ($3::stock_transaction_type IS NULL OR t.type = $3::stock_transaction_type)`
-	args := []any{garageID, nullable(filter.PartID), nullable(string(filter.Type))}
+		AND ($3::stock_transaction_type IS NULL OR t.type = $3::stock_transaction_type)
+		AND ($4::stock_transaction_ref_type IS NULL OR t.ref_type = $4::stock_transaction_ref_type)`
+	args := []any{garageID, nullable(filter.PartID), nullable(string(filter.Type)), nullable(string(filter.RefType))}
 
 	var total int
 	if err := q.QueryRow(ctx, `SELECT count(*)`+where, args...).Scan(&total); err != nil {
@@ -205,8 +238,12 @@ func (r *PostgresRepository) ListTransactions(ctx context.Context, garageID stri
 		return nil, 0, nil
 	}
 
-	rows, err := q.Query(ctx, `SELECT `+transactionColumns+where+`
-		ORDER BY t.created_at DESC, t.id LIMIT $4 OFFSET $5`,
+	rows, err := q.Query(ctx, `SELECT `+transactionColumns+` FROM stock_transactions t`+transactionJoins+`
+		WHERE t.garage_id = $1
+		AND ($2::uuid IS NULL OR t.part_id = $2::uuid)
+		AND ($3::stock_transaction_type IS NULL OR t.type = $3::stock_transaction_type)
+		AND ($4::stock_transaction_ref_type IS NULL OR t.ref_type = $4::stock_transaction_ref_type)
+		ORDER BY t.created_at DESC, t.seq DESC LIMIT $5 OFFSET $6`,
 		append(args, filter.Limit, filter.Offset)...)
 	if err != nil {
 		return nil, 0, err
@@ -252,6 +289,22 @@ func (r *PostgresRepository) MovementsReference(ctx context.Context, garageID, p
 				OR ($3::text <> '' AND unit_id = NULLIF($3, '')::uuid)))
 		OR EXISTS (
 			SELECT 1 FROM stock_issue_lines
+			WHERE garage_id = $1 AND (($2::text <> '' AND part_id = NULLIF($2, '')::uuid)
+				OR ($3::text <> '' AND unit_id = NULLIF($3, '')::uuid)))
+		OR EXISTS (
+			SELECT 1 FROM stock_count_lines
+			WHERE garage_id = $1 AND (($2::text <> '' AND part_id = NULLIF($2, '')::uuid)
+				OR ($3::text <> '' AND unit_id = NULLIF($3, '')::uuid)))
+		OR EXISTS (
+			SELECT 1 FROM write_off_lines
+			WHERE garage_id = $1 AND (($2::text <> '' AND part_id = NULLIF($2, '')::uuid)
+				OR ($3::text <> '' AND unit_id = NULLIF($3, '')::uuid)))
+		OR EXISTS (
+			SELECT 1 FROM supplier_return_lines
+			WHERE garage_id = $1 AND (($2::text <> '' AND part_id = NULLIF($2, '')::uuid)
+				OR ($3::text <> '' AND unit_id = NULLIF($3, '')::uuid)))
+		OR EXISTS (
+			SELECT 1 FROM repair_order_part_returns
 			WHERE garage_id = $1 AND (($2::text <> '' AND part_id = NULLIF($2, '')::uuid)
 				OR ($3::text <> '' AND unit_id = NULLIF($3, '')::uuid)))`,
 		garageID, partID, unitID).Scan(&exists)

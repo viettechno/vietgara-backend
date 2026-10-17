@@ -39,7 +39,7 @@ func StockMovementsExcel(rows []StockMovementRow) ([]byte, error) {
 		return nil, fmt.Errorf("render stock movements excel: %w", err)
 	}
 
-	headers := []string{"Date", headingSKU, headingPart, "Direction", headingQuantity, "Unit", "Entered quantity", "Entered unit", "Reference"}
+	headers := []string{"Date", headingSKU, headingPart, "Direction", headingQuantity, headingUnit, "Entered quantity", "Entered unit", "Reference"}
 	if err := f.SetSheetRow(stockMovementsSheet, "A1", &headers); err != nil {
 		return nil, fmt.Errorf("render stock movements excel: %w", err)
 	}
@@ -113,7 +113,7 @@ func RevenueExcel(rows []RevenueRow, total int64) ([]byte, error) {
 	}
 
 	totalRow := len(rows) + 2
-	cells := []any{"Total", total}
+	cells := []any{labelTotal, total}
 
 	if err := f.SetSheetRow(revenueSheet, fmt.Sprintf("A%d", totalRow), &cells); err != nil {
 		return nil, fmt.Errorf("render revenue excel: %w", err)

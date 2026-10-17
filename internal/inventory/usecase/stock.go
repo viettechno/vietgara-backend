@@ -222,6 +222,7 @@ type ListTransactionsRequest struct {
 	GarageID string
 	PartID   string
 	Type     domain.TransactionType
+	RefType  domain.RefType
 }
 
 // ListTransactions returns one page of the garage's stock movements
@@ -231,13 +232,17 @@ func (uc *InventoryUseCase) ListTransactions(ctx context.Context, req ListTransa
 	page := req.normalize()
 
 	items, total, err := uc.repo.ListTransactions(ctx, req.GarageID, TransactionFilter{
-		PartID: req.PartID, Type: req.Type, Limit: page.PageSize, Offset: page.offset(),
+		PartID: req.PartID, Type: req.Type, RefType: req.RefType, Limit: page.PageSize, Offset: page.offset(),
 	})
 	if err != nil {
 		return nil, toAppError("list stock transactions", err)
 	}
 
 	if err := uc.describe(ctx, req.GarageID, items); err != nil {
+		return nil, toAppError("list stock transactions", err)
+	}
+
+	if err := uc.nameActors(ctx, items); err != nil {
 		return nil, toAppError("list stock transactions", err)
 	}
 
@@ -298,4 +303,23 @@ func (uc *InventoryUseCase) unitAbbreviations(ctx context.Context, garageID stri
 	}
 
 	return uc.parts.UnitAbbreviations(ctx, garageID, unitIDs)
+}
+
+// nameActors fills the name of the user behind each movement.
+func (uc *InventoryUseCase) nameActors(ctx context.Context, txs []*domain.StockTransaction) error {
+	ids := make([]string, 0, len(txs))
+	for _, t := range txs {
+		ids = append(ids, derefAll(t.CreatedBy)...)
+	}
+
+	names, err := uc.userNames(ctx, ids)
+	if err != nil {
+		return err
+	}
+
+	for _, t := range txs {
+		t.CreatedByName = nameOf(names, t.CreatedBy)
+	}
+
+	return nil
 }

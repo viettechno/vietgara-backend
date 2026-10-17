@@ -55,6 +55,8 @@ func transactionToProto(ctx context.Context, t *domain.StockTransaction) *invent
 		out.RefId = *t.RefID
 	}
 
+	out.RefNumber, out.Reason, out.QuantityAfter, out.CreatedByName = t.RefNumber, t.Reason, t.QuantityAfter, t.CreatedByName
+
 	return out
 }
 
@@ -106,9 +108,55 @@ func refTypeToProto(t domain.RefType) inventoryv1.StockTransactionRefType {
 		return inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_STOCK_ISSUE
 	case domain.RefPurchase:
 		return inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_PURCHASE
+	case domain.RefStockCount:
+		return inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_STOCK_COUNT
+	case domain.RefWriteOff:
+		return inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_WRITE_OFF
+	case domain.RefSupplierReturn:
+		return inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_SUPPLIER_RETURN
+	case domain.RefRepairOrderReturn:
+		return inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_REPAIR_ORDER_RETURN
 	default:
 		return inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_UNSPECIFIED
 	}
+}
+
+// refTypeFromProto maps UNSPECIFIED (and unknown values) to "", which the use
+// case treats as "every kind of movement" when listing.
+func refTypeFromProto(t inventoryv1.StockTransactionRefType) domain.RefType {
+	switch t {
+	case inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_PURCHASE:
+		return domain.RefPurchase
+	case inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_REPAIR_ORDER:
+		return domain.RefRepairOrder
+	case inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_GOODS_RECEIPT:
+		return domain.RefGoodsReceipt
+	case inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_STOCK_ISSUE:
+		return domain.RefStockIssue
+	case inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_STOCK_COUNT:
+		return domain.RefStockCount
+	case inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_WRITE_OFF:
+		return domain.RefWriteOff
+	case inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_SUPPLIER_RETURN:
+		return domain.RefSupplierReturn
+	case inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_REPAIR_ORDER_RETURN:
+		return domain.RefRepairOrderReturn
+	case inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_UNSPECIFIED:
+		return ""
+	default:
+		return ""
+	}
+}
+
+// mapPage converts the items of a page to API messages.
+func mapPage[T, P any](page *usecase.Page[T], convert func(T) P) []P {
+	out := make([]P, 0, len(page.Items))
+
+	for _, it := range page.Items {
+		out = append(out, convert(it))
+	}
+
+	return out
 }
 
 func paginationToProto[T any](p *usecase.Page[T]) *commonv1.Pagination {

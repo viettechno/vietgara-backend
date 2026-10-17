@@ -48,6 +48,9 @@ func TestGarageRepository(t *testing.T) {
 	assert.Equal(t, "PT-{SEQ:4}", g.PaymentVoucherNumberTemplate)
 	assert.Equal(t, "PN-{SEQ:4}", g.GoodsReceiptNumberTemplate)
 	assert.Equal(t, "PX-{SEQ:4}", g.StockIssueNumberTemplate)
+	assert.Equal(t, "KK-{SEQ:4}", g.StockCountNumberTemplate)
+	assert.Equal(t, "XH-{SEQ:4}", g.WriteOffNumberTemplate)
+	assert.Equal(t, "TN-{SEQ:4}", g.SupplierReturnNumberTemplate)
 	assert.Equal(t, domain.StockIssueModeOnStart, g.StockIssueMode)
 
 	_, err = repo.FindByID(ctx, "x")

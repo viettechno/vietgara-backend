@@ -135,6 +135,16 @@ func (s *Server) ExportStockIssuePdf(ctx context.Context, req *documentv1.Export
 	return pdfBody(data), nil
 }
 
+// ExportStockCountExcel renders a stock count as an Excel workbook (FR-INV-12).
+func (s *Server) ExportStockCountExcel(ctx context.Context, req *documentv1.ExportStockCountExcelRequest) (*httpbody.HttpBody, error) {
+	data, err := s.uc.StockCountExcel(ctx, req.GetGarageId(), req.GetStockCountId())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return excelBody(data), nil
+}
+
 // ExportPurchasesExcel renders the purchases-by-supplier report as an Excel
 // workbook (FR-INV-19).
 func (s *Server) ExportPurchasesExcel(ctx context.Context, req *documentv1.ExportPurchasesExcelRequest) (*httpbody.HttpBody, error) {

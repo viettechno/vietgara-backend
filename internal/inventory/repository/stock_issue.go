@@ -62,7 +62,7 @@ func (r *PostgresRepository) findIssue(ctx context.Context, garageID, column, va
 
 	lock := ""
 	if forUpdate {
-		lock = " FOR UPDATE"
+		lock = forUpdateClause
 	}
 
 	var (
@@ -84,9 +84,11 @@ func (r *PostgresRepository) findIssue(ctx context.Context, garageID, column, va
 	issue.Status = domain.StockIssueStatus(status)
 
 	rows, err := q.Query(ctx, `
-		SELECT id, repair_order_line_id, part_id, unit_id, trim_scale(entered_quantity)::text, trim_scale(quantity)::text,
-		       trim_scale(unit_cost)::text
-		FROM stock_issue_lines WHERE garage_id = $1 AND stock_issue_id = $2 ORDER BY created_at, id`, garageID, issue.ID)
+		SELECT l.id, l.repair_order_line_id, l.part_id, l.unit_id, trim_scale(l.entered_quantity)::text, trim_scale(l.quantity)::text,
+		       trim_scale(l.unit_cost)::text,
+		       COALESCE((SELECT trim_scale(sum(p.quantity))::text FROM repair_order_part_returns p
+		                 WHERE p.garage_id = l.garage_id AND p.stock_issue_line_id = l.id), '0')
+		FROM stock_issue_lines l WHERE l.garage_id = $1 AND l.stock_issue_id = $2 ORDER BY l.created_at, l.id`, garageID, issue.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +96,7 @@ func (r *PostgresRepository) findIssue(ctx context.Context, garageID, column, va
 
 	for rows.Next() {
 		var l domain.StockIssueLine
-		if err := rows.Scan(&l.ID, &l.RepairOrderLineID, &l.PartID, &l.UnitID, &l.EnteredQuantity, &l.Quantity, &l.UnitCost); err != nil {
+		if err := rows.Scan(&l.ID, &l.RepairOrderLineID, &l.PartID, &l.UnitID, &l.EnteredQuantity, &l.Quantity, &l.UnitCost, &l.ReturnedQuantity); err != nil {
 			return nil, err
 		}
 

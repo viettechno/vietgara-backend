@@ -114,6 +114,69 @@ func (_c *MockInventoryRepository_Balances_Call) RunAndReturn(run func(ctx conte
 	return _c
 }
 
+// ClearStockCountLines provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) ClearStockCountLines(ctx context.Context, garageID string, countID string) error {
+	ret := _mock.Called(ctx, garageID, countID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ClearStockCountLines")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = returnFunc(ctx, garageID, countID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_ClearStockCountLines_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ClearStockCountLines'
+type MockInventoryRepository_ClearStockCountLines_Call struct {
+	*mock.Call
+}
+
+// ClearStockCountLines is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - countID string
+func (_e *MockInventoryRepository_Expecter) ClearStockCountLines(ctx any, garageID any, countID any) *MockInventoryRepository_ClearStockCountLines_Call {
+	return &MockInventoryRepository_ClearStockCountLines_Call{Call: _e.mock.On("ClearStockCountLines", ctx, garageID, countID)}
+}
+
+func (_c *MockInventoryRepository_ClearStockCountLines_Call) Run(run func(ctx context.Context, garageID string, countID string)) *MockInventoryRepository_ClearStockCountLines_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_ClearStockCountLines_Call) Return(err error) *MockInventoryRepository_ClearStockCountLines_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_ClearStockCountLines_Call) RunAndReturn(run func(ctx context.Context, garageID string, countID string) error) *MockInventoryRepository_ClearStockCountLines_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateGoodsReceipt provides a mock function for the type MockInventoryRepository
 func (_mock *MockInventoryRepository) CreateGoodsReceipt(ctx context.Context, r *domain.GoodsReceipt) error {
 	ret := _mock.Called(ctx, r)
@@ -167,6 +230,120 @@ func (_c *MockInventoryRepository_CreateGoodsReceipt_Call) Return(err error) *Mo
 }
 
 func (_c *MockInventoryRepository_CreateGoodsReceipt_Call) RunAndReturn(run func(ctx context.Context, r *domain.GoodsReceipt) error) *MockInventoryRepository_CreateGoodsReceipt_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CreatePartReturn provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) CreatePartReturn(ctx context.Context, r *domain.RepairOrderPartReturn) error {
+	ret := _mock.Called(ctx, r)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreatePartReturn")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.RepairOrderPartReturn) error); ok {
+		r0 = returnFunc(ctx, r)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_CreatePartReturn_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreatePartReturn'
+type MockInventoryRepository_CreatePartReturn_Call struct {
+	*mock.Call
+}
+
+// CreatePartReturn is a helper method to define mock.On call
+//   - ctx context.Context
+//   - r *domain.RepairOrderPartReturn
+func (_e *MockInventoryRepository_Expecter) CreatePartReturn(ctx any, r any) *MockInventoryRepository_CreatePartReturn_Call {
+	return &MockInventoryRepository_CreatePartReturn_Call{Call: _e.mock.On("CreatePartReturn", ctx, r)}
+}
+
+func (_c *MockInventoryRepository_CreatePartReturn_Call) Run(run func(ctx context.Context, r *domain.RepairOrderPartReturn)) *MockInventoryRepository_CreatePartReturn_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.RepairOrderPartReturn
+		if args[1] != nil {
+			arg1 = args[1].(*domain.RepairOrderPartReturn)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_CreatePartReturn_Call) Return(err error) *MockInventoryRepository_CreatePartReturn_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_CreatePartReturn_Call) RunAndReturn(run func(ctx context.Context, r *domain.RepairOrderPartReturn) error) *MockInventoryRepository_CreatePartReturn_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CreateStockCount provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) CreateStockCount(ctx context.Context, c *domain.StockCount) error {
+	ret := _mock.Called(ctx, c)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateStockCount")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.StockCount) error); ok {
+		r0 = returnFunc(ctx, c)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_CreateStockCount_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateStockCount'
+type MockInventoryRepository_CreateStockCount_Call struct {
+	*mock.Call
+}
+
+// CreateStockCount is a helper method to define mock.On call
+//   - ctx context.Context
+//   - c *domain.StockCount
+func (_e *MockInventoryRepository_Expecter) CreateStockCount(ctx any, c any) *MockInventoryRepository_CreateStockCount_Call {
+	return &MockInventoryRepository_CreateStockCount_Call{Call: _e.mock.On("CreateStockCount", ctx, c)}
+}
+
+func (_c *MockInventoryRepository_CreateStockCount_Call) Run(run func(ctx context.Context, c *domain.StockCount)) *MockInventoryRepository_CreateStockCount_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.StockCount
+		if args[1] != nil {
+			arg1 = args[1].(*domain.StockCount)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_CreateStockCount_Call) Return(err error) *MockInventoryRepository_CreateStockCount_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_CreateStockCount_Call) RunAndReturn(run func(ctx context.Context, c *domain.StockCount) error) *MockInventoryRepository_CreateStockCount_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -233,6 +410,120 @@ func (_c *MockInventoryRepository_CreateStockIssue_Call) Return(created bool, er
 }
 
 func (_c *MockInventoryRepository_CreateStockIssue_Call) RunAndReturn(run func(ctx context.Context, issue *domain.StockIssue) (bool, error)) *MockInventoryRepository_CreateStockIssue_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CreateSupplierReturn provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) CreateSupplierReturn(ctx context.Context, s *domain.SupplierReturn) error {
+	ret := _mock.Called(ctx, s)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateSupplierReturn")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.SupplierReturn) error); ok {
+		r0 = returnFunc(ctx, s)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_CreateSupplierReturn_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateSupplierReturn'
+type MockInventoryRepository_CreateSupplierReturn_Call struct {
+	*mock.Call
+}
+
+// CreateSupplierReturn is a helper method to define mock.On call
+//   - ctx context.Context
+//   - s *domain.SupplierReturn
+func (_e *MockInventoryRepository_Expecter) CreateSupplierReturn(ctx any, s any) *MockInventoryRepository_CreateSupplierReturn_Call {
+	return &MockInventoryRepository_CreateSupplierReturn_Call{Call: _e.mock.On("CreateSupplierReturn", ctx, s)}
+}
+
+func (_c *MockInventoryRepository_CreateSupplierReturn_Call) Run(run func(ctx context.Context, s *domain.SupplierReturn)) *MockInventoryRepository_CreateSupplierReturn_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.SupplierReturn
+		if args[1] != nil {
+			arg1 = args[1].(*domain.SupplierReturn)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_CreateSupplierReturn_Call) Return(err error) *MockInventoryRepository_CreateSupplierReturn_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_CreateSupplierReturn_Call) RunAndReturn(run func(ctx context.Context, s *domain.SupplierReturn) error) *MockInventoryRepository_CreateSupplierReturn_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CreateWriteOff provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) CreateWriteOff(ctx context.Context, w *domain.WriteOff) error {
+	ret := _mock.Called(ctx, w)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateWriteOff")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.WriteOff) error); ok {
+		r0 = returnFunc(ctx, w)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_CreateWriteOff_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateWriteOff'
+type MockInventoryRepository_CreateWriteOff_Call struct {
+	*mock.Call
+}
+
+// CreateWriteOff is a helper method to define mock.On call
+//   - ctx context.Context
+//   - w *domain.WriteOff
+func (_e *MockInventoryRepository_Expecter) CreateWriteOff(ctx any, w any) *MockInventoryRepository_CreateWriteOff_Call {
+	return &MockInventoryRepository_CreateWriteOff_Call{Call: _e.mock.On("CreateWriteOff", ctx, w)}
+}
+
+func (_c *MockInventoryRepository_CreateWriteOff_Call) Run(run func(ctx context.Context, w *domain.WriteOff)) *MockInventoryRepository_CreateWriteOff_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.WriteOff
+		if args[1] != nil {
+			arg1 = args[1].(*domain.WriteOff)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_CreateWriteOff_Call) Return(err error) *MockInventoryRepository_CreateWriteOff_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_CreateWriteOff_Call) RunAndReturn(run func(ctx context.Context, w *domain.WriteOff) error) *MockInventoryRepository_CreateWriteOff_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -307,6 +598,75 @@ func (_c *MockInventoryRepository_DefaultSuppliers_Call) Return(stringToString m
 }
 
 func (_c *MockInventoryRepository_DefaultSuppliers_Call) RunAndReturn(run func(ctx context.Context, garageID string, partIDs []string) (map[string]string, error)) *MockInventoryRepository_DefaultSuppliers_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteStockCountLine provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) DeleteStockCountLine(ctx context.Context, garageID string, countID string, lineID string) error {
+	ret := _mock.Called(ctx, garageID, countID, lineID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteStockCountLine")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string) error); ok {
+		r0 = returnFunc(ctx, garageID, countID, lineID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_DeleteStockCountLine_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteStockCountLine'
+type MockInventoryRepository_DeleteStockCountLine_Call struct {
+	*mock.Call
+}
+
+// DeleteStockCountLine is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - countID string
+//   - lineID string
+func (_e *MockInventoryRepository_Expecter) DeleteStockCountLine(ctx any, garageID any, countID any, lineID any) *MockInventoryRepository_DeleteStockCountLine_Call {
+	return &MockInventoryRepository_DeleteStockCountLine_Call{Call: _e.mock.On("DeleteStockCountLine", ctx, garageID, countID, lineID)}
+}
+
+func (_c *MockInventoryRepository_DeleteStockCountLine_Call) Run(run func(ctx context.Context, garageID string, countID string, lineID string)) *MockInventoryRepository_DeleteStockCountLine_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_DeleteStockCountLine_Call) Return(err error) *MockInventoryRepository_DeleteStockCountLine_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_DeleteStockCountLine_Call) RunAndReturn(run func(ctx context.Context, garageID string, countID string, lineID string) error) *MockInventoryRepository_DeleteStockCountLine_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -387,6 +747,86 @@ func (_c *MockInventoryRepository_FindGoodsReceipt_Call) Return(goodsReceipt *do
 }
 
 func (_c *MockInventoryRepository_FindGoodsReceipt_Call) RunAndReturn(run func(ctx context.Context, garageID string, receiptID string, forUpdate bool) (*domain.GoodsReceipt, error)) *MockInventoryRepository_FindGoodsReceipt_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FindStockCount provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) FindStockCount(ctx context.Context, garageID string, countID string, forUpdate bool) (*domain.StockCount, error) {
+	ret := _mock.Called(ctx, garageID, countID, forUpdate)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindStockCount")
+	}
+
+	var r0 *domain.StockCount
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, bool) (*domain.StockCount, error)); ok {
+		return returnFunc(ctx, garageID, countID, forUpdate)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, bool) *domain.StockCount); ok {
+		r0 = returnFunc(ctx, garageID, countID, forUpdate)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*domain.StockCount)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, bool) error); ok {
+		r1 = returnFunc(ctx, garageID, countID, forUpdate)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockInventoryRepository_FindStockCount_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindStockCount'
+type MockInventoryRepository_FindStockCount_Call struct {
+	*mock.Call
+}
+
+// FindStockCount is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - countID string
+//   - forUpdate bool
+func (_e *MockInventoryRepository_Expecter) FindStockCount(ctx any, garageID any, countID any, forUpdate any) *MockInventoryRepository_FindStockCount_Call {
+	return &MockInventoryRepository_FindStockCount_Call{Call: _e.mock.On("FindStockCount", ctx, garageID, countID, forUpdate)}
+}
+
+func (_c *MockInventoryRepository_FindStockCount_Call) Run(run func(ctx context.Context, garageID string, countID string, forUpdate bool)) *MockInventoryRepository_FindStockCount_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 bool
+		if args[3] != nil {
+			arg3 = args[3].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_FindStockCount_Call) Return(stockCount *domain.StockCount, err error) *MockInventoryRepository_FindStockCount_Call {
+	_c.Call.Return(stockCount, err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_FindStockCount_Call) RunAndReturn(run func(ctx context.Context, garageID string, countID string, forUpdate bool) (*domain.StockCount, error)) *MockInventoryRepository_FindStockCount_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -551,6 +991,315 @@ func (_c *MockInventoryRepository_FindStockIssueByRepairOrder_Call) RunAndReturn
 	return _c
 }
 
+// FindSupplierReturn provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) FindSupplierReturn(ctx context.Context, garageID string, returnID string, forUpdate bool) (*domain.SupplierReturn, error) {
+	ret := _mock.Called(ctx, garageID, returnID, forUpdate)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindSupplierReturn")
+	}
+
+	var r0 *domain.SupplierReturn
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, bool) (*domain.SupplierReturn, error)); ok {
+		return returnFunc(ctx, garageID, returnID, forUpdate)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, bool) *domain.SupplierReturn); ok {
+		r0 = returnFunc(ctx, garageID, returnID, forUpdate)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*domain.SupplierReturn)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, bool) error); ok {
+		r1 = returnFunc(ctx, garageID, returnID, forUpdate)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockInventoryRepository_FindSupplierReturn_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindSupplierReturn'
+type MockInventoryRepository_FindSupplierReturn_Call struct {
+	*mock.Call
+}
+
+// FindSupplierReturn is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - returnID string
+//   - forUpdate bool
+func (_e *MockInventoryRepository_Expecter) FindSupplierReturn(ctx any, garageID any, returnID any, forUpdate any) *MockInventoryRepository_FindSupplierReturn_Call {
+	return &MockInventoryRepository_FindSupplierReturn_Call{Call: _e.mock.On("FindSupplierReturn", ctx, garageID, returnID, forUpdate)}
+}
+
+func (_c *MockInventoryRepository_FindSupplierReturn_Call) Run(run func(ctx context.Context, garageID string, returnID string, forUpdate bool)) *MockInventoryRepository_FindSupplierReturn_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 bool
+		if args[3] != nil {
+			arg3 = args[3].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_FindSupplierReturn_Call) Return(supplierReturn *domain.SupplierReturn, err error) *MockInventoryRepository_FindSupplierReturn_Call {
+	_c.Call.Return(supplierReturn, err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_FindSupplierReturn_Call) RunAndReturn(run func(ctx context.Context, garageID string, returnID string, forUpdate bool) (*domain.SupplierReturn, error)) *MockInventoryRepository_FindSupplierReturn_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FindWriteOff provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) FindWriteOff(ctx context.Context, garageID string, writeOffID string, forUpdate bool) (*domain.WriteOff, error) {
+	ret := _mock.Called(ctx, garageID, writeOffID, forUpdate)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindWriteOff")
+	}
+
+	var r0 *domain.WriteOff
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, bool) (*domain.WriteOff, error)); ok {
+		return returnFunc(ctx, garageID, writeOffID, forUpdate)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, bool) *domain.WriteOff); ok {
+		r0 = returnFunc(ctx, garageID, writeOffID, forUpdate)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*domain.WriteOff)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, bool) error); ok {
+		r1 = returnFunc(ctx, garageID, writeOffID, forUpdate)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockInventoryRepository_FindWriteOff_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindWriteOff'
+type MockInventoryRepository_FindWriteOff_Call struct {
+	*mock.Call
+}
+
+// FindWriteOff is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - writeOffID string
+//   - forUpdate bool
+func (_e *MockInventoryRepository_Expecter) FindWriteOff(ctx any, garageID any, writeOffID any, forUpdate any) *MockInventoryRepository_FindWriteOff_Call {
+	return &MockInventoryRepository_FindWriteOff_Call{Call: _e.mock.On("FindWriteOff", ctx, garageID, writeOffID, forUpdate)}
+}
+
+func (_c *MockInventoryRepository_FindWriteOff_Call) Run(run func(ctx context.Context, garageID string, writeOffID string, forUpdate bool)) *MockInventoryRepository_FindWriteOff_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 bool
+		if args[3] != nil {
+			arg3 = args[3].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_FindWriteOff_Call) Return(writeOff *domain.WriteOff, err error) *MockInventoryRepository_FindWriteOff_Call {
+	_c.Call.Return(writeOff, err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_FindWriteOff_Call) RunAndReturn(run func(ctx context.Context, garageID string, writeOffID string, forUpdate bool) (*domain.WriteOff, error)) *MockInventoryRepository_FindWriteOff_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GoodsReceiptNumbers provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) GoodsReceiptNumbers(ctx context.Context, garageID string, ids []string) (map[string]string, error) {
+	ret := _mock.Called(ctx, garageID, ids)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GoodsReceiptNumbers")
+	}
+
+	var r0 map[string]string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) (map[string]string, error)); ok {
+		return returnFunc(ctx, garageID, ids)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) map[string]string); ok {
+		r0 = returnFunc(ctx, garageID, ids)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[string]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, []string) error); ok {
+		r1 = returnFunc(ctx, garageID, ids)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockInventoryRepository_GoodsReceiptNumbers_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GoodsReceiptNumbers'
+type MockInventoryRepository_GoodsReceiptNumbers_Call struct {
+	*mock.Call
+}
+
+// GoodsReceiptNumbers is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - ids []string
+func (_e *MockInventoryRepository_Expecter) GoodsReceiptNumbers(ctx any, garageID any, ids any) *MockInventoryRepository_GoodsReceiptNumbers_Call {
+	return &MockInventoryRepository_GoodsReceiptNumbers_Call{Call: _e.mock.On("GoodsReceiptNumbers", ctx, garageID, ids)}
+}
+
+func (_c *MockInventoryRepository_GoodsReceiptNumbers_Call) Run(run func(ctx context.Context, garageID string, ids []string)) *MockInventoryRepository_GoodsReceiptNumbers_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_GoodsReceiptNumbers_Call) Return(stringToString map[string]string, err error) *MockInventoryRepository_GoodsReceiptNumbers_Call {
+	_c.Call.Return(stringToString, err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_GoodsReceiptNumbers_Call) RunAndReturn(run func(ctx context.Context, garageID string, ids []string) (map[string]string, error)) *MockInventoryRepository_GoodsReceiptNumbers_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// InsertStockCountLines provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) InsertStockCountLines(ctx context.Context, garageID string, countID string, actor *string, lines []domain.StockCountLine) error {
+	ret := _mock.Called(ctx, garageID, countID, actor, lines)
+
+	if len(ret) == 0 {
+		panic("no return value specified for InsertStockCountLines")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, *string, []domain.StockCountLine) error); ok {
+		r0 = returnFunc(ctx, garageID, countID, actor, lines)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_InsertStockCountLines_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'InsertStockCountLines'
+type MockInventoryRepository_InsertStockCountLines_Call struct {
+	*mock.Call
+}
+
+// InsertStockCountLines is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - countID string
+//   - actor *string
+//   - lines []domain.StockCountLine
+func (_e *MockInventoryRepository_Expecter) InsertStockCountLines(ctx any, garageID any, countID any, actor any, lines any) *MockInventoryRepository_InsertStockCountLines_Call {
+	return &MockInventoryRepository_InsertStockCountLines_Call{Call: _e.mock.On("InsertStockCountLines", ctx, garageID, countID, actor, lines)}
+}
+
+func (_c *MockInventoryRepository_InsertStockCountLines_Call) Run(run func(ctx context.Context, garageID string, countID string, actor *string, lines []domain.StockCountLine)) *MockInventoryRepository_InsertStockCountLines_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 *string
+		if args[3] != nil {
+			arg3 = args[3].(*string)
+		}
+		var arg4 []domain.StockCountLine
+		if args[4] != nil {
+			arg4 = args[4].([]domain.StockCountLine)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_InsertStockCountLines_Call) Return(err error) *MockInventoryRepository_InsertStockCountLines_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_InsertStockCountLines_Call) RunAndReturn(run func(ctx context.Context, garageID string, countID string, actor *string, lines []domain.StockCountLine) error) *MockInventoryRepository_InsertStockCountLines_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListGoodsReceipts provides a mock function for the type MockInventoryRepository
 func (_mock *MockInventoryRepository) ListGoodsReceipts(ctx context.Context, garageID string, filter usecase.GoodsReceiptFilter) ([]*domain.GoodsReceipt, int, error) {
 	ret := _mock.Called(ctx, garageID, filter)
@@ -631,6 +1380,240 @@ func (_c *MockInventoryRepository_ListGoodsReceipts_Call) RunAndReturn(run func(
 	return _c
 }
 
+// ListPartReturns provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) ListPartReturns(ctx context.Context, garageID string, repairOrderID string) ([]domain.RepairOrderPartReturn, error) {
+	ret := _mock.Called(ctx, garageID, repairOrderID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListPartReturns")
+	}
+
+	var r0 []domain.RepairOrderPartReturn
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) ([]domain.RepairOrderPartReturn, error)); ok {
+		return returnFunc(ctx, garageID, repairOrderID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) []domain.RepairOrderPartReturn); ok {
+		r0 = returnFunc(ctx, garageID, repairOrderID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]domain.RepairOrderPartReturn)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, garageID, repairOrderID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockInventoryRepository_ListPartReturns_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListPartReturns'
+type MockInventoryRepository_ListPartReturns_Call struct {
+	*mock.Call
+}
+
+// ListPartReturns is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - repairOrderID string
+func (_e *MockInventoryRepository_Expecter) ListPartReturns(ctx any, garageID any, repairOrderID any) *MockInventoryRepository_ListPartReturns_Call {
+	return &MockInventoryRepository_ListPartReturns_Call{Call: _e.mock.On("ListPartReturns", ctx, garageID, repairOrderID)}
+}
+
+func (_c *MockInventoryRepository_ListPartReturns_Call) Run(run func(ctx context.Context, garageID string, repairOrderID string)) *MockInventoryRepository_ListPartReturns_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_ListPartReturns_Call) Return(repairOrderPartReturns []domain.RepairOrderPartReturn, err error) *MockInventoryRepository_ListPartReturns_Call {
+	_c.Call.Return(repairOrderPartReturns, err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_ListPartReturns_Call) RunAndReturn(run func(ctx context.Context, garageID string, repairOrderID string) ([]domain.RepairOrderPartReturn, error)) *MockInventoryRepository_ListPartReturns_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListStockCounts provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) ListStockCounts(ctx context.Context, garageID string, filter usecase.StockCountFilter) ([]*domain.StockCount, int, error) {
+	ret := _mock.Called(ctx, garageID, filter)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListStockCounts")
+	}
+
+	var r0 []*domain.StockCount
+	var r1 int
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.StockCountFilter) ([]*domain.StockCount, int, error)); ok {
+		return returnFunc(ctx, garageID, filter)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.StockCountFilter) []*domain.StockCount); ok {
+		r0 = returnFunc(ctx, garageID, filter)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*domain.StockCount)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, usecase.StockCountFilter) int); ok {
+		r1 = returnFunc(ctx, garageID, filter)
+	} else {
+		r1 = ret.Get(1).(int)
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string, usecase.StockCountFilter) error); ok {
+		r2 = returnFunc(ctx, garageID, filter)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockInventoryRepository_ListStockCounts_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListStockCounts'
+type MockInventoryRepository_ListStockCounts_Call struct {
+	*mock.Call
+}
+
+// ListStockCounts is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - filter usecase.StockCountFilter
+func (_e *MockInventoryRepository_Expecter) ListStockCounts(ctx any, garageID any, filter any) *MockInventoryRepository_ListStockCounts_Call {
+	return &MockInventoryRepository_ListStockCounts_Call{Call: _e.mock.On("ListStockCounts", ctx, garageID, filter)}
+}
+
+func (_c *MockInventoryRepository_ListStockCounts_Call) Run(run func(ctx context.Context, garageID string, filter usecase.StockCountFilter)) *MockInventoryRepository_ListStockCounts_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 usecase.StockCountFilter
+		if args[2] != nil {
+			arg2 = args[2].(usecase.StockCountFilter)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_ListStockCounts_Call) Return(stockCounts []*domain.StockCount, n int, err error) *MockInventoryRepository_ListStockCounts_Call {
+	_c.Call.Return(stockCounts, n, err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_ListStockCounts_Call) RunAndReturn(run func(ctx context.Context, garageID string, filter usecase.StockCountFilter) ([]*domain.StockCount, int, error)) *MockInventoryRepository_ListStockCounts_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListSupplierReturns provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) ListSupplierReturns(ctx context.Context, garageID string, filter usecase.SupplierReturnFilter) ([]*domain.SupplierReturn, int, error) {
+	ret := _mock.Called(ctx, garageID, filter)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListSupplierReturns")
+	}
+
+	var r0 []*domain.SupplierReturn
+	var r1 int
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.SupplierReturnFilter) ([]*domain.SupplierReturn, int, error)); ok {
+		return returnFunc(ctx, garageID, filter)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.SupplierReturnFilter) []*domain.SupplierReturn); ok {
+		r0 = returnFunc(ctx, garageID, filter)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*domain.SupplierReturn)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, usecase.SupplierReturnFilter) int); ok {
+		r1 = returnFunc(ctx, garageID, filter)
+	} else {
+		r1 = ret.Get(1).(int)
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string, usecase.SupplierReturnFilter) error); ok {
+		r2 = returnFunc(ctx, garageID, filter)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockInventoryRepository_ListSupplierReturns_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListSupplierReturns'
+type MockInventoryRepository_ListSupplierReturns_Call struct {
+	*mock.Call
+}
+
+// ListSupplierReturns is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - filter usecase.SupplierReturnFilter
+func (_e *MockInventoryRepository_Expecter) ListSupplierReturns(ctx any, garageID any, filter any) *MockInventoryRepository_ListSupplierReturns_Call {
+	return &MockInventoryRepository_ListSupplierReturns_Call{Call: _e.mock.On("ListSupplierReturns", ctx, garageID, filter)}
+}
+
+func (_c *MockInventoryRepository_ListSupplierReturns_Call) Run(run func(ctx context.Context, garageID string, filter usecase.SupplierReturnFilter)) *MockInventoryRepository_ListSupplierReturns_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 usecase.SupplierReturnFilter
+		if args[2] != nil {
+			arg2 = args[2].(usecase.SupplierReturnFilter)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_ListSupplierReturns_Call) Return(supplierReturns []*domain.SupplierReturn, n int, err error) *MockInventoryRepository_ListSupplierReturns_Call {
+	_c.Call.Return(supplierReturns, n, err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_ListSupplierReturns_Call) RunAndReturn(run func(ctx context.Context, garageID string, filter usecase.SupplierReturnFilter) ([]*domain.SupplierReturn, int, error)) *MockInventoryRepository_ListSupplierReturns_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListTransactions provides a mock function for the type MockInventoryRepository
 func (_mock *MockInventoryRepository) ListTransactions(ctx context.Context, garageID string, filter usecase.TransactionFilter) ([]*domain.StockTransaction, int, error) {
 	ret := _mock.Called(ctx, garageID, filter)
@@ -707,6 +1690,149 @@ func (_c *MockInventoryRepository_ListTransactions_Call) Return(stockTransaction
 }
 
 func (_c *MockInventoryRepository_ListTransactions_Call) RunAndReturn(run func(ctx context.Context, garageID string, filter usecase.TransactionFilter) ([]*domain.StockTransaction, int, error)) *MockInventoryRepository_ListTransactions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListWriteOffs provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) ListWriteOffs(ctx context.Context, garageID string, filter usecase.WriteOffFilter) ([]*domain.WriteOff, int, error) {
+	ret := _mock.Called(ctx, garageID, filter)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListWriteOffs")
+	}
+
+	var r0 []*domain.WriteOff
+	var r1 int
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.WriteOffFilter) ([]*domain.WriteOff, int, error)); ok {
+		return returnFunc(ctx, garageID, filter)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.WriteOffFilter) []*domain.WriteOff); ok {
+		r0 = returnFunc(ctx, garageID, filter)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*domain.WriteOff)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, usecase.WriteOffFilter) int); ok {
+		r1 = returnFunc(ctx, garageID, filter)
+	} else {
+		r1 = ret.Get(1).(int)
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string, usecase.WriteOffFilter) error); ok {
+		r2 = returnFunc(ctx, garageID, filter)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockInventoryRepository_ListWriteOffs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListWriteOffs'
+type MockInventoryRepository_ListWriteOffs_Call struct {
+	*mock.Call
+}
+
+// ListWriteOffs is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - filter usecase.WriteOffFilter
+func (_e *MockInventoryRepository_Expecter) ListWriteOffs(ctx any, garageID any, filter any) *MockInventoryRepository_ListWriteOffs_Call {
+	return &MockInventoryRepository_ListWriteOffs_Call{Call: _e.mock.On("ListWriteOffs", ctx, garageID, filter)}
+}
+
+func (_c *MockInventoryRepository_ListWriteOffs_Call) Run(run func(ctx context.Context, garageID string, filter usecase.WriteOffFilter)) *MockInventoryRepository_ListWriteOffs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 usecase.WriteOffFilter
+		if args[2] != nil {
+			arg2 = args[2].(usecase.WriteOffFilter)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_ListWriteOffs_Call) Return(writeOffs []*domain.WriteOff, n int, err error) *MockInventoryRepository_ListWriteOffs_Call {
+	_c.Call.Return(writeOffs, n, err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_ListWriteOffs_Call) RunAndReturn(run func(ctx context.Context, garageID string, filter usecase.WriteOffFilter) ([]*domain.WriteOff, int, error)) *MockInventoryRepository_ListWriteOffs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// LockBalances provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) LockBalances(ctx context.Context, garageID string, partIDs []string) error {
+	ret := _mock.Called(ctx, garageID, partIDs)
+
+	if len(ret) == 0 {
+		panic("no return value specified for LockBalances")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) error); ok {
+		r0 = returnFunc(ctx, garageID, partIDs)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_LockBalances_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LockBalances'
+type MockInventoryRepository_LockBalances_Call struct {
+	*mock.Call
+}
+
+// LockBalances is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - partIDs []string
+func (_e *MockInventoryRepository_Expecter) LockBalances(ctx any, garageID any, partIDs any) *MockInventoryRepository_LockBalances_Call {
+	return &MockInventoryRepository_LockBalances_Call{Call: _e.mock.On("LockBalances", ctx, garageID, partIDs)}
+}
+
+func (_c *MockInventoryRepository_LockBalances_Call) Run(run func(ctx context.Context, garageID string, partIDs []string)) *MockInventoryRepository_LockBalances_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_LockBalances_Call) Return(err error) *MockInventoryRepository_LockBalances_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_LockBalances_Call) RunAndReturn(run func(ctx context.Context, garageID string, partIDs []string) error) *MockInventoryRepository_LockBalances_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1117,6 +2243,132 @@ func (_c *MockInventoryRepository_SaveGoodsReceipt_Call) RunAndReturn(run func(c
 	return _c
 }
 
+// SaveStockCount provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) SaveStockCount(ctx context.Context, c *domain.StockCount) error {
+	ret := _mock.Called(ctx, c)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SaveStockCount")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.StockCount) error); ok {
+		r0 = returnFunc(ctx, c)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_SaveStockCount_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SaveStockCount'
+type MockInventoryRepository_SaveStockCount_Call struct {
+	*mock.Call
+}
+
+// SaveStockCount is a helper method to define mock.On call
+//   - ctx context.Context
+//   - c *domain.StockCount
+func (_e *MockInventoryRepository_Expecter) SaveStockCount(ctx any, c any) *MockInventoryRepository_SaveStockCount_Call {
+	return &MockInventoryRepository_SaveStockCount_Call{Call: _e.mock.On("SaveStockCount", ctx, c)}
+}
+
+func (_c *MockInventoryRepository_SaveStockCount_Call) Run(run func(ctx context.Context, c *domain.StockCount)) *MockInventoryRepository_SaveStockCount_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.StockCount
+		if args[1] != nil {
+			arg1 = args[1].(*domain.StockCount)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_SaveStockCount_Call) Return(err error) *MockInventoryRepository_SaveStockCount_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_SaveStockCount_Call) RunAndReturn(run func(ctx context.Context, c *domain.StockCount) error) *MockInventoryRepository_SaveStockCount_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SaveStockCountLine provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) SaveStockCountLine(ctx context.Context, garageID string, countID string, l *domain.StockCountLine) error {
+	ret := _mock.Called(ctx, garageID, countID, l)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SaveStockCountLine")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, *domain.StockCountLine) error); ok {
+		r0 = returnFunc(ctx, garageID, countID, l)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_SaveStockCountLine_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SaveStockCountLine'
+type MockInventoryRepository_SaveStockCountLine_Call struct {
+	*mock.Call
+}
+
+// SaveStockCountLine is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - countID string
+//   - l *domain.StockCountLine
+func (_e *MockInventoryRepository_Expecter) SaveStockCountLine(ctx any, garageID any, countID any, l any) *MockInventoryRepository_SaveStockCountLine_Call {
+	return &MockInventoryRepository_SaveStockCountLine_Call{Call: _e.mock.On("SaveStockCountLine", ctx, garageID, countID, l)}
+}
+
+func (_c *MockInventoryRepository_SaveStockCountLine_Call) Run(run func(ctx context.Context, garageID string, countID string, l *domain.StockCountLine)) *MockInventoryRepository_SaveStockCountLine_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 *domain.StockCountLine
+		if args[3] != nil {
+			arg3 = args[3].(*domain.StockCountLine)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_SaveStockCountLine_Call) Return(err error) *MockInventoryRepository_SaveStockCountLine_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_SaveStockCountLine_Call) RunAndReturn(run func(ctx context.Context, garageID string, countID string, l *domain.StockCountLine) error) *MockInventoryRepository_SaveStockCountLine_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SaveStockIssue provides a mock function for the type MockInventoryRepository
 func (_mock *MockInventoryRepository) SaveStockIssue(ctx context.Context, issue *domain.StockIssue) error {
 	ret := _mock.Called(ctx, issue)
@@ -1170,6 +2422,120 @@ func (_c *MockInventoryRepository_SaveStockIssue_Call) Return(err error) *MockIn
 }
 
 func (_c *MockInventoryRepository_SaveStockIssue_Call) RunAndReturn(run func(ctx context.Context, issue *domain.StockIssue) error) *MockInventoryRepository_SaveStockIssue_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SaveSupplierReturn provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) SaveSupplierReturn(ctx context.Context, s *domain.SupplierReturn) error {
+	ret := _mock.Called(ctx, s)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SaveSupplierReturn")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.SupplierReturn) error); ok {
+		r0 = returnFunc(ctx, s)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_SaveSupplierReturn_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SaveSupplierReturn'
+type MockInventoryRepository_SaveSupplierReturn_Call struct {
+	*mock.Call
+}
+
+// SaveSupplierReturn is a helper method to define mock.On call
+//   - ctx context.Context
+//   - s *domain.SupplierReturn
+func (_e *MockInventoryRepository_Expecter) SaveSupplierReturn(ctx any, s any) *MockInventoryRepository_SaveSupplierReturn_Call {
+	return &MockInventoryRepository_SaveSupplierReturn_Call{Call: _e.mock.On("SaveSupplierReturn", ctx, s)}
+}
+
+func (_c *MockInventoryRepository_SaveSupplierReturn_Call) Run(run func(ctx context.Context, s *domain.SupplierReturn)) *MockInventoryRepository_SaveSupplierReturn_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.SupplierReturn
+		if args[1] != nil {
+			arg1 = args[1].(*domain.SupplierReturn)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_SaveSupplierReturn_Call) Return(err error) *MockInventoryRepository_SaveSupplierReturn_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_SaveSupplierReturn_Call) RunAndReturn(run func(ctx context.Context, s *domain.SupplierReturn) error) *MockInventoryRepository_SaveSupplierReturn_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SaveWriteOff provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) SaveWriteOff(ctx context.Context, w *domain.WriteOff) error {
+	ret := _mock.Called(ctx, w)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SaveWriteOff")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.WriteOff) error); ok {
+		r0 = returnFunc(ctx, w)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_SaveWriteOff_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SaveWriteOff'
+type MockInventoryRepository_SaveWriteOff_Call struct {
+	*mock.Call
+}
+
+// SaveWriteOff is a helper method to define mock.On call
+//   - ctx context.Context
+//   - w *domain.WriteOff
+func (_e *MockInventoryRepository_Expecter) SaveWriteOff(ctx any, w any) *MockInventoryRepository_SaveWriteOff_Call {
+	return &MockInventoryRepository_SaveWriteOff_Call{Call: _e.mock.On("SaveWriteOff", ctx, w)}
+}
+
+func (_c *MockInventoryRepository_SaveWriteOff_Call) Run(run func(ctx context.Context, w *domain.WriteOff)) *MockInventoryRepository_SaveWriteOff_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.WriteOff
+		if args[1] != nil {
+			arg1 = args[1].(*domain.WriteOff)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_SaveWriteOff_Call) Return(err error) *MockInventoryRepository_SaveWriteOff_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_SaveWriteOff_Call) RunAndReturn(run func(ctx context.Context, w *domain.WriteOff) error) *MockInventoryRepository_SaveWriteOff_Call {
 	_c.Call.Return(run)
 	return _c
 }

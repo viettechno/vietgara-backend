@@ -128,6 +128,18 @@ var garageSetters = map[string]func(f *usecase.GarageFields, in *tenantv1.Garage
 		if v := in.GetNumbering().GetStockIssue(); v != "" {
 			f.StockIssueNumberTemplate = new(v)
 		}
+
+		if v := in.GetNumbering().GetStockCount(); v != "" {
+			f.StockCountNumberTemplate = new(v)
+		}
+
+		if v := in.GetNumbering().GetWriteOff(); v != "" {
+			f.WriteOffNumberTemplate = new(v)
+		}
+
+		if v := in.GetNumbering().GetSupplierReturn(); v != "" {
+			f.SupplierReturnNumberTemplate = new(v)
+		}
 	},
 	"numbering.quote": func(f *usecase.GarageFields, in *tenantv1.Garage) {
 		f.QuoteNumberTemplate = new(in.GetNumbering().GetQuote())
@@ -146,6 +158,15 @@ var garageSetters = map[string]func(f *usecase.GarageFields, in *tenantv1.Garage
 	},
 	"numbering.stock_issue": func(f *usecase.GarageFields, in *tenantv1.Garage) {
 		f.StockIssueNumberTemplate = new(in.GetNumbering().GetStockIssue())
+	},
+	"numbering.stock_count": func(f *usecase.GarageFields, in *tenantv1.Garage) {
+		f.StockCountNumberTemplate = new(in.GetNumbering().GetStockCount())
+	},
+	"numbering.write_off": func(f *usecase.GarageFields, in *tenantv1.Garage) {
+		f.WriteOffNumberTemplate = new(in.GetNumbering().GetWriteOff())
+	},
+	"numbering.supplier_return": func(f *usecase.GarageFields, in *tenantv1.Garage) {
+		f.SupplierReturnNumberTemplate = new(in.GetNumbering().GetSupplierReturn())
 	},
 	"stock_issue_mode": func(f *usecase.GarageFields, in *tenantv1.Garage) {
 		f.StockIssueMode = new(stockIssueModeFromProto(in.GetStockIssueMode()))
@@ -198,8 +219,10 @@ func presentGarageFields(in *tenantv1.Garage) []string {
 		"numbering.quote": in.GetNumbering().GetQuote() != "", "numbering.repair_order": in.GetNumbering().GetRepairOrder() != "",
 		"numbering.settlement": in.GetNumbering().GetSettlement() != "", "numbering.payment_voucher": in.GetNumbering().GetPaymentVoucher() != "",
 		"numbering.goods_receipt": in.GetNumbering().GetGoodsReceipt() != "", "numbering.stock_issue": in.GetNumbering().GetStockIssue() != "",
-		"stock_issue_mode": in.GetStockIssueMode() != tenantv1.StockIssueMode_STOCK_ISSUE_MODE_UNSPECIFIED,
-		"legal_name":       in.LegalName != nil, "legal_address": in.LegalAddress != nil, "representative": in.Representative != nil,
+		"numbering.stock_count": in.GetNumbering().GetStockCount() != "", "numbering.write_off": in.GetNumbering().GetWriteOff() != "",
+		"numbering.supplier_return": in.GetNumbering().GetSupplierReturn() != "",
+		"stock_issue_mode":          in.GetStockIssueMode() != tenantv1.StockIssueMode_STOCK_ISSUE_MODE_UNSPECIFIED,
+		"legal_name":                in.LegalName != nil, "legal_address": in.LegalAddress != nil, "representative": in.Representative != nil,
 		"bank":                        in.GetBank() != nil,
 		"default_quote_approval_mode": in.GetDefaultQuoteApprovalMode() != commonv1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_UNSPECIFIED,
 	} {

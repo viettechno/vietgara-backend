@@ -230,7 +230,7 @@ func (uc *InventoryUseCase) post(ctx context.Context, issue *domain.StockIssue, 
 	err := uc.audit.Record(ctx, audit.Entry{
 		Actor: actorID, GarageID: issue.GarageID, Action: ActionStockIssuePosted, EntityType: entityStockIssue, EntityID: issue.ID,
 		Before: map[string]any{keyStatus: domain.StockIssueDraft},
-		After:  map[string]any{"number": issue.Number, "repair_order_id": issue.RepairOrderID, keyStatus: issue.Status, "lines": len(issue.Lines)},
+		After:  map[string]any{keyNumber: issue.Number, "repair_order_id": issue.RepairOrderID, keyStatus: issue.Status, keyLines: len(issue.Lines)},
 		IP:     middleware.ClientIP(ctx),
 	})
 	if err != nil {
@@ -239,7 +239,7 @@ func (uc *InventoryUseCase) post(ctx context.Context, issue *domain.StockIssue, 
 
 	return uc.events.Publish(ctx, EventStockIssued, issue.GarageID, actorID, map[string]any{
 		"stock_issue_id": issue.ID, keyGarageID: issue.GarageID, "repair_order_id": issue.RepairOrderID,
-		"lines": issuedLines(partIDs, quantities),
+		keyLines: issuedLines(partIDs, quantities),
 	})
 }
 

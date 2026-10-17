@@ -203,7 +203,7 @@ func writeLineTable(pdf *fpdf.Fpdf, lines []DocumentLine, total int64) {
 	}
 
 	pdf.SetFont(fontFamily, "B", 10)
-	pdf.CellFormat(lineColumnWidths[0]+lineColumnWidths[1]+lineColumnWidths[2], 8, "Total", "1", 0, "R", false, 0, "")
+	pdf.CellFormat(lineColumnWidths[0]+lineColumnWidths[1]+lineColumnWidths[2], 8, labelTotal, "1", 0, "R", false, 0, "")
 	pdf.CellFormat(lineColumnWidths[3], 8, formatVND(total), "1", 0, "R", false, 0, "")
 	pdf.Ln(-1)
 }

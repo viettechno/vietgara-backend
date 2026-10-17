@@ -329,7 +329,7 @@ func TestPostgresRepository_StockIssue(t *testing.T) {
 	t.Run("find by id and by repair order", func(t *testing.T) {
 		t.Parallel()
 
-		line := []any{"l1", "rl1", partID, nil, "2", "2", "100"}
+		line := []any{"l1", "rl1", partID, nil, "2", "2", "100", "0.5"}
 		tx := dbtest.New(t).
 			ExpectQueryRow("i.id = $2::uuid", dbtest.Row(issueHeader()...)).
 			ExpectQuery("FROM stock_issue_lines", dbtest.NewRows(line), nil).
@@ -342,6 +342,7 @@ func TestPostgresRepository_StockIssue(t *testing.T) {
 		assert.Equal(t, domain.StockIssueDraft, got.Status)
 		require.Len(t, got.Lines, 1)
 		assert.Equal(t, "100", *got.Lines[0].UnitCost)
+		assert.Equal(t, "0.5", got.Lines[0].ReturnedQuantity)
 
 		got, err = repo.FindStockIssueByRepairOrder(ctx, garageID, orderID, true)
 		require.NoError(t, err)

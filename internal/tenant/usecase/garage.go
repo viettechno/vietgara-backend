@@ -35,6 +35,12 @@ type GarageFields struct {
 	// receipts and stock issues (FR-INV-06/20).
 	GoodsReceiptNumberTemplate *string
 	StockIssueNumberTemplate   *string
+	// StockCountNumberTemplate, WriteOffNumberTemplate and
+	// SupplierReturnNumberTemplate number stock counts, write-offs and
+	// returns to supplier (FR-INV-09/10/12).
+	StockCountNumberTemplate     *string
+	WriteOffNumberTemplate       *string
+	SupplierReturnNumberTemplate *string
 	// StockIssueMode is when a repair order's draft stock issue posts.
 	StockIssueMode           *domain.StockIssueMode
 	DefaultQuoteApprovalMode *domain.QuoteApprovalMode
@@ -91,6 +97,9 @@ func (uc *TenantUseCase) CreateGarage(ctx context.Context, ownerID string, field
 		PaymentVoucherNumberTemplate: domain.DefaultPaymentVoucherNumberTemplate,
 		GoodsReceiptNumberTemplate:   domain.DefaultGoodsReceiptNumberTemplate,
 		StockIssueNumberTemplate:     domain.DefaultStockIssueNumberTemplate,
+		StockCountNumberTemplate:     domain.DefaultStockCountNumberTemplate,
+		WriteOffNumberTemplate:       domain.DefaultWriteOffNumberTemplate,
+		SupplierReturnNumberTemplate: domain.DefaultSupplierReturnNumberTemplate,
 		StockIssueMode:               domain.StockIssueModeOnClose,
 		DefaultQuoteApprovalMode:     domain.QuoteApprovalModeLink,
 		CreatedBy:                    &ownerID,
@@ -519,6 +528,26 @@ func applyStockConfiguration(g *domain.Garage, f GarageFields) error {
 		}
 
 		g.StockIssueNumberTemplate = *f.StockIssueNumberTemplate
+	}
+
+	for _, t := range []struct {
+		value *string
+		field string
+		set   func(string)
+	}{
+		{f.StockCountNumberTemplate, "numbering.stockCount", func(v string) { g.StockCountNumberTemplate = v }},
+		{f.WriteOffNumberTemplate, "numbering.writeOff", func(v string) { g.WriteOffNumberTemplate = v }},
+		{f.SupplierReturnNumberTemplate, "numbering.supplierReturn", func(v string) { g.SupplierReturnNumberTemplate = v }},
+	} {
+		if t.value == nil {
+			continue
+		}
+
+		if !domain.ValidNumberingTemplate(*t.value) {
+			return apperror.Validation(t.field, apperror.IssueInvalid, "numbering template is invalid")
+		}
+
+		t.set(*t.value)
 	}
 
 	if f.StockIssueMode != nil {

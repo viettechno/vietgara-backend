@@ -47,7 +47,7 @@ func issueToProto(ctx context.Context, i *domain.StockIssue) *inventoryv1.StockI
 		line := &inventoryv1.StockIssueLine{
 			Id: l.ID, RepairOrderLineId: l.RepairOrderLineID, PartId: l.PartID, PartSku: l.PartSKU, PartName: l.PartName,
 			BaseUnitAbbreviation: l.BaseUnitAbbreviation, UnitId: l.UnitID, UnitAbbreviation: l.UnitAbbreviation,
-			EnteredQuantity: l.EnteredQuantity, Quantity: l.Quantity,
+			EnteredQuantity: l.EnteredQuantity, Quantity: l.Quantity, ReturnedQuantity: l.ReturnedQuantity,
 		}
 
 		if seeCost {

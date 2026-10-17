@@ -286,16 +286,23 @@ func TestStockSettings(t *testing.T) {
 	assert.Equal(t, domain.DefaultGoodsReceiptNumberTemplate, g.Garage.GoodsReceiptNumberTemplate)
 	assert.Equal(t, domain.DefaultStockIssueNumberTemplate, g.Garage.StockIssueNumberTemplate)
 	assert.Equal(t, domain.StockIssueModeOnClose, g.Garage.StockIssueMode)
+	assert.Equal(t, domain.DefaultStockCountNumberTemplate, g.Garage.StockCountNumberTemplate)
+	assert.Equal(t, domain.DefaultWriteOffNumberTemplate, g.Garage.WriteOffNumberTemplate)
+	assert.Equal(t, domain.DefaultSupplierReturnNumberTemplate, g.Garage.SupplierReturnNumberTemplate)
 
 	mode := domain.StockIssueModeOnStart
 
 	g, err = e.UC.UpdateGarage(ctx, id, usecase.GarageFields{
 		GoodsReceiptNumberTemplate: new("NK-{YYYY}-{SEQ:5}"), StockIssueNumberTemplate: new("XK-{SEQ:3}"), StockIssueMode: &mode,
+		StockCountNumberTemplate: new("KK-{SEQ:3}"), WriteOffNumberTemplate: new("XH-{SEQ:3}"), SupplierReturnNumberTemplate: new("TN-{SEQ:3}"),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "NK-{YYYY}-{SEQ:5}", g.Garage.GoodsReceiptNumberTemplate)
 	assert.Equal(t, "XK-{SEQ:3}", g.Garage.StockIssueNumberTemplate)
 	assert.Equal(t, domain.StockIssueModeOnStart, g.Garage.StockIssueMode)
+	assert.Equal(t, "KK-{SEQ:3}", g.Garage.StockCountNumberTemplate)
+	assert.Equal(t, "XH-{SEQ:3}", g.Garage.WriteOffNumberTemplate)
+	assert.Equal(t, "TN-{SEQ:3}", g.Garage.SupplierReturnNumberTemplate)
 
 	bad := domain.StockIssueMode("sometimes")
 
@@ -303,6 +310,9 @@ func TestStockSettings(t *testing.T) {
 		"goods receipt numbers": {GoodsReceiptNumberTemplate: new("NK-no-sequence")},
 		"stock issue numbers":   {StockIssueNumberTemplate: new("XK-no-sequence")},
 		"stock issue mode":      {StockIssueMode: &bad},
+		"stock count numbers":   {StockCountNumberTemplate: new("KK-no-sequence")},
+		"write-off numbers":     {WriteOffNumberTemplate: new("XH-no-sequence")},
+		"supplier return nums":  {SupplierReturnNumberTemplate: new("TN-no-sequence")},
 	} {
 		_, err := e.UC.UpdateGarage(ctx, id, fields)
 		requireReason(t, err, apperror.ReasonValidation, name)

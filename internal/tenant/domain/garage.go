@@ -68,6 +68,9 @@ const (
 	DefaultPaymentVoucherNumberTemplate = "PT-{YYYY}{MM}-{SEQ:4}"
 	DefaultGoodsReceiptNumberTemplate   = "PN-{YYYY}{MM}-{SEQ:4}"
 	DefaultStockIssueNumberTemplate     = "PX-{YYYY}{MM}-{SEQ:4}"
+	DefaultStockCountNumberTemplate     = "KK-{YYYY}{MM}-{SEQ:4}"
+	DefaultWriteOffNumberTemplate       = "XH-{YYYY}{MM}-{SEQ:4}"
+	DefaultSupplierReturnNumberTemplate = "TN-{YYYY}{MM}-{SEQ:4}"
 	MaxGarageNameLength                 = 255
 	MaxTaxCodeLength                    = 20
 	MaxTemplateLength                   = 50
@@ -139,6 +142,12 @@ type Garage struct {
 	// receipts and stock issues (FR-INV-06/20, Release 7.0).
 	GoodsReceiptNumberTemplate string
 	StockIssueNumberTemplate   string
+	// StockCountNumberTemplate, WriteOffNumberTemplate and
+	// SupplierReturnNumberTemplate number stock counts, write-offs and
+	// returns to supplier (FR-INV-09/10/12, Release 7.1).
+	StockCountNumberTemplate     string
+	WriteOffNumberTemplate       string
+	SupplierReturnNumberTemplate string
 	// StockIssueMode is when a repair order's draft stock issue posts.
 	StockIssueMode           StockIssueMode
 	DefaultQuoteApprovalMode QuoteApprovalMode

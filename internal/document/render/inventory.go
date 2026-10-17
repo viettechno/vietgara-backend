@@ -13,6 +13,8 @@ const (
 	headingSKU      = "SKU"
 	headingPart     = "Part"
 	headingQuantity = "Quantity"
+	headingUnit     = "Unit"
+	labelTotal      = "Total"
 )
 
 // GoodsReceiptRow is one line of a goods receipt document.
@@ -97,7 +99,7 @@ func GoodsReceiptPDF(data GoodsReceiptPDFData) ([]byte, error) {
 
 	if data.ShowCost {
 		pdf.SetFont(fontFamily, "B", 10)
-		pdf.CellFormat(widths[0]+widths[1]+widths[2]+widths[3]+widths[4], 8, "Total", "1", 0, "R", false, 0, "")
+		pdf.CellFormat(widths[0]+widths[1]+widths[2]+widths[3]+widths[4], 8, labelTotal, "1", 0, "R", false, 0, "")
 		pdf.CellFormat(widths[5], 8, formatVND(data.TotalAmount), "1", 0, "R", false, 0, "")
 		pdf.Ln(-1)
 	}
@@ -197,9 +199,55 @@ func PurchasesExcel(rows []PurchaseRow, total int64) ([]byte, error) {
 	}
 
 	return sheet(purchasesSheet,
-		[]any{"Date", "Receipt", "Supplier", headingSKU, headingPart, headingQuantity, "Unit", "Unit cost (VND)", "Amount (VND)"},
-		data, []any{"Total", "", "", "", "", "", "", "", total},
+		[]any{"Date", "Receipt", "Supplier", headingSKU, headingPart, headingQuantity, headingUnit, "Unit cost (VND)", "Amount (VND)"},
+		data, []any{labelTotal, "", "", "", "", "", "", "", total},
 		map[string]float64{"A": 12, "B": 16, "C": 24, "D": 14, "E": 28, "F": 12, "G": 8, "H": 16, "I": 16})
+}
+
+// StockCountRow is one line of a stock count.
+type StockCountRow struct {
+	SKU    string
+	Part   string
+	Unit   string
+	System string
+	// Counted and Difference are empty while the line is uncounted.
+	Counted    string
+	Difference string
+	Result     string
+	// AverageCost and Value are used only when the sheet shows costs.
+	AverageCost int64
+	Value       int64
+}
+
+const stockCountSheet = "Stock Count"
+
+// StockCountExcel renders a stock count as an Excel workbook for review
+// (FR-INV-12): system against counted quantity per line and, with showCost,
+// the value of the difference, whose total closes the sheet.
+func StockCountExcel(rows []StockCountRow, showCost bool, total int64) ([]byte, error) {
+	headers := []any{headingSKU, headingPart, headingUnit, "System", "Counted", "Difference", "Result"}
+	widths := map[string]float64{"A": 14, "B": 28, "C": 8, "D": 12, "E": 12, "F": 12, "G": 12}
+	totals := []any{labelTotal, "", "", "", "", "", ""}
+
+	if showCost {
+		headers = append(headers, "Average cost (VND)", "Difference value (VND)")
+		widths["H"], widths["I"] = 18, 22
+
+		totals = append(totals, "", total)
+	}
+
+	data := make([][]any, 0, len(rows))
+
+	for _, r := range rows {
+		row := []any{r.SKU, r.Part, r.Unit, r.System, r.Counted, r.Difference, r.Result}
+		if showCost {
+			row = append(row, r.AverageCost, r.Value)
+		}
+
+		data = append(data, row)
+	}
+
+	return sheet(stockCountSheet, headers, data, totals, widths)
 }
 
 // ValuationRow is one part of the stock valuation report.
@@ -224,8 +272,8 @@ func StockValuationExcel(rows []ValuationRow, total int64) ([]byte, error) {
 	}
 
 	return sheet(valuationSheet,
-		[]any{"Category", headingSKU, headingPart, headingQuantity, "Unit", "Average cost (VND)", "Value (VND)"},
-		data, []any{"Total", "", "", "", "", "", total},
+		[]any{"Category", headingSKU, headingPart, headingQuantity, headingUnit, "Average cost (VND)", "Value (VND)"},
+		data, []any{labelTotal, "", "", "", "", "", total},
 		map[string]float64{"A": 20, "B": 14, "C": 28, "D": 12, "E": 8, "F": 18, "G": 16})
 }
 

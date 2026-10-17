@@ -39,6 +39,8 @@ func garageSettings(mode string) usecase.GarageSettings {
 	return usecase.GarageSettings{
 		Timezone: "Asia/Ho_Chi_Minh", GoodsReceiptNumberTemplate: "PN-{YYYY}{MM}-{SEQ:4}",
 		StockIssueNumberTemplate: "PX-{YYYY}{MM}-{SEQ:4}", StockIssueMode: mode,
+		StockCountNumberTemplate: "KK-{YYYY}{MM}-{SEQ:4}", WriteOffNumberTemplate: "XH-{YYYY}{MM}-{SEQ:4}",
+		SupplierReturnNumberTemplate: "TN-{YYYY}{MM}-{SEQ:4}",
 	}
 }
 

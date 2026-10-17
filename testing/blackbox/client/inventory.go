@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
@@ -166,4 +167,182 @@ func (c *Client) GetStockValuationReport(ctx context.Context, garageID, at strin
 	}
 
 	return call[inventoryv1.GetStockValuationReportResponse](ctx, c, http.MethodGet, path, nil)
+}
+
+// ---- Stock counts and adjustments (Release 7.1) -----------------------------
+
+func stockCountPath(garageID, countID string) string {
+	return garagePath(garageID) + "/stock-counts/" + url.PathEscape(countID)
+}
+
+// CreateStockCount saves an empty draft stock count (name and notes).
+func (c *Client) CreateStockCount(ctx context.Context, garageID string, count *inventoryv1.StockCount) (*inventoryv1.StockCount, error) {
+	return call[inventoryv1.StockCount](ctx, c, http.MethodPost, garagePath(garageID)+"/stock-counts", count)
+}
+
+// GetStockCount returns one stock count with its lines.
+func (c *Client) GetStockCount(ctx context.Context, garageID, countID string) (*inventoryv1.StockCount, error) {
+	return call[inventoryv1.StockCount](ctx, c, http.MethodGet, stockCountPath(garageID, countID), nil)
+}
+
+// ListStockCounts returns garageID's stock counts filtered by query
+// parameters (query, status, page, pageSize).
+func (c *Client) ListStockCounts(ctx context.Context, garageID string, query url.Values) ([]*inventoryv1.StockCount, error) {
+	path := garagePath(garageID) + "/stock-counts"
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+
+	resp, err := call[inventoryv1.ListStockCountsResponse](ctx, c, http.MethodGet, path, nil)
+
+	return resp.GetData(), err
+}
+
+// UpdateStockCount patches the name and notes of a draft count.
+func (c *Client) UpdateStockCount(
+	ctx context.Context, garageID, countID string, count *inventoryv1.StockCount, paths ...string,
+) (*inventoryv1.StockCount, error) {
+	path := stockCountPath(garageID, countID)
+	if len(paths) > 0 {
+		path += "?updateMask=" + url.QueryEscape(strings.Join(paths, ","))
+	}
+
+	return call[inventoryv1.StockCount](ctx, c, http.MethodPatch, path, count)
+}
+
+// AddStockCountLines adds parts (by id, or by category) to a draft count.
+func (c *Client) AddStockCountLines(ctx context.Context, garageID, countID string, partIDs []string, categoryID string) (*inventoryv1.StockCount, error) {
+	return call[inventoryv1.StockCount](ctx, c, http.MethodPost, stockCountPath(garageID, countID)+"/lines",
+		&inventoryv1.AddStockCountLinesRequest{PartIds: partIDs, CategoryId: categoryID})
+}
+
+// CountStockLine types the counted quantity of a line (unitID empty for the
+// base unit, quantity empty to mark the line uncounted).
+func (c *Client) CountStockLine(ctx context.Context, garageID, countID, lineID, unitID, quantity string) (*inventoryv1.StockCount, error) {
+	line := &inventoryv1.StockCountLine{EnteredCountedQuantity: quantity}
+	if unitID != "" {
+		line.UnitId = &unitID
+	}
+
+	return call[inventoryv1.StockCount](ctx, c, http.MethodPatch, stockCountPath(garageID, countID)+"/lines/"+url.PathEscape(lineID), line)
+}
+
+// DeleteStockCountLine removes a line from a draft count.
+func (c *Client) DeleteStockCountLine(ctx context.Context, garageID, countID, lineID string) (*inventoryv1.StockCount, error) {
+	return call[inventoryv1.StockCount](ctx, c, http.MethodDelete, stockCountPath(garageID, countID)+"/lines/"+url.PathEscape(lineID), nil)
+}
+
+// MergeStockCounts folds draft counts into the first one.
+func (c *Client) MergeStockCounts(ctx context.Context, garageID string, countIDs ...string) (*inventoryv1.StockCount, error) {
+	return call[inventoryv1.StockCount](ctx, c, http.MethodPost, garagePath(garageID)+"/stock-counts:merge",
+		&inventoryv1.MergeStockCountsRequest{StockCountIds: countIDs})
+}
+
+// CompleteStockCount posts the adjustments of a draft count.
+func (c *Client) CompleteStockCount(ctx context.Context, garageID, countID string, skipUncounted bool) (*inventoryv1.StockCount, error) {
+	return call[inventoryv1.StockCount](ctx, c, http.MethodPost, stockCountPath(garageID, countID)+":complete",
+		&inventoryv1.CompleteStockCountRequest{SkipUncounted: skipUncounted})
+}
+
+// CancelStockCount closes a draft or reverses a completed count.
+func (c *Client) CancelStockCount(ctx context.Context, garageID, countID string) (*inventoryv1.StockCount, error) {
+	return call[inventoryv1.StockCount](ctx, c, http.MethodPost, stockCountPath(garageID, countID)+":cancel", &inventoryv1.CancelStockCountRequest{})
+}
+
+// DownloadStockCountExcel downloads a stock count as an Excel workbook.
+func (c *Client) DownloadStockCountExcel(ctx context.Context, garageID, countID string) (string, []byte, error) {
+	return c.DownloadRaw(ctx, http.MethodGet, stockCountPath(garageID, countID)+"/excel")
+}
+
+func writeOffPath(garageID, writeOffID string) string {
+	return garagePath(garageID) + "/write-offs/" + url.PathEscape(writeOffID)
+}
+
+// CreateWriteOff posts a write-off.
+func (c *Client) CreateWriteOff(ctx context.Context, garageID string, writeOff *inventoryv1.WriteOff) (*inventoryv1.WriteOff, error) {
+	return call[inventoryv1.WriteOff](ctx, c, http.MethodPost, garagePath(garageID)+"/write-offs", writeOff)
+}
+
+// GetWriteOff returns one write-off with its lines.
+func (c *Client) GetWriteOff(ctx context.Context, garageID, writeOffID string) (*inventoryv1.WriteOff, error) {
+	return call[inventoryv1.WriteOff](ctx, c, http.MethodGet, writeOffPath(garageID, writeOffID), nil)
+}
+
+// ListWriteOffs returns garageID's write-offs filtered by query parameters
+// (query, reason, status, page, pageSize).
+func (c *Client) ListWriteOffs(ctx context.Context, garageID string, query url.Values) ([]*inventoryv1.WriteOff, error) {
+	path := garagePath(garageID) + "/write-offs"
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+
+	resp, err := call[inventoryv1.ListWriteOffsResponse](ctx, c, http.MethodGet, path, nil)
+
+	return resp.GetData(), err
+}
+
+// CancelWriteOff puts the written-off parts back in stock.
+func (c *Client) CancelWriteOff(ctx context.Context, garageID, writeOffID string) (*inventoryv1.WriteOff, error) {
+	return call[inventoryv1.WriteOff](ctx, c, http.MethodPost, writeOffPath(garageID, writeOffID)+":cancel", &inventoryv1.CancelWriteOffRequest{})
+}
+
+func supplierReturnPath(garageID, returnID string) string {
+	return garagePath(garageID) + "/supplier-returns/" + url.PathEscape(returnID)
+}
+
+// CreateSupplierReturn posts a return to supplier.
+func (c *Client) CreateSupplierReturn(ctx context.Context, garageID string, ret *inventoryv1.SupplierReturn) (*inventoryv1.SupplierReturn, error) {
+	return call[inventoryv1.SupplierReturn](ctx, c, http.MethodPost, garagePath(garageID)+"/supplier-returns", ret)
+}
+
+// GetSupplierReturn returns one return to supplier with its lines.
+func (c *Client) GetSupplierReturn(ctx context.Context, garageID, returnID string) (*inventoryv1.SupplierReturn, error) {
+	return call[inventoryv1.SupplierReturn](ctx, c, http.MethodGet, supplierReturnPath(garageID, returnID), nil)
+}
+
+// ListSupplierReturns returns garageID's returns to supplier filtered by
+// query parameters (query, supplierId, status, page, pageSize).
+func (c *Client) ListSupplierReturns(ctx context.Context, garageID string, query url.Values) ([]*inventoryv1.SupplierReturn, error) {
+	path := garagePath(garageID) + "/supplier-returns"
+	if encoded := query.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+
+	resp, err := call[inventoryv1.ListSupplierReturnsResponse](ctx, c, http.MethodGet, path, nil)
+
+	return resp.GetData(), err
+}
+
+// CancelSupplierReturn puts the returned parts back in stock.
+func (c *Client) CancelSupplierReturn(ctx context.Context, garageID, returnID string) (*inventoryv1.SupplierReturn, error) {
+	return call[inventoryv1.SupplierReturn](ctx, c, http.MethodPost, supplierReturnPath(garageID, returnID)+":cancel", &inventoryv1.CancelSupplierReturnRequest{})
+}
+
+// ReturnRepairOrderPart returns unused parts of a repair order to stock.
+func (c *Client) ReturnRepairOrderPart(
+	ctx context.Context, garageID, orderID string, ret *inventoryv1.RepairOrderPartReturn,
+) (*inventoryv1.RepairOrderPartReturn, error) {
+	return call[inventoryv1.RepairOrderPartReturn](ctx, c, http.MethodPost, repairOrderPath(garageID, orderID)+"/part-returns", ret)
+}
+
+// ListRepairOrderPartReturns returns the parts returned from a repair order.
+func (c *Client) ListRepairOrderPartReturns(ctx context.Context, garageID, orderID string) ([]*inventoryv1.RepairOrderPartReturn, error) {
+	resp, err := call[inventoryv1.ListRepairOrderPartReturnsResponse](ctx, c, http.MethodGet, repairOrderPath(garageID, orderID)+"/part-returns", nil)
+
+	return resp.GetData(), err
+}
+
+// ListStockCard returns the movements of one part (its stock card), newest
+// first, optionally only those caused by one kind of document (refType is the
+// proto enum value, 0 for all).
+func (c *Client) ListStockCard(ctx context.Context, garageID, partID string, refType inventoryv1.StockTransactionRefType) ([]*inventoryv1.StockTransaction, error) {
+	query := url.Values{"partId": {partID}}
+	if refType != inventoryv1.StockTransactionRefType_STOCK_TRANSACTION_REF_TYPE_UNSPECIFIED {
+		query.Set("refType", strconv.Itoa(int(refType.Number())))
+	}
+
+	resp, err := call[inventoryv1.ListStockTransactionsResponse](ctx, c, http.MethodGet,
+		garagePath(garageID)+"/reports/stock-movements?"+query.Encode(), nil)
+
+	return resp.GetData(), err
 }

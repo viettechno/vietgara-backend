@@ -10,7 +10,10 @@ CREATE TYPE stock_transaction_type AS ENUM ('in', 'out');
 -- movements stay readable; new movements use 'goods_receipt' (a completed
 -- receipt, or the reversal of a cancelled one) and 'stock_issue' (a posted
 -- stock issue).
-CREATE TYPE stock_transaction_ref_type AS ENUM ('purchase', 'repair_order', 'goods_receipt', 'stock_issue');
+CREATE TYPE stock_transaction_ref_type AS ENUM (
+    'purchase', 'repair_order', 'goods_receipt', 'stock_issue', 'stock_count', 'write_off', 'supplier_return',
+    'repair_order_return'
+);
 
 -- ---------------------------------------------------------------------------
 -- units: the garage's units of measure (FR-CAT-01). A unit in use is
@@ -260,9 +263,13 @@ CREATE TABLE stock_transactions (
     unit_id UUID,
     entered_quantity NUMERIC(14, 3),
     ref_type stock_transaction_ref_type NOT NULL,
-    -- The goods receipt id for 'goods_receipt', the stock issue id for
-    -- 'stock_issue'.
+    -- The id of the document behind the movement: the goods receipt,
+    -- stock issue, stock count, write-off, supplier return, or the repair
+    -- order part return (Release 7.1).
     ref_id UUID,
+    -- Why an adjustment happened (the write-off reason, the reason a repair
+    -- order's parts came back); '' otherwise (Release 7.1).
+    reason TEXT NOT NULL DEFAULT '',
     -- The supplier of the goods receipt line this movement came from.
     supplier_id UUID,
     -- The part's quantity on hand and average cost right after this

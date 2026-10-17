@@ -44,6 +44,11 @@ const (
 	// InventoryCostRead shows a part's cost, average cost and the valuation
 	// and purchases reports (FR-INV-08, Release 7.0).
 	InventoryCostRead Permission = "inventory.cost.read"
+	// InventoryAdjust posts write-offs, returns to supplier and returns of
+	// unused parts from a repair order; InventoryCount creates and completes
+	// stock counts (FR-INV-09..12, Release 7.1).
+	InventoryAdjust Permission = "inventory.adjust"
+	InventoryCount  Permission = "inventory.count"
 	// CatalogueRead / CatalogueWrite cover the parts, units, packaging,
 	// categories, prices and images of the Catalogue module (Release 6.0).
 	CatalogueRead     Permission = "catalogue.read"
@@ -53,6 +58,9 @@ const (
 	ReportRead        Permission = "report.read"
 	permissionUnknown Permission = ""
 )
+
+// moduleInventory is the module of the inventory permissions.
+const moduleInventory = "inventory"
 
 // Catalog lists every permission in display order with its module.
 var Catalog = []CatalogEntry{
@@ -69,9 +77,11 @@ var Catalog = []CatalogEntry{
 	{QuoteWrite, "quote"},
 	{RepairOrderRead, "repair_order"},
 	{RepairOrderWrite, "repair_order"},
-	{InventoryRead, "inventory"},
-	{InventoryWrite, "inventory"},
-	{InventoryCostRead, "inventory"},
+	{InventoryRead, moduleInventory},
+	{InventoryWrite, moduleInventory},
+	{InventoryCostRead, moduleInventory},
+	{InventoryAdjust, moduleInventory},
+	{InventoryCount, moduleInventory},
 	{CatalogueRead, "catalogue"},
 	{CatalogueWrite, "catalogue"},
 	{BillingRead, "billing"},

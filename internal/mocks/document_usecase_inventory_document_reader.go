@@ -203,6 +203,78 @@ func (_c *MockDocumentInventoryReader_Purchases_Call) RunAndReturn(run func(ctx 
 	return _c
 }
 
+// StockCount provides a mock function for the type MockDocumentInventoryReader
+func (_mock *MockDocumentInventoryReader) StockCount(ctx context.Context, garageID string, countID string) (usecase.StockCountInfo, error) {
+	ret := _mock.Called(ctx, garageID, countID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for StockCount")
+	}
+
+	var r0 usecase.StockCountInfo
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (usecase.StockCountInfo, error)); ok {
+		return returnFunc(ctx, garageID, countID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) usecase.StockCountInfo); ok {
+		r0 = returnFunc(ctx, garageID, countID)
+	} else {
+		r0 = ret.Get(0).(usecase.StockCountInfo)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, garageID, countID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockDocumentInventoryReader_StockCount_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'StockCount'
+type MockDocumentInventoryReader_StockCount_Call struct {
+	*mock.Call
+}
+
+// StockCount is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - countID string
+func (_e *MockDocumentInventoryReader_Expecter) StockCount(ctx any, garageID any, countID any) *MockDocumentInventoryReader_StockCount_Call {
+	return &MockDocumentInventoryReader_StockCount_Call{Call: _e.mock.On("StockCount", ctx, garageID, countID)}
+}
+
+func (_c *MockDocumentInventoryReader_StockCount_Call) Run(run func(ctx context.Context, garageID string, countID string)) *MockDocumentInventoryReader_StockCount_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockDocumentInventoryReader_StockCount_Call) Return(stockCountInfo usecase.StockCountInfo, err error) *MockDocumentInventoryReader_StockCount_Call {
+	_c.Call.Return(stockCountInfo, err)
+	return _c
+}
+
+func (_c *MockDocumentInventoryReader_StockCount_Call) RunAndReturn(run func(ctx context.Context, garageID string, countID string) (usecase.StockCountInfo, error)) *MockDocumentInventoryReader_StockCount_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // StockIssue provides a mock function for the type MockDocumentInventoryReader
 func (_mock *MockDocumentInventoryReader) StockIssue(ctx context.Context, garageID string, repairOrderID string) (usecase.StockIssueInfo, error) {
 	ret := _mock.Called(ctx, garageID, repairOrderID)

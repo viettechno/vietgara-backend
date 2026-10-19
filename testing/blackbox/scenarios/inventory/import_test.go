@@ -73,18 +73,22 @@ func workbook(t *testing.T, headers []string, rows []row) []byte {
 // partsRows is a parts file of n parts: a barcode on each, every tenth with a
 // Case of 12 and its own barcode, every one but each seventh with opening
 // stock from supplierName.
-func partsRows(n int, supplierName string) []row {
+func partsRows(n int, supplierName string) []row { return taggedPartsRows(n, supplierName, "") }
+
+// taggedPartsRows is partsRows with tag in every SKU and barcode, so a second
+// file in the same garage does not repeat the first one's.
+func taggedPartsRows(n int, supplierName, tag string) []row {
 	rows := make([]row, 0, n)
 
 	for i := range n {
 		r := row{
-			"SKU": fmt.Sprintf("P-%04d", i), "Name": fmt.Sprintf("Part %d", i), "Base unit": "Piece",
-			"Base unit abbreviation": "pc", "Category": "Filters", "Brand": "Bosch", "Barcodes": fmt.Sprintf("89%06d", i),
+			"SKU": fmt.Sprintf("P%s-%04d", tag, i), "Name": fmt.Sprintf("Part %d", i), "Base unit": "Piece",
+			"Base unit abbreviation": "pc", "Category": "Filters", "Brand": "Bosch", "Barcodes": fmt.Sprintf("89%s%06d", tag, i),
 		}
 
 		if i%10 == 0 {
 			r["Packaging units"] = "Case=12"
-			r["Barcodes"] += fmt.Sprintf(";79%06d@Case", i)
+			r["Barcodes"] += fmt.Sprintf(";79%s%06d@Case", tag, i)
 		}
 
 		if i%7 != 0 {
@@ -590,21 +594,17 @@ func TestImportPermissions(t *testing.T) {
 	})
 
 	t.Run("inventory staff import all three types", func(t *testing.T) {
-		more := partsRows(5, acme.GetName())
-		for _, r := range more {
-			r["SKU"] = "S" + r["SKU"]
-			r["Barcodes"] = "5" + r["Barcodes"]
-		}
+		more := taggedPartsRows(5, acme.GetName(), "S")
 
 		_, err := staff.API.ConfirmImport(ctx, garageID, typeParts, "staff.xlsx", workbook(t, partsColumns, more))
 		require.NoError(t, err)
 
 		_, err = staff.API.ConfirmImport(ctx, garageID, typeReceipts, "staff-gr.xlsx",
-			workbook(t, receiptsColumns, []row{{"SKU": "SP-0001", "Quantity": "3", "Supplier": acme.GetName(), "Unit cost": "800"}}))
+			workbook(t, receiptsColumns, []row{{"SKU": "PS-0001", "Quantity": "3", "Supplier": acme.GetName(), "Unit cost": "800"}}))
 		require.NoError(t, err)
 
 		_, err = staff.API.ConfirmImport(ctx, garageID, typeCounts, "staff-count.xlsx",
-			workbook(t, countsColumns, []row{{"SKU": "SP-0001", "Counted quantity": "3"}}))
+			workbook(t, countsColumns, []row{{"SKU": "PS-0001", "Counted quantity": "3"}}))
 		require.NoError(t, err)
 	})
 

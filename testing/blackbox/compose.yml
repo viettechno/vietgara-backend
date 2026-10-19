@@ -152,7 +152,9 @@ services:
       KONG_DECLARATIVE_CONFIG: /etc/kong/kong.yml
       KONG_PROXY_LISTEN: 0.0.0.0:8000
       KONG_LOG_LEVEL: warn
-      KONG_NGINX_HTTP_CLIENT_MAX_BODY_SIZE: 4m
+      # Excel imports (5 MB) are base64 JSON of about 7 MB (Release 7.2); the backend
+      # limits each route itself (6 MiB, imports 7.5 MiB).
+      KONG_NGINX_HTTP_CLIENT_MAX_BODY_SIZE: 8m
     ports:
       - "127.0.0.1:${BLACKBOX_KONG_PORT:-18000}:8000"
     volumes:

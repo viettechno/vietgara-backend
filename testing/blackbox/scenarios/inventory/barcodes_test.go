@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	cataloguev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/catalogue/v1"
-	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
@@ -126,13 +125,13 @@ func TestPartBarcodes(t *testing.T) {
 	})
 
 	t.Run("another garage may use the same code and cannot see this one's", func(t *testing.T) {
-		other, err := owner.API.CreateGarage(ctx, &tenantv1.Garage{Name: "Blackbox other barcodes"})
-		require.NoError(t, err)
+		// A plan allows one garage, so the other garage belongs to another owner.
+		otherOwner, other := setup(t, "inv-barcodes-other")
 
-		unit := fixture.NewUnit(t, owner.API, other.GetId(), "Piece", "pc")
-		part := fixture.NewPart(t, owner.API, other.GetId(), "OTHER-1", "Other", unit)
+		unit := fixture.NewUnit(t, otherOwner.API, other.GetId(), "Piece", "pc")
+		part := fixture.NewPart(t, otherOwner.API, other.GetId(), "OTHER-1", "Other", unit)
 
-		_, err = owner.API.SetPartBarcodes(ctx, other.GetId(), part.GetId(), []*cataloguev1.PartBarcode{{Barcode: "8930001"}})
+		_, err := otherOwner.API.SetPartBarcodes(ctx, other.GetId(), part.GetId(), []*cataloguev1.PartBarcode{{Barcode: "8930001"}})
 		require.NoError(t, err)
 
 		found, err := owner.API.LookupPartByBarcode(ctx, garageID, "8930001")

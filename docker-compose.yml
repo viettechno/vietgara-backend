@@ -179,7 +179,9 @@ services:
       KONG_ADMIN_LISTEN: 0.0.0.0:8001
       KONG_LOG_LEVEL: warn
       # Logo uploads are base64 JSON (max 1 MB of image).
-      KONG_NGINX_HTTP_CLIENT_MAX_BODY_SIZE: 4m
+      # Excel imports (5 MB) are base64 JSON of about 7 MB (Release 7.2); the backend
+      # limits each route itself (6 MiB, imports 7.5 MiB).
+      KONG_NGINX_HTTP_CLIENT_MAX_BODY_SIZE: 8m
     ports:
       # Single local entry point: the garage web admin is served at http://localhost:8000 and the
       # platform admin at http://admin.localhost:8000.

@@ -65,7 +65,43 @@ func (s *Server) GetRepairOrder(
 	})
 }
 
-var lineSettable = []string{"status", "assigned_technician_ids"}
+var lineSettable = []string{
+	"status", "assigned_technician_ids", "description", "item_ref_id", "quantity", "unit_id", "entered_quantity", "unit_price",
+}
+
+// lineEdit reads the content fields named by paths from line; nil when none is.
+func lineEdit(paths []string, line *repairorderv1.RepairOrderLine) *usecase.LineEdit {
+	var edit usecase.LineEdit
+
+	touched := false
+
+	for _, path := range paths {
+		switch path {
+		case "description":
+			edit.Description = new(line.GetDescription())
+		case "item_ref_id":
+			edit.ItemRefID = new(line.GetItemRefId())
+		case "quantity":
+			edit.Quantity = new(line.GetQuantity())
+		case "unit_id":
+			edit.UnitID = new(line.GetUnitId())
+		case "entered_quantity":
+			edit.EnteredQuantity = new(line.GetEnteredQuantity())
+		case "unit_price":
+			edit.UnitPrice = new(line.GetUnitPrice())
+		default:
+			continue
+		}
+
+		touched = true
+	}
+
+	if !touched {
+		return nil
+	}
+
+	return &edit
+}
 
 // UpdateRepairOrderLine assigns technicians and/or updates one line's own
 // progress (FR-REP-02/03).
@@ -73,7 +109,7 @@ func (s *Server) UpdateRepairOrderLine(
 	ctx context.Context, req *repairorderv1.UpdateRepairOrderLineRequest,
 ) (*repairorderv1.UpdateRepairOrderLineResponse, error) {
 	return run(ctx, func(actorID string) (*repairorderv1.UpdateRepairOrderLineResponse, error) {
-		paths := maskPaths(req.GetUpdateMask().GetPaths(), lineSettable...)
+		paths := maskPaths(req.GetUpdateMask().GetPaths(), "status", "assigned_technician_ids")
 		for _, path := range paths {
 			if !slices.Contains(lineSettable, path) {
 				return nil, badMask(path)
@@ -93,6 +129,8 @@ func (s *Server) UpdateRepairOrderLine(
 			ids := req.GetLine().GetAssignedTechnicianIds()
 			update.AssignedTechnicianIDs = &ids
 		}
+
+		update.Edit = lineEdit(paths, req.GetLine())
 
 		ro, err := s.uc.UpdateLine(ctx, update)
 		if err != nil {
@@ -114,5 +152,51 @@ func (s *Server) CloseRepairOrder(
 		}
 
 		return &repairorderv1.CloseRepairOrderResponse{RepairOrder: repairOrderToProto(ro)}, nil
+	})
+}
+
+// AddRepairOrderLine adds a line to a repair order (Release 7.3).
+func (s *Server) AddRepairOrderLine(
+	ctx context.Context, req *repairorderv1.AddRepairOrderLineRequest,
+) (*repairorderv1.AddRepairOrderLineResponse, error) {
+	return run(ctx, func(actorID string) (*repairorderv1.AddRepairOrderLineResponse, error) {
+		ro, err := s.uc.AddLine(ctx, usecase.AddLineRequest{
+			GarageID: req.GetGarageId(), RepairOrderID: req.GetRepairOrderId(), ActorID: actorID,
+			Line: lineInputFromProto(req.GetLine()),
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		return &repairorderv1.AddRepairOrderLineResponse{RepairOrder: repairOrderToProto(ro)}, nil
+	})
+}
+
+// DeleteRepairOrderLine removes a line from a repair order (Release 7.3).
+func (s *Server) DeleteRepairOrderLine(
+	ctx context.Context, req *repairorderv1.DeleteRepairOrderLineRequest,
+) (*repairorderv1.DeleteRepairOrderLineResponse, error) {
+	return run(ctx, func(actorID string) (*repairorderv1.DeleteRepairOrderLineResponse, error) {
+		ro, err := s.uc.DeleteLine(ctx, req.GetGarageId(), req.GetRepairOrderId(), req.GetLineId(), actorID)
+		if err != nil {
+			return nil, err
+		}
+
+		return &repairorderv1.DeleteRepairOrderLineResponse{RepairOrder: repairOrderToProto(ro)}, nil
+	})
+}
+
+// CancelRepairOrder cancels a repair order whose work has not started
+// (Release 7.3).
+func (s *Server) CancelRepairOrder(
+	ctx context.Context, req *repairorderv1.CancelRepairOrderRequest,
+) (*repairorderv1.CancelRepairOrderResponse, error) {
+	return run(ctx, func(actorID string) (*repairorderv1.CancelRepairOrderResponse, error) {
+		ro, err := s.uc.Cancel(ctx, req.GetGarageId(), req.GetRepairOrderId(), actorID)
+		if err != nil {
+			return nil, err
+		}
+
+		return &repairorderv1.CancelRepairOrderResponse{RepairOrder: repairOrderToProto(ro)}, nil
 	})
 }

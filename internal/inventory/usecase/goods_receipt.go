@@ -305,7 +305,7 @@ func (uc *InventoryUseCase) receiveLine(ctx context.Context, r *domain.GoodsRece
 		SupplierID: l.SupplierID, CreatedBy: actorRef(actorID),
 	}
 
-	if err := uc.repo.RecordTransaction(ctx, tx); err != nil {
+	if err := uc.recordMovement(ctx, tx); err != nil {
 		return err
 	}
 
@@ -399,7 +399,7 @@ func (uc *InventoryUseCase) reverseReceipt(ctx context.Context, r *domain.GoodsR
 			SupplierID: l.SupplierID, CreatedBy: actorRef(actorID),
 		}
 
-		if err := uc.repo.RecordTransaction(ctx, tx); err != nil {
+		if err := uc.recordMovement(ctx, tx); err != nil {
 			return err
 		}
 	}

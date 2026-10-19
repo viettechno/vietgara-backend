@@ -54,6 +54,7 @@ type deps struct {
 	Events       *mocks.MockQuoteEventPublisher
 	Parties      *mocks.MockQuoteBillingPartyResolver
 	Parts        *mocks.MockPartQuantityResolver
+	Jobs         *mocks.MockQuoteJobCatalogue
 	// party answers the billing party resolver (retail by default); the
 	// profile ids it was asked for are recorded in resolved.
 	party    func(customerID string, profileID *string) (billingparty.Party, error)
@@ -69,7 +70,7 @@ func newUseCase(t *testing.T) (*usecase.QuoteUseCase, *deps) {
 		Limits: mocks.NewMockTransactionLimiter(t), Sequences: mocks.NewMockSequencer(t),
 		RepairOrders: mocks.NewMockRepairOrderCreator(t), Mailer: mocks.NewMockQuoteMailer(t),
 		Events: mocks.NewMockQuoteEventPublisher(t), Parties: mocks.NewMockQuoteBillingPartyResolver(t),
-		Parts: mocks.NewMockPartQuantityResolver(t),
+		Parts: mocks.NewMockPartQuantityResolver(t), Jobs: mocks.NewMockQuoteJobCatalogue(t),
 	}
 	d.party = func(string, *string) (billingparty.Party, error) { return billingparty.Party{}, nil }
 	d.Parties.EXPECT().Resolve(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
@@ -81,7 +82,7 @@ func newUseCase(t *testing.T) (*usecase.QuoteUseCase, *deps) {
 
 	uc := usecase.NewQuoteUseCase(usecase.Deps{
 		Quotes: d.Quotes, Vehicles: d.Vehicles, Customers: d.Customers, Garages: d.Garages, Limits: d.Limits,
-		Sequences: d.Sequences, RepairOrders: d.RepairOrders, BillingParties: d.Parties, Mailer: d.Mailer, Events: d.Events, Tx: passTx{}, Parts: d.Parts,
+		Sequences: d.Sequences, RepairOrders: d.RepairOrders, BillingParties: d.Parties, Mailer: d.Mailer, Events: d.Events, Tx: passTx{}, Parts: d.Parts, Jobs: d.Jobs,
 		AppBaseURL: "https://vietgara.viettechno.com/", Now: func() time.Time { return now },
 	})
 

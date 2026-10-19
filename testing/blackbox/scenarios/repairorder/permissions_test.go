@@ -274,10 +274,10 @@ func TestRepairOrderPermissionsOwner(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, repairorderv1.RepairOrderStatus_REPAIR_ORDER_STATUS_CLOSED, closed2.GetStatus())
 
-		// A closed order cannot be edited further
+		// A closed order cannot be edited further (a line's description is editable since Release 7.3)
 		_, err = owner.API.UpdateRepairOrderLineMasked(ctx, garageID, order2.GetId(), ownerLine.GetId(), &repairorderv1.RepairOrderLine{Description: "Try edit"}, "description")
 		require.Error(t, err)
-		fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "")
+		fixture.RequireAPIError(t, err, http.StatusConflict, "")
 
 		// Closing again is refused
 		_, err = owner.API.CloseRepairOrder(ctx, garageID, order2.GetId())

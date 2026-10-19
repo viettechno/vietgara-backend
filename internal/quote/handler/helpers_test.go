@@ -39,6 +39,7 @@ type env struct {
 	mailer    *mocks.MockQuoteMailer
 	events    *mocks.MockQuoteEventPublisher
 	parties   *mocks.MockQuoteBillingPartyResolver
+	jobs      *mocks.MockQuoteJobCatalogue
 }
 
 func newEnv(t *testing.T) *env {
@@ -50,13 +51,14 @@ func newEnv(t *testing.T) *env {
 		limits: mocks.NewMockTransactionLimiter(t), sequences: mocks.NewMockSequencer(t),
 		repairs: mocks.NewMockRepairOrderCreator(t), mailer: mocks.NewMockQuoteMailer(t),
 		events: mocks.NewMockQuoteEventPublisher(t), parties: mocks.NewMockQuoteBillingPartyResolver(t),
+		jobs: mocks.NewMockQuoteJobCatalogue(t),
 	}
 	e.parties.EXPECT().Resolve(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(billingparty.Party{}, nil).Maybe()
 
 	uc := usecase.NewQuoteUseCase(usecase.Deps{
 		Quotes: e.quotes, Vehicles: e.vehicles, Customers: e.customers, Garages: e.garages, Limits: e.limits,
-		Sequences: e.sequences, RepairOrders: e.repairs, BillingParties: e.parties, Mailer: e.mailer, Events: e.events, Tx: passTx{},
+		Sequences: e.sequences, RepairOrders: e.repairs, BillingParties: e.parties, Mailer: e.mailer, Events: e.events, Tx: passTx{}, Jobs: e.jobs,
 		AppBaseURL: "https://vietgara.viettechno.com",
 	})
 	e.srv = handler.NewServer(uc)

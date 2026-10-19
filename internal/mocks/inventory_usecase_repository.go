@@ -671,6 +671,80 @@ func (_c *MockInventoryRepository_DeleteStockCountLine_Call) RunAndReturn(run fu
 	return _c
 }
 
+// DraftLines provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) DraftLines(ctx context.Context, garageID string, partIDs []string) ([]domain.DraftLine, error) {
+	ret := _mock.Called(ctx, garageID, partIDs)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DraftLines")
+	}
+
+	var r0 []domain.DraftLine
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) ([]domain.DraftLine, error)); ok {
+		return returnFunc(ctx, garageID, partIDs)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) []domain.DraftLine); ok {
+		r0 = returnFunc(ctx, garageID, partIDs)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]domain.DraftLine)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, []string) error); ok {
+		r1 = returnFunc(ctx, garageID, partIDs)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockInventoryRepository_DraftLines_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DraftLines'
+type MockInventoryRepository_DraftLines_Call struct {
+	*mock.Call
+}
+
+// DraftLines is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - partIDs []string
+func (_e *MockInventoryRepository_Expecter) DraftLines(ctx any, garageID any, partIDs any) *MockInventoryRepository_DraftLines_Call {
+	return &MockInventoryRepository_DraftLines_Call{Call: _e.mock.On("DraftLines", ctx, garageID, partIDs)}
+}
+
+func (_c *MockInventoryRepository_DraftLines_Call) Run(run func(ctx context.Context, garageID string, partIDs []string)) *MockInventoryRepository_DraftLines_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_DraftLines_Call) Return(draftLines []domain.DraftLine, err error) *MockInventoryRepository_DraftLines_Call {
+	_c.Call.Return(draftLines, err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_DraftLines_Call) RunAndReturn(run func(ctx context.Context, garageID string, partIDs []string) ([]domain.DraftLine, error)) *MockInventoryRepository_DraftLines_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // FindGoodsReceipt provides a mock function for the type MockInventoryRepository
 func (_mock *MockInventoryRepository) FindGoodsReceipt(ctx context.Context, garageID string, receiptID string, forUpdate bool) (*domain.GoodsReceipt, error) {
 	ret := _mock.Called(ctx, garageID, receiptID, forUpdate)
@@ -2117,6 +2191,63 @@ func (_c *MockInventoryRepository_RecordTransaction_Call) RunAndReturn(run func(
 	return _c
 }
 
+// ReplaceIssueLines provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) ReplaceIssueLines(ctx context.Context, issue *domain.StockIssue) error {
+	ret := _mock.Called(ctx, issue)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReplaceIssueLines")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.StockIssue) error); ok {
+		r0 = returnFunc(ctx, issue)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_ReplaceIssueLines_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReplaceIssueLines'
+type MockInventoryRepository_ReplaceIssueLines_Call struct {
+	*mock.Call
+}
+
+// ReplaceIssueLines is a helper method to define mock.On call
+//   - ctx context.Context
+//   - issue *domain.StockIssue
+func (_e *MockInventoryRepository_Expecter) ReplaceIssueLines(ctx any, issue any) *MockInventoryRepository_ReplaceIssueLines_Call {
+	return &MockInventoryRepository_ReplaceIssueLines_Call{Call: _e.mock.On("ReplaceIssueLines", ctx, issue)}
+}
+
+func (_c *MockInventoryRepository_ReplaceIssueLines_Call) Run(run func(ctx context.Context, issue *domain.StockIssue)) *MockInventoryRepository_ReplaceIssueLines_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.StockIssue
+		if args[1] != nil {
+			arg1 = args[1].(*domain.StockIssue)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_ReplaceIssueLines_Call) Return(err error) *MockInventoryRepository_ReplaceIssueLines_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_ReplaceIssueLines_Call) RunAndReturn(run func(ctx context.Context, issue *domain.StockIssue) error) *MockInventoryRepository_ReplaceIssueLines_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ReplacePartSuppliers provides a mock function for the type MockInventoryRepository
 func (_mock *MockInventoryRepository) ReplacePartSuppliers(ctx context.Context, garageID string, partID string, list []domain.PartSupplier) error {
 	ret := _mock.Called(ctx, garageID, partID, list)
@@ -2536,6 +2667,75 @@ func (_c *MockInventoryRepository_SaveWriteOff_Call) Return(err error) *MockInve
 }
 
 func (_c *MockInventoryRepository_SaveWriteOff_Call) RunAndReturn(run func(ctx context.Context, w *domain.WriteOff) error) *MockInventoryRepository_SaveWriteOff_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetIssueShort provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) SetIssueShort(ctx context.Context, garageID string, issueID string, short bool) error {
+	ret := _mock.Called(ctx, garageID, issueID, short)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetIssueShort")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, bool) error); ok {
+		r0 = returnFunc(ctx, garageID, issueID, short)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_SetIssueShort_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetIssueShort'
+type MockInventoryRepository_SetIssueShort_Call struct {
+	*mock.Call
+}
+
+// SetIssueShort is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - issueID string
+//   - short bool
+func (_e *MockInventoryRepository_Expecter) SetIssueShort(ctx any, garageID any, issueID any, short any) *MockInventoryRepository_SetIssueShort_Call {
+	return &MockInventoryRepository_SetIssueShort_Call{Call: _e.mock.On("SetIssueShort", ctx, garageID, issueID, short)}
+}
+
+func (_c *MockInventoryRepository_SetIssueShort_Call) Run(run func(ctx context.Context, garageID string, issueID string, short bool)) *MockInventoryRepository_SetIssueShort_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 bool
+		if args[3] != nil {
+			arg3 = args[3].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_SetIssueShort_Call) Return(err error) *MockInventoryRepository_SetIssueShort_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_SetIssueShort_Call) RunAndReturn(run func(ctx context.Context, garageID string, issueID string, short bool) error) *MockInventoryRepository_SetIssueShort_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -45,10 +45,10 @@ func (r *PostgresRepository) insertLines(ctx context.Context, q platformdb.Queri
 	for _, line := range lines {
 		_, err := q.Exec(ctx, `
 			INSERT INTO quote_lines (id, garage_id, quote_id, position, item_type, item_ref_id, description, quantity,
-				unit_id, entered_quantity, unit_price, line_total, decision)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10::numeric, $11, $12, $13)`,
+				unit_id, entered_quantity, unit_price, line_total, decision, job_id, non_billable)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10::numeric, $11, $12, $13, $14, $15)`,
 			line.ID, garageID, quoteID, line.Position, string(line.ItemType), line.ItemRefID, line.Description,
-			line.Quantity, line.UnitID, line.EnteredQuantity, line.UnitPrice, line.LineTotal, string(line.Decision),
+			line.Quantity, line.UnitID, line.EnteredQuantity, line.UnitPrice, line.LineTotal, string(line.Decision), line.JobID, line.NonBillable,
 		)
 		if err != nil {
 			return err
@@ -371,6 +371,18 @@ func (r *PostgresRepository) LinesReference(ctx context.Context, garageID, partI
 			WHERE garage_id = $1 AND (($2::text <> '' AND item_ref_id = NULLIF($2, '')::uuid)
 				OR ($3::text <> '' AND unit_id = NULLIF($3, '')::uuid)))`,
 		garageID, partID, unitID).Scan(&exists)
+
+	return exists, err
+}
+
+// LinesFromJob reports whether a quote line, live or in a deleted quote, came
+// from the job: such a job is deactivated, not deleted (FR-CAT-07).
+func (r *PostgresRepository) LinesFromJob(ctx context.Context, garageID, jobID string) (bool, error) {
+	var exists bool
+
+	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM quote_lines WHERE garage_id = $1 AND job_id = $2::uuid)`,
+		garageID, jobID).Scan(&exists)
 
 	return exists, err
 }

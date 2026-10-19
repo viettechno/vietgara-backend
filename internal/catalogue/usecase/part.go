@@ -128,7 +128,7 @@ func (uc *UseCase) checkBaseUnitChange(ctx context.Context, p *domain.Part) erro
 		return domain.ErrBaseUnitLocked
 	}
 
-	inUse, err := uc.usage.PartInUse(ctx, p.GarageID, p.ID)
+	inUse, err := uc.partInUse(ctx, p.GarageID, p.ID)
 	if err != nil {
 		return err
 	}
@@ -138,6 +138,14 @@ func (uc *UseCase) checkBaseUnitChange(ctx context.Context, p *domain.Part) erro
 	}
 
 	return nil
+}
+
+// partInUse reports whether stock, a document or a job refers to the part.
+func (uc *UseCase) partInUse(ctx context.Context, garageID, partID string) (bool, error) {
+	return lifecycle.AnyInUse(ctx,
+		func(ctx context.Context) (bool, error) { return uc.usage.PartInUse(ctx, garageID, partID) },
+		func(ctx context.Context) (bool, error) { return uc.repo.PartUsedByJobs(ctx, garageID, partID) },
+	)
 }
 
 // ListParts returns one page of the garage's parts.
@@ -198,7 +206,7 @@ func (uc *UseCase) DeletePart(ctx context.Context, req DeleteRequest) (lifecycle
 	}
 
 	outcome, err := lifecycle.Apply(ctx, req.DryRun, lifecycle.Rule{
-		InUse: func(ctx context.Context) (bool, error) { return uc.usage.PartInUse(ctx, req.GarageID, req.ID) },
+		InUse: func(ctx context.Context) (bool, error) { return uc.partInUse(ctx, req.GarageID, req.ID) },
 		Delete: func(ctx context.Context) error {
 			return uc.repo.SoftDeletePart(ctx, req.GarageID, req.ID, req.ActorID)
 		},

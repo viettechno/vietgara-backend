@@ -40,14 +40,14 @@ func issueToProto(ctx context.Context, i *domain.StockIssue) *inventoryv1.StockI
 		Id: i.ID, GarageId: i.GarageID, Number: i.Number, RepairOrderId: i.RepairOrderID, RepairOrderNumber: i.RepairOrderNumber,
 		Status: issueStatusToProto(i.Status), Lines: make([]*inventoryv1.StockIssueLine, 0, len(i.Lines)),
 		PostedAt: converter.TimePtrToProto(i.PostedAt), PostedByName: i.PostedByName,
-		CreatedAt: converter.TimeToProto(i.CreatedAt), UpdatedAt: converter.TimeToProto(i.UpdatedAt),
+		CreatedAt: converter.TimeToProto(i.CreatedAt), UpdatedAt: converter.TimeToProto(i.UpdatedAt), IsShort: i.IsShort,
 	}
 
 	for _, l := range i.Lines {
 		line := &inventoryv1.StockIssueLine{
 			Id: l.ID, RepairOrderLineId: l.RepairOrderLineID, PartId: l.PartID, PartSku: l.PartSKU, PartName: l.PartName,
 			BaseUnitAbbreviation: l.BaseUnitAbbreviation, UnitId: l.UnitID, UnitAbbreviation: l.UnitAbbreviation,
-			EnteredQuantity: l.EnteredQuantity, Quantity: l.Quantity, ReturnedQuantity: l.ReturnedQuantity,
+			EnteredQuantity: l.EnteredQuantity, Quantity: l.Quantity, ReturnedQuantity: l.ReturnedQuantity, ShortQuantity: l.ShortQuantity,
 		}
 
 		if seeCost {

@@ -45,13 +45,17 @@ func (uc *RepairOrderUseCase) publish(ctx context.Context, eventType string, ro 
 // Design), not synchronously here -- closing a repair order must not fail
 // because of an inventory-side problem.
 func (uc *RepairOrderUseCase) Close(ctx context.Context, garageID, repairOrderID, actorID string) (*domain.RepairOrder, error) {
-	ro, err := uc.RepairOrders.FindByID(ctx, garageID, repairOrderID)
+	ro, err := uc.load(ctx, garageID, repairOrderID)
 	if err != nil {
 		return nil, toAppError("close repair order", err)
 	}
 
 	if ro.Status == domain.StatusClosed {
 		return nil, toAppError("close repair order", domain.ErrAlreadyClosed)
+	}
+
+	if ro.Status == domain.StatusCancelled {
+		return nil, toAppError("close repair order", domain.ErrNotEditable)
 	}
 
 	if !ro.ReadyToClose() {

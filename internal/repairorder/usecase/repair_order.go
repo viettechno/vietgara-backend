@@ -21,7 +21,14 @@ const (
 	EventRepairOrderCreated = "repair_order.created"
 	EventRepairOrderStarted = "repair_order.started"
 	EventRepairOrderClosed  = "repair_order.closed"
-	keyGarageID             = "garage_id"
+	// EventRepairOrderLinesChanged (Release 7.3) carries the part lines after
+	// a line was added, changed or removed, so Inventory can bring the draft
+	// stock issue in line.
+	EventRepairOrderLinesChanged = "repair_order.lines_changed"
+	// EventRepairOrderCancelled (Release 7.3) tells Inventory to release the
+	// reservation of the order's draft stock issue.
+	EventRepairOrderCancelled = "repair_order.cancelled"
+	keyGarageID               = "garage_id"
 )
 
 // Deps are the dependencies of RepairOrderUseCase.
@@ -34,6 +41,9 @@ type Deps struct {
 	Events       EventPublisher
 	// Parts converts part-line quantities typed in a packaging unit.
 	Parts partquantity.Resolver
+	// StockIssues tells whether an order's stock issue is posted already
+	// (Release 7.3); the parts of such an order can no longer change.
+	StockIssues StockIssues
 	// Now defaults to time.Now.
 	Now clock
 }
@@ -63,6 +73,10 @@ type LineInput struct {
 	UnitID          string
 	EnteredQuantity string
 	UnitPrice       int64
+	// JobID is the catalogue job the line came from (Release 7.3).
+	JobID *string
+	// NonBillable makes the line a hidden consumable (FR-CAT-08).
+	NonBillable bool
 }
 
 // CreateRepairOrderRequest is the input for RepairOrderUseCase.Create.
@@ -272,44 +286,96 @@ func (uc *RepairOrderUseCase) buildLines(ctx context.Context, garageID string, i
 	}
 
 	lines := make([]domain.Line, 0, len(inputs))
+	billable := 0
 
 	for i, in := range inputs {
-		description := strings.TrimSpace(in.Description)
-		if description == "" {
-			return nil, domain.ErrDescriptionRequired
-		}
-
-		if err := domain.CheckLength(description, domain.MaxDescriptionLen); err != nil {
-			return nil, err
-		}
-
-		if !in.ItemType.IsValid() {
-			return nil, domain.ErrInvalidItemType
-		}
-
-		if in.UnitPrice < 0 {
-			return nil, domain.ErrInvalidUnitPrice
-		}
-
-		stored, err := partquantity.ForLine(ctx, uc.Parts, garageID, in.ItemType == domain.ItemTypePart, in.ItemRefID,
-			in.Quantity, in.UnitID, in.EnteredQuantity)
+		line, err := uc.buildLine(ctx, garageID, in, i+1)
 		if err != nil {
 			return nil, err
 		}
 
-		scaled, err := domain.ParseQuantity(stored.Quantity)
-		if err != nil {
-			return nil, err
+		if !line.NonBillable {
+			billable++
 		}
 
-		lines = append(lines, domain.Line{
-			ID: uuid.NewString(), Position: i + 1, ItemType: in.ItemType, ItemRefID: in.ItemRefID,
-			Description: description, Quantity: stored.Quantity, UnitID: stored.UnitID, EnteredQuantity: stored.Entered,
-			UnitAbbreviation: stored.UnitAbbreviation,
-			UnitPrice:        in.UnitPrice,
-			LineTotal:        domain.LineTotal(scaled, in.UnitPrice), Status: domain.LineNotStarted,
-		})
+		lines = append(lines, line)
+	}
+
+	if billable == 0 {
+		return nil, domain.ErrInvalidNonBillable
 	}
 
 	return lines, nil
+}
+
+// buildLine validates one input and returns the line it makes at position,
+// not started. A hidden consumable (NonBillable) must be a catalogue part line
+// and is priced at zero.
+func (uc *RepairOrderUseCase) buildLine(ctx context.Context, garageID string, in LineInput, position int) (domain.Line, error) {
+	description := strings.TrimSpace(in.Description)
+	if description == "" {
+		return domain.Line{}, domain.ErrDescriptionRequired
+	}
+
+	if err := domain.CheckLength(description, domain.MaxDescriptionLen); err != nil {
+		return domain.Line{}, err
+	}
+
+	if !in.ItemType.IsValid() {
+		return domain.Line{}, domain.ErrInvalidItemType
+	}
+
+	if in.UnitPrice < 0 {
+		return domain.Line{}, domain.ErrInvalidUnitPrice
+	}
+
+	jobID, price, err := lineOrigin(in)
+	if err != nil {
+		return domain.Line{}, err
+	}
+
+	stored, err := partquantity.ForLine(ctx, uc.Parts, garageID, in.ItemType == domain.ItemTypePart, in.ItemRefID,
+		in.Quantity, in.UnitID, in.EnteredQuantity)
+	if err != nil {
+		return domain.Line{}, err
+	}
+
+	scaled, err := domain.ParseQuantity(stored.Quantity)
+	if err != nil {
+		return domain.Line{}, err
+	}
+
+	return domain.Line{
+		ID: uuid.NewString(), Position: position, ItemType: in.ItemType, ItemRefID: in.ItemRefID,
+		Description: description, Quantity: stored.Quantity, UnitID: stored.UnitID, EnteredQuantity: stored.Entered,
+		UnitAbbreviation: stored.UnitAbbreviation,
+		UnitPrice:        price,
+		LineTotal:        domain.LineTotal(scaled, price), Status: domain.LineNotStarted,
+		JobID: jobID, NonBillable: in.NonBillable,
+	}, nil
+}
+
+// lineOrigin checks a line's job reference and hidden-consumable mark and
+// returns the job id and the price to store: a hidden consumable is a
+// catalogue part line, priced at zero.
+func lineOrigin(in LineInput) (*string, int64, error) {
+	var jobID *string
+
+	if in.JobID != nil && *in.JobID != "" {
+		if uuid.Validate(*in.JobID) != nil {
+			return nil, 0, domain.ErrInvalidJobRef
+		}
+
+		jobID = in.JobID
+	}
+
+	if !in.NonBillable {
+		return jobID, in.UnitPrice, nil
+	}
+
+	if in.ItemType != domain.ItemTypePart || in.ItemRefID == nil || *in.ItemRefID == "" {
+		return nil, 0, domain.ErrInvalidNonBillable
+	}
+
+	return jobID, 0, nil
 }

@@ -127,6 +127,35 @@ type RepairOrderCreator interface {
 	) (repairOrderID string, err error)
 }
 
+// JobPart is one suggested part of a job, ready to become a quote line.
+type JobPart struct {
+	PartID      string
+	Description string
+	// UnitID is the packaging unit the amount is typed in; empty for the base
+	// unit.
+	UnitID string
+	// Quantity is the amount typed in UnitID (or the base unit).
+	Quantity    string
+	UnitPrice   int64
+	NonBillable bool
+}
+
+// Job is a catalogue job as the quote needs it.
+type Job struct {
+	ID         string
+	Name       string
+	LaborPrice int64
+	Parts      []JobPart
+}
+
+// JobCatalogue reads a job of the garage's catalogue (FR-CAT-05); implemented
+// by an adapter over the Catalogue module in cmd/server. It refuses an
+// unknown or inactive job, and leaves out suggestions whose part is
+// inactive.
+type JobCatalogue interface {
+	Job(ctx context.Context, garageID, jobID string) (Job, error)
+}
+
 // Mailer delivers e-mails (internal/platform/mail).
 type Mailer interface {
 	Send(ctx context.Context, msg mail.Message) error

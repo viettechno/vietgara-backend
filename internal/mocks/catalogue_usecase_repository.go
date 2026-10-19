@@ -317,6 +317,63 @@ func (_c *MockCatalogueRepository_CreateCategory_Call) RunAndReturn(run func(ctx
 	return _c
 }
 
+// CreateJob provides a mock function for the type MockCatalogueRepository
+func (_mock *MockCatalogueRepository) CreateJob(ctx context.Context, j *domain.Job) error {
+	ret := _mock.Called(ctx, j)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateJob")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.Job) error); ok {
+		r0 = returnFunc(ctx, j)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockCatalogueRepository_CreateJob_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateJob'
+type MockCatalogueRepository_CreateJob_Call struct {
+	*mock.Call
+}
+
+// CreateJob is a helper method to define mock.On call
+//   - ctx context.Context
+//   - j *domain.Job
+func (_e *MockCatalogueRepository_Expecter) CreateJob(ctx any, j any) *MockCatalogueRepository_CreateJob_Call {
+	return &MockCatalogueRepository_CreateJob_Call{Call: _e.mock.On("CreateJob", ctx, j)}
+}
+
+func (_c *MockCatalogueRepository_CreateJob_Call) Run(run func(ctx context.Context, j *domain.Job)) *MockCatalogueRepository_CreateJob_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.Job
+		if args[1] != nil {
+			arg1 = args[1].(*domain.Job)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCatalogueRepository_CreateJob_Call) Return(err error) *MockCatalogueRepository_CreateJob_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockCatalogueRepository_CreateJob_Call) RunAndReturn(run func(ctx context.Context, j *domain.Job) error) *MockCatalogueRepository_CreateJob_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreatePart provides a mock function for the type MockCatalogueRepository
 func (_mock *MockCatalogueRepository) CreatePart(ctx context.Context, p *domain.Part) error {
 	ret := _mock.Called(ctx, p)
@@ -736,6 +793,80 @@ func (_c *MockCatalogueRepository_FindCategory_Call) Return(category *domain.Cat
 }
 
 func (_c *MockCatalogueRepository_FindCategory_Call) RunAndReturn(run func(ctx context.Context, garageID string, categoryID string) (*domain.Category, error)) *MockCatalogueRepository_FindCategory_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FindJob provides a mock function for the type MockCatalogueRepository
+func (_mock *MockCatalogueRepository) FindJob(ctx context.Context, garageID string, jobID string) (*domain.Job, error) {
+	ret := _mock.Called(ctx, garageID, jobID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindJob")
+	}
+
+	var r0 *domain.Job
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (*domain.Job, error)); ok {
+		return returnFunc(ctx, garageID, jobID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) *domain.Job); ok {
+		r0 = returnFunc(ctx, garageID, jobID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*domain.Job)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, garageID, jobID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockCatalogueRepository_FindJob_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindJob'
+type MockCatalogueRepository_FindJob_Call struct {
+	*mock.Call
+}
+
+// FindJob is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - jobID string
+func (_e *MockCatalogueRepository_Expecter) FindJob(ctx any, garageID any, jobID any) *MockCatalogueRepository_FindJob_Call {
+	return &MockCatalogueRepository_FindJob_Call{Call: _e.mock.On("FindJob", ctx, garageID, jobID)}
+}
+
+func (_c *MockCatalogueRepository_FindJob_Call) Run(run func(ctx context.Context, garageID string, jobID string)) *MockCatalogueRepository_FindJob_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCatalogueRepository_FindJob_Call) Return(job *domain.Job, err error) *MockCatalogueRepository_FindJob_Call {
+	_c.Call.Return(job, err)
+	return _c
+}
+
+func (_c *MockCatalogueRepository_FindJob_Call) RunAndReturn(run func(ctx context.Context, garageID string, jobID string) (*domain.Job, error)) *MockCatalogueRepository_FindJob_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1184,6 +1315,86 @@ func (_c *MockCatalogueRepository_ListImages_Call) RunAndReturn(run func(ctx con
 	return _c
 }
 
+// ListJobs provides a mock function for the type MockCatalogueRepository
+func (_mock *MockCatalogueRepository) ListJobs(ctx context.Context, garageID string, filter usecase.JobFilter) ([]*domain.Job, int, error) {
+	ret := _mock.Called(ctx, garageID, filter)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListJobs")
+	}
+
+	var r0 []*domain.Job
+	var r1 int
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.JobFilter) ([]*domain.Job, int, error)); ok {
+		return returnFunc(ctx, garageID, filter)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.JobFilter) []*domain.Job); ok {
+		r0 = returnFunc(ctx, garageID, filter)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*domain.Job)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, usecase.JobFilter) int); ok {
+		r1 = returnFunc(ctx, garageID, filter)
+	} else {
+		r1 = ret.Get(1).(int)
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string, usecase.JobFilter) error); ok {
+		r2 = returnFunc(ctx, garageID, filter)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockCatalogueRepository_ListJobs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListJobs'
+type MockCatalogueRepository_ListJobs_Call struct {
+	*mock.Call
+}
+
+// ListJobs is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - filter usecase.JobFilter
+func (_e *MockCatalogueRepository_Expecter) ListJobs(ctx any, garageID any, filter any) *MockCatalogueRepository_ListJobs_Call {
+	return &MockCatalogueRepository_ListJobs_Call{Call: _e.mock.On("ListJobs", ctx, garageID, filter)}
+}
+
+func (_c *MockCatalogueRepository_ListJobs_Call) Run(run func(ctx context.Context, garageID string, filter usecase.JobFilter)) *MockCatalogueRepository_ListJobs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 usecase.JobFilter
+		if args[2] != nil {
+			arg2 = args[2].(usecase.JobFilter)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCatalogueRepository_ListJobs_Call) Return(jobs []*domain.Job, n int, err error) *MockCatalogueRepository_ListJobs_Call {
+	_c.Call.Return(jobs, n, err)
+	return _c
+}
+
+func (_c *MockCatalogueRepository_ListJobs_Call) RunAndReturn(run func(ctx context.Context, garageID string, filter usecase.JobFilter) ([]*domain.Job, int, error)) *MockCatalogueRepository_ListJobs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListParts provides a mock function for the type MockCatalogueRepository
 func (_mock *MockCatalogueRepository) ListParts(ctx context.Context, garageID string, filter usecase.PartFilter) ([]*domain.Part, int, error) {
 	ret := _mock.Called(ctx, garageID, filter)
@@ -1340,6 +1551,78 @@ func (_c *MockCatalogueRepository_ListUnits_Call) Return(units []*domain.Unit, n
 }
 
 func (_c *MockCatalogueRepository_ListUnits_Call) RunAndReturn(run func(ctx context.Context, garageID string, filter usecase.UnitFilter) ([]*domain.Unit, int, error)) *MockCatalogueRepository_ListUnits_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// PartUsedByJobs provides a mock function for the type MockCatalogueRepository
+func (_mock *MockCatalogueRepository) PartUsedByJobs(ctx context.Context, garageID string, partID string) (bool, error) {
+	ret := _mock.Called(ctx, garageID, partID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PartUsedByJobs")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (bool, error)); ok {
+		return returnFunc(ctx, garageID, partID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) bool); ok {
+		r0 = returnFunc(ctx, garageID, partID)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, garageID, partID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockCatalogueRepository_PartUsedByJobs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PartUsedByJobs'
+type MockCatalogueRepository_PartUsedByJobs_Call struct {
+	*mock.Call
+}
+
+// PartUsedByJobs is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - partID string
+func (_e *MockCatalogueRepository_Expecter) PartUsedByJobs(ctx any, garageID any, partID any) *MockCatalogueRepository_PartUsedByJobs_Call {
+	return &MockCatalogueRepository_PartUsedByJobs_Call{Call: _e.mock.On("PartUsedByJobs", ctx, garageID, partID)}
+}
+
+func (_c *MockCatalogueRepository_PartUsedByJobs_Call) Run(run func(ctx context.Context, garageID string, partID string)) *MockCatalogueRepository_PartUsedByJobs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCatalogueRepository_PartUsedByJobs_Call) Return(b bool, err error) *MockCatalogueRepository_PartUsedByJobs_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockCatalogueRepository_PartUsedByJobs_Call) RunAndReturn(run func(ctx context.Context, garageID string, partID string) (bool, error)) *MockCatalogueRepository_PartUsedByJobs_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1638,6 +1921,81 @@ func (_c *MockCatalogueRepository_SetCategoryActive_Call) RunAndReturn(run func(
 	return _c
 }
 
+// SetJobActive provides a mock function for the type MockCatalogueRepository
+func (_mock *MockCatalogueRepository) SetJobActive(ctx context.Context, garageID string, jobID string, active bool, actorID string) error {
+	ret := _mock.Called(ctx, garageID, jobID, active, actorID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetJobActive")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, bool, string) error); ok {
+		r0 = returnFunc(ctx, garageID, jobID, active, actorID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockCatalogueRepository_SetJobActive_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetJobActive'
+type MockCatalogueRepository_SetJobActive_Call struct {
+	*mock.Call
+}
+
+// SetJobActive is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - jobID string
+//   - active bool
+//   - actorID string
+func (_e *MockCatalogueRepository_Expecter) SetJobActive(ctx any, garageID any, jobID any, active any, actorID any) *MockCatalogueRepository_SetJobActive_Call {
+	return &MockCatalogueRepository_SetJobActive_Call{Call: _e.mock.On("SetJobActive", ctx, garageID, jobID, active, actorID)}
+}
+
+func (_c *MockCatalogueRepository_SetJobActive_Call) Run(run func(ctx context.Context, garageID string, jobID string, active bool, actorID string)) *MockCatalogueRepository_SetJobActive_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 bool
+		if args[3] != nil {
+			arg3 = args[3].(bool)
+		}
+		var arg4 string
+		if args[4] != nil {
+			arg4 = args[4].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCatalogueRepository_SetJobActive_Call) Return(err error) *MockCatalogueRepository_SetJobActive_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockCatalogueRepository_SetJobActive_Call) RunAndReturn(run func(ctx context.Context, garageID string, jobID string, active bool, actorID string) error) *MockCatalogueRepository_SetJobActive_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SetPartActive provides a mock function for the type MockCatalogueRepository
 func (_mock *MockCatalogueRepository) SetPartActive(ctx context.Context, garageID string, partID string, active bool, actorID string) error {
 	ret := _mock.Called(ctx, garageID, partID, active, actorID)
@@ -1853,6 +2211,75 @@ func (_c *MockCatalogueRepository_SoftDeleteCategory_Call) Return(err error) *Mo
 }
 
 func (_c *MockCatalogueRepository_SoftDeleteCategory_Call) RunAndReturn(run func(ctx context.Context, garageID string, categoryID string, actorID string) error) *MockCatalogueRepository_SoftDeleteCategory_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SoftDeleteJob provides a mock function for the type MockCatalogueRepository
+func (_mock *MockCatalogueRepository) SoftDeleteJob(ctx context.Context, garageID string, jobID string, actorID string) error {
+	ret := _mock.Called(ctx, garageID, jobID, actorID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SoftDeleteJob")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string) error); ok {
+		r0 = returnFunc(ctx, garageID, jobID, actorID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockCatalogueRepository_SoftDeleteJob_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SoftDeleteJob'
+type MockCatalogueRepository_SoftDeleteJob_Call struct {
+	*mock.Call
+}
+
+// SoftDeleteJob is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - jobID string
+//   - actorID string
+func (_e *MockCatalogueRepository_Expecter) SoftDeleteJob(ctx any, garageID any, jobID any, actorID any) *MockCatalogueRepository_SoftDeleteJob_Call {
+	return &MockCatalogueRepository_SoftDeleteJob_Call{Call: _e.mock.On("SoftDeleteJob", ctx, garageID, jobID, actorID)}
+}
+
+func (_c *MockCatalogueRepository_SoftDeleteJob_Call) Run(run func(ctx context.Context, garageID string, jobID string, actorID string)) *MockCatalogueRepository_SoftDeleteJob_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCatalogueRepository_SoftDeleteJob_Call) Return(err error) *MockCatalogueRepository_SoftDeleteJob_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockCatalogueRepository_SoftDeleteJob_Call) RunAndReturn(run func(ctx context.Context, garageID string, jobID string, actorID string) error) *MockCatalogueRepository_SoftDeleteJob_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -2120,6 +2547,69 @@ func (_c *MockCatalogueRepository_UpdateCategory_Call) Return(err error) *MockCa
 }
 
 func (_c *MockCatalogueRepository_UpdateCategory_Call) RunAndReturn(run func(ctx context.Context, c *domain.Category) error) *MockCatalogueRepository_UpdateCategory_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpdateJob provides a mock function for the type MockCatalogueRepository
+func (_mock *MockCatalogueRepository) UpdateJob(ctx context.Context, j *domain.Job, replaceParts bool) error {
+	ret := _mock.Called(ctx, j, replaceParts)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateJob")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.Job, bool) error); ok {
+		r0 = returnFunc(ctx, j, replaceParts)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockCatalogueRepository_UpdateJob_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateJob'
+type MockCatalogueRepository_UpdateJob_Call struct {
+	*mock.Call
+}
+
+// UpdateJob is a helper method to define mock.On call
+//   - ctx context.Context
+//   - j *domain.Job
+//   - replaceParts bool
+func (_e *MockCatalogueRepository_Expecter) UpdateJob(ctx any, j any, replaceParts any) *MockCatalogueRepository_UpdateJob_Call {
+	return &MockCatalogueRepository_UpdateJob_Call{Call: _e.mock.On("UpdateJob", ctx, j, replaceParts)}
+}
+
+func (_c *MockCatalogueRepository_UpdateJob_Call) Run(run func(ctx context.Context, j *domain.Job, replaceParts bool)) *MockCatalogueRepository_UpdateJob_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.Job
+		if args[1] != nil {
+			arg1 = args[1].(*domain.Job)
+		}
+		var arg2 bool
+		if args[2] != nil {
+			arg2 = args[2].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCatalogueRepository_UpdateJob_Call) Return(err error) *MockCatalogueRepository_UpdateJob_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockCatalogueRepository_UpdateJob_Call) RunAndReturn(run func(ctx context.Context, j *domain.Job, replaceParts bool) error) *MockCatalogueRepository_UpdateJob_Call {
 	_c.Call.Return(run)
 	return _c
 }

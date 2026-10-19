@@ -79,11 +79,99 @@ func (uc *InventoryUseCase) CreateStockIssue(ctx context.Context, req CreateStoc
 		RepairOrderNumber: req.RepairOrderNumber, Status: domain.StockIssueDraft, Lines: lines,
 	}
 
-	if _, err := uc.repo.CreateStockIssue(ctx, issue); err != nil {
+	created, err := uc.repo.CreateStockIssue(ctx, issue)
+	if err != nil {
 		return nil, toAppError(op, err)
 	}
 
+	if created {
+		if err := uc.recheckShortage(ctx, req.GarageID, linePartIDs(lines)); err != nil {
+			return nil, toAppError(op, err)
+		}
+	}
+
 	return issue, nil
+}
+
+// ResyncStockIssue brings the draft stock issue of a repair order in line with
+// the order's part lines after they changed (Release 7.3): lines added,
+// changed or removed. An order without an issue gets one. A posted or cancelled
+// issue is left alone: the parts have left stock, or the order is gone.
+func (uc *InventoryUseCase) ResyncStockIssue(ctx context.Context, req CreateStockIssueRequest) error {
+	const op = "resync stock issue"
+
+	issue, err := uc.repo.FindStockIssueByRepairOrder(ctx, req.GarageID, req.RepairOrderID, true)
+	if err != nil {
+		if !isNotFound(err) {
+			return toAppError(op, err)
+		}
+
+		_, err := uc.CreateStockIssue(ctx, req)
+
+		return err
+	}
+
+	if issue.Status != domain.StockIssueDraft {
+		return nil
+	}
+
+	lines, err := uc.issueLines(ctx, req)
+	if err != nil {
+		return toAppError(op, err)
+	}
+
+	affected := append(linePartIDs(issue.Lines), linePartIDs(lines)...)
+	issue.Lines = lines
+
+	if err := uc.repo.ReplaceIssueLines(ctx, issue); err != nil {
+		return toAppError(op, err)
+	}
+
+	// An issue left without lines is not listed by the recheck, so its own
+	// mark is cleared here.
+	if len(lines) == 0 && issue.IsShort {
+		if err := uc.markShort(ctx, req.GarageID, issue.ID, issue.RepairOrderID, false); err != nil {
+			return toAppError(op, err)
+		}
+	}
+
+	if err := uc.recheckShortage(ctx, req.GarageID, affected); err != nil {
+		return toAppError(op, err)
+	}
+
+	return nil
+}
+
+// CancelStockIssue cancels the draft stock issue of a cancelled repair order,
+// which releases its reservation (FR-INV-15); other draft issues waiting for
+// the same parts may be covered now. A posted issue is left alone.
+func (uc *InventoryUseCase) CancelStockIssue(ctx context.Context, garageID, repairOrderID string) error {
+	const op = "cancel stock issue"
+
+	issue, err := uc.repo.FindStockIssueByRepairOrder(ctx, garageID, repairOrderID, true)
+	if err != nil {
+		if isNotFound(err) {
+			return nil
+		}
+
+		return toAppError(op, err)
+	}
+
+	if issue.Status != domain.StockIssueDraft {
+		return nil
+	}
+
+	issue.Status, issue.IsShort = domain.StockIssueCancelled, false
+
+	if err := uc.repo.SaveStockIssue(ctx, issue); err != nil {
+		return toAppError(op, err)
+	}
+
+	if err := uc.recheckShortage(ctx, garageID, linePartIDs(issue.Lines)); err != nil {
+		return toAppError(op, err)
+	}
+
+	return nil
 }
 
 // issueLines builds the lines of a new issue from the repair order's part
@@ -137,6 +225,40 @@ func (uc *InventoryUseCase) GetRepairOrderStockIssue(ctx context.Context, garage
 	}
 
 	return issue, nil
+}
+
+// StockIssuePosted reports whether the repair order's stock issue is posted,
+// so its parts have left stock; an order without an issue is not posted. The
+// Repair Order module asks before it lets the order's parts change.
+func (uc *InventoryUseCase) StockIssuePosted(ctx context.Context, garageID, repairOrderID string) (bool, error) {
+	issue, err := uc.repo.FindStockIssueByRepairOrder(ctx, garageID, repairOrderID, false)
+	if err != nil {
+		if isNotFound(err) {
+			return false, nil
+		}
+
+		return false, toAppError("get stock issue", err)
+	}
+
+	return issue.Status == domain.StockIssuePosted, nil
+}
+
+// StockIssueShort reports whether the repair order's draft stock issue cannot
+// be covered by the stock on hand right now (FR-INV-15). A posted or cancelled
+// issue, or none, is not short. The Repair Order module reads it when it is
+// told the answer changed, so a late or repeated event cannot leave a stale
+// mark.
+func (uc *InventoryUseCase) StockIssueShort(ctx context.Context, garageID, repairOrderID string) (bool, error) {
+	issue, err := uc.repo.FindStockIssueByRepairOrder(ctx, garageID, repairOrderID, false)
+	if err != nil {
+		if isNotFound(err) {
+			return false, nil
+		}
+
+		return false, toAppError("get stock issue", err)
+	}
+
+	return issue.Status == domain.StockIssueDraft && issue.IsShort, nil
 }
 
 // PostStockIssue posts a draft issue now ("issue now"). Any other status is
@@ -221,16 +343,30 @@ func (uc *InventoryUseCase) post(ctx context.Context, issue *domain.StockIssue, 
 	}
 
 	now := uc.now()
+	wasShort := issue.IsShort
 	issue.Status, issue.PostedAt, issue.PostedBy, issue.UpdatedBy = domain.StockIssuePosted, &now, actorRef(actorID), actorRef(actorID)
+	issue.IsShort = false
 
 	if err := uc.repo.SaveStockIssue(ctx, issue); err != nil {
+		return err
+	}
+
+	if wasShort {
+		if err := uc.events.Publish(ctx, EventShortageChanged, issue.GarageID, "", map[string]any{
+			keyRepairOrderID: issue.RepairOrderID, keyGarageID: issue.GarageID, "short": false,
+		}); err != nil {
+			return err
+		}
+	}
+
+	if err := uc.recheckShortage(ctx, issue.GarageID, partIDs); err != nil {
 		return err
 	}
 
 	err := uc.audit.Record(ctx, audit.Entry{
 		Actor: actorID, GarageID: issue.GarageID, Action: ActionStockIssuePosted, EntityType: entityStockIssue, EntityID: issue.ID,
 		Before: map[string]any{keyStatus: domain.StockIssueDraft},
-		After:  map[string]any{keyNumber: issue.Number, "repair_order_id": issue.RepairOrderID, keyStatus: issue.Status, keyLines: len(issue.Lines)},
+		After:  map[string]any{keyNumber: issue.Number, keyRepairOrderID: issue.RepairOrderID, keyStatus: issue.Status, keyLines: len(issue.Lines)},
 		IP:     middleware.ClientIP(ctx),
 	})
 	if err != nil {
@@ -238,7 +374,7 @@ func (uc *InventoryUseCase) post(ctx context.Context, issue *domain.StockIssue, 
 	}
 
 	return uc.events.Publish(ctx, EventStockIssued, issue.GarageID, actorID, map[string]any{
-		"stock_issue_id": issue.ID, keyGarageID: issue.GarageID, "repair_order_id": issue.RepairOrderID,
+		"stock_issue_id": issue.ID, keyGarageID: issue.GarageID, keyRepairOrderID: issue.RepairOrderID,
 		keyLines: issuedLines(partIDs, quantities),
 	})
 }
@@ -278,9 +414,18 @@ func (uc *InventoryUseCase) describeIssue(ctx context.Context, garageID string, 
 		return err
 	}
 
+	short := map[string]string{}
+
+	if issue.Status == domain.StockIssueDraft {
+		if _, short, err = uc.draftShortages(ctx, garageID, uniq(partIDs)); err != nil {
+			return err
+		}
+	}
+
 	for i := range issue.Lines {
 		l := &issue.Lines[i]
 		p := parts[l.PartID]
+		l.ShortQuantity = orDefault(short[l.ID], "0")
 		l.PartSKU, l.PartName, l.BaseUnitAbbreviation = p.SKU, p.Name, p.BaseUnitAbbreviation
 
 		if l.UnitID != nil {

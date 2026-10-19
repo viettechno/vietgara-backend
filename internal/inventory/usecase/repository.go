@@ -161,8 +161,15 @@ type Repository interface {
 	FindStockIssue(ctx context.Context, garageID, issueID string, forUpdate bool) (*domain.StockIssue, error)
 	// FindStockIssueByRepairOrder is FindStockIssue by the repair order.
 	FindStockIssueByRepairOrder(ctx context.Context, garageID, repairOrderID string, forUpdate bool) (*domain.StockIssue, error)
-	// SaveStockIssue persists the status, posting and line costs.
+	// SaveStockIssue persists the status, posting, shortage mark and line costs.
 	SaveStockIssue(ctx context.Context, issue *domain.StockIssue) error
+	// ReplaceIssueLines replaces the lines of a draft issue with issue.Lines.
+	ReplaceIssueLines(ctx context.Context, issue *domain.StockIssue) error
+	// SetIssueShort stores whether the draft issue can be covered by the stock.
+	SetIssueShort(ctx context.Context, garageID, issueID string, short bool) error
+	// DraftLines returns, in reservation order, the lines of every part held by
+	// a draft issue that has a line for one of partIDs; see domain.DraftLine.
+	DraftLines(ctx context.Context, garageID string, partIDs []string) ([]domain.DraftLine, error)
 
 	// CreateStockCount inserts the count header and its lines.
 	CreateStockCount(ctx context.Context, c *domain.StockCount) error

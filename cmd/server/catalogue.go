@@ -24,6 +24,7 @@ import (
 // parts, units of measure and packaging, the category tree and part images.
 type catalogueModule struct {
 	server *catalogueHandler.Server
+	jobs   *catalogueHandler.JobServer
 	uc     *catalogueUsecase.UseCase
 	repo   *catalogueRepository.PostgresRepository
 }
@@ -32,7 +33,7 @@ func buildCatalogue(pool *platformdb.Pool, files *fileModule, usage *catalogueUs
 	repo := catalogueRepository.NewPostgresRepository(pool)
 	uc := catalogueUsecase.NewUseCase(repo, usage, catalogueFiles{files: fileRepository.NewPostgresRepository(pool), uc: files.uc})
 
-	return &catalogueModule{server: catalogueHandler.NewServer(uc), uc: uc, repo: repo}
+	return &catalogueModule{server: catalogueHandler.NewServer(uc), jobs: catalogueHandler.NewJobServer(uc), uc: uc, repo: repo}
 }
 
 // catalogueUsage tells the Catalogue whether stock movements or documents
@@ -52,6 +53,14 @@ func (u *catalogueUsage) PartInUse(ctx context.Context, garageID, partID string)
 
 func (u *catalogueUsage) UnitInUse(ctx context.Context, garageID, unitID string) (bool, error) {
 	return u.inUse(ctx, garageID, "", unitID)
+}
+
+// JobInUse reports whether a quote or repair order line came from the job.
+func (u *catalogueUsage) JobInUse(ctx context.Context, garageID, jobID string) (bool, error) {
+	return lifecycle.AnyInUse(ctx,
+		func(ctx context.Context) (bool, error) { return u.quotes.LinesFromJob(ctx, garageID, jobID) },
+		func(ctx context.Context) (bool, error) { return u.repairOrders.LinesFromJob(ctx, garageID, jobID) },
+	)
 }
 
 func (u *catalogueUsage) inUse(ctx context.Context, garageID, partID, unitID string) (bool, error) {

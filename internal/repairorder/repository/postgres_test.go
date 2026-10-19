@@ -48,12 +48,12 @@ func repairOrderRow() []any {
 	return []any{
 		repairOrderID, garageID, "q-1", vehicleID, "51F-123.45", "An Nguyen", "LSC-202609-0001", "open",
 		int64(730_000), []byte(`{"name":"Cong ty An Phat"}`), []byte(`{"tax_profile_id":"tp-1","legal_name":"Cong ty Van Tai A"}`),
-		nil, nil, nil, now, now,
+		nil, false, nil, nil, now, now,
 	}
 }
 
 func lineRow() []any {
-	return []any{"l-1", 1, "labor", nil, "Oil change", "1", nil, nil, "", int64(250_000), int64(250_000), "not_started", []string{}}
+	return []any{"l-1", 1, "labor", nil, "Oil change", "1", nil, nil, "", int64(250_000), int64(250_000), "not_started", []string{}, nil, false}
 }
 
 func TestPostgresRepository_Create(t *testing.T) {
@@ -376,4 +376,67 @@ func TestPostgresRepository_LinesReference(t *testing.T) {
 
 	_, err = repo.LinesReference(ctx, "g-1", "", "unit-1")
 	require.ErrorIs(t, err, errBoom)
+}
+
+func TestPostgresRepository_LockAndJobUse(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+	tx := dbtest.New(t).
+		ExpectQueryRow("FOR UPDATE", dbtest.Row(repairOrderID)).
+		ExpectQueryRow("FOR UPDATE", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectQueryRow("FOR UPDATE", dbtest.ErrRow(errBoom)).
+		ExpectQueryRow("FROM repair_order_lines", dbtest.Row(true)).
+		ExpectQueryRow("FROM repair_order_lines", dbtest.ErrRow(errBoom))
+	ctx := tx.Context(t.Context())
+
+	require.NoError(t, repo.Lock(ctx, garageID, repairOrderID))
+	require.ErrorIs(t, repo.Lock(ctx, garageID, repairOrderID), domain.ErrRepairOrderNotFound)
+	require.ErrorIs(t, repo.Lock(ctx, garageID, repairOrderID), errBoom)
+
+	used, err := repo.LinesFromJob(ctx, garageID, "job-1")
+	require.NoError(t, err)
+	require.True(t, used)
+
+	_, err = repo.LinesFromJob(ctx, garageID, "job-1")
+	require.ErrorIs(t, err, errBoom)
+}
+
+func TestPostgresRepository_ReplaceLines(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+
+	t.Run("deletes the lines that left, upserts the others and saves the order", func(t *testing.T) {
+		t.Parallel()
+
+		ro := newRepairOrder()
+		tx := dbtest.New(t).
+			ExpectExec("DELETE FROM repair_order_lines", dbtest.Tag(1), nil)
+
+		for range ro.Lines {
+			tx.ExpectExec("INSERT INTO repair_order_lines", dbtest.Tag(1), nil)
+		}
+
+		tx.ExpectQueryRow("UPDATE repair_orders SET status", dbtest.Row(now))
+
+		for range ro.Lines {
+			tx.ExpectExec("UPDATE repair_order_lines SET status", dbtest.Tag(1), nil)
+		}
+
+		require.NoError(t, repo.ReplaceLines(tx.Context(t.Context()), ro))
+	})
+
+	t.Run("failures", func(t *testing.T) {
+		t.Parallel()
+
+		tx := dbtest.New(t).
+			ExpectExec("DELETE FROM repair_order_lines", dbtest.Tag(0), errBoom).
+			ExpectExec("DELETE FROM repair_order_lines", dbtest.Tag(1), nil).
+			ExpectExec("INSERT INTO repair_order_lines", dbtest.Tag(0), errBoom)
+		ctx := tx.Context(t.Context())
+
+		require.ErrorIs(t, repo.ReplaceLines(ctx, newRepairOrder()), errBoom)
+		require.ErrorIs(t, repo.ReplaceLines(ctx, newRepairOrder()), errBoom)
+	})
 }

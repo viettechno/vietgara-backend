@@ -9,6 +9,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/mocks"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -34,7 +35,19 @@ type deps struct {
 // now is the fixed clock of the tests: a Thursday morning in Ho Chi Minh City.
 var now = time.Date(2026, time.October, 15, 3, 0, 0, 0, time.UTC)
 
+// newUseCase builds the use case over mocks. A stock movement rechecks the draft
+// stock issues of its part; by default there are none (see newBareUseCase for
+// the tests of that check).
 func newUseCase(t *testing.T) (*usecase.InventoryUseCase, *deps) {
+	t.Helper()
+
+	uc, d := newBareUseCase(t)
+	d.Repo.EXPECT().DraftLines(mock.Anything, mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+
+	return uc, d
+}
+
+func newBareUseCase(t *testing.T) (*usecase.InventoryUseCase, *deps) {
 	t.Helper()
 
 	d := &deps{

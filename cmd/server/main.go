@@ -333,11 +333,13 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 
 	// Repair Order (Release 1.3): the Kanban board, plus the
 	// draft-creation-from-quote use case Quote depends on (FR-QUO-04).
-	repairOrder := buildRepairOrder(pool, events, garages, license.entitlements, repairOrderVehicles{vehicles: vehicleRepo}, quantities)
+	repairOrderIssueState := &repairOrderIssues{}
+	repairOrder := buildRepairOrder(pool, events, garages, license.entitlements, repairOrderVehicles{vehicles: vehicleRepo}, quantities,
+		repairOrderIssueState)
 
 	// Quote & Pricing (Release 1.2)
 	quote := buildQuote(pool, tx, events, mailer, garages, license.entitlements, customerRepo, vehicleRepo, repairOrder.uc,
-		quoteBillingParties{profiles: taxProfileUC}, quantities)
+		quoteBillingParties{profiles: taxProfileUC}, quantities, quoteJobs{jobs: catalogue.uc})
 
 	// Inventory (Release 7.0): stock on hand, goods receipts with average
 	// cost, part suppliers and the repair order stock issues kept by the
@@ -346,6 +348,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	inventory := buildInventory(pool, events, inventoryParts{partQuantities: quantities},
 		inventoryGarages{garages: garages}, inventoryDirectory{suppliers: supplierRepo, users: users}, auditLog)
 	catalogueRefs.inventory, catalogueRefs.quotes, catalogueRefs.repairOrders = inventory.repo, quote.quotes, repairOrder.repo
+	repairOrderIssueState.inventory = inventory.uc
 
 	supplierUC := supplierUsecase.NewUseCase(supplierRepo, supplierUsage{inventory: inventory.repo})
 	supplierSrv := supplierHandler.NewServer(supplierUC)
@@ -397,7 +400,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	customerPortalSrv := buildCustomerPortal(tx, identityUC, customerRepo, vehicleUC, garages, customerLinks)
 
 	// Events: Kafka when brokers are configured, otherwise in-process.
-	if err := wireEvents(app, pool, tx, tenantUC, license, inventory, notification); err != nil {
+	if err := wireEvents(app, pool, tx, tenantUC, license, inventory, repairOrder, notification); err != nil {
 		return nil, err
 	}
 
@@ -427,7 +430,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
 		customerHandler.LinkPolicies(), customerHandler.TaxProfilePolicies(),
 		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
-		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(), fileHandler.Policies(), catalogueHandler.Policies(),
+		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(), fileHandler.Policies(), catalogueHandler.Policies(), catalogueHandler.JobPolicies(),
 		technicianHandler.Policies(), customerportalHandler.Policies(), dataimportHandler.Policies(),
 	)
 	app.grpcServer = grpc.NewServer(
@@ -459,6 +462,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	supplierv1.RegisterSupplierServiceServer(app.grpcServer, supplierSrv)
 	filev1.RegisterFileServiceServer(app.grpcServer, fileModule.server)
 	cataloguev1.RegisterCatalogueServiceServer(app.grpcServer, catalogue.server)
+	cataloguev1.RegisterJobServiceServer(app.grpcServer, catalogue.jobs)
 	quotev1.RegisterQuoteServiceServer(app.grpcServer, quote.server)
 	quotev1.RegisterPublicQuoteServiceServer(app.grpcServer, quote.server)
 	repairorderv1.RegisterRepairOrderServiceServer(app.grpcServer, repairOrder.server)
@@ -485,7 +489,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 // dispatcher) and subscribes the module consumers.
 func wireEvents(
 	app *application, pool *platformdb.Pool, tx *platformdb.TxManager, tenantUC *tenantUsecase.TenantUseCase,
-	license *licenseModule, inventory *inventoryModule, notification *notificationModule,
+	license *licenseModule, inventory *inventoryModule, repairOrder *repairOrderModule, notification *notificationModule,
 ) error {
 	processor := outbox.NewProcessor(pool, tx)
 	relayOpts := []outbox.RelayOption{outbox.WithInterval(envDuration("OUTBOX_RELAY_INTERVAL", outbox.DefaultRelayInterval))}
@@ -498,6 +502,7 @@ func wireEvents(
 		tenantHandler.Subscribe(dispatcher, processor, tenantUC)
 		licenseHandler.Subscribe(dispatcher, processor, license.subscriptions)
 		inventoryHandler.Subscribe(dispatcher, processor, inventory.uc)
+		repairorderHandler.Subscribe(dispatcher, processor, repairOrder.uc)
 		notificationHandler.Subscribe(dispatcher, processor, notification.uc)
 		app.workers = append(app.workers, outbox.NewRelay(pool, tx, dispatcher, relayOpts...).Run)
 
@@ -517,6 +522,7 @@ func wireEvents(
 	tenantHandler.Subscribe(consumer, processor, tenantUC)
 	licenseHandler.Subscribe(consumer, processor, license.subscriptions)
 	inventoryHandler.Subscribe(consumer, processor, inventory.uc)
+	repairorderHandler.Subscribe(consumer, processor, repairOrder.uc)
 	notificationHandler.Subscribe(consumer, processor, notification.uc)
 
 	app.workers = append(app.workers,
@@ -564,7 +570,7 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 		customerv1.RegisterCustomerServiceHandler, customerv1.RegisterVehicleServiceHandler,
 		customerv1.RegisterCustomerLinkServiceHandler, customerv1.RegisterCustomerTaxProfileServiceHandler,
 		supplierv1.RegisterSupplierServiceHandler, filev1.RegisterFileServiceHandler,
-		cataloguev1.RegisterCatalogueServiceHandler,
+		cataloguev1.RegisterCatalogueServiceHandler, cataloguev1.RegisterJobServiceHandler,
 		quotev1.RegisterQuoteServiceHandler, quotev1.RegisterPublicQuoteServiceHandler,
 		repairorderv1.RegisterRepairOrderServiceHandler, inventoryv1.RegisterInventoryServiceHandler,
 		inventoryv1.RegisterImportServiceHandler,

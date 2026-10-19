@@ -39,12 +39,15 @@ const (
 	// StatusClosed (FR-REP-06): no further edits; ready for settlement
 	// (Release 1.4) and triggers stock deduction (Event Design).
 	StatusClosed RepairOrderStatus = "closed"
+	// StatusCancelled (Release 7.3): cancelled before work started; its
+	// stock issue is cancelled and the reservation released. Final.
+	StatusCancelled RepairOrderStatus = "cancelled"
 )
 
 // IsValid reports whether s is one of the defined RepairOrderStatus values.
 func (s RepairOrderStatus) IsValid() bool {
 	switch s {
-	case StatusOpen, StatusInProgress, StatusWaitingOnParts, StatusCompleted, StatusClosed:
+	case StatusOpen, StatusInProgress, StatusWaitingOnParts, StatusCompleted, StatusClosed, StatusCancelled:
 		return true
 	default:
 		return false
@@ -107,6 +110,12 @@ type Line struct {
 	// AssignedTechnicianIDs are the user ids assigned to this line
 	// (FR-REP-02); a line may have more than one.
 	AssignedTechnicianIDs []string
+	// JobID is the catalogue job the line came from (Release 7.3).
+	JobID *string
+	// NonBillable marks a hidden consumable (FR-CAT-08): its stock is
+	// deducted, but it has no price, is not shown to the customer and needs
+	// no progress, so it never holds the order back.
+	NonBillable bool
 }
 
 // RepairOrder is a repair job for one vehicle (FR-REP-01), either
@@ -134,10 +143,14 @@ type RepairOrder struct {
 	// quote's, which the settlement starts from. Zero is retail.
 	BillingParty billingparty.Party
 	ClosedAt     *time.Time
-	CreatedBy    *string
-	UpdatedBy    *string
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// WaitingOnParts is Inventory's answer that the order's draft stock
+	// issue cannot be covered by the stock on hand (Release 7.3); while it
+	// is set and work has not finished the status is waiting on parts.
+	WaitingOnParts bool
+	CreatedBy      *string
+	UpdatedBy      *string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 // Recalculate sums ro.Lines into ro.TotalAmount.
@@ -151,49 +164,82 @@ func (ro *RepairOrder) Recalculate() {
 }
 
 // DeriveStatus recomputes the repair order's overall status from its
-// lines' own status (FR-REP-03), leaving StatusClosed untouched -- closing
-// is only ever set explicitly by Close (FR-REP-06), never derived back
-// down from line edits.
+// lines' own status (FR-REP-03), leaving StatusClosed and StatusCancelled
+// untouched -- they are only ever set explicitly. Hidden consumables
+// (NonBillable) have no progress and are ignored. While Inventory reports a
+// shortage, an order that is open or in progress is waiting on parts.
 func (ro *RepairOrder) DeriveStatus() {
-	if ro.Status == StatusClosed {
+	if ro.Status == StatusClosed || ro.Status == StatusCancelled {
 		return
 	}
 
-	allCompleted, anyStarted := true, false
+	ro.Status = ro.progressStatus()
+
+	if ro.WaitingOnParts && (ro.Status == StatusOpen || ro.Status == StatusInProgress) {
+		ro.Status = StatusWaitingOnParts
+	}
+}
+
+// progressStatus is the status the lines' progress alone gives.
+func (ro *RepairOrder) progressStatus() RepairOrderStatus {
+	total, completed, started := 0, 0, false
 
 	for _, line := range ro.Lines {
-		if line.Status != LineCompleted {
-			allCompleted = false
+		if line.NonBillable {
+			continue
+		}
+
+		total++
+
+		if line.Status == LineCompleted {
+			completed++
 		}
 
 		if line.Status != LineNotStarted {
-			anyStarted = true
+			started = true
 		}
 	}
 
 	switch {
-	case len(ro.Lines) > 0 && allCompleted:
-		ro.Status = StatusCompleted
-	case anyStarted:
-		ro.Status = StatusInProgress
+	case total > 0 && completed == total:
+		return StatusCompleted
+	case started:
+		return StatusInProgress
 	default:
-		ro.Status = StatusOpen
+		return StatusOpen
 	}
 }
 
-// ReadyToClose reports whether every line is completed (FR-REP-06).
-func (ro *RepairOrder) ReadyToClose() bool {
-	if len(ro.Lines) == 0 {
-		return false
+// WorkStarted reports whether any line has moved out of not started, which is
+// the order starting (FR-INV-20) whatever the waiting mark says.
+func (ro *RepairOrder) WorkStarted() bool {
+	for _, line := range ro.Lines {
+		if !line.NonBillable && line.Status != LineNotStarted {
+			return true
+		}
 	}
 
+	return false
+}
+
+// ReadyToClose reports whether every line other than a hidden consumable is
+// completed (FR-REP-06).
+func (ro *RepairOrder) ReadyToClose() bool {
+	billable := 0
+
 	for _, line := range ro.Lines {
+		if line.NonBillable {
+			continue
+		}
+
+		billable++
+
 		if line.Status != LineCompleted {
 			return false
 		}
 	}
 
-	return true
+	return billable > 0
 }
 
 // PartLines returns the lines that consume inventory: type PART with a
@@ -238,6 +284,25 @@ var (
 	// ErrNotReadyToClose is returned by Close while a line is not yet
 	// completed (FR-REP-06).
 	ErrNotReadyToClose = errors.New("every line must be completed before closing")
+	// ErrNotEditable is returned when a line is added, changed or removed on
+	// a closed or cancelled repair order.
+	ErrNotEditable = errors.New("a closed or cancelled repair order cannot be changed")
+	// ErrNotCancellable is returned by Cancel once work has started or the
+	// order is completed, closed or already cancelled.
+	ErrNotCancellable = errors.New("only a repair order whose work has not started can be cancelled")
+	// ErrLastLine is returned when the only line of an order would be removed.
+	ErrLastLine = errors.New("a repair order needs at least one line")
+	// ErrStockIssuePosted is returned when a part line is added, changed or
+	// removed, or the order cancelled, after its stock issue was posted.
+	ErrStockIssuePosted = errors.New("the stock issue is already posted, so the parts can no longer change")
+	// ErrQuantityNeedsEntered is returned when only the quantity of a line typed
+	// in a packaging unit is edited: that amount is entered_quantity.
+	ErrQuantityNeedsEntered = errors.New("the amount of a line in a packaging unit is entered_quantity")
+	// ErrInvalidJobRef is returned for a job reference that is not an id.
+	ErrInvalidJobRef = errors.New("job id is not valid")
+	// ErrInvalidNonBillable is returned for a hidden consumable that is not a
+	// catalogue part line, or for an order left with no billable line.
+	ErrInvalidNonBillable = errors.New("only a catalogue part line can be non-billable, and an order needs a billable line")
 
 	ErrFieldTooLong = errors.New("field is too long")
 )

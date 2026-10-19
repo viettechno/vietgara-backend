@@ -812,6 +812,11 @@ func (r *PostgresRepository) ReplacePackaging(ctx context.Context, garageID, par
 	if _, err := q.Exec(ctx,
 		`DELETE FROM part_units WHERE garage_id = $1 AND part_id = $2 AND NOT (unit_id = ANY($3::uuid[]))`,
 		garageID, partID, kept); err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgRestrictViolation && pgErr.ConstraintName == "job_parts_garage_part_unit_fkey" {
+			return domain.ErrPackagingUnitUsedByJob
+		}
+
 		return err
 	}
 

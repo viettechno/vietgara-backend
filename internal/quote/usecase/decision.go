@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"time"
 
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/quote/domain"
@@ -126,7 +127,7 @@ func (uc *QuoteUseCase) applyDecisions(q *domain.Quote, inputs []LineDecisionInp
 		return domain.ErrNotEditable
 	}
 
-	if len(inputs) != len(q.Lines) {
+	if len(inputs) != q.BillableCount() {
 		return domain.ErrDecisionMismatch
 	}
 
@@ -138,7 +139,13 @@ func (uc *QuoteUseCase) applyDecisions(q *domain.Quote, inputs []LineDecisionInp
 	now := uc.Now()
 	anyApproved := false
 
+	approvedJobs := make(map[string]struct{})
+
 	for i := range q.Lines {
+		if q.Lines[i].NonBillable {
+			continue
+		}
+
 		approved, ok := approvals[q.Lines[i].ID]
 		if !ok {
 			return domain.ErrDecisionMismatch
@@ -147,12 +154,18 @@ func (uc *QuoteUseCase) applyDecisions(q *domain.Quote, inputs []LineDecisionInp
 		if approved {
 			q.Lines[i].Decision = domain.DecisionApproved
 			anyApproved = true
+
+			if q.Lines[i].JobID != nil {
+				approvedJobs[*q.Lines[i].JobID] = struct{}{}
+			}
 		} else {
 			q.Lines[i].Decision = domain.DecisionRejected
 		}
 
 		q.Lines[i].DecidedAt = &now
 	}
+
+	decideConsumables(q, approvedJobs, anyApproved, now)
 
 	q.Status = domain.StatusRejected
 	if anyApproved {
@@ -163,6 +176,31 @@ func (uc *QuoteUseCase) applyDecisions(q *domain.Quote, inputs []LineDecisionInp
 	q.PublicTokenHash, q.PublicTokenExpiresAt = nil, nil
 
 	return nil
+}
+
+// decideConsumables settles the hidden consumables, which the customer never
+// sees: one follows its job (it is used when any billable line of the job was
+// approved), a free-standing one follows the quote.
+func decideConsumables(q *domain.Quote, approvedJobs map[string]struct{}, anyApproved bool, now time.Time) {
+	for i := range q.Lines {
+		line := &q.Lines[i]
+		if !line.NonBillable {
+			continue
+		}
+
+		used := anyApproved
+
+		if line.JobID != nil {
+			_, used = approvedJobs[*line.JobID]
+		}
+
+		line.Decision = domain.DecisionRejected
+		if used {
+			line.Decision = domain.DecisionApproved
+		}
+
+		line.DecidedAt = &now
+	}
 }
 
 func (uc *QuoteUseCase) publishDecisionEvent(ctx context.Context, q *domain.Quote) error {

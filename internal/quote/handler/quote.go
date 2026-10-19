@@ -127,6 +127,21 @@ func (s *Server) DeleteQuote(ctx context.Context, req *quotev1.DeleteQuoteReques
 	})
 }
 
+// AddQuoteJob appends a job's labor and part lines to a draft quote
+// (FR-CAT-06).
+func (s *Server) AddQuoteJob(ctx context.Context, req *quotev1.AddQuoteJobRequest) (*quotev1.AddQuoteJobResponse, error) {
+	return run(ctx, func(actorID string) (*quotev1.AddQuoteJobResponse, error) {
+		q, err := s.uc.AddJob(ctx, usecase.AddJobRequest{
+			GarageID: req.GetGarageId(), QuoteID: req.GetQuoteId(), JobID: req.GetJobId(), ActorID: actorID,
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		return &quotev1.AddQuoteJobResponse{Quote: quoteToProto(q)}, nil
+	})
+}
+
 // maskPaths returns the update mask paths, or settable when it is empty.
 func maskPaths(paths []string, settable ...string) []string {
 	if len(paths) == 0 {

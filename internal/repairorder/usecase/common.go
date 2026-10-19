@@ -49,9 +49,12 @@ var (
 	invalidErrors  = []error{
 		domain.ErrVehicleRequired, domain.ErrNoLines, domain.ErrTooManyLines, domain.ErrDescriptionRequired,
 		domain.ErrInvalidItemType, domain.ErrInvalidQuantity, domain.ErrInvalidUnitPrice, domain.ErrInvalidLineStatus,
-		domain.ErrFieldTooLong,
+		domain.ErrFieldTooLong, domain.ErrInvalidNonBillable, domain.ErrInvalidJobRef, domain.ErrQuantityNeedsEntered,
 	}
-	preconditionErrors = []error{domain.ErrAlreadyClosed, domain.ErrNotReadyToClose}
+	preconditionErrors = []error{
+		domain.ErrAlreadyClosed, domain.ErrNotReadyToClose, domain.ErrNotEditable, domain.ErrNotCancellable,
+		domain.ErrLastLine, domain.ErrStockIssuePosted,
+	}
 )
 
 // toAppError classifies err into an *apperror.AppError; op names the
@@ -67,10 +70,36 @@ func toAppError(op string, err error) error {
 	case isAny(err, invalidErrors):
 		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err)
 	case isAny(err, preconditionErrors):
-		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err)
+		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err).WithReason(preconditionReason(err))
 	default:
 		return apperror.Wrap(apperror.CodeInternal, op, err)
 	}
+}
+
+// Client-facing reasons for the Release 7.3 refusals.
+const (
+	ReasonStockIssuePosted = "STOCK_ISSUE_POSTED"
+	ReasonNotCancellable   = "REPAIR_ORDER_NOT_CANCELLABLE"
+	ReasonLastLine         = "LAST_LINE"
+)
+
+// preconditionReason is the stable reason of a refusal that has one; empty for
+// the others.
+func preconditionReason(err error) string {
+	switch {
+	case errors.Is(err, domain.ErrStockIssuePosted):
+		return ReasonStockIssuePosted
+	case errors.Is(err, domain.ErrNotCancellable):
+		return ReasonNotCancellable
+	case errors.Is(err, domain.ErrLastLine):
+		return ReasonLastLine
+	default:
+		return ""
+	}
+}
+
+func errorsIsNotFound(err error) bool {
+	return errors.Is(err, domain.ErrRepairOrderNotFound)
 }
 
 func isAny(err error, targets []error) bool {

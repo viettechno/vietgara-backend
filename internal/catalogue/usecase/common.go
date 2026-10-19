@@ -51,14 +51,20 @@ const (
 	ReasonPackagingUnitHasBarcode = "PACKAGING_UNIT_HAS_BARCODE"
 )
 
+// Client-facing reasons for the job catalogue (FR-CAT-05).
+const (
+	ReasonJobInactive            = "JOB_INACTIVE"
+	ReasonPackagingUnitUsedByJob = "PACKAGING_UNIT_USED_BY_JOB"
+)
+
 var (
 	notFoundErrors = []error{
 		domain.ErrPartNotFound, domain.ErrUnitNotFound, domain.ErrCategoryNotFound, domain.ErrImageNotFound,
-		domain.ErrBarcodeNotFound,
+		domain.ErrBarcodeNotFound, domain.ErrJobNotFound,
 	}
 	conflictErrors = []error{
 		domain.ErrSKUTaken, domain.ErrUnitNameTaken, domain.ErrCategoryNameTaken, domain.ErrImageAlreadyAttached,
-		domain.ErrBarcodeAlreadyUsed,
+		domain.ErrBarcodeAlreadyUsed, domain.ErrJobNameTaken,
 	}
 	preconditionErrors = []error{domain.ErrBaseUnitLocked, domain.ErrPartInactive, domain.ErrPackagingUnitHasBarcode}
 	invalidErrors      = []error{
@@ -68,6 +74,8 @@ var (
 		domain.ErrBaseUnitPackaged, domain.ErrDuplicateUnit, domain.ErrInactiveUnit, domain.ErrInactiveCategory,
 		domain.ErrTooManyImages, domain.ErrNotPartImage, domain.ErrUnitNotForPart, domain.ErrQuantityPrecision,
 		domain.ErrInvalidQuantity, domain.ErrCategoryHasChildren, domain.ErrBarcodeInvalid,
+		domain.ErrJobNameRequired, domain.ErrInvalidLaborPrice, domain.ErrInvalidDuration, domain.ErrTooManyJobParts,
+		domain.ErrDuplicateJobPart,
 	}
 )
 
@@ -111,6 +119,10 @@ func barcodeAppError(err error) error {
 		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err).WithReason(ReasonBarcodeInvalid)
 	case errors.Is(err, domain.ErrPackagingUnitHasBarcode):
 		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err).WithReason(ReasonPackagingUnitHasBarcode)
+	case errors.Is(err, domain.ErrJobInactive):
+		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err).WithReason(ReasonJobInactive)
+	case errors.Is(err, domain.ErrPackagingUnitUsedByJob):
+		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err).WithReason(ReasonPackagingUnitUsedByJob)
 	default:
 		return nil
 	}

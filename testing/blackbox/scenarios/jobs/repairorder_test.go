@@ -348,6 +348,7 @@ func TestStockIssueFollowsTheLines(t *testing.T) {
 // its stock issue is cancelled and the reservation released; the order is
 // read-only; the quote stays converted; started, completed, closed and
 // already cancelled orders, and one whose stock issue is posted, are refused.
+//
 //nolint:funlen // one scenario, read top to bottom
 func TestCancelRepairOrder(t *testing.T) {
 	t.Parallel()

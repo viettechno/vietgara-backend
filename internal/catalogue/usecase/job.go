@@ -311,7 +311,7 @@ func cleanJobPart(part *domain.Part, in JobPartInput) (domain.JobPart, error) {
 		}
 
 		if !found {
-			return domain.JobPart{}, domain.ErrUnitNotForPart
+			return domain.JobPart{}, domain.ErrJobPartUnit
 		}
 
 		unitID = in.UnitID
@@ -360,7 +360,7 @@ func describeJobPart(jp *domain.JobPart, part *domain.Part) {
 	}
 
 	jp.PartSKU, jp.PartName, jp.PartIsActive = part.SKU, part.Name, part.IsActive
-	jp.UnitAbbreviation, jp.UnitPrice = part.BaseUnitAbbreviation, part.SalePrice
+	jp.UnitAbbreviation, jp.UnitPrice, jp.BasePrice = part.BaseUnitAbbreviation, part.SalePrice, part.SalePrice
 
 	if jp.UnitID == nil {
 		return
@@ -369,6 +369,7 @@ func describeJobPart(jp *domain.JobPart, part *domain.Part) {
 	for _, u := range part.PackagingUnits {
 		if u.UnitID == *jp.UnitID {
 			jp.UnitAbbreviation, jp.UnitPrice = u.UnitAbbreviation, u.EffectivePrice
+			jp.BasePrice = domain.PerBaseUnit(u.EffectivePrice, u.Factor)
 
 			return
 		}

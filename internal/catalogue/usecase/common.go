@@ -75,7 +75,7 @@ var (
 		domain.ErrTooManyImages, domain.ErrNotPartImage, domain.ErrUnitNotForPart, domain.ErrQuantityPrecision,
 		domain.ErrInvalidQuantity, domain.ErrCategoryHasChildren, domain.ErrBarcodeInvalid,
 		domain.ErrJobNameRequired, domain.ErrInvalidLaborPrice, domain.ErrInvalidDuration, domain.ErrTooManyJobParts,
-		domain.ErrDuplicateJobPart,
+		domain.ErrDuplicateJobPart, domain.ErrJobPartUnit,
 	}
 )
 

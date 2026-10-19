@@ -135,7 +135,9 @@ type JobPart struct {
 	// unit.
 	UnitID string
 	// Quantity is the amount typed in UnitID (or the base unit).
-	Quantity    string
+	Quantity string
+	// UnitPrice is the price per base unit of the part, which a line prices
+	// its base-unit quantity at (a pack price is divided by the pack size).
 	UnitPrice   int64
 	NonBillable bool
 }

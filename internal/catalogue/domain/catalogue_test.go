@@ -152,3 +152,24 @@ func TestNormalizeBarcode(t *testing.T) {
 	_, err := domain.NormalizeBarcode(strings.Repeat("9", domain.MaxBarcodeLen))
 	require.NoError(t, err, "64 characters is allowed")
 }
+
+func TestPerBaseUnit(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		price  int64
+		factor string
+		want   int64
+	}{
+		{360_000, "24", 15_000},
+		{340_000, "24", 14_167}, // 14,166.67 rounds up
+		{450_000, "5", 90_000},
+		{10, "3", 3},
+		{10, "0", 0},
+		{10, "x", 0},
+	}
+
+	for _, tt := range tests {
+		assert.Equal(t, tt.want, domain.PerBaseUnit(tt.price, tt.factor), "%d / %s", tt.price, tt.factor)
+	}
+}

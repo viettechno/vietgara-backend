@@ -25,6 +25,10 @@ const (
 	MaxCategoryDepth = 3
 	// MaxPartImages bounds FR-CAT-04: one to three images per part.
 	MaxPartImages = 3
+	// MaxPartBarcodes bounds FR-INV-13: a part may carry up to twenty codes.
+	MaxPartBarcodes = 20
+	// MaxBarcodeLen is the length of a barcode after trimming.
+	MaxBarcodeLen = 64
 	// QuantityScale is the number of decimals a stored quantity keeps
 	// (NUMERIC(14,3)).
 	QuantityScale = 3
@@ -78,6 +82,19 @@ type Image struct {
 	URL      string
 }
 
+// PartBarcode is one scannable code of a part (FR-INV-13). A code is unique
+// across the garage, case-insensitively, and is stored as typed after
+// trimming. UnitID is nil for the base unit and otherwise a packaging unit of
+// the same part (a case barcode).
+type PartBarcode struct {
+	Barcode  string
+	UnitID   *string
+	UnitName string
+	// UnitAbbreviation is the packaging unit's abbreviation; empty for the
+	// base unit.
+	UnitAbbreviation string
+}
+
 // Part is one part code of a garage (FR-CAT-01..04, FR-CAT-09).
 type Part struct {
 	ID                   string
@@ -95,11 +112,13 @@ type Part struct {
 	// ReorderThreshold is a decimal string in the base unit.
 	ReorderThreshold string
 	PackagingUnits   []PackagingUnit
-	Images           []Image
-	CreatedBy        *string
-	UpdatedBy        *string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	// Barcodes are the codes that identify the part (FR-INV-13).
+	Barcodes  []PartBarcode
+	Images    []Image
+	CreatedBy *string
+	UpdatedBy *string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // Sentinel errors for business-rule violations in the Catalogue module.
@@ -137,6 +156,11 @@ var (
 	ErrCategoryNameTaken    = errors.New("another category at this level already has this name")
 	ErrPartInactive         = errors.New("the part is not active")
 	ErrImageAlreadyAttached = errors.New("the image is already attached to a part")
+
+	ErrBarcodeNotFound         = errors.New("no part has this barcode")
+	ErrBarcodeInvalid          = errors.New("a barcode must be 1 to 64 characters: letters, digits, space or - . / + $ %")
+	ErrBarcodeAlreadyUsed      = errors.New("another part of the garage already uses this barcode")
+	ErrPackagingUnitHasBarcode = errors.New("a packaging unit with a barcode cannot be removed")
 )
 
 // CheckLength returns ErrFieldTooLong when value has more than maxLen
@@ -147,6 +171,22 @@ func CheckLength(value string, maxLen int) error {
 	}
 
 	return nil
+}
+
+// barcodePattern accepts the characters scanners produce: letters, digits,
+// space and the punctuation - . / + $ % (FR-INV-13).
+var barcodePattern = regexp.MustCompile(`^[A-Za-z0-9 \-./+$%]+$`)
+
+// NormalizeBarcode trims a typed or scanned code and checks it: 1 to 64
+// characters from barcodePattern. The code keeps its case; matching is
+// case-insensitive.
+func NormalizeBarcode(s string) (string, error) {
+	barcode := strings.TrimSpace(s)
+	if barcode == "" || len([]rune(barcode)) > MaxBarcodeLen || !barcodePattern.MatchString(barcode) {
+		return "", ErrBarcodeInvalid
+	}
+
+	return barcode, nil
 }
 
 var decimalPattern = regexp.MustCompile(`^\d+(\.\d+)?$`)

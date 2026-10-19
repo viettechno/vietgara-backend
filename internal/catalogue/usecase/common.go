@@ -44,21 +44,30 @@ type Page[T any] struct {
 	PageSize int
 }
 
+// Client-facing reasons for barcode rules (FR-INV-13).
+const (
+	ReasonBarcodeAlreadyUsed      = "BARCODE_ALREADY_USED"
+	ReasonBarcodeInvalid          = "BARCODE_INVALID"
+	ReasonPackagingUnitHasBarcode = "PACKAGING_UNIT_HAS_BARCODE"
+)
+
 var (
 	notFoundErrors = []error{
 		domain.ErrPartNotFound, domain.ErrUnitNotFound, domain.ErrCategoryNotFound, domain.ErrImageNotFound,
+		domain.ErrBarcodeNotFound,
 	}
 	conflictErrors = []error{
 		domain.ErrSKUTaken, domain.ErrUnitNameTaken, domain.ErrCategoryNameTaken, domain.ErrImageAlreadyAttached,
+		domain.ErrBarcodeAlreadyUsed,
 	}
-	preconditionErrors = []error{domain.ErrBaseUnitLocked, domain.ErrPartInactive}
+	preconditionErrors = []error{domain.ErrBaseUnitLocked, domain.ErrPartInactive, domain.ErrPackagingUnitHasBarcode}
 	invalidErrors      = []error{
 		domain.ErrSKURequired, domain.ErrNameRequired, domain.ErrBaseUnitRequired, domain.ErrFieldTooLong,
 		domain.ErrNegativePrice, domain.ErrInvalidThreshold, domain.ErrUnitNameRequired, domain.ErrUnitAbbrevRequired,
 		domain.ErrCategoryNameRequired, domain.ErrCategoryDepth, domain.ErrCategoryCycle, domain.ErrInvalidFactor,
 		domain.ErrBaseUnitPackaged, domain.ErrDuplicateUnit, domain.ErrInactiveUnit, domain.ErrInactiveCategory,
 		domain.ErrTooManyImages, domain.ErrNotPartImage, domain.ErrUnitNotForPart, domain.ErrQuantityPrecision,
-		domain.ErrInvalidQuantity, domain.ErrCategoryHasChildren,
+		domain.ErrInvalidQuantity, domain.ErrCategoryHasChildren, domain.ErrBarcodeInvalid,
 	}
 )
 
@@ -74,6 +83,10 @@ func toAppError(op string, err error) error {
 		return err
 	}
 
+	if err := barcodeAppError(err); err != nil {
+		return err
+	}
+
 	switch {
 	case isAny(err, notFoundErrors):
 		return apperror.Wrap(apperror.CodeNotFound, err.Error(), err)
@@ -85,6 +98,21 @@ func toAppError(op string, err error) error {
 		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err)
 	default:
 		return apperror.Wrap(apperror.CodeInternal, op, err)
+	}
+}
+
+// barcodeAppError gives the barcode rules their own stable reasons; nil for
+// any other error.
+func barcodeAppError(err error) error {
+	switch {
+	case errors.Is(err, domain.ErrBarcodeAlreadyUsed):
+		return apperror.Wrap(apperror.CodeAlreadyExists, err.Error(), err).WithReason(ReasonBarcodeAlreadyUsed)
+	case errors.Is(err, domain.ErrBarcodeInvalid), errors.Is(err, domain.ErrUnitNotForPart):
+		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err).WithReason(ReasonBarcodeInvalid)
+	case errors.Is(err, domain.ErrPackagingUnitHasBarcode):
+		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err).WithReason(ReasonPackagingUnitHasBarcode)
+	default:
+		return nil
 	}
 }
 

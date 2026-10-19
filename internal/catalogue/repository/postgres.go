@@ -36,10 +36,12 @@ const (
 	// partSearch filters live parts of garage $1. $2 is an ILIKE pattern over
 	// SKU, name and brand ("" disables it), $3 restricts to categories (an
 	// empty array disables it), $4 the exact brand ("" disables it), $5 also
-	// lists deactivated parts.
+	// lists deactivated parts, and $6 is an exact barcode ("" disables it).
 	partSearch = partFrom + `
 		WHERE i.garage_id = $1 AND i.deleted_at IS NULL AND ($5::bool OR i.is_active)
-		AND ($2::text = '' OR i.sku ILIKE $2 OR i.name ILIKE $2 OR i.brand ILIKE $2)
+		AND ($2::text = '' OR i.sku ILIKE $2 OR i.name ILIKE $2 OR i.brand ILIKE $2
+			OR EXISTS (SELECT 1 FROM part_barcodes b
+			           WHERE b.garage_id = i.garage_id AND b.part_id = i.id AND lower(b.barcode) = lower($6)))
 		AND (cardinality($3::uuid[]) = 0 OR i.category_id = ANY($3::uuid[]))
 		AND ($4::text = '' OR lower(i.brand) = lower($4))`
 )
@@ -83,6 +85,8 @@ func translate(err error) error {
 		return domain.ErrUnitNameTaken
 	case "idx_part_categories_sibling_name_unique":
 		return domain.ErrCategoryNameTaken
+	case "idx_part_barcodes_garage_barcode_unique":
+		return domain.ErrBarcodeAlreadyUsed
 	}
 
 	return err
@@ -358,6 +362,70 @@ func (r *PostgresRepository) CreatePart(ctx context.Context, p *domain.Part) err
 	return translate(row.Scan(&p.CreatedAt, &p.UpdatedAt))
 }
 
+// CreateParts inserts parts with their packaging units and barcodes, one
+// statement per table. A SKU or barcode already taken returns the matching
+// domain error and the caller's transaction is abandoned.
+func (r *PostgresRepository) CreateParts(
+	ctx context.Context, garageID, actorID string, parts []*domain.Part,
+	packaging []usecase.PackagingRow, barcodes []usecase.BarcodeRow,
+) error {
+	if len(parts) == 0 {
+		return nil
+	}
+
+	q := r.q(ctx)
+	ids, skus, names := make([]string, len(parts)), make([]string, len(parts)), make([]string, len(parts))
+	units, categories, brands := make([]string, len(parts)), make([]*string, len(parts)), make([]string, len(parts))
+
+	for i, p := range parts {
+		ids[i], skus[i], names[i], units[i], categories[i], brands[i] = p.ID, p.SKU, p.Name, p.BaseUnitID, p.CategoryID, p.Brand
+	}
+
+	if _, err := q.Exec(ctx, `
+		INSERT INTO parts (id, garage_id, sku, name, base_unit_id, category_id, brand, created_by, updated_by)
+		SELECT t.id, $1, t.sku, t.name, t.base_unit_id, t.category_id, t.brand, $2, $2
+		FROM unnest($3::uuid[], $4::text[], $5::text[], $6::uuid[], $7::uuid[], $8::text[])
+		     AS t(id, sku, name, base_unit_id, category_id, brand)`,
+		garageID, nullable(actorID), ids, skus, names, units, categories, brands); err != nil {
+		return translate(err)
+	}
+
+	if len(packaging) > 0 {
+		partIDs, unitIDs, factors := make([]string, len(packaging)), make([]string, len(packaging)), make([]string, len(packaging))
+		prices := make([]*int64, len(packaging))
+
+		for i, row := range packaging {
+			partIDs[i], unitIDs[i], factors[i], prices[i] = row.PartID, row.Unit.UnitID, row.Unit.Factor, row.Unit.SalePrice
+		}
+
+		if _, err := q.Exec(ctx, `
+			INSERT INTO part_units (garage_id, part_id, unit_id, factor, sale_price, created_by)
+			SELECT $1, t.part_id, t.unit_id, t.factor::numeric, t.sale_price, $2
+			FROM unnest($3::uuid[], $4::uuid[], $5::text[], $6::bigint[]) AS t(part_id, unit_id, factor, sale_price)`,
+			garageID, nullable(actorID), partIDs, unitIDs, factors, prices); err != nil {
+			return err
+		}
+	}
+
+	if len(barcodes) > 0 {
+		partIDs, codes, unitIDs := make([]string, len(barcodes)), make([]string, len(barcodes)), make([]*string, len(barcodes))
+
+		for i, row := range barcodes {
+			partIDs[i], codes[i], unitIDs[i] = row.PartID, row.Barcode.Barcode, row.Barcode.UnitID
+		}
+
+		if _, err := q.Exec(ctx, `
+			INSERT INTO part_barcodes (garage_id, part_id, unit_id, barcode, created_by)
+			SELECT $1, t.part_id, t.unit_id, t.barcode, $2
+			FROM unnest($3::uuid[], $4::uuid[], $5::text[]) AS t(part_id, unit_id, barcode)`,
+			garageID, nullable(actorID), partIDs, unitIDs, codes); err != nil {
+			return translate(err)
+		}
+	}
+
+	return nil
+}
+
 // FindPart returns the part with its packaging units and image links.
 func (r *PostgresRepository) FindPart(ctx context.Context, garageID, partID string) (*domain.Part, error) {
 	if !validID(partID) {
@@ -413,6 +481,37 @@ func (r *PostgresRepository) FindPartsByIDs(ctx context.Context, garageID string
 	return parts, r.fillChildren(ctx, garageID, parts)
 }
 
+// FindPartsBySKUs returns the parts with these SKUs, matched
+// case-insensitively, deleted ones excluded.
+func (r *PostgresRepository) FindPartsBySKUs(ctx context.Context, garageID string, skus []string) ([]*domain.Part, error) {
+	valid := make([]string, 0, len(skus))
+
+	for _, sku := range skus {
+		if sku = strings.TrimSpace(sku); sku != "" {
+			valid = append(valid, strings.ToLower(sku))
+		}
+	}
+
+	if len(valid) == 0 {
+		return nil, nil
+	}
+
+	rows, err := r.q(ctx).Query(ctx,
+		`SELECT `+partColumns+partFrom+` WHERE i.garage_id = $1 AND lower(i.sku) = ANY($2::text[]) AND i.deleted_at IS NULL`,
+		garageID, valid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	parts, err := collectParts(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	return parts, r.fillChildren(ctx, garageID, parts)
+}
+
 func collectParts(rows pgx.Rows) ([]*domain.Part, error) {
 	var out []*domain.Part
 
@@ -451,7 +550,7 @@ func (r *PostgresRepository) ListParts(ctx context.Context, garageID string, f u
 		categories = []string{}
 	}
 
-	args := []any{garageID, containsPattern(f.Query), categories, f.Brand, f.IncludeInactive}
+	args := []any{garageID, containsPattern(f.Query), categories, f.Brand, f.IncludeInactive, strings.TrimSpace(f.Query)}
 
 	var total int
 	if err := r.q(ctx).QueryRow(ctx, `SELECT count(*)`+partSearch, args...).Scan(&total); err != nil {
@@ -463,7 +562,7 @@ func (r *PostgresRepository) ListParts(ctx context.Context, garageID string, f u
 	}
 
 	rows, err := r.q(ctx).Query(ctx,
-		`SELECT `+partColumns+partSearch+` ORDER BY lower(i.name), i.id LIMIT $6 OFFSET $7`,
+		`SELECT `+partColumns+partSearch+` ORDER BY lower(i.name), i.id LIMIT $7 OFFSET $8`,
 		append(args, f.Limit, f.Offset)...)
 	if err != nil {
 		return nil, 0, err
@@ -480,10 +579,110 @@ func (r *PostgresRepository) ListParts(ctx context.Context, garageID string, f u
 	return parts, total, r.fillChildren(ctx, garageID, parts)
 }
 
-// SoftDeletePart marks the part deleted.
+// SoftDeletePart marks the part deleted and frees its barcodes: the delete
+// happens in the same transaction, so no other part can claim a code while
+// the part still looks alive.
 func (r *PostgresRepository) SoftDeletePart(ctx context.Context, garageID, partID, actorID string) error {
-	return r.touch(ctx, `UPDATE parts SET deleted_at = now(), updated_by = $3 WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL`,
-		garageID, partID, actorID, domain.ErrPartNotFound)
+	if err := r.touch(ctx,
+		`UPDATE parts SET deleted_at = now(), updated_by = $3 WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL`,
+		garageID, partID, actorID, domain.ErrPartNotFound); err != nil {
+		return err
+	}
+
+	_, err := r.q(ctx).Exec(ctx, `DELETE FROM part_barcodes WHERE garage_id = $1 AND part_id = $2`, garageID, partID)
+
+	return err
+}
+
+// ReplaceBarcodes replaces the part's barcode table.
+func (r *PostgresRepository) ReplaceBarcodes(
+	ctx context.Context, garageID, partID, actorID string, barcodes []domain.PartBarcode,
+) error {
+	q := r.q(ctx)
+
+	if _, err := q.Exec(ctx, `DELETE FROM part_barcodes WHERE garage_id = $1 AND part_id = $2`, garageID, partID); err != nil {
+		return err
+	}
+
+	for _, b := range barcodes {
+		if _, err := q.Exec(ctx, `
+			INSERT INTO part_barcodes (garage_id, part_id, unit_id, barcode, created_by)
+			VALUES ($1, $2, $3, $4, $5)`,
+			garageID, partID, b.UnitID, b.Barcode, nullable(actorID)); err != nil {
+			return translate(err)
+		}
+	}
+
+	_, err := q.Exec(ctx, `UPDATE parts SET updated_by = $3 WHERE garage_id = $1 AND id = $2`, garageID, partID, nullable(actorID))
+
+	return err
+}
+
+// FindBarcode returns the part and the barcode row matching code
+// case-insensitively, or domain.ErrBarcodeNotFound.
+func (r *PostgresRepository) FindBarcode(ctx context.Context, garageID, barcode string) (*domain.Part, *domain.PartBarcode, error) {
+	var (
+		partID string
+		code   domain.PartBarcode
+	)
+
+	err := r.q(ctx).QueryRow(ctx, `
+		SELECT b.part_id, b.barcode, b.unit_id, COALESCE(u.name, ''), COALESCE(u.abbreviation, '')
+		FROM part_barcodes b
+		JOIN parts i ON i.garage_id = b.garage_id AND i.id = b.part_id AND i.deleted_at IS NULL
+		LEFT JOIN units u ON u.garage_id = b.garage_id AND u.id = b.unit_id
+		WHERE b.garage_id = $1 AND lower(b.barcode) = lower($2)`,
+		garageID, barcode).Scan(&partID, &code.Barcode, &code.UnitID, &code.UnitName, &code.UnitAbbreviation)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil, domain.ErrBarcodeNotFound
+	}
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	p, err := r.FindPart(ctx, garageID, partID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return p, &code, nil
+}
+
+// BarcodesByCode returns the part id per lower-case code for the codes that
+// exist in the garage; unknown codes are absent.
+func (r *PostgresRepository) BarcodesByCode(ctx context.Context, garageID string, codes []string) (map[string]string, error) {
+	out := make(map[string]string, len(codes))
+	if len(codes) == 0 {
+		return out, nil
+	}
+
+	lowered := make([]string, 0, len(codes))
+	for _, code := range codes {
+		lowered = append(lowered, strings.ToLower(strings.TrimSpace(code)))
+	}
+
+	rows, err := r.q(ctx).Query(ctx, `
+		SELECT lower(b.barcode), b.part_id
+		FROM part_barcodes b
+		JOIN parts i ON i.garage_id = b.garage_id AND i.id = b.part_id AND i.deleted_at IS NULL
+		WHERE b.garage_id = $1 AND lower(b.barcode) = ANY($2::text[])`,
+		garageID, lowered)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var code, partID string
+		if err := rows.Scan(&code, &partID); err != nil {
+			return nil, err
+		}
+
+		out[code] = partID
+	}
+
+	return out, rows.Err()
 }
 
 // SetPartActive deactivates or reactivates the part.
@@ -563,7 +762,40 @@ func (r *PostgresRepository) fillChildren(ctx context.Context, garageID string, 
 		byID[partID].Images = append(byID[partID].Images, img)
 	}
 
-	return imgs.Err()
+	if err := imgs.Err(); err != nil {
+		return err
+	}
+
+	return r.fillBarcodes(ctx, garageID, ids, byID)
+}
+
+// fillBarcodes attaches each part's barcodes, ordered by code.
+func (r *PostgresRepository) fillBarcodes(ctx context.Context, garageID string, ids []string, byID map[string]*domain.Part) error {
+	codes, err := r.q(ctx).Query(ctx, `
+		SELECT b.part_id, b.barcode, b.unit_id, COALESCE(u.name, ''), COALESCE(u.abbreviation, '')
+		FROM part_barcodes b
+		LEFT JOIN units u ON u.garage_id = b.garage_id AND u.id = b.unit_id
+		WHERE b.garage_id = $1 AND b.part_id = ANY($2::uuid[])
+		ORDER BY lower(b.barcode), b.barcode`, garageID, ids)
+	if err != nil {
+		return err
+	}
+	defer codes.Close()
+
+	for codes.Next() {
+		var (
+			partID string
+			code   domain.PartBarcode
+		)
+
+		if err := codes.Scan(&partID, &code.Barcode, &code.UnitID, &code.UnitName, &code.UnitAbbreviation); err != nil {
+			return err
+		}
+
+		byID[partID].Barcodes = append(byID[partID].Barcodes, code)
+	}
+
+	return codes.Err()
 }
 
 // ReplacePackaging replaces the part's packaging table.

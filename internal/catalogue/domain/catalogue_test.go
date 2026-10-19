@@ -2,6 +2,7 @@ package domain_test
 
 import (
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -128,4 +129,26 @@ func TestDerivedPrice(t *testing.T) {
 	assert.Equal(t, int64(2), domain.DerivedPrice(3, "0.5"), "half a dong rounds up")
 	assert.Equal(t, int64(0), domain.DerivedPrice(15_000, "bad"))
 	assert.Equal(t, int64(0), domain.DerivedPrice(0, "24"))
+}
+
+func TestNormalizeBarcode(t *testing.T) {
+	t.Parallel()
+
+	for in, want := range map[string]string{
+		"8934567890123": "8934567890123", "  AB-12/3.4+5$6%7 8  ": "AB-12/3.4+5$6%7 8", "abc": "abc",
+	} {
+		got, err := domain.NormalizeBarcode(in)
+		require.NoError(t, err, in)
+		assert.Equal(t, want, got, in)
+	}
+
+	tooLong := strings.Repeat("9", domain.MaxBarcodeLen+1)
+
+	for _, bad := range []string{"", "   ", "ab_cd", "ab@cd", "ab;cd", "tên", tooLong} {
+		_, err := domain.NormalizeBarcode(bad)
+		require.ErrorIs(t, err, domain.ErrBarcodeInvalid, bad)
+	}
+
+	_, err := domain.NormalizeBarcode(strings.Repeat("9", domain.MaxBarcodeLen))
+	require.NoError(t, err, "64 characters is allowed")
 }

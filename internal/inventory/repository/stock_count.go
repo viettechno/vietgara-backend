@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -57,21 +58,31 @@ func (r *PostgresRepository) CreateStockCount(ctx context.Context, c *domain.Sto
 
 // InsertStockCountLines adds lines to a count.
 func (r *PostgresRepository) InsertStockCountLines(ctx context.Context, garageID, countID string, actor *string, lines []domain.StockCountLine) error {
-	q := platformdb.QuerierFromContext(ctx, r.pool)
-
-	for _, l := range lines {
-		_, err := q.Exec(ctx, `
-			INSERT INTO stock_count_lines (id, garage_id, stock_count_id, position, part_id, unit_id, entered_counted_quantity,
-			                               counted_quantity, system_quantity, average_cost, counted_at, created_by, updated_by)
-			VALUES ($1, $2, $3, $4, $5, $6, $7::numeric, $8::numeric, $9::numeric, $10::numeric, $11, $12, $12)`,
-			l.ID, garageID, countID, l.Position, l.PartID, l.UnitID, l.EnteredCounted, l.Counted, l.SystemQuantity, l.AverageCost,
-			l.CountedAt, actor)
-		if err != nil {
-			return err
-		}
+	if len(lines) == 0 {
+		return nil
 	}
 
-	return nil
+	n := len(lines)
+	ids, positions, parts := make([]string, n), make([]int32, n), make([]string, n)
+	units, entered, counted := make([]*string, n), make([]*string, n), make([]*string, n)
+	system, costs, at := make([]string, n), make([]*string, n), make([]*time.Time, n)
+
+	for i, l := range lines {
+		ids[i], positions[i], parts[i] = l.ID, int32(l.Position), l.PartID //nolint:gosec // a count has at most a few thousand lines
+		units[i], entered[i], counted[i] = l.UnitID, l.EnteredCounted, l.Counted
+		system[i], costs[i], at[i] = l.SystemQuantity, l.AverageCost, l.CountedAt
+	}
+
+	_, err := platformdb.QuerierFromContext(ctx, r.pool).Exec(ctx, `
+		INSERT INTO stock_count_lines (id, garage_id, stock_count_id, position, part_id, unit_id, entered_counted_quantity,
+		                               counted_quantity, system_quantity, average_cost, counted_at, created_by, updated_by)
+		SELECT t.id, $1, $2, t.position, t.part_id, t.unit_id, t.entered::numeric, t.counted::numeric, t.system::numeric,
+		       t.cost::numeric, t.counted_at, $3, $3
+		FROM unnest($4::uuid[], $5::int[], $6::uuid[], $7::uuid[], $8::text[], $9::text[], $10::text[], $11::text[], $12::timestamptz[])
+		     AS t(id, position, part_id, unit_id, entered, counted, system, cost, counted_at)`,
+		garageID, countID, actor, ids, positions, parts, units, entered, counted, system, costs, at)
+
+	return err
 }
 
 // FindStockCount returns the count with its lines in order. A line's average

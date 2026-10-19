@@ -114,6 +114,80 @@ func (_c *MockCatalogueRepository_AddImage_Call) RunAndReturn(run func(ctx conte
 	return _c
 }
 
+// BarcodesByCode provides a mock function for the type MockCatalogueRepository
+func (_mock *MockCatalogueRepository) BarcodesByCode(ctx context.Context, garageID string, codes []string) (map[string]string, error) {
+	ret := _mock.Called(ctx, garageID, codes)
+
+	if len(ret) == 0 {
+		panic("no return value specified for BarcodesByCode")
+	}
+
+	var r0 map[string]string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) (map[string]string, error)); ok {
+		return returnFunc(ctx, garageID, codes)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) map[string]string); ok {
+		r0 = returnFunc(ctx, garageID, codes)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[string]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, []string) error); ok {
+		r1 = returnFunc(ctx, garageID, codes)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockCatalogueRepository_BarcodesByCode_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'BarcodesByCode'
+type MockCatalogueRepository_BarcodesByCode_Call struct {
+	*mock.Call
+}
+
+// BarcodesByCode is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - codes []string
+func (_e *MockCatalogueRepository_Expecter) BarcodesByCode(ctx any, garageID any, codes any) *MockCatalogueRepository_BarcodesByCode_Call {
+	return &MockCatalogueRepository_BarcodesByCode_Call{Call: _e.mock.On("BarcodesByCode", ctx, garageID, codes)}
+}
+
+func (_c *MockCatalogueRepository_BarcodesByCode_Call) Run(run func(ctx context.Context, garageID string, codes []string)) *MockCatalogueRepository_BarcodesByCode_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCatalogueRepository_BarcodesByCode_Call) Return(stringToString map[string]string, err error) *MockCatalogueRepository_BarcodesByCode_Call {
+	_c.Call.Return(stringToString, err)
+	return _c
+}
+
+func (_c *MockCatalogueRepository_BarcodesByCode_Call) RunAndReturn(run func(ctx context.Context, garageID string, codes []string) (map[string]string, error)) *MockCatalogueRepository_BarcodesByCode_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CategoryHasParts provides a mock function for the type MockCatalogueRepository
 func (_mock *MockCatalogueRepository) CategoryHasParts(ctx context.Context, garageID string, categoryID string) (bool, error) {
 	ret := _mock.Called(ctx, garageID, categoryID)
@@ -300,6 +374,87 @@ func (_c *MockCatalogueRepository_CreatePart_Call) RunAndReturn(run func(ctx con
 	return _c
 }
 
+// CreateParts provides a mock function for the type MockCatalogueRepository
+func (_mock *MockCatalogueRepository) CreateParts(ctx context.Context, garageID string, actorID string, parts []*domain.Part, packaging []usecase.PackagingRow, barcodes []usecase.BarcodeRow) error {
+	ret := _mock.Called(ctx, garageID, actorID, parts, packaging, barcodes)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateParts")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, []*domain.Part, []usecase.PackagingRow, []usecase.BarcodeRow) error); ok {
+		r0 = returnFunc(ctx, garageID, actorID, parts, packaging, barcodes)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockCatalogueRepository_CreateParts_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateParts'
+type MockCatalogueRepository_CreateParts_Call struct {
+	*mock.Call
+}
+
+// CreateParts is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - actorID string
+//   - parts []*domain.Part
+//   - packaging []usecase.PackagingRow
+//   - barcodes []usecase.BarcodeRow
+func (_e *MockCatalogueRepository_Expecter) CreateParts(ctx any, garageID any, actorID any, parts any, packaging any, barcodes any) *MockCatalogueRepository_CreateParts_Call {
+	return &MockCatalogueRepository_CreateParts_Call{Call: _e.mock.On("CreateParts", ctx, garageID, actorID, parts, packaging, barcodes)}
+}
+
+func (_c *MockCatalogueRepository_CreateParts_Call) Run(run func(ctx context.Context, garageID string, actorID string, parts []*domain.Part, packaging []usecase.PackagingRow, barcodes []usecase.BarcodeRow)) *MockCatalogueRepository_CreateParts_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 []*domain.Part
+		if args[3] != nil {
+			arg3 = args[3].([]*domain.Part)
+		}
+		var arg4 []usecase.PackagingRow
+		if args[4] != nil {
+			arg4 = args[4].([]usecase.PackagingRow)
+		}
+		var arg5 []usecase.BarcodeRow
+		if args[5] != nil {
+			arg5 = args[5].([]usecase.BarcodeRow)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+			arg5,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCatalogueRepository_CreateParts_Call) Return(err error) *MockCatalogueRepository_CreateParts_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockCatalogueRepository_CreateParts_Call) RunAndReturn(run func(ctx context.Context, garageID string, actorID string, parts []*domain.Part, packaging []usecase.PackagingRow, barcodes []usecase.BarcodeRow) error) *MockCatalogueRepository_CreateParts_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateUnit provides a mock function for the type MockCatalogueRepository
 func (_mock *MockCatalogueRepository) CreateUnit(ctx context.Context, u *domain.Unit) error {
 	ret := _mock.Called(ctx, u)
@@ -425,6 +580,88 @@ func (_c *MockCatalogueRepository_FileAttached_Call) Return(b bool, err error) *
 }
 
 func (_c *MockCatalogueRepository_FileAttached_Call) RunAndReturn(run func(ctx context.Context, garageID string, fileID string) (bool, error)) *MockCatalogueRepository_FileAttached_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FindBarcode provides a mock function for the type MockCatalogueRepository
+func (_mock *MockCatalogueRepository) FindBarcode(ctx context.Context, garageID string, barcode string) (*domain.Part, *domain.PartBarcode, error) {
+	ret := _mock.Called(ctx, garageID, barcode)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindBarcode")
+	}
+
+	var r0 *domain.Part
+	var r1 *domain.PartBarcode
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (*domain.Part, *domain.PartBarcode, error)); ok {
+		return returnFunc(ctx, garageID, barcode)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) *domain.Part); ok {
+		r0 = returnFunc(ctx, garageID, barcode)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*domain.Part)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) *domain.PartBarcode); ok {
+		r1 = returnFunc(ctx, garageID, barcode)
+	} else {
+		if ret.Get(1) != nil {
+			r1 = ret.Get(1).(*domain.PartBarcode)
+		}
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string, string) error); ok {
+		r2 = returnFunc(ctx, garageID, barcode)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockCatalogueRepository_FindBarcode_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindBarcode'
+type MockCatalogueRepository_FindBarcode_Call struct {
+	*mock.Call
+}
+
+// FindBarcode is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - barcode string
+func (_e *MockCatalogueRepository_Expecter) FindBarcode(ctx any, garageID any, barcode any) *MockCatalogueRepository_FindBarcode_Call {
+	return &MockCatalogueRepository_FindBarcode_Call{Call: _e.mock.On("FindBarcode", ctx, garageID, barcode)}
+}
+
+func (_c *MockCatalogueRepository_FindBarcode_Call) Run(run func(ctx context.Context, garageID string, barcode string)) *MockCatalogueRepository_FindBarcode_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCatalogueRepository_FindBarcode_Call) Return(part *domain.Part, partBarcode *domain.PartBarcode, err error) *MockCatalogueRepository_FindBarcode_Call {
+	_c.Call.Return(part, partBarcode, err)
+	return _c
+}
+
+func (_c *MockCatalogueRepository_FindBarcode_Call) RunAndReturn(run func(ctx context.Context, garageID string, barcode string) (*domain.Part, *domain.PartBarcode, error)) *MockCatalogueRepository_FindBarcode_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -647,6 +884,80 @@ func (_c *MockCatalogueRepository_FindPartsByIDs_Call) Return(parts []*domain.Pa
 }
 
 func (_c *MockCatalogueRepository_FindPartsByIDs_Call) RunAndReturn(run func(ctx context.Context, garageID string, ids []string) ([]*domain.Part, error)) *MockCatalogueRepository_FindPartsByIDs_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FindPartsBySKUs provides a mock function for the type MockCatalogueRepository
+func (_mock *MockCatalogueRepository) FindPartsBySKUs(ctx context.Context, garageID string, skus []string) ([]*domain.Part, error) {
+	ret := _mock.Called(ctx, garageID, skus)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindPartsBySKUs")
+	}
+
+	var r0 []*domain.Part
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) ([]*domain.Part, error)); ok {
+		return returnFunc(ctx, garageID, skus)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) []*domain.Part); ok {
+		r0 = returnFunc(ctx, garageID, skus)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*domain.Part)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, []string) error); ok {
+		r1 = returnFunc(ctx, garageID, skus)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockCatalogueRepository_FindPartsBySKUs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindPartsBySKUs'
+type MockCatalogueRepository_FindPartsBySKUs_Call struct {
+	*mock.Call
+}
+
+// FindPartsBySKUs is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - skus []string
+func (_e *MockCatalogueRepository_Expecter) FindPartsBySKUs(ctx any, garageID any, skus any) *MockCatalogueRepository_FindPartsBySKUs_Call {
+	return &MockCatalogueRepository_FindPartsBySKUs_Call{Call: _e.mock.On("FindPartsBySKUs", ctx, garageID, skus)}
+}
+
+func (_c *MockCatalogueRepository_FindPartsBySKUs_Call) Run(run func(ctx context.Context, garageID string, skus []string)) *MockCatalogueRepository_FindPartsBySKUs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCatalogueRepository_FindPartsBySKUs_Call) Return(parts []*domain.Part, err error) *MockCatalogueRepository_FindPartsBySKUs_Call {
+	_c.Call.Return(parts, err)
+	return _c
+}
+
+func (_c *MockCatalogueRepository_FindPartsBySKUs_Call) RunAndReturn(run func(ctx context.Context, garageID string, skus []string) ([]*domain.Part, error)) *MockCatalogueRepository_FindPartsBySKUs_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1098,6 +1409,81 @@ func (_c *MockCatalogueRepository_RemoveImage_Call) Return(err error) *MockCatal
 }
 
 func (_c *MockCatalogueRepository_RemoveImage_Call) RunAndReturn(run func(ctx context.Context, garageID string, partID string, fileID string) error) *MockCatalogueRepository_RemoveImage_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ReplaceBarcodes provides a mock function for the type MockCatalogueRepository
+func (_mock *MockCatalogueRepository) ReplaceBarcodes(ctx context.Context, garageID string, partID string, actorID string, barcodes []domain.PartBarcode) error {
+	ret := _mock.Called(ctx, garageID, partID, actorID, barcodes)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReplaceBarcodes")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string, []domain.PartBarcode) error); ok {
+		r0 = returnFunc(ctx, garageID, partID, actorID, barcodes)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockCatalogueRepository_ReplaceBarcodes_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReplaceBarcodes'
+type MockCatalogueRepository_ReplaceBarcodes_Call struct {
+	*mock.Call
+}
+
+// ReplaceBarcodes is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - partID string
+//   - actorID string
+//   - barcodes []domain.PartBarcode
+func (_e *MockCatalogueRepository_Expecter) ReplaceBarcodes(ctx any, garageID any, partID any, actorID any, barcodes any) *MockCatalogueRepository_ReplaceBarcodes_Call {
+	return &MockCatalogueRepository_ReplaceBarcodes_Call{Call: _e.mock.On("ReplaceBarcodes", ctx, garageID, partID, actorID, barcodes)}
+}
+
+func (_c *MockCatalogueRepository_ReplaceBarcodes_Call) Run(run func(ctx context.Context, garageID string, partID string, actorID string, barcodes []domain.PartBarcode)) *MockCatalogueRepository_ReplaceBarcodes_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		var arg4 []domain.PartBarcode
+		if args[4] != nil {
+			arg4 = args[4].([]domain.PartBarcode)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+			arg4,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCatalogueRepository_ReplaceBarcodes_Call) Return(err error) *MockCatalogueRepository_ReplaceBarcodes_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockCatalogueRepository_ReplaceBarcodes_Call) RunAndReturn(run func(ctx context.Context, garageID string, partID string, actorID string, barcodes []domain.PartBarcode) error) *MockCatalogueRepository_ReplaceBarcodes_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -231,39 +231,15 @@ func (uc *UseCase) SetPartUnits(ctx context.Context, garageID, partID, actorID s
 		return nil, toAppError("set part units", err)
 	}
 
-	seen := make(map[string]struct{}, len(units))
-	clean := make([]domain.PackagingUnit, 0, len(units))
+	clean, err := cleanPackaging(p.BaseUnitID, units, func(id string) (*domain.Unit, error) {
+		return uc.repo.FindUnit(ctx, garageID, id)
+	})
+	if err != nil {
+		return nil, toAppError("set part units", err)
+	}
 
-	for _, u := range units {
-		if u.UnitID == p.BaseUnitID {
-			return nil, toAppError("set part units", domain.ErrBaseUnitPackaged)
-		}
-
-		if _, dup := seen[u.UnitID]; dup {
-			return nil, toAppError("set part units", domain.ErrDuplicateUnit)
-		}
-
-		seen[u.UnitID] = struct{}{}
-
-		factor, err := domain.NormalizeFactor(u.Factor)
-		if err != nil {
-			return nil, toAppError("set part units", err)
-		}
-
-		if u.SalePrice != nil && *u.SalePrice < 0 {
-			return nil, toAppError("set part units", domain.ErrNegativePrice)
-		}
-
-		unit, err := uc.repo.FindUnit(ctx, garageID, u.UnitID)
-		if err != nil {
-			return nil, toAppError("set part units", err)
-		}
-
-		if !unit.IsActive {
-			return nil, toAppError("set part units", domain.ErrInactiveUnit)
-		}
-
-		clean = append(clean, domain.PackagingUnit{UnitID: u.UnitID, Factor: factor, SalePrice: u.SalePrice})
+	if err := uc.barcodesStayValid(p, clean); err != nil {
+		return nil, toAppError("set part units", err)
 	}
 
 	if err := uc.repo.ReplacePackaging(ctx, garageID, partID, actorID, clean); err != nil {
@@ -271,6 +247,385 @@ func (uc *UseCase) SetPartUnits(ctx context.Context, garageID, partID, actorID s
 	}
 
 	return uc.GetPart(ctx, garageID, partID)
+}
+
+// cleanPackaging validates a packaging table for a part with this base unit:
+// the base unit is never one of its own packaging units, a unit appears once,
+// every factor is above zero and every unit is active. unitOf loads a unit.
+func cleanPackaging(
+	baseUnitID string, units []domain.PackagingUnit, unitOf func(id string) (*domain.Unit, error),
+) ([]domain.PackagingUnit, error) {
+	seen := make(map[string]struct{}, len(units))
+	clean := make([]domain.PackagingUnit, 0, len(units))
+
+	for _, u := range units {
+		if u.UnitID == baseUnitID {
+			return nil, domain.ErrBaseUnitPackaged
+		}
+
+		if _, dup := seen[u.UnitID]; dup {
+			return nil, domain.ErrDuplicateUnit
+		}
+
+		seen[u.UnitID] = struct{}{}
+
+		factor, err := domain.NormalizeFactor(u.Factor)
+		if err != nil {
+			return nil, err
+		}
+
+		if u.SalePrice != nil && *u.SalePrice < 0 {
+			return nil, domain.ErrNegativePrice
+		}
+
+		unit, err := unitOf(u.UnitID)
+		if err != nil {
+			return nil, err
+		}
+
+		if !unit.IsActive {
+			return nil, domain.ErrInactiveUnit
+		}
+
+		clean = append(clean, domain.PackagingUnit{UnitID: u.UnitID, Factor: factor, SalePrice: u.SalePrice})
+	}
+
+	return clean, nil
+}
+
+// cleanBarcodes validates the barcodes of one part: at most MaxPartBarcodes,
+// each trimmed and well-formed, none repeated (case-insensitively), and a code
+// for a unit names one of the part's packaging units.
+func cleanBarcodes(barcodes []domain.PartBarcode, packaging map[string]struct{}) ([]domain.PartBarcode, error) {
+	if len(barcodes) > domain.MaxPartBarcodes {
+		return nil, domain.ErrBarcodeInvalid
+	}
+
+	seen := make(map[string]struct{}, len(barcodes))
+	clean := make([]domain.PartBarcode, 0, len(barcodes))
+
+	for _, b := range barcodes {
+		code, err := domain.NormalizeBarcode(b.Barcode)
+		if err != nil {
+			return nil, err
+		}
+
+		key := strings.ToLower(code)
+		if _, dup := seen[key]; dup {
+			return nil, domain.ErrBarcodeAlreadyUsed
+		}
+
+		seen[key] = struct{}{}
+
+		if b.UnitID != nil {
+			if _, ok := packaging[*b.UnitID]; !ok {
+				return nil, domain.ErrUnitNotForPart
+			}
+		}
+
+		clean = append(clean, domain.PartBarcode{Barcode: code, UnitID: b.UnitID})
+	}
+
+	return clean, nil
+}
+
+// NewPart is one part created in bulk with its packaging units and barcodes.
+type NewPart struct {
+	SKU        string
+	Name       string
+	Brand      string
+	CategoryID string
+	BaseUnitID string
+	Packaging  []domain.PackagingUnit
+	Barcodes   []domain.PartBarcode
+}
+
+// bulkParts accumulates the rows of CreateParts and loads each unit and
+// category once.
+type bulkParts struct {
+	uc         *UseCase
+	ctx        context.Context //nolint:containedctx // scoped to one CreateParts call
+	garageID   string
+	actorID    string
+	units      map[string]*domain.Unit
+	categories map[string]struct{}
+	batchCodes map[string]struct{}
+
+	parts     []*domain.Part
+	packaging []PackagingRow
+	barcodes  []BarcodeRow
+}
+
+func (b *bulkParts) unitOf(id string) (*domain.Unit, error) {
+	if u, ok := b.units[id]; ok {
+		return u, nil
+	}
+
+	u, err := b.uc.repo.FindUnit(b.ctx, b.garageID, id)
+	if err != nil {
+		return nil, err
+	}
+
+	b.units[id] = u
+
+	return u, nil
+}
+
+// add validates one part with the rules of CreatePart, SetPartUnits and
+// SetPartBarcodes and queues it for insertion.
+func (b *bulkParts) add(n NewPart) error {
+	p := &domain.Part{
+		ID: uuid.NewString(), GarageID: b.garageID, IsActive: true, ReorderThreshold: "0",
+		CreatedBy: actorRef(b.actorID), UpdatedBy: actorRef(b.actorID),
+	}
+
+	switch {
+	case n.SKU == "":
+		return domain.ErrSKURequired
+	case n.Name == "":
+		return domain.ErrNameRequired
+	case n.BaseUnitID == "":
+		return domain.ErrBaseUnitRequired
+	}
+
+	if err := applyPartText(p, PartFields{SKU: &n.SKU, Name: &n.Name, Brand: &n.Brand}); err != nil {
+		return err
+	}
+
+	base, err := b.unitOf(n.BaseUnitID)
+	if err != nil {
+		return err
+	}
+
+	if !base.IsActive {
+		return domain.ErrInactiveUnit
+	}
+
+	p.BaseUnitID = base.ID
+
+	if err := b.category(p, n.CategoryID); err != nil {
+		return err
+	}
+
+	clean, err := cleanPackaging(p.BaseUnitID, n.Packaging, b.unitOf)
+	if err != nil {
+		return err
+	}
+
+	owned := make(map[string]struct{}, len(clean))
+
+	for _, u := range clean {
+		owned[u.UnitID] = struct{}{}
+		b.packaging = append(b.packaging, PackagingRow{PartID: p.ID, Unit: u})
+	}
+
+	if err := b.codes(p.ID, n.Barcodes, owned); err != nil {
+		return err
+	}
+
+	b.parts = append(b.parts, p)
+
+	return nil
+}
+
+// category points p at the category, checking it the first time it is seen.
+func (b *bulkParts) category(p *domain.Part, categoryID string) error {
+	if categoryID == "" {
+		return nil
+	}
+
+	if _, known := b.categories[categoryID]; !known {
+		if err := b.uc.applyCategory(b.ctx, p, &categoryID); err != nil {
+			return err
+		}
+
+		b.categories[categoryID] = struct{}{}
+	}
+
+	p.CategoryID = &categoryID
+
+	return nil
+}
+
+// codes validates the barcodes of one part and refuses a code used twice in
+// the batch.
+func (b *bulkParts) codes(partID string, in []domain.PartBarcode, packaging map[string]struct{}) error {
+	clean, err := cleanBarcodes(in, packaging)
+	if err != nil {
+		return err
+	}
+
+	for _, code := range clean {
+		key := strings.ToLower(code.Barcode)
+		if _, dup := b.batchCodes[key]; dup {
+			return domain.ErrBarcodeAlreadyUsed
+		}
+
+		b.batchCodes[key] = struct{}{}
+		b.barcodes = append(b.barcodes, BarcodeRow{PartID: partID, Barcode: code})
+	}
+
+	return nil
+}
+
+// CreateParts creates parts with their packaging units and barcodes in a few
+// statements, for the Excel import (FR-INV-14). Every part obeys the rules of
+// CreatePart, SetPartUnits and SetPartBarcodes; units and categories are
+// loaded once, and a code used twice in the batch or by another part of the
+// garage is refused. It returns the new part ids in input order.
+func (uc *UseCase) CreateParts(ctx context.Context, garageID, actorID string, in []NewPart) ([]string, error) {
+	const op = "create parts"
+
+	b := &bulkParts{
+		uc: uc, ctx: ctx, garageID: garageID, actorID: actorID,
+		units: map[string]*domain.Unit{}, categories: map[string]struct{}{}, batchCodes: map[string]struct{}{},
+	}
+
+	ids := make([]string, 0, len(in))
+
+	for _, n := range in {
+		if err := b.add(n); err != nil {
+			return nil, toAppError(op, err)
+		}
+
+		ids = append(ids, b.parts[len(b.parts)-1].ID)
+	}
+
+	if err := uc.repo.CreateParts(ctx, garageID, actorID, b.parts, b.packaging, b.barcodes); err != nil {
+		return nil, toAppError(op, err)
+	}
+
+	return ids, nil
+}
+
+// barcodesStayValid refuses to remove a packaging unit that has a barcode:
+// the code would lose the quantity one scan stands for.
+func (uc *UseCase) barcodesStayValid(p *domain.Part, units []domain.PackagingUnit) error {
+	if len(p.Barcodes) == 0 {
+		return nil
+	}
+
+	kept := make(map[string]struct{}, len(units))
+	for _, u := range units {
+		kept[u.UnitID] = struct{}{}
+	}
+
+	for _, b := range p.Barcodes {
+		if b.UnitID == nil {
+			continue
+		}
+
+		if _, ok := kept[*b.UnitID]; !ok {
+			return domain.ErrPackagingUnitHasBarcode
+		}
+	}
+
+	return nil
+}
+
+// SetPartBarcodes replaces the part's barcode table (FR-INV-13). Codes are
+// trimmed, unique within the request and the garage case-insensitively, and
+// a code for a packaging unit must name one of the part's packaging units.
+func (uc *UseCase) SetPartBarcodes(
+	ctx context.Context, garageID, partID, actorID string, barcodes []domain.PartBarcode,
+) (*domain.Part, error) {
+	p, err := uc.repo.FindPart(ctx, garageID, partID)
+	if err != nil {
+		return nil, toAppError("set part barcodes", err)
+	}
+
+	packaging := make(map[string]struct{}, len(p.PackagingUnits))
+	for _, u := range p.PackagingUnits {
+		packaging[u.UnitID] = struct{}{}
+	}
+
+	clean, err := cleanBarcodes(barcodes, packaging)
+	if err != nil {
+		return nil, toAppError("set part barcodes", err)
+	}
+
+	if err := uc.repo.ReplaceBarcodes(ctx, garageID, partID, actorID, clean); err != nil {
+		return nil, toAppError("set part barcodes", err)
+	}
+
+	return uc.GetPart(ctx, garageID, partID)
+}
+
+// LookupPartByBarcode finds the part a scanned code belongs to (FR-INV-13),
+// including inactive parts so the caller can say so, and returns the matched
+// code with the unit one scan stands for.
+func (uc *UseCase) LookupPartByBarcode(ctx context.Context, garageID, barcode string) (*domain.Part, *domain.PartBarcode, error) {
+	code, err := domain.NormalizeBarcode(barcode)
+	if err != nil {
+		return nil, nil, toAppError("lookup barcode", err)
+	}
+
+	p, matched, err := uc.repo.FindBarcode(ctx, garageID, code)
+	if err != nil {
+		return nil, nil, toAppError("lookup barcode", err)
+	}
+
+	if err := uc.fillImages(ctx, garageID, []*domain.Part{p}); err != nil {
+		return nil, nil, toAppError("lookup barcode", err)
+	}
+
+	return p, matched, nil
+}
+
+// PartsBySKUs returns the parts with the given SKUs, matched
+// case-insensitively, for the Excel import.
+func (uc *UseCase) PartsBySKUs(ctx context.Context, garageID string, skus []string) ([]*domain.Part, error) {
+	if len(skus) == 0 {
+		return nil, nil
+	}
+
+	parts, err := uc.repo.FindPartsBySKUs(ctx, garageID, skus)
+	if err != nil {
+		return nil, toAppError("find parts by SKU", err)
+	}
+
+	return parts, nil
+}
+
+// PartsByBarcodes returns the parts (with their barcodes) that own any of
+// the codes, for the Excel import of receipts and counts.
+func (uc *UseCase) PartsByBarcodes(ctx context.Context, garageID string, codes []string) ([]*domain.Part, error) {
+	owners, err := uc.repo.BarcodesByCode(ctx, garageID, codes)
+	if err != nil {
+		return nil, toAppError("find parts by barcode", err)
+	}
+
+	if len(owners) == 0 {
+		return nil, nil
+	}
+
+	seen := make(map[string]struct{}, len(owners))
+	ids := make([]string, 0, len(owners))
+
+	for _, partID := range owners {
+		if _, dup := seen[partID]; !dup {
+			seen[partID] = struct{}{}
+			ids = append(ids, partID)
+		}
+	}
+
+	parts, err := uc.repo.FindPartsByIDs(ctx, garageID, ids)
+	if err != nil {
+		return nil, toAppError("find parts by barcode", err)
+	}
+
+	return parts, nil
+}
+
+// BarcodesByCode returns the part id per lower-case code for the codes that
+// exist in the garage, for the Excel import's uniqueness check.
+func (uc *UseCase) BarcodesByCode(ctx context.Context, garageID string, codes []string) (map[string]string, error) {
+	out, err := uc.repo.BarcodesByCode(ctx, garageID, codes)
+	if err != nil {
+		return nil, toAppError("find barcodes", err)
+	}
+
+	return out, nil
 }
 
 // AddPartImage attaches an uploaded part image, at most three per part.

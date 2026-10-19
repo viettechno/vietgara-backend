@@ -252,10 +252,16 @@ func TestPostgresRepository_FindPart(t *testing.T) {
 		tx := dbtest.New(t).
 			ExpectQueryRow("FROM parts i", dbtest.Row(partRow()...)).
 			ExpectQuery("FROM part_units iu", dbtest.NewRows(packagingRow(), overrideRow()), nil).
-			ExpectQuery("FROM part_images", dbtest.NewRows([]any{partID, fileID, 0}), nil)
+			ExpectQuery("FROM part_images", dbtest.NewRows([]any{partID, fileID, 0}), nil).
+			ExpectQuery("FROM part_barcodes b", dbtest.NewRows(
+				[]any{partID, "8930001", nil, "", ""}, []any{partID, "8930024", caseID, "Carton", "ctn"}), nil)
 
 		p, err := repo.FindPart(tx.Context(t.Context()), garageID, partID)
 		require.NoError(t, err)
+		require.Len(t, p.Barcodes, 2)
+		assert.Nil(t, p.Barcodes[0].UnitID, "a base-unit code has no unit")
+		assert.Equal(t, caseID, *p.Barcodes[1].UnitID)
+		assert.Equal(t, "ctn", p.Barcodes[1].UnitAbbreviation)
 		assert.Equal(t, "48", p.ReorderThreshold, "NUMERIC text loses its trailing zeros")
 		assert.Equal(t, catID, *p.CategoryID)
 		require.Len(t, p.PackagingUnits, 2)
@@ -282,13 +288,21 @@ func TestPostgresRepository_FindPart(t *testing.T) {
 			ExpectQuery("FROM part_images", nil, errBoom).
 			ExpectQueryRow("FROM parts i", dbtest.Row(partRow()...)).
 			ExpectQuery("FROM part_units iu", dbtest.NewRows(), nil).
-			ExpectQuery("FROM part_images", dbtest.NewRows([]any{partID, fileID, 0}).WithScanError(errBoom), nil)
+			ExpectQuery("FROM part_images", dbtest.NewRows([]any{partID, fileID, 0}).WithScanError(errBoom), nil).
+			ExpectQueryRow("FROM parts i", dbtest.Row(partRow()...)).
+			ExpectQuery("FROM part_units iu", dbtest.NewRows(), nil).
+			ExpectQuery("FROM part_images", dbtest.NewRows(), nil).
+			ExpectQuery("FROM part_barcodes b", nil, errBoom).
+			ExpectQueryRow("FROM parts i", dbtest.Row(partRow()...)).
+			ExpectQuery("FROM part_units iu", dbtest.NewRows(), nil).
+			ExpectQuery("FROM part_images", dbtest.NewRows(), nil).
+			ExpectQuery("FROM part_barcodes b", dbtest.NewRows([]any{partID, "8930001", nil, "", ""}).WithScanError(errBoom), nil)
 		ctx := tx.Context(t.Context())
 
 		_, err := repo.FindPart(ctx, garageID, partID)
 		require.ErrorIs(t, err, domain.ErrPartNotFound)
 
-		for range 5 {
+		for range 7 {
 			_, err = repo.FindPart(ctx, garageID, partID)
 			require.ErrorIs(t, err, errBoom)
 		}
@@ -311,6 +325,7 @@ func TestPostgresRepository_FindPartsByIDs(t *testing.T) {
 		ExpectQuery("FROM parts i", dbtest.NewRows(partRow()), nil).
 		ExpectQuery("FROM part_units iu", dbtest.NewRows(), nil).
 		ExpectQuery("FROM part_images", dbtest.NewRows(), nil).
+		ExpectQuery("FROM part_barcodes b", dbtest.NewRows(), nil).
 		ExpectQuery("FROM parts i", nil, errBoom).
 		ExpectQuery("FROM parts i", dbtest.NewRows(partRow()).WithScanError(errBoom), nil)
 	ctx := tx.Context(t.Context())
@@ -341,6 +356,10 @@ func TestPostgresRepository_PartWrites(t *testing.T) {
 		ExpectQueryRow("UPDATE parts SET sku", dbtest.ErrRow(pgx.ErrNoRows)).
 		ExpectQueryRow("UPDATE parts SET sku", dbtest.ErrRow(dbtest.UniqueViolation("idx_parts_garage_sku_unique"))).
 		ExpectExec("UPDATE parts SET deleted_at", dbtest.Tag(1), nil).
+		ExpectExec("DELETE FROM part_barcodes", dbtest.Tag(2), nil).
+		ExpectExec("UPDATE parts SET deleted_at", dbtest.Tag(0), nil).
+		ExpectExec("UPDATE parts SET deleted_at", dbtest.Tag(1), nil).
+		ExpectExec("DELETE FROM part_barcodes", dbtest.Tag(0), errBoom).
 		ExpectExec("UPDATE parts SET is_active", dbtest.Tag(0), nil)
 	ctx := tx.Context(t.Context())
 	repo := newRepo()
@@ -354,6 +373,8 @@ func TestPostgresRepository_PartWrites(t *testing.T) {
 	require.ErrorIs(t, repo.UpdatePart(ctx, part), domain.ErrSKUTaken)
 
 	require.NoError(t, repo.SoftDeletePart(ctx, garageID, partID, "actor"))
+	require.ErrorIs(t, repo.SoftDeletePart(ctx, garageID, partID, "actor"), domain.ErrPartNotFound, "no barcode delete for a missing part")
+	require.ErrorIs(t, repo.SoftDeletePart(ctx, garageID, partID, "actor"), errBoom)
 	require.ErrorIs(t, repo.SetPartActive(ctx, garageID, partID, true, "actor"), domain.ErrPartNotFound)
 }
 
@@ -370,7 +391,8 @@ func TestPostgresRepository_ListParts(t *testing.T) {
 			ExpectQueryRow("SELECT count(*)", dbtest.Row(1)).
 			ExpectQuery("FROM parts i", dbtest.NewRows(partRow()), nil).
 			ExpectQuery("FROM part_units iu", dbtest.NewRows(packagingRow()), nil).
-			ExpectQuery("FROM part_images", dbtest.NewRows(), nil)
+			ExpectQuery("FROM part_images", dbtest.NewRows(), nil).
+			ExpectQuery("FROM part_barcodes b", dbtest.NewRows(), nil)
 
 		parts, total, err := repo.ListParts(tx.Context(t.Context()), garageID, filter)
 		require.NoError(t, err)
@@ -470,4 +492,152 @@ func TestPostgresRepository_Images(t *testing.T) {
 	attached, err = repo.FileAttached(ctx, garageID, "bad")
 	require.NoError(t, err)
 	assert.False(t, attached)
+}
+
+func TestPostgresRepository_ReplaceBarcodes(t *testing.T) {
+	t.Parallel()
+
+	carton := caseID
+	codes := []domain.PartBarcode{{Barcode: "8930001"}, {Barcode: "8930024", UnitID: &carton}}
+	repo := newRepo()
+
+	tx := dbtest.New(t).
+		ExpectExec("DELETE FROM part_barcodes", dbtest.Tag(1), nil).
+		ExpectExec("INSERT INTO part_barcodes", dbtest.Tag(1), nil).
+		ExpectExec("INSERT INTO part_barcodes", dbtest.Tag(1), nil).
+		ExpectExec("UPDATE parts SET updated_by", dbtest.Tag(1), nil).
+		ExpectExec("DELETE FROM part_barcodes", dbtest.Tag(0), errBoom).
+		ExpectExec("DELETE FROM part_barcodes", dbtest.Tag(0), nil).
+		ExpectExec("INSERT INTO part_barcodes", dbtest.Tag(0), dbtest.UniqueViolation("idx_part_barcodes_garage_barcode_unique")).
+		ExpectExec("DELETE FROM part_barcodes", dbtest.Tag(0), nil).
+		ExpectExec("INSERT INTO part_barcodes", dbtest.Tag(1), nil).
+		ExpectExec("INSERT INTO part_barcodes", dbtest.Tag(1), nil).
+		ExpectExec("UPDATE parts SET updated_by", dbtest.Tag(0), errBoom)
+	ctx := tx.Context(t.Context())
+
+	require.NoError(t, repo.ReplaceBarcodes(ctx, garageID, partID, "actor", codes))
+	require.ErrorIs(t, repo.ReplaceBarcodes(ctx, garageID, partID, "actor", codes), errBoom)
+	require.ErrorIs(t, repo.ReplaceBarcodes(ctx, garageID, partID, "actor", codes), domain.ErrBarcodeAlreadyUsed)
+	require.ErrorIs(t, repo.ReplaceBarcodes(ctx, garageID, partID, "", codes), errBoom)
+}
+
+func TestPostgresRepository_FindBarcode(t *testing.T) {
+	t.Parallel()
+
+	repo := newRepo()
+
+	tx := dbtest.New(t).
+		ExpectQueryRow("FROM part_barcodes b", dbtest.Row(partID, "8930024", caseID, "Carton", "ctn")).
+		ExpectQueryRow("FROM parts i", dbtest.Row(partRow()...)).
+		ExpectQuery("FROM part_units iu", dbtest.NewRows(), nil).
+		ExpectQuery("FROM part_images", dbtest.NewRows(), nil).
+		ExpectQuery("FROM part_barcodes b", dbtest.NewRows(), nil).
+		ExpectQueryRow("FROM part_barcodes b", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectQueryRow("FROM part_barcodes b", dbtest.ErrRow(errBoom)).
+		ExpectQueryRow("FROM part_barcodes b", dbtest.Row(partID, "8930024", nil, "", "")).
+		ExpectQueryRow("FROM parts i", dbtest.ErrRow(errBoom))
+	ctx := tx.Context(t.Context())
+
+	p, code, err := repo.FindBarcode(ctx, garageID, "8930024")
+	require.NoError(t, err)
+	assert.Equal(t, partID, p.ID)
+	assert.Equal(t, "8930024", code.Barcode)
+	assert.Equal(t, caseID, *code.UnitID)
+	assert.Equal(t, "Carton", code.UnitName)
+
+	_, _, err = repo.FindBarcode(ctx, garageID, "nope")
+	require.ErrorIs(t, err, domain.ErrBarcodeNotFound)
+
+	_, _, err = repo.FindBarcode(ctx, garageID, "boom")
+	require.ErrorIs(t, err, errBoom)
+
+	_, _, err = repo.FindBarcode(ctx, garageID, "8930024")
+	require.ErrorIs(t, err, errBoom, "the part lookup failure surfaces")
+}
+
+func TestPostgresRepository_BarcodesByCode(t *testing.T) {
+	t.Parallel()
+
+	repo := newRepo()
+
+	got, err := repo.BarcodesByCode(t.Context(), garageID, nil)
+	require.NoError(t, err)
+	assert.Empty(t, got, "no codes means no query")
+
+	tx := dbtest.New(t).
+		ExpectQuery("FROM part_barcodes b", dbtest.NewRows([]any{"8930001", partID}), nil).
+		ExpectQuery("FROM part_barcodes b", nil, errBoom).
+		ExpectQuery("FROM part_barcodes b", dbtest.NewRows([]any{"8930001", partID}).WithScanError(errBoom), nil)
+	ctx := tx.Context(t.Context())
+
+	got, err = repo.BarcodesByCode(ctx, garageID, []string{" 8930001 ", "8930002"})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]string{"8930001": partID}, got)
+
+	for range 2 {
+		_, err = repo.BarcodesByCode(ctx, garageID, []string{"8930001"})
+		require.ErrorIs(t, err, errBoom)
+	}
+}
+
+func TestPostgresRepository_FindPartsBySKUs(t *testing.T) {
+	t.Parallel()
+
+	repo := newRepo()
+
+	got, err := repo.FindPartsBySKUs(t.Context(), garageID, []string{"", "  "})
+	require.NoError(t, err)
+	assert.Empty(t, got, "blank SKUs mean no query")
+
+	tx := dbtest.New(t).
+		ExpectQuery("lower(i.sku) = ANY", dbtest.NewRows(partRow()), nil).
+		ExpectQuery("FROM part_units iu", dbtest.NewRows(), nil).
+		ExpectQuery("FROM part_images", dbtest.NewRows(), nil).
+		ExpectQuery("FROM part_barcodes b", dbtest.NewRows(), nil).
+		ExpectQuery("lower(i.sku) = ANY", nil, errBoom).
+		ExpectQuery("lower(i.sku) = ANY", dbtest.NewRows(partRow()).WithScanError(errBoom), nil)
+	ctx := tx.Context(t.Context())
+
+	got, err = repo.FindPartsBySKUs(ctx, garageID, []string{" beer-330 "})
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, "BEER-330", got[0].SKU)
+
+	for range 2 {
+		_, err = repo.FindPartsBySKUs(ctx, garageID, []string{"BEER-330"})
+		require.ErrorIs(t, err, errBoom)
+	}
+}
+
+func TestPostgresRepository_CreateParts(t *testing.T) {
+	t.Parallel()
+
+	cat := catID
+	parts := []*domain.Part{
+		{ID: partID, SKU: "A", Name: "A", BaseUnitID: unitID, CategoryID: &cat},
+		{ID: caseID, SKU: "B", Name: "B", BaseUnitID: unitID},
+	}
+	packaging := []usecase.PackagingRow{{PartID: partID, Unit: domain.PackagingUnit{UnitID: caseID, Factor: "24"}}}
+	codes := []usecase.BarcodeRow{{PartID: partID, Barcode: domain.PartBarcode{Barcode: "8930001"}}}
+	repo := newRepo()
+
+	tx := dbtest.New(t).
+		ExpectExec("INSERT INTO parts", dbtest.Tag(2), nil).
+		ExpectExec("INSERT INTO part_units", dbtest.Tag(1), nil).
+		ExpectExec("INSERT INTO part_barcodes", dbtest.Tag(1), nil).
+		ExpectExec("INSERT INTO parts", dbtest.Tag(2), nil).
+		ExpectExec("INSERT INTO parts", dbtest.Tag(0), dbtest.UniqueViolation("idx_parts_garage_sku_unique")).
+		ExpectExec("INSERT INTO parts", dbtest.Tag(2), nil).
+		ExpectExec("INSERT INTO part_units", dbtest.Tag(0), errBoom).
+		ExpectExec("INSERT INTO parts", dbtest.Tag(2), nil).
+		ExpectExec("INSERT INTO part_units", dbtest.Tag(1), nil).
+		ExpectExec("INSERT INTO part_barcodes", dbtest.Tag(0), dbtest.UniqueViolation("idx_part_barcodes_garage_barcode_unique"))
+	ctx := tx.Context(t.Context())
+
+	require.NoError(t, repo.CreateParts(ctx, garageID, "actor", parts, packaging, codes))
+	require.NoError(t, repo.CreateParts(ctx, garageID, "", parts, nil, nil), "no packaging and no codes means one statement")
+	require.ErrorIs(t, repo.CreateParts(ctx, garageID, "actor", parts, nil, nil), domain.ErrSKUTaken)
+	require.ErrorIs(t, repo.CreateParts(ctx, garageID, "actor", parts, packaging, nil), errBoom)
+	require.ErrorIs(t, repo.CreateParts(ctx, garageID, "actor", parts, packaging, codes), domain.ErrBarcodeAlreadyUsed)
+	require.NoError(t, repo.CreateParts(ctx, garageID, "actor", nil, packaging, codes), "nothing to create, nothing to write")
 }

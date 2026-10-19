@@ -54,6 +54,7 @@ import (
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
 	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
 	customerportalHandler "github.com/viettechno/vietgara-backend/internal/customerportal/handler"
+	dataimportHandler "github.com/viettechno/vietgara-backend/internal/dataimport/handler"
 	documentHandler "github.com/viettechno/vietgara-backend/internal/document/handler"
 	fileHandler "github.com/viettechno/vietgara-backend/internal/file/handler"
 	identityHandler "github.com/viettechno/vietgara-backend/internal/identity/handler"
@@ -327,6 +328,12 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	supplierUC := supplierUsecase.NewUseCase(supplierRepo, supplierUsage{inventory: inventory.repo})
 	supplierSrv := supplierHandler.NewServer(supplierUC)
 
+	// Data Import (Release 7.2): Excel templates, preview and confirm for
+	// parts, goods receipts and stock counts (FR-INV-14). It writes through
+	// the Catalogue and Inventory use cases, so imported rows obey exactly
+	// the same rules as the screens.
+	dataImport := buildDataImport(pool, catalogue.uc, inventory.uc, supplierRepo, auditLog)
+
 	usage := customerUsage{quotes: quote.quotes, repairOrders: repairOrder.uc}
 	vehicleUC := customerUsecase.NewVehicleUseCase(
 		vehicleRepo, customerRepo, vehicleHistory{quotes: quote.quotes, repairOrders: repairOrder.uc}, usage,
@@ -399,10 +406,11 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		customerHandler.LinkPolicies(), customerHandler.TaxProfilePolicies(),
 		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
 		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(), fileHandler.Policies(), catalogueHandler.Policies(),
-		technicianHandler.Policies(), customerportalHandler.Policies(),
+		technicianHandler.Policies(), customerportalHandler.Policies(), dataimportHandler.Policies(),
 	)
 	app.grpcServer = grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()), // one span per request (NFR-OB-01)
+		grpc.MaxRecvMsgSize(8<<20),                     // Excel imports are uploaded as one message (Release 7.2)
 		grpc.ChainUnaryInterceptor(
 			middleware.Auth(issuer, policies),
 			middleware.EmailVerified(),
@@ -433,6 +441,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	quotev1.RegisterPublicQuoteServiceServer(app.grpcServer, quote.server)
 	repairorderv1.RegisterRepairOrderServiceServer(app.grpcServer, repairOrder.server)
 	inventoryv1.RegisterInventoryServiceServer(app.grpcServer, inventory.server)
+	inventoryv1.RegisterImportServiceServer(app.grpcServer, dataImport.server)
 	billingv1.RegisterSettlementServiceServer(app.grpcServer, billing.server)
 	documentv1.RegisterDocumentServiceServer(app.grpcServer, document.server)
 	reportingv1.RegisterReportingServiceServer(app.grpcServer, reporting.server)
@@ -536,6 +545,7 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 		cataloguev1.RegisterCatalogueServiceHandler,
 		quotev1.RegisterQuoteServiceHandler, quotev1.RegisterPublicQuoteServiceHandler,
 		repairorderv1.RegisterRepairOrderServiceHandler, inventoryv1.RegisterInventoryServiceHandler,
+		inventoryv1.RegisterImportServiceHandler,
 		billingv1.RegisterSettlementServiceHandler, documentv1.RegisterDocumentServiceHandler,
 		reportingv1.RegisterReportingServiceHandler,
 		technicianv1.RegisterTechnicianServiceHandler, customerportalv1.RegisterCustomerPortalServiceHandler,

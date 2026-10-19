@@ -127,6 +127,14 @@ func (uc *InventoryUseCase) ResyncStockIssue(ctx context.Context, req CreateStoc
 		return toAppError(op, err)
 	}
 
+	// An issue left without lines is not listed by the recheck, so its own
+	// mark is cleared here.
+	if len(lines) == 0 && issue.IsShort {
+		if err := uc.markShort(ctx, req.GarageID, issue.ID, issue.RepairOrderID, false); err != nil {
+			return toAppError(op, err)
+		}
+	}
+
 	if err := uc.recheckShortage(ctx, req.GarageID, affected); err != nil {
 		return toAppError(op, err)
 	}
@@ -233,6 +241,24 @@ func (uc *InventoryUseCase) StockIssuePosted(ctx context.Context, garageID, repa
 	}
 
 	return issue.Status == domain.StockIssuePosted, nil
+}
+
+// StockIssueShort reports whether the repair order's draft stock issue cannot
+// be covered by the stock on hand right now (FR-INV-15). A posted or cancelled
+// issue, or none, is not short. The Repair Order module reads it when it is
+// told the answer changed, so a late or repeated event cannot leave a stale
+// mark.
+func (uc *InventoryUseCase) StockIssueShort(ctx context.Context, garageID, repairOrderID string) (bool, error) {
+	issue, err := uc.repo.FindStockIssueByRepairOrder(ctx, garageID, repairOrderID, false)
+	if err != nil {
+		if isNotFound(err) {
+			return false, nil
+		}
+
+		return false, toAppError("get stock issue", err)
+	}
+
+	return issue.Status == domain.StockIssueDraft && issue.IsShort, nil
 }
 
 // PostStockIssue posts a draft issue now ("issue now"). Any other status is

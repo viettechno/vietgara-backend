@@ -50,6 +50,11 @@ type repairOrderIssues struct {
 	inventory *inventoryUsecase.InventoryUseCase
 }
 
+// Short implements repairorderUsecase.StockIssues.
+func (r *repairOrderIssues) Short(ctx context.Context, garageID, repairOrderID string) (bool, error) {
+	return r.inventory.StockIssueShort(ctx, garageID, repairOrderID)
+}
+
 // Posted implements repairorderUsecase.StockIssues.
 func (r *repairOrderIssues) Posted(ctx context.Context, garageID, repairOrderID string) (bool, error) {
 	return r.inventory.StockIssuePosted(ctx, garageID, repairOrderID)

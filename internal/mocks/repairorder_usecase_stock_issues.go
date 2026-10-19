@@ -108,3 +108,75 @@ func (_c *MockRepairOrderStockIssues_Posted_Call) RunAndReturn(run func(ctx cont
 	_c.Call.Return(run)
 	return _c
 }
+
+// Short provides a mock function for the type MockRepairOrderStockIssues
+func (_mock *MockRepairOrderStockIssues) Short(ctx context.Context, garageID string, repairOrderID string) (bool, error) {
+	ret := _mock.Called(ctx, garageID, repairOrderID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Short")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (bool, error)); ok {
+		return returnFunc(ctx, garageID, repairOrderID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) bool); ok {
+		r0 = returnFunc(ctx, garageID, repairOrderID)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, garageID, repairOrderID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockRepairOrderStockIssues_Short_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Short'
+type MockRepairOrderStockIssues_Short_Call struct {
+	*mock.Call
+}
+
+// Short is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - repairOrderID string
+func (_e *MockRepairOrderStockIssues_Expecter) Short(ctx any, garageID any, repairOrderID any) *MockRepairOrderStockIssues_Short_Call {
+	return &MockRepairOrderStockIssues_Short_Call{Call: _e.mock.On("Short", ctx, garageID, repairOrderID)}
+}
+
+func (_c *MockRepairOrderStockIssues_Short_Call) Run(run func(ctx context.Context, garageID string, repairOrderID string)) *MockRepairOrderStockIssues_Short_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepairOrderStockIssues_Short_Call) Return(b bool, err error) *MockRepairOrderStockIssues_Short_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockRepairOrderStockIssues_Short_Call) RunAndReturn(run func(ctx context.Context, garageID string, repairOrderID string) (bool, error)) *MockRepairOrderStockIssues_Short_Call {
+	_c.Call.Return(run)
+	return _c
+}

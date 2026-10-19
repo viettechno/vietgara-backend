@@ -293,14 +293,51 @@ func TestJobsAndReservation(t *testing.T) {
 		})
 	})
 
+	t.Run("a deleted job no longer holds a packaging unit", func(t *testing.T) {
+		inGarage(func(ctx context.Context) {
+			coolant, err := uc.CreatePart(ctx, catalogueUsecase.CreatePartRequest{
+				GarageID: garageID, ActorID: userID, Fields: catalogueUsecase.PartFields{SKU: str("COOLANT"), Name: str("Coolant"), BaseUnitID: &litre.ID},
+			})
+			require.NoError(t, err)
+
+			_, err = uc.SetPartUnits(ctx, garageID, coolant.ID, userID, []catalogueDomain.PackagingUnit{{UnitID: jug.ID, Factor: "5"}})
+			require.NoError(t, err)
+
+			temp, err := uc.CreateJob(ctx, catalogueUsecase.CreateJobRequest{
+				GarageID: garageID, ActorID: userID, Fields: catalogueUsecase.JobFields{
+					Name: str("Coolant flush"), Parts: &[]catalogueUsecase.JobPartInput{{PartID: coolant.ID, Quantity: "1", UnitID: &jug.ID}},
+				},
+			})
+			require.NoError(t, err)
+
+			outcome, err := uc.DeleteJob(ctx, catalogueUsecase.DeleteRequest{GarageID: garageID, ID: temp.ID, ActorID: userID})
+			require.NoError(t, err)
+			assert.Equal(t, lifecycle.Deleted, outcome)
+
+			_, err = uc.SetPartUnits(ctx, garageID, coolant.ID, userID, nil)
+			require.NoError(t, err, "the deleted job suggests nothing")
+		})
+	})
+
 	t.Run("a repair order keeps the waiting mark, edited lines and the cancelled status", func(t *testing.T) {
+		var onOrderOnly *catalogueDomain.Job
+
+		inGarage(func(ctx context.Context) {
+			var err error
+
+			onOrderOnly, err = uc.CreateJob(ctx, catalogueUsecase.CreateJobRequest{
+				GarageID: garageID, ActorID: userID, Fields: catalogueUsecase.JobFields{Name: str("Only on an order")},
+			})
+			require.NoError(t, err)
+		})
+
 		ro := &repairorderDomain.RepairOrder{
 			ID: uuid.NewString(), GarageID: garageID, VehicleID: vehicleID, VehicleLicensePlate: "51F-111.11", CustomerName: "An",
 			Number: "LSC-73", Status: repairorderDomain.StatusOpen,
 			Lines: []repairorderDomain.Line{
 				{
 					ID: uuid.NewString(), Position: 1, ItemType: repairorderDomain.ItemTypeLabor, Description: "Oil change", Quantity: "1",
-					UnitPrice: 200_000, LineTotal: 200_000, JobID: &job.ID, Status: repairorderDomain.LineNotStarted,
+					UnitPrice: 200_000, LineTotal: 200_000, JobID: &onOrderOnly.ID, Status: repairorderDomain.LineNotStarted,
 				},
 				{
 					ID: uuid.NewString(), Position: 2, ItemType: repairorderDomain.ItemTypePart, ItemRefID: &rag.ID, Description: "Shop rag",
@@ -316,7 +353,14 @@ func TestJobsAndReservation(t *testing.T) {
 			got, err := orders.FindByID(ctx, garageID, ro.ID)
 			require.NoError(t, err)
 			assert.True(t, got.Lines[1].NonBillable)
-			assert.Equal(t, job.ID, *got.Lines[0].JobID)
+			assert.Equal(t, onOrderOnly.ID, *got.Lines[0].JobID)
+
+			// A job that only an order's line came from is deactivated, not deleted.
+			used, err := usage.JobInUse(ctx, garageID, onOrderOnly.ID)
+			require.NoError(t, err)
+			assert.True(t, used)
+
+			require.NoError(t, orders.Lock(ctx, garageID, ro.ID))
 
 			// Edit one line, drop one, add one: ids of the kept lines stay.
 			kept := got.Lines[0]

@@ -212,8 +212,15 @@ func (r *PostgresRepository) ListJobs(ctx context.Context, garageID string, f us
 
 // SoftDeleteJob marks the job deleted, which frees its name.
 func (r *PostgresRepository) SoftDeleteJob(ctx context.Context, garageID, jobID, actorID string) error {
-	return r.touch(ctx, `UPDATE jobs SET deleted_at = now(), updated_by = $3 WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL`,
-		garageID, jobID, actorID, domain.ErrJobNotFound)
+	if err := r.touch(ctx, `UPDATE jobs SET deleted_at = now(), updated_by = $3 WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL`,
+		garageID, jobID, actorID, domain.ErrJobNotFound); err != nil {
+		return err
+	}
+
+	// A deleted job suggests nothing: its parts and packaging units are free.
+	_, err := r.q(ctx).Exec(ctx, `DELETE FROM job_parts WHERE garage_id = $1 AND job_id = $2`, garageID, jobID)
+
+	return err
 }
 
 // SetJobActive deactivates or reactivates the job.

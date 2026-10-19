@@ -295,6 +295,9 @@ var (
 	// ErrStockIssuePosted is returned when a part line is added, changed or
 	// removed, or the order cancelled, after its stock issue was posted.
 	ErrStockIssuePosted = errors.New("the stock issue is already posted, so the parts can no longer change")
+	// ErrQuantityNeedsEntered is returned when only the quantity of a line typed
+	// in a packaging unit is edited: that amount is entered_quantity.
+	ErrQuantityNeedsEntered = errors.New("the amount of a line in a packaging unit is entered_quantity")
 	// ErrInvalidJobRef is returned for a job reference that is not an id.
 	ErrInvalidJobRef = errors.New("job id is not valid")
 	// ErrInvalidNonBillable is returned for a hidden consumable that is not a

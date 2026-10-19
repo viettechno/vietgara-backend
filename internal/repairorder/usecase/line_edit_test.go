@@ -271,6 +271,7 @@ func TestRepairOrderUseCase_DeleteLine(t *testing.T) {
 	})
 }
 
+//nolint:funlen // one table of scenarios
 func TestRepairOrderUseCase_EditLine(t *testing.T) {
 	t.Parallel()
 
@@ -322,6 +323,35 @@ func TestRepairOrderUseCase_EditLine(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "48", ro.Lines[1].Quantity)
 		assert.Equal(t, "case", ro.Lines[1].UnitAbbreviation)
+	})
+
+	t.Run("only the quantity of a line in a packaging unit is refused", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		ro := repairOrderWithPart()
+		ro.Lines[1].UnitID, ro.Lines[1].EnteredQuantity = new(unitID), new("2")
+		expectFind(d, ro)
+
+		_, err := uc.UpdateLine(t.Context(), edit(usecase.LineEdit{Quantity: new("5")}))
+		assertAppError(t, err, apperror.CodeInvalidArgument)
+	})
+
+	t.Run("moving a packaged line back to the base unit", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		ro := repairOrderWithPart()
+		ro.Lines[1].UnitID, ro.Lines[1].EnteredQuantity = new(unitID), new("2")
+		expectFind(d, ro)
+		d.Issues.EXPECT().Posted(mock.Anything, garageID, repairOrderID).Return(false, nil).Once()
+		d.RepairOrders.EXPECT().ReplaceLines(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderLinesChanged, garageID, "", mock.Anything).Return(nil).Once()
+
+		got, err := uc.UpdateLine(t.Context(), edit(usecase.LineEdit{UnitID: new(""), Quantity: new("3")}))
+		require.NoError(t, err)
+		assert.Nil(t, got.Lines[1].UnitID)
+		assert.Equal(t, "3", got.Lines[1].Quantity)
 	})
 
 	t.Run("the part itself can change", func(t *testing.T) {

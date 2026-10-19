@@ -55,9 +55,12 @@ func (u *catalogueUsage) UnitInUse(ctx context.Context, garageID, unitID string)
 	return u.inUse(ctx, garageID, "", unitID)
 }
 
-// JobInUse reports whether a quote line came from the job.
+// JobInUse reports whether a quote or repair order line came from the job.
 func (u *catalogueUsage) JobInUse(ctx context.Context, garageID, jobID string) (bool, error) {
-	return u.quotes.LinesFromJob(ctx, garageID, jobID)
+	return lifecycle.AnyInUse(ctx,
+		func(ctx context.Context) (bool, error) { return u.quotes.LinesFromJob(ctx, garageID, jobID) },
+		func(ctx context.Context) (bool, error) { return u.repairOrders.LinesFromJob(ctx, garageID, jobID) },
+	)
 }
 
 func (u *catalogueUsage) inUse(ctx context.Context, garageID, partID, unitID string) (bool, error) {

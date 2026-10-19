@@ -16,7 +16,7 @@ import (
 func (uc *RepairOrderUseCase) Cancel(ctx context.Context, garageID, repairOrderID, actorID string) (*domain.RepairOrder, error) {
 	const op = "cancel repair order"
 
-	ro, err := uc.RepairOrders.FindByID(ctx, garageID, repairOrderID)
+	ro, err := uc.load(ctx, garageID, repairOrderID)
 	if err != nil {
 		return nil, toAppError(op, err)
 	}
@@ -44,24 +44,25 @@ func (uc *RepairOrderUseCase) Cancel(ctx context.Context, garageID, repairOrderI
 }
 
 // shortagePayload is the stock_issue.shortage_changed event of Inventory
-// (Release 7.3): the draft stock issue of the order can or cannot be covered
-// by the stock on hand.
+// (Release 7.3): the draft stock issue of the order was found coverable or not
+// by the stock on hand. The event only says which order to look at.
 type shortagePayload struct {
 	RepairOrderID string `json:"repair_order_id"`
-	Short         bool   `json:"short"`
 }
 
 // HandleStockShortage is the stock_issue.shortage_changed consumer: it marks
 // the order waiting on parts while Inventory cannot cover its draft stock
-// issue, and clears the mark when it can (FR-INV-15). A closed, cancelled or
-// unknown order is left alone, so redelivered events are no-ops.
+// issue, and clears the mark when it can (FR-INV-15). The answer is read from
+// Inventory when the event is handled rather than taken from the event, so a
+// late, repeated or reordered event converges on the current state. A closed,
+// cancelled or unknown order is left alone.
 func (uc *RepairOrderUseCase) HandleStockShortage(ctx context.Context, event outbox.Event) error {
 	var payload shortagePayload
 	if err := json.Unmarshal(event.Data, &payload); err != nil || payload.RepairOrderID == "" {
 		return nil //nolint:nilerr // a malformed event cannot succeed on retry, so it is dropped
 	}
 
-	ro, err := uc.RepairOrders.FindByID(ctx, event.GarageID, payload.RepairOrderID)
+	ro, err := uc.load(ctx, event.GarageID, payload.RepairOrderID)
 	if err != nil {
 		if errorsIsNotFound(err) {
 			return nil
@@ -70,11 +71,20 @@ func (uc *RepairOrderUseCase) HandleStockShortage(ctx context.Context, event out
 		return err
 	}
 
-	if ro.Status == domain.StatusClosed || ro.Status == domain.StatusCancelled || ro.WaitingOnParts == payload.Short {
+	if ro.Status == domain.StatusClosed || ro.Status == domain.StatusCancelled {
 		return nil
 	}
 
-	ro.WaitingOnParts = payload.Short
+	short, err := uc.StockIssues.Short(ctx, event.GarageID, payload.RepairOrderID)
+	if err != nil {
+		return err
+	}
+
+	if ro.WaitingOnParts == short {
+		return nil
+	}
+
+	ro.WaitingOnParts = short
 	ro.DeriveStatus()
 
 	return uc.RepairOrders.Save(ctx, ro)

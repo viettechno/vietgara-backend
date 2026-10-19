@@ -157,6 +157,20 @@ func (r *PostgresRepository) insertLines(ctx context.Context, q platformdb.Queri
 	return nil
 }
 
+// Lock takes the row lock of the live repair order until the transaction ends.
+func (r *PostgresRepository) Lock(ctx context.Context, garageID, repairOrderID string) error {
+	var id string
+
+	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx,
+		`SELECT id FROM repair_orders WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL FOR UPDATE`,
+		garageID, repairOrderID).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.ErrRepairOrderNotFound
+	}
+
+	return err
+}
+
 // FindByID returns the live repair order with its lines, or
 // domain.ErrRepairOrderNotFound.
 func (r *PostgresRepository) FindByID(ctx context.Context, garageID, repairOrderID string) (*domain.RepairOrder, error) {
@@ -427,6 +441,18 @@ func isUniqueViolation(err error, constraint string) bool {
 	var pgErr *pgconn.PgError
 
 	return errors.As(err, &pgErr) && pgErr.Code == pgUniqueViolation && pgErr.ConstraintName == constraint
+}
+
+// LinesFromJob reports whether a repair order line came from the job, in a
+// live or a deleted order: such a job is deactivated, not deleted (FR-CAT-07).
+func (r *PostgresRepository) LinesFromJob(ctx context.Context, garageID, jobID string) (bool, error) {
+	var exists bool
+
+	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM repair_order_lines WHERE garage_id = $1 AND job_id = $2::uuid)`,
+		garageID, jobID).Scan(&exists)
+
+	return exists, err
 }
 
 // LinesReference reports whether a line refers to the part (as its item_ref_id)

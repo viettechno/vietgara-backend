@@ -39,7 +39,7 @@ type UpdateLineRequest struct {
 func (uc *RepairOrderUseCase) UpdateLine(ctx context.Context, req UpdateLineRequest) (*domain.RepairOrder, error) {
 	const op = "update repair order line"
 
-	ro, err := uc.RepairOrders.FindByID(ctx, req.GarageID, req.RepairOrderID)
+	ro, err := uc.load(ctx, req.GarageID, req.RepairOrderID)
 	if err != nil {
 		return nil, toAppError(op, err)
 	}
@@ -134,7 +134,7 @@ type AddLineRequest struct {
 func (uc *RepairOrderUseCase) AddLine(ctx context.Context, req AddLineRequest) (*domain.RepairOrder, error) {
 	const op = "add repair order line"
 
-	ro, err := uc.RepairOrders.FindByID(ctx, req.GarageID, req.RepairOrderID)
+	ro, err := uc.load(ctx, req.GarageID, req.RepairOrderID)
 	if err != nil {
 		return nil, toAppError(op, err)
 	}
@@ -169,7 +169,7 @@ func (uc *RepairOrderUseCase) AddLine(ctx context.Context, req AddLineRequest) (
 func (uc *RepairOrderUseCase) DeleteLine(ctx context.Context, garageID, repairOrderID, lineID, actorID string) (*domain.RepairOrder, error) {
 	const op = "delete repair order line"
 
-	ro, err := uc.RepairOrders.FindByID(ctx, garageID, repairOrderID)
+	ro, err := uc.load(ctx, garageID, repairOrderID)
 	if err != nil {
 		return nil, toAppError(op, err)
 	}
@@ -233,7 +233,12 @@ func (uc *RepairOrderUseCase) saveEdited(ctx context.Context, ro *domain.RepairO
 func (uc *RepairOrderUseCase) applyEdit(ctx context.Context, ro *domain.RepairOrder, index int, edit LineEdit) (bool, error) {
 	old := ro.Lines[index]
 
-	line, err := uc.buildLine(ctx, ro.GarageID, edit.apply(old), old.Position)
+	in, err := edit.apply(old)
+	if err != nil {
+		return false, err
+	}
+
+	line, err := uc.buildLine(ctx, ro.GarageID, in, old.Position)
 	if err != nil {
 		return false, err
 	}
@@ -253,8 +258,10 @@ func (uc *RepairOrderUseCase) applyEdit(ctx context.Context, ro *domain.RepairOr
 	return partsChanged, nil
 }
 
-// apply returns the input that builds the line as edit changes it.
-func (e LineEdit) apply(old domain.Line) LineInput {
+// apply returns the input that builds the line as edit changes it. A line
+// typed in a packaging unit takes its amount from EnteredQuantity: sending only
+// Quantity for it is refused rather than silently ignored.
+func (e LineEdit) apply(old domain.Line) (LineInput, error) {
 	in := LineInput{
 		ItemType: old.ItemType, ItemRefID: old.ItemRefID, Description: old.Description, Quantity: old.Quantity,
 		UnitPrice: old.UnitPrice, JobID: old.JobID, NonBillable: old.NonBillable,
@@ -272,23 +279,35 @@ func (e LineEdit) apply(old domain.Line) LineInput {
 		in.ItemRefID = e.ItemRefID
 	}
 
-	if e.Quantity != nil {
-		in.Quantity = *e.Quantity
+	if e.UnitPrice != nil {
+		in.UnitPrice = *e.UnitPrice
 	}
 
+	return e.applyAmount(in)
+}
+
+// applyAmount applies the quantity, unit and entered amount of the edit.
+func (e LineEdit) applyAmount(in LineInput) (LineInput, error) {
 	if e.UnitID != nil {
 		in.UnitID = *e.UnitID
+		if in.UnitID == "" {
+			in.EnteredQuantity = "" // back to the base unit: the quantity is the base amount
+		}
 	}
 
 	if e.EnteredQuantity != nil {
 		in.EnteredQuantity = *e.EnteredQuantity
 	}
 
-	if e.UnitPrice != nil {
-		in.UnitPrice = *e.UnitPrice
+	if e.Quantity != nil {
+		if in.UnitID != "" && e.EnteredQuantity == nil {
+			return LineInput{}, domain.ErrQuantityNeedsEntered
+		}
+
+		in.Quantity = *e.Quantity
 	}
 
-	return in
+	return in, nil
 }
 
 // consumesStock reports whether a line takes a catalogue part out of stock.
@@ -337,6 +356,16 @@ func checkEditable(ro *domain.RepairOrder) error {
 	default:
 		return nil
 	}
+}
+
+// load locks the order's row and reads the order, so that the changes to one
+// order (a line edit, the shortage mark, a cancel) never overwrite each other.
+func (uc *RepairOrderUseCase) load(ctx context.Context, garageID, repairOrderID string) (*domain.RepairOrder, error) {
+	if err := uc.RepairOrders.Lock(ctx, garageID, repairOrderID); err != nil {
+		return nil, err
+	}
+
+	return uc.RepairOrders.FindByID(ctx, garageID, repairOrderID)
 }
 
 func lineIndex(ro *domain.RepairOrder, lineID string) int {

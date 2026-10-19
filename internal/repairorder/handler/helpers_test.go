@@ -44,6 +44,8 @@ func newEnv(t *testing.T) *env {
 		issues: mocks.NewMockRepairOrderStockIssues(t),
 	}
 
+	e.repairOrders.EXPECT().Lock(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+
 	uc := usecase.NewRepairOrderUseCase(usecase.Deps{
 		RepairOrders: e.repairOrders, Vehicles: e.vehicles, Garages: e.garages, Limits: e.limits,
 		Sequences: e.sequences, Events: e.events, StockIssues: e.issues,

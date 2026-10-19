@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/viettechno/vietgara-backend/internal/mocks"
@@ -49,6 +50,8 @@ func newUseCase(t *testing.T) (*usecase.RepairOrderUseCase, *deps) {
 		Sequences: mocks.NewMockRepairOrderSequencer(t), Events: mocks.NewMockRepairOrderEventPublisher(t),
 		Parts: mocks.NewMockPartQuantityResolver(t), Issues: mocks.NewMockRepairOrderStockIssues(t),
 	}
+
+	d.RepairOrders.EXPECT().Lock(mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 
 	uc := usecase.NewRepairOrderUseCase(usecase.Deps{
 		RepairOrders: d.RepairOrders, Vehicles: d.Vehicles, Garages: d.Garages, Limits: d.Limits, Sequences: d.Sequences,

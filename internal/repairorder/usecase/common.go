@@ -49,7 +49,7 @@ var (
 	invalidErrors  = []error{
 		domain.ErrVehicleRequired, domain.ErrNoLines, domain.ErrTooManyLines, domain.ErrDescriptionRequired,
 		domain.ErrInvalidItemType, domain.ErrInvalidQuantity, domain.ErrInvalidUnitPrice, domain.ErrInvalidLineStatus,
-		domain.ErrFieldTooLong, domain.ErrInvalidNonBillable, domain.ErrInvalidJobRef,
+		domain.ErrFieldTooLong, domain.ErrInvalidNonBillable, domain.ErrInvalidJobRef, domain.ErrQuantityNeedsEntered,
 	}
 	preconditionErrors = []error{
 		domain.ErrAlreadyClosed, domain.ErrNotReadyToClose, domain.ErrNotEditable, domain.ErrNotCancellable,

@@ -470,6 +470,69 @@ func (_c *MockRepairOrderRepository_LiveVehicleIDs_Call) RunAndReturn(run func(c
 	return _c
 }
 
+// Lock provides a mock function for the type MockRepairOrderRepository
+func (_mock *MockRepairOrderRepository) Lock(ctx context.Context, garageID string, repairOrderID string) error {
+	ret := _mock.Called(ctx, garageID, repairOrderID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Lock")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = returnFunc(ctx, garageID, repairOrderID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockRepairOrderRepository_Lock_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Lock'
+type MockRepairOrderRepository_Lock_Call struct {
+	*mock.Call
+}
+
+// Lock is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - repairOrderID string
+func (_e *MockRepairOrderRepository_Expecter) Lock(ctx any, garageID any, repairOrderID any) *MockRepairOrderRepository_Lock_Call {
+	return &MockRepairOrderRepository_Lock_Call{Call: _e.mock.On("Lock", ctx, garageID, repairOrderID)}
+}
+
+func (_c *MockRepairOrderRepository_Lock_Call) Run(run func(ctx context.Context, garageID string, repairOrderID string)) *MockRepairOrderRepository_Lock_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepairOrderRepository_Lock_Call) Return(err error) *MockRepairOrderRepository_Lock_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockRepairOrderRepository_Lock_Call) RunAndReturn(run func(ctx context.Context, garageID string, repairOrderID string) error) *MockRepairOrderRepository_Lock_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ReplaceLines provides a mock function for the type MockRepairOrderRepository
 func (_mock *MockRepairOrderRepository) ReplaceLines(ctx context.Context, ro *domain.RepairOrder) error {
 	ret := _mock.Called(ctx, ro)

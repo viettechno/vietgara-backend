@@ -378,6 +378,30 @@ func TestPostgresRepository_LinesReference(t *testing.T) {
 	require.ErrorIs(t, err, errBoom)
 }
 
+func TestPostgresRepository_LockAndJobUse(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+	tx := dbtest.New(t).
+		ExpectQueryRow("FOR UPDATE", dbtest.Row(repairOrderID)).
+		ExpectQueryRow("FOR UPDATE", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectQueryRow("FOR UPDATE", dbtest.ErrRow(errBoom)).
+		ExpectQueryRow("FROM repair_order_lines", dbtest.Row(true)).
+		ExpectQueryRow("FROM repair_order_lines", dbtest.ErrRow(errBoom))
+	ctx := tx.Context(t.Context())
+
+	require.NoError(t, repo.Lock(ctx, garageID, repairOrderID))
+	require.ErrorIs(t, repo.Lock(ctx, garageID, repairOrderID), domain.ErrRepairOrderNotFound)
+	require.ErrorIs(t, repo.Lock(ctx, garageID, repairOrderID), errBoom)
+
+	used, err := repo.LinesFromJob(ctx, garageID, "job-1")
+	require.NoError(t, err)
+	require.True(t, used)
+
+	_, err = repo.LinesFromJob(ctx, garageID, "job-1")
+	require.ErrorIs(t, err, errBoom)
+}
+
 func TestPostgresRepository_ReplaceLines(t *testing.T) {
 	t.Parallel()
 

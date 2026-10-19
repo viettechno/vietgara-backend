@@ -35,6 +35,10 @@ type Repository interface {
 	// Create inserts ro and its lines; a quote already converted returns
 	// domain.ErrAlreadyConverted (the unique constraint on quote_id).
 	Create(ctx context.Context, ro *domain.RepairOrder) error
+	// Lock takes the order's row lock until the transaction ends, so changes
+	// to one order run one after the other; domain.ErrRepairOrderNotFound
+	// when there is none.
+	Lock(ctx context.Context, garageID, repairOrderID string) error
 	// FindByID returns the repair order with its lines, or
 	// domain.ErrRepairOrderNotFound.
 	FindByID(ctx context.Context, garageID, repairOrderID string) (*domain.RepairOrder, error)
@@ -106,6 +110,9 @@ type StockIssues interface {
 	// Posted reports whether the repair order's stock issue is posted, so its
 	// parts have left stock. An order without an issue is not posted.
 	Posted(ctx context.Context, garageID, repairOrderID string) (bool, error)
+	// Short reports whether the order's draft stock issue cannot be covered by
+	// the stock on hand right now.
+	Short(ctx context.Context, garageID, repairOrderID string) (bool, error)
 }
 
 // EventPublisher writes domain events to the outbox in the caller's

@@ -257,6 +257,55 @@ func TestInventoryUseCase_CancelStockIssue(t *testing.T) {
 	})
 }
 
+func TestInventoryUseCase_ResyncThatEmptiesAShortIssueClearsItsMark(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+	short := draftIssue(issueLine("old", partID, "9"))
+	short.IsShort = true
+
+	d.Repo.EXPECT().FindStockIssueByRepairOrder(mock.Anything, garageID, repairOrderID, true).Return(short, nil).Once()
+	d.Repo.EXPECT().ReplaceIssueLines(mock.Anything, mock.MatchedBy(func(i *domain.StockIssue) bool { return len(i.Lines) == 0 })).Return(nil).Once()
+	d.Repo.EXPECT().SetIssueShort(mock.Anything, garageID, issueID, false).Return(nil).Once()
+	d.Events.EXPECT().Publish(mock.Anything, usecase.EventShortageChanged, garageID, "", map[string]any{
+		"repair_order_id": repairOrderID, "garage_id": garageID, "short": false,
+	}).Return(nil).Once()
+
+	require.NoError(t, uc.HandleRepairOrderLinesChanged(t.Context(), orderEvent([]byte(`{"repair_order_id":"`+repairOrderID+`","part_lines":[]}`))))
+
+	// A failure to clear it is returned.
+	again := draftIssue(issueLine("old", partID, "9"))
+	again.IsShort = true
+	d.Repo.EXPECT().FindStockIssueByRepairOrder(mock.Anything, garageID, repairOrderID, true).Return(again, nil).Once()
+	d.Repo.EXPECT().ReplaceIssueLines(mock.Anything, mock.Anything).Return(nil).Once()
+	d.Repo.EXPECT().SetIssueShort(mock.Anything, garageID, issueID, false).Return(errBoom).Once()
+
+	require.Error(t, uc.HandleRepairOrderLinesChanged(t.Context(), orderEvent([]byte(`{"repair_order_id":"`+repairOrderID+`","part_lines":[]}`))))
+}
+
+func TestInventoryUseCase_StockIssueShort(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+	short, covered, posted := draftIssue(), draftIssue(), draftIssue()
+	short.IsShort, posted.IsShort, posted.Status = true, true, domain.StockIssuePosted
+
+	d.Repo.EXPECT().FindStockIssueByRepairOrder(mock.Anything, garageID, repairOrderID, false).Return(short, nil).Once()
+	d.Repo.EXPECT().FindStockIssueByRepairOrder(mock.Anything, garageID, repairOrderID, false).Return(covered, nil).Once()
+	d.Repo.EXPECT().FindStockIssueByRepairOrder(mock.Anything, garageID, repairOrderID, false).Return(posted, nil).Once()
+	d.Repo.EXPECT().FindStockIssueByRepairOrder(mock.Anything, garageID, repairOrderID, false).Return(nil, domain.ErrStockIssueNotFound).Once()
+	d.Repo.EXPECT().FindStockIssueByRepairOrder(mock.Anything, garageID, repairOrderID, false).Return(nil, errBoom).Once()
+
+	for _, want := range []bool{true, false, false, false} {
+		got, err := uc.StockIssueShort(t.Context(), garageID, repairOrderID)
+		require.NoError(t, err)
+		assert.Equal(t, want, got)
+	}
+
+	_, err := uc.StockIssueShort(t.Context(), garageID, repairOrderID)
+	require.Error(t, err)
+}
+
 func TestInventoryUseCase_StockIssuePosted(t *testing.T) {
 	t.Parallel()
 

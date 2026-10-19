@@ -185,6 +185,9 @@ func TestPostgresRepository_JobLifecycle(t *testing.T) {
 
 	tx := dbtest.New(t).
 		ExpectExec("UPDATE jobs SET deleted_at", dbtest.Tag(1), nil).
+		ExpectExec("DELETE FROM job_parts", dbtest.Tag(2), nil).
+		ExpectExec("UPDATE jobs SET deleted_at", dbtest.Tag(1), nil).
+		ExpectExec("DELETE FROM job_parts", dbtest.Tag(0), errBoom).
 		ExpectExec("UPDATE jobs SET is_active", dbtest.Tag(1), nil).
 		ExpectQueryRow("FROM job_parts jp", dbtest.Row(true)).
 		ExpectQueryRow("FROM job_parts jp", dbtest.ErrRow(errBoom))
@@ -192,6 +195,7 @@ func TestPostgresRepository_JobLifecycle(t *testing.T) {
 
 	require.NoError(t, newRepo().SoftDeleteJob(ctx, garageID, jobID, "actor"))
 	require.ErrorIs(t, newRepo().SoftDeleteJob(ctx, garageID, "bad", "actor"), domain.ErrJobNotFound)
+	require.ErrorIs(t, newRepo().SoftDeleteJob(ctx, garageID, jobID, "actor"), errBoom)
 	require.NoError(t, newRepo().SetJobActive(ctx, garageID, jobID, true, "actor"))
 
 	used, err := newRepo().PartUsedByJobs(ctx, garageID, partID)

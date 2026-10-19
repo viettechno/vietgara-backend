@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/viettechno/vietgara-backend/internal/mocks"
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
 	"github.com/viettechno/vietgara-backend/internal/repairorder/domain"
 	"github.com/viettechno/vietgara-backend/internal/repairorder/usecase"
@@ -114,8 +115,8 @@ func TestRepairOrderUseCase_Cancel(t *testing.T) {
 	})
 }
 
-func shortageEvent(short string) outbox.Event {
-	return outbox.Event{GarageID: garageID, Data: []byte(`{"repair_order_id":"` + repairOrderID + `","short":` + short + `}`)}
+func shortageEvent() outbox.Event {
+	return outbox.Event{GarageID: garageID, Data: []byte(`{"repair_order_id":"` + repairOrderID + `","short":true}`)}
 }
 
 func TestRepairOrderUseCase_HandleStockShortage(t *testing.T) {
@@ -126,11 +127,12 @@ func TestRepairOrderUseCase_HandleStockShortage(t *testing.T) {
 
 		uc, d := newUseCase(t)
 		expectFind(d, openRepairOrder())
+		d.Issues.EXPECT().Short(mock.Anything, garageID, repairOrderID).Return(true, nil).Once()
 		d.RepairOrders.EXPECT().Save(mock.Anything, mock.MatchedBy(func(r *domain.RepairOrder) bool {
 			return r.WaitingOnParts && r.Status == domain.StatusWaitingOnParts
 		})).Return(nil).Once()
 
-		require.NoError(t, uc.HandleStockShortage(t.Context(), shortageEvent("true")))
+		require.NoError(t, uc.HandleStockShortage(t.Context(), shortageEvent()))
 	})
 
 	t.Run("stock that arrives brings the order back", func(t *testing.T) {
@@ -140,25 +142,35 @@ func TestRepairOrderUseCase_HandleStockShortage(t *testing.T) {
 		ro := openRepairOrder()
 		ro.WaitingOnParts, ro.Status = true, domain.StatusWaitingOnParts
 		expectFind(d, ro)
+		d.Issues.EXPECT().Short(mock.Anything, garageID, repairOrderID).Return(false, nil).Once()
 		d.RepairOrders.EXPECT().Save(mock.Anything, mock.MatchedBy(func(r *domain.RepairOrder) bool {
 			return !r.WaitingOnParts && r.Status == domain.StatusOpen
 		})).Return(nil).Once()
 
-		require.NoError(t, uc.HandleStockShortage(t.Context(), shortageEvent("false")))
+		require.NoError(t, uc.HandleStockShortage(t.Context(), shortageEvent()))
 	})
 
-	t.Run("a redelivered event, or a final order, is left alone", func(t *testing.T) {
+	t.Run("the answer is Inventory's now, whatever the event said", func(t *testing.T) {
+		t.Parallel()
+
+		// A late "short" event for an order the stock now covers changes nothing.
+		uc, d := newUseCase(t)
+		expectFind(d, openRepairOrder())
+		d.Issues.EXPECT().Short(mock.Anything, garageID, repairOrderID).Return(false, nil).Once()
+
+		require.NoError(t, uc.HandleStockShortage(t.Context(), shortageEvent()))
+	})
+
+	t.Run("a final order is left alone", func(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
-		same := openRepairOrder()
-		same.WaitingOnParts = true
 		closed, cancelled := openRepairOrder(), openRepairOrder()
 		closed.Status, cancelled.Status = domain.StatusClosed, domain.StatusCancelled
 
-		for _, ro := range []*domain.RepairOrder{same, closed, cancelled} {
+		for _, ro := range []*domain.RepairOrder{closed, cancelled} {
 			expectFind(d, ro)
-			require.NoError(t, uc.HandleStockShortage(t.Context(), shortageEvent("true")))
+			require.NoError(t, uc.HandleStockShortage(t.Context(), shortageEvent()))
 		}
 	})
 
@@ -168,7 +180,7 @@ func TestRepairOrderUseCase_HandleStockShortage(t *testing.T) {
 		uc, d := newUseCase(t)
 		d.RepairOrders.EXPECT().FindByID(mock.Anything, garageID, repairOrderID).Return(nil, domain.ErrRepairOrderNotFound).Once()
 
-		require.NoError(t, uc.HandleStockShortage(t.Context(), shortageEvent("true")))
+		require.NoError(t, uc.HandleStockShortage(t.Context(), shortageEvent()))
 		require.NoError(t, uc.HandleStockShortage(t.Context(), outbox.Event{GarageID: garageID, Data: []byte(`nope`)}))
 		require.NoError(t, uc.HandleStockShortage(t.Context(), outbox.Event{GarageID: garageID, Data: []byte(`{}`)}))
 	})
@@ -178,10 +190,30 @@ func TestRepairOrderUseCase_HandleStockShortage(t *testing.T) {
 
 		uc, d := newUseCase(t)
 		d.RepairOrders.EXPECT().FindByID(mock.Anything, garageID, repairOrderID).Return(nil, errBoom).Once()
-		require.Error(t, uc.HandleStockShortage(t.Context(), shortageEvent("true")))
+		require.Error(t, uc.HandleStockShortage(t.Context(), shortageEvent()))
 
 		expectFind(d, openRepairOrder())
+		d.Issues.EXPECT().Short(mock.Anything, garageID, repairOrderID).Return(false, errBoom).Once()
+		require.Error(t, uc.HandleStockShortage(t.Context(), shortageEvent()))
+
+		expectFind(d, openRepairOrder())
+		d.Issues.EXPECT().Short(mock.Anything, garageID, repairOrderID).Return(true, nil).Once()
 		d.RepairOrders.EXPECT().Save(mock.Anything, mock.Anything).Return(errBoom).Once()
-		require.Error(t, uc.HandleStockShortage(t.Context(), shortageEvent("true")))
+		require.Error(t, uc.HandleStockShortage(t.Context(), shortageEvent()))
+	})
+
+	t.Run("a lock that fails is returned", func(t *testing.T) {
+		t.Parallel()
+
+		repo := mocks.NewMockRepairOrderRepository(t)
+		repo.EXPECT().Lock(mock.Anything, garageID, repairOrderID).Return(errBoom).Once()
+
+		uc := usecase.NewRepairOrderUseCase(usecase.Deps{RepairOrders: repo})
+		require.Error(t, uc.HandleStockShortage(t.Context(), shortageEvent()))
+
+		repo.EXPECT().Lock(mock.Anything, garageID, repairOrderID).Return(errBoom).Once()
+
+		_, err := uc.Cancel(t.Context(), garageID, repairOrderID, actorID)
+		assertAppError(t, err, apperror.CodeInternal)
 	})
 }

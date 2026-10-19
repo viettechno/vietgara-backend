@@ -60,6 +60,7 @@ func TestRepairOrderUseCase_Cancel(t *testing.T) {
 			_, err := uc.Cancel(t.Context(), garageID, repairOrderID, actorID)
 			require.Error(t, err, name)
 			assertAppError(t, err, apperror.CodeFailedPrecondition)
+			assertReason(t, err, usecase.ReasonNotCancellable)
 		}
 	})
 
@@ -72,6 +73,7 @@ func TestRepairOrderUseCase_Cancel(t *testing.T) {
 
 		_, err := uc.Cancel(t.Context(), garageID, repairOrderID, actorID)
 		assertAppError(t, err, apperror.CodeFailedPrecondition)
+		assertReason(t, err, usecase.ReasonStockIssuePosted)
 	})
 
 	t.Run("failures", func(t *testing.T) {

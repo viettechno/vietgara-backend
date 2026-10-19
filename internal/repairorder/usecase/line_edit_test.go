@@ -258,6 +258,17 @@ func TestRepairOrderUseCase_DeleteLine(t *testing.T) {
 
 		_, err := uc.DeleteLine(t.Context(), garageID, repairOrderID, partRef, actorID)
 		assertAppError(t, err, apperror.CodeFailedPrecondition)
+		assertReason(t, err, usecase.ReasonStockIssuePosted)
+	})
+
+	t.Run("the last line has its own reason", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		expectFind(d, openRepairOrder())
+
+		_, err := uc.DeleteLine(t.Context(), garageID, repairOrderID, "line-1", actorID)
+		assertReason(t, err, usecase.ReasonLastLine)
 	})
 
 	t.Run("not found", func(t *testing.T) {

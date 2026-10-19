@@ -106,6 +106,14 @@ func repairOrderWithPart() *domain.RepairOrder {
 	return ro
 }
 
+func assertReason(t *testing.T, err error, reason string) {
+	t.Helper()
+
+	appErr, ok := apperror.As(err)
+	require.True(t, ok)
+	require.Equal(t, reason, appErr.Reason)
+}
+
 func assertAppError(t *testing.T, err error, code apperror.Code) {
 	t.Helper()
 

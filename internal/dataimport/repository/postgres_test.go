@@ -64,3 +64,18 @@ func TestPostgresRepository_Create(t *testing.T) {
 	require.ErrorIs(t, repo.Create(ctx, run), domain.ErrFileAlreadyImported, "a concurrent confirmation inserts nothing")
 	require.ErrorIs(t, repo.Create(ctx, run), errBoom)
 }
+
+func TestPostgresRepository_Lock(t *testing.T) {
+	t.Parallel()
+
+	tx := dbtest.New(t).
+		ExpectExec("pg_advisory_xact_lock", dbtest.Tag(1), nil).WithArgs(func(args []any) {
+		assert.Equal(t, []any{"g-1|parts|abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"}, args)
+	}).
+		ExpectExec("pg_advisory_xact_lock", dbtest.Tag(0), errBoom)
+	ctx := tx.Context(t.Context())
+	repo := repository.NewPostgresRepository(nil)
+
+	require.NoError(t, repo.Lock(ctx, "g-1", "parts", sum))
+	require.ErrorIs(t, repo.Lock(ctx, "g-1", "parts", sum), errBoom)
+}

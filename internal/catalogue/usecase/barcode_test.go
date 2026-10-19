@@ -199,13 +199,25 @@ func TestLookupPartByBarcode(t *testing.T) {
 		assertAppError(t, err, apperror.CodeNotFound)
 	})
 
-	t.Run("invalid code never reaches the repository", func(t *testing.T) {
+	t.Run("a blank or oversized code never reaches the repository", func(t *testing.T) {
 		t.Parallel()
 
 		uc, _ := newUseCase(t)
 
-		_, _, err := uc.LookupPartByBarcode(t.Context(), garageID, "a_b")
-		assertAppError(t, err, apperror.CodeInvalidArgument)
+		for _, bad := range []string{"", "   ", strings.Repeat("9", domain.MaxBarcodeLen+1)} {
+			_, _, err := uc.LookupPartByBarcode(t.Context(), garageID, bad)
+			assertAppError(t, err, apperror.CodeInvalidArgument)
+		}
+	})
+
+	t.Run("a scan with characters the garage cannot store is simply not found", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Repo.EXPECT().FindBarcode(mock.Anything, garageID, "a_b:ü").Return(nil, nil, domain.ErrBarcodeNotFound)
+
+		_, _, err := uc.LookupPartByBarcode(t.Context(), garageID, "a_b:ü")
+		assertAppError(t, err, apperror.CodeNotFound)
 	})
 
 	t.Run("images failure", func(t *testing.T) {

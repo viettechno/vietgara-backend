@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -163,6 +164,27 @@ func (a *application) close() {
 	for _, c := range a.closers {
 		c()
 	}
+}
+
+const (
+	// maxMessageBytes is the largest gRPC message: an Excel import of 5 MB.
+	maxMessageBytes = 8 << 20
+	// maxJSONBodyBytes is the request body limit of every REST route: the
+	// 4 MiB the gRPC default allowed, as base64 in JSON. Imports are the one
+	// exception (maxImportBodyBytes), so the raised gRPC limit cannot be used
+	// to make the server buffer large anonymous requests.
+	maxJSONBodyBytes = 6 << 20
+	// maxImportBodyBytes holds a 5 MB workbook as base64 in JSON.
+	maxImportBodyBytes = 7<<20 + 512<<10
+)
+
+// bodyLimit is the largest request body a REST route accepts.
+func bodyLimit(r *http.Request) int64 {
+	if strings.Contains(r.URL.Path, "/imports/") {
+		return maxImportBodyBytes
+	}
+
+	return maxJSONBodyBytes
 }
 
 //nolint:funlen // the composition root wires every module in one place
@@ -410,7 +432,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	)
 	app.grpcServer = grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()), // one span per request (NFR-OB-01)
-		grpc.MaxRecvMsgSize(8<<20),                     // Excel imports are uploaded as one message (Release 7.2)
+		grpc.MaxRecvMsgSize(maxMessageBytes),           // Excel imports are uploaded as one message (Release 7.2)
 		grpc.ChainUnaryInterceptor(
 			middleware.Auth(issuer, policies),
 			middleware.EmailVerified(),
@@ -454,7 +476,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		return nil, err
 	}
 
-	app.httpServer = &http.Server{Handler: httpapi.NoContentForDelete(mux), ReadHeaderTimeout: 5 * time.Second}
+	app.httpServer = &http.Server{Handler: httpapi.NoContentForDelete(httpapi.LimitBody(mux, bodyLimit)), ReadHeaderTimeout: 5 * time.Second}
 
 	return app, nil
 }

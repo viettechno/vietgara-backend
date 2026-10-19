@@ -605,6 +605,8 @@ func (c *partCheck) text() {
 		c.fail(template.ColBaseUnit, domain.CodeRequiredValue, "base unit is required")
 	case !validateUnitName(p.baseUnit):
 		c.fail(template.ColBaseUnit, domain.CodeInvalidUnit, "base unit must be at most 50 characters")
+	case c.inactiveUnit(p.baseUnit):
+		c.fail(template.ColBaseUnit, domain.CodeInvalidUnit, "unit "+p.baseUnit+" is not active; activate it first")
 	}
 
 	switch {
@@ -617,6 +619,14 @@ func (c *partCheck) text() {
 	if len([]rune(p.category)) > 255 {
 		c.fail(template.ColCategory, domain.CodeInvalidCategory, "category must be at most 255 characters")
 	}
+}
+
+// inactiveUnit reports whether the file names an existing unit that is not
+// active; the Catalogue would refuse it when the part is created.
+func (c *partCheck) inactiveUnit(name string) bool {
+	unit, exists := c.r.units[strings.ToLower(name)]
+
+	return exists && !unit.IsActive
 }
 
 // packaging reads the Name=Factor items and returns the lower-cased names it
@@ -655,6 +665,11 @@ func (c *partCheck) packagingItem(item string, seen map[string]struct{}) (packIn
 		return packInput{}, false
 	}
 
+	if c.inactiveUnit(name) {
+		c.fail(template.ColPackagingUnits, domain.CodeInvalidUnit, "unit "+name+" is not active; activate it first")
+		return packInput{}, false
+	}
+
 	normalized, ok := parseFactor(factor)
 	if !ok {
 		c.fail(template.ColPackagingUnits, domain.CodeInvalidPackaging,
@@ -676,7 +691,13 @@ func (c *partCheck) packagingItem(item string, seen map[string]struct{}) (packIn
 // barcodes reads the Code and Code@Unit items: well-formed, for a packaging
 // unit of this row, and used by no other row and no other part.
 func (c *partCheck) barcodes(packNames, seen map[string]struct{}) {
-	for _, item := range splitList(c.t.cell(c.row, template.ColBarcodes)) {
+	items := splitList(c.t.cell(c.row, template.ColBarcodes))
+	if len(items) > domain.MaxBarcodesPerPart {
+		c.fail(template.ColBarcodes, domain.CodeBarcodeInvalid, "a part can have at most 20 barcodes")
+		return
+	}
+
+	for _, item := range items {
 		code, unit, forUnit := strings.Cut(item, "@")
 		code, unit = strings.TrimSpace(code), strings.TrimSpace(unit)
 

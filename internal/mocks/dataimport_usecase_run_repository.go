@@ -174,3 +174,72 @@ func (_c *MockImportRunRepository_Find_Call) RunAndReturn(run func(ctx context.C
 	_c.Call.Return(run)
 	return _c
 }
+
+// Lock provides a mock function for the type MockImportRunRepository
+func (_mock *MockImportRunRepository) Lock(ctx context.Context, garageID string, importType string, sha256 string) error {
+	ret := _mock.Called(ctx, garageID, importType, sha256)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Lock")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string) error); ok {
+		r0 = returnFunc(ctx, garageID, importType, sha256)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockImportRunRepository_Lock_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Lock'
+type MockImportRunRepository_Lock_Call struct {
+	*mock.Call
+}
+
+// Lock is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - importType string
+//   - sha256 string
+func (_e *MockImportRunRepository_Expecter) Lock(ctx any, garageID any, importType any, sha256 any) *MockImportRunRepository_Lock_Call {
+	return &MockImportRunRepository_Lock_Call{Call: _e.mock.On("Lock", ctx, garageID, importType, sha256)}
+}
+
+func (_c *MockImportRunRepository_Lock_Call) Run(run func(ctx context.Context, garageID string, importType string, sha256 string)) *MockImportRunRepository_Lock_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockImportRunRepository_Lock_Call) Return(err error) *MockImportRunRepository_Lock_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockImportRunRepository_Lock_Call) RunAndReturn(run func(ctx context.Context, garageID string, importType string, sha256 string) error) *MockImportRunRepository_Lock_Call {
+	_c.Call.Return(run)
+	return _c
+}

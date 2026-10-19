@@ -49,6 +49,8 @@ func newEnv(t *testing.T, sheet *usecase.Sheet) *env {
 		runs: mocks.NewMockImportRunRepository(t),
 	}
 
+	e.runs.EXPECT().Lock(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+
 	e.srv = handler.NewServer(usecase.NewUseCase(usecase.Dependencies{
 		Catalogue: e.catalogue, Suppliers: e.suppliers, Inventory: mocks.NewMockImportInventory(t),
 		Runs: e.runs, Reader: stubReader{sheet: sheet}, Audit: mocks.NewMockImportAuditLogger(t),

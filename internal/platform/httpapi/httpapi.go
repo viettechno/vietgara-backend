@@ -202,6 +202,19 @@ func WriteError(w http.ResponseWriter, r *http.Request, err error) {
 	errorHandler(r.Context(), nil, nil, w, r, apperror.ToGRPCError(err))
 }
 
+// LimitBody caps the request body at limit(r) bytes before anything reads it,
+// so a large message is refused at the edge instead of being buffered by the
+// gRPC server behind it.
+func LimitBody(next http.Handler, limit func(*http.Request) int64) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Body != nil && r.Body != http.NoBody {
+			r.Body = http.MaxBytesReader(w, r.Body, limit(r))
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
+
 // NoContentForDelete turns the empty 200 answer of a DELETE RPC into 204
 // No Content, as REST clients expect.
 func NoContentForDelete(next http.Handler) http.Handler {

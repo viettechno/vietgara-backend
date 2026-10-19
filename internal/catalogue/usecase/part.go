@@ -555,9 +555,11 @@ func (uc *UseCase) SetPartBarcodes(
 // including inactive parts so the caller can say so, and returns the matched
 // code with the unit one scan stands for.
 func (uc *UseCase) LookupPartByBarcode(ctx context.Context, garageID, barcode string) (*domain.Part, *domain.PartBarcode, error) {
-	code, err := domain.NormalizeBarcode(barcode)
-	if err != nil {
-		return nil, nil, toAppError("lookup barcode", err)
+	// A scan is only trimmed and length-checked: a code with characters the
+	// garage cannot store simply is not found.
+	code := strings.TrimSpace(barcode)
+	if code == "" || len([]rune(code)) > domain.MaxBarcodeLen {
+		return nil, nil, toAppError("lookup barcode", domain.ErrBarcodeInvalid)
 	}
 
 	p, matched, err := uc.repo.FindBarcode(ctx, garageID, code)

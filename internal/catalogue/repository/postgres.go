@@ -802,14 +802,24 @@ func (r *PostgresRepository) fillBarcodes(ctx context.Context, garageID string, 
 func (r *PostgresRepository) ReplacePackaging(ctx context.Context, garageID, partID, actorID string, units []domain.PackagingUnit) error {
 	q := r.q(ctx)
 
-	if _, err := q.Exec(ctx, `DELETE FROM part_units WHERE garage_id = $1 AND part_id = $2`, garageID, partID); err != nil {
+	// Only the units that left the table are deleted: a barcode may point at
+	// a unit that stays, and the foreign key would refuse deleting it.
+	kept := make([]string, 0, len(units))
+	for _, u := range units {
+		kept = append(kept, u.UnitID)
+	}
+
+	if _, err := q.Exec(ctx,
+		`DELETE FROM part_units WHERE garage_id = $1 AND part_id = $2 AND NOT (unit_id = ANY($3::uuid[]))`,
+		garageID, partID, kept); err != nil {
 		return err
 	}
 
 	for _, u := range units {
 		if _, err := q.Exec(ctx, `
 			INSERT INTO part_units (garage_id, part_id, unit_id, factor, sale_price, created_by)
-			VALUES ($1, $2, $3, $4::numeric, $5, $6)`,
+			VALUES ($1, $2, $3, $4::numeric, $5, $6)
+			ON CONFLICT (garage_id, part_id, unit_id) DO UPDATE SET factor = EXCLUDED.factor, sale_price = EXCLUDED.sale_price`,
 			garageID, partID, u.UnitID, u.Factor, u.SalePrice, nullable(actorID)); err != nil {
 			return err
 		}

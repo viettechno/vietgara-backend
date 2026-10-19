@@ -44,6 +44,8 @@ const (
 	MaxErrors = 1000
 	// MaxSampleRows is the length of the preview table.
 	MaxSampleRows = 20
+	// MaxBarcodesPerPart is the Catalogue's limit of barcodes on one part.
+	MaxBarcodesPerPart = 20
 )
 
 // Row-error codes, stable for clients.

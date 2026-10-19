@@ -28,6 +28,15 @@ func (r *PostgresRepository) q(ctx context.Context) platformdb.Querier {
 	return platformdb.QuerierFromContext(ctx, r.pool)
 }
 
+// Lock takes a transaction-scoped advisory lock on the file, so two
+// confirmations of the same content run one after the other.
+func (r *PostgresRepository) Lock(ctx context.Context, garageID, importType, sha256 string) error {
+	_, err := r.q(ctx).Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`,
+		garageID+"|"+importType+"|"+strings.ToLower(sha256))
+
+	return err
+}
+
 // Find returns the run with the same garage, type and file hash, or
 // (nil, nil).
 func (r *PostgresRepository) Find(ctx context.Context, garageID, importType, sha256 string) (*usecase.Run, error) {

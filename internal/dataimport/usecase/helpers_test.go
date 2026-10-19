@@ -54,6 +54,8 @@ func newDeps(t *testing.T) (*usecase.UseCase, *deps) {
 		Catalogue: d.catalogue, Suppliers: d.suppliers, Inventory: d.inventory, Runs: d.runs, Reader: d.reader, Audit: d.audit,
 	})
 
+	d.runs.EXPECT().Lock(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+
 	return uc, d
 }
 

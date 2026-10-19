@@ -1,7 +1,9 @@
 package usecase_test
 
 import (
+	"fmt"
 	"maps"
+	"strings"
 	"testing"
 	"time"
 
@@ -598,4 +600,59 @@ func TestPreviewCountHeaderMustAgree(t *testing.T) {
 
 	require.False(t, p.CanConfirm)
 	require.Equal(t, domain.CodeHeaderMismatch, codeOf(t, p, 3))
+}
+
+func TestPreviewPartsRefusesWhatTheCatalogueWould(t *testing.T) {
+	inactive := usecase.UnitInfo{ID: catID, Name: "Case", Abbreviation: "cs", IsActive: false}
+	units := []usecase.UnitInfo{{ID: unitID, Name: "Piece", Abbreviation: "pc", IsActive: true}, inactive}
+
+	t.Run("an inactive base unit", func(t *testing.T) {
+		uc, d := newDeps(t)
+
+		row := partRow()
+		row[template.ColBaseUnit] = "Case"
+		d.reader.sheet = sheet(domain.TypeParts, row)
+		catalogueState{units: units}.expect(d)
+		expectSuppliers(d, nil)
+
+		p := preview(t, uc, domain.TypeParts, []byte("xlsx"), allPermissions)
+
+		require.False(t, p.CanConfirm)
+		require.Equal(t, domain.CodeInvalidUnit, codeOf(t, p, 2))
+	})
+
+	t.Run("an inactive packaging unit", func(t *testing.T) {
+		uc, d := newDeps(t)
+
+		row := partRow()
+		row[template.ColPackagingUnits] = "Case=12"
+		d.reader.sheet = sheet(domain.TypeParts, row)
+		catalogueState{units: units}.expect(d)
+		expectSuppliers(d, nil)
+
+		p := preview(t, uc, domain.TypeParts, []byte("xlsx"), allPermissions)
+
+		require.False(t, p.CanConfirm)
+		require.Equal(t, domain.CodeInvalidUnit, codeOf(t, p, 2))
+	})
+
+	t.Run("more barcodes than a part can hold", func(t *testing.T) {
+		uc, d := newDeps(t)
+
+		codes := make([]string, 0, domain.MaxBarcodesPerPart+1)
+		for i := range domain.MaxBarcodesPerPart + 1 {
+			codes = append(codes, fmt.Sprintf("89%04d", i))
+		}
+
+		row := partRow()
+		row[template.ColBarcodes] = strings.Join(codes, ";")
+		d.reader.sheet = sheet(domain.TypeParts, row)
+		catalogueState{units: units}.expect(d)
+		expectSuppliers(d, nil)
+
+		p := preview(t, uc, domain.TypeParts, []byte("xlsx"), allPermissions)
+
+		require.False(t, p.CanConfirm)
+		require.Equal(t, domain.CodeBarcodeInvalid, codeOf(t, p, 2))
+	})
 }

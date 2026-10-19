@@ -69,6 +69,6 @@ func TestBarcodeRPCFailures(t *testing.T) {
 	_, err = e.srv.LookupPartByBarcode(ctx, &cataloguev1.LookupPartByBarcodeRequest{GarageId: garageID, Barcode: "0"})
 	assert.Equal(t, codes.NotFound, code(err))
 
-	_, err = e.srv.LookupPartByBarcode(ctx, &cataloguev1.LookupPartByBarcodeRequest{GarageId: garageID, Barcode: "a_b"})
+	_, err = e.srv.LookupPartByBarcode(ctx, &cataloguev1.LookupPartByBarcodeRequest{GarageId: garageID, Barcode: " "})
 	assert.Equal(t, codes.InvalidArgument, code(err))
 }

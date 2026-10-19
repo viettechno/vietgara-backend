@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/xuri/excelize/v2"
 
+	catalogueDomain "github.com/viettechno/vietgara-backend/internal/catalogue/domain"
 	catalogueRepository "github.com/viettechno/vietgara-backend/internal/catalogue/repository"
 	catalogueUsecase "github.com/viettechno/vietgara-backend/internal/catalogue/usecase"
 	"github.com/viettechno/vietgara-backend/internal/dataimport/domain"
@@ -325,6 +326,33 @@ func TestDataImport(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, page.Items, 1, "the part list finds a part by an exact barcode")
 			assert.Equal(t, "A-0010", page.Items[0].SKU)
+		})
+	})
+
+	t.Run("a packaging unit with a barcode can be edited, but not removed", func(t *testing.T) {
+		partID := partIDBySKU(t, pg, garageID, "A-0010")
+
+		inGarage(garageID, func(ctx context.Context) {
+			part, err := catalogue.uc.GetPart(ctx, garageID, partID)
+			require.NoError(t, err)
+			require.Len(t, part.PackagingUnits, 1)
+
+			caseUnit := part.PackagingUnits[0]
+
+			// The case keeps its barcode while its factor changes: the table is
+			// updated in place, not deleted and rewritten.
+			updated, err := catalogue.uc.SetPartUnits(ctx, garageID, partID, userID,
+				[]catalogueDomain.PackagingUnit{{UnitID: caseUnit.UnitID, Factor: "24"}})
+			require.NoError(t, err)
+			assert.Equal(t, "24", updated.PackagingUnits[0].Factor)
+			assert.Len(t, updated.Barcodes, 2, "the barcodes survived")
+
+			_, err = catalogue.uc.SetPartUnits(ctx, garageID, partID, userID, nil)
+			assert.Equal(t, "PACKAGING_UNIT_HAS_BARCODE", reasonOfError(err))
+
+			_, err = catalogue.uc.SetPartUnits(ctx, garageID, partID, userID,
+				[]catalogueDomain.PackagingUnit{{UnitID: caseUnit.UnitID, Factor: "12"}})
+			require.NoError(t, err, "back to the original factor for the scenarios that follow")
 		})
 	})
 

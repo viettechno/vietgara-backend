@@ -10,6 +10,7 @@ import (
 
 var (
 	decimalPattern = regexp.MustCompile(`^\d+(\.\d+)?$`)
+	costPattern    = regexp.MustCompile(`^(\d+|\d{1,3}([.,]\d{3})+)$`)
 	barcodePattern = regexp.MustCompile(`^[A-Za-z0-9 \-./+$%]+$`)
 )
 
@@ -59,12 +60,19 @@ func parseQuantity(s string, aboveZero bool) (string, bool) {
 // parseCost parses a non-negative whole VND amount. Thousands separators are
 // accepted because exported spreadsheets carry them.
 func parseCost(s string) (int64, bool) {
-	s = strings.NewReplacer(".", "", ",", "", " ", "", "đ", "", "₫", "").Replace(strings.TrimSpace(s))
+	s = strings.NewReplacer(" ", "", "đ", "", "₫", "").Replace(strings.TrimSpace(s))
 	if s == "" {
 		return 0, true
 	}
 
-	n, err := strconv.ParseInt(s, 10, 64)
+	// A separator is a thousands separator only when exactly three digits
+	// follow it; "1.5" or "12,50" is a fraction, which a whole-dong cost
+	// cannot have, and is refused rather than read as 15 or 1250.
+	if !costPattern.MatchString(s) {
+		return 0, false
+	}
+
+	n, err := strconv.ParseInt(strings.NewReplacer(".", "", ",", "").Replace(s), 10, 64)
 	if err != nil || n < 0 {
 		return 0, false
 	}

@@ -113,6 +113,10 @@ func (uc *UseCase) Confirm(ctx context.Context, req Request) (*domain.Result, er
 	hash := sha256.Sum256(req.Content)
 	sum := hex.EncodeToString(hash[:])
 
+	if err := uc.runs.Lock(ctx, req.GarageID, string(req.Type), sum); err != nil {
+		return nil, toAppError("confirm import", err)
+	}
+
 	run, err := uc.runs.Find(ctx, req.GarageID, string(req.Type), sum)
 	if err != nil {
 		return nil, toAppError("confirm import", err)

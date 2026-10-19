@@ -2,11 +2,18 @@ package usecase
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"maps"
 	"strings"
 
 	"github.com/viettechno/vietgara-backend/internal/dataimport/domain"
 )
+
+// errBarcodeUnit means a barcode names a packaging unit the row does not
+// have; the preview refuses such a row, so it is a drift between the check
+// and the write.
+var errBarcodeUnit = errors.New("a barcode names a packaging unit the part does not have")
 
 // apply writes a checked file through the Catalogue and Inventory use cases.
 // It runs in the caller's garage-scoped transaction, so any error rolls the
@@ -128,7 +135,11 @@ func (uc *UseCase) newPart(
 		in := BarcodeInput{Barcode: code.code}
 
 		if code.unit != "" {
-			unitID := packIDs[strings.ToLower(code.unit)]
+			unitID, ok := packIDs[strings.ToLower(code.unit)]
+			if !ok {
+				return NewPart{}, fmt.Errorf("%w: %s", errBarcodeUnit, code.unit)
+			}
+
 			in.UnitID = &unitID
 		}
 

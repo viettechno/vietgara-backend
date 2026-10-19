@@ -170,6 +170,9 @@ type Run struct {
 
 // RunRepository guards idempotency and keeps the import history.
 type RunRepository interface {
+	// Lock serialises the confirmations of one file for the rest of the
+	// transaction, so a second one waits and then finds the first one's run.
+	Lock(ctx context.Context, garageID, importType, sha256 string) error
 	// Find returns the run for the same garage, type and file hash, or
 	// (nil, nil).
 	Find(ctx context.Context, garageID, importType, sha256 string) (*Run, error)

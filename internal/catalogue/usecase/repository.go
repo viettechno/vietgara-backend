@@ -40,6 +40,18 @@ type ImageRef struct {
 	Position int
 }
 
+// PackagingRow is one packaging unit of a part created in bulk.
+type PackagingRow struct {
+	PartID string
+	Unit   domain.PackagingUnit
+}
+
+// BarcodeRow is one barcode of a part created in bulk.
+type BarcodeRow struct {
+	PartID  string
+	Barcode domain.PartBarcode
+}
+
 // Repository defines the persistence contract of the module. Every method is
 // scoped to one garage and ignores soft-deleted rows.
 type Repository interface {
@@ -64,16 +76,31 @@ type Repository interface {
 	CategoryHasParts(ctx context.Context, garageID, categoryID string) (bool, error)
 
 	CreatePart(ctx context.Context, p *domain.Part) error
+	// CreateParts inserts the parts with their packaging units and barcodes in
+	// bulk. A SKU or a barcode already taken returns the matching domain error.
+	CreateParts(ctx context.Context, garageID, actorID string, parts []*domain.Part, packaging []PackagingRow, barcodes []BarcodeRow) error
 	// FindPart returns the part with its base unit, category, packaging
-	// units and image links, or domain.ErrPartNotFound.
+	// units, barcodes and image links, or domain.ErrPartNotFound.
 	FindPart(ctx context.Context, garageID, partID string) (*domain.Part, error)
 	FindPartsByIDs(ctx context.Context, garageID string, ids []string) ([]*domain.Part, error)
+	// FindPartsBySKUs returns the live and inactive parts with these SKUs,
+	// matched case-insensitively.
+	FindPartsBySKUs(ctx context.Context, garageID string, skus []string) ([]*domain.Part, error)
 	UpdatePart(ctx context.Context, p *domain.Part) error
 	ListParts(ctx context.Context, garageID string, filter PartFilter) ([]*domain.Part, int, error)
 	SoftDeletePart(ctx context.Context, garageID, partID, actorID string) error
 	SetPartActive(ctx context.Context, garageID, partID string, active bool, actorID string) error
 	// ReplacePackaging replaces the part's packaging table.
 	ReplacePackaging(ctx context.Context, garageID, partID, actorID string, units []domain.PackagingUnit) error
+	// ReplaceBarcodes replaces the part's barcode table. A code already used
+	// by another part returns domain.ErrBarcodeAlreadyUsed.
+	ReplaceBarcodes(ctx context.Context, garageID, partID, actorID string, barcodes []domain.PartBarcode) error
+	// FindBarcode returns the part and the barcode row that matches code
+	// case-insensitively, or domain.ErrBarcodeNotFound.
+	FindBarcode(ctx context.Context, garageID, barcode string) (*domain.Part, *domain.PartBarcode, error)
+	// BarcodesByCode returns the part id per lower-case code for the codes
+	// that exist in the garage.
+	BarcodesByCode(ctx context.Context, garageID string, codes []string) (map[string]string, error)
 	ListImages(ctx context.Context, garageID, partID string) ([]ImageRef, error)
 	AddImage(ctx context.Context, garageID, partID, fileID, actorID string) error
 	RemoveImage(ctx context.Context, garageID, partID, fileID string) error

@@ -293,6 +293,148 @@ func (uc *InventoryUseCase) stockedPartsOf(ctx context.Context, garageID, catego
 	return stocked, nil
 }
 
+// CountedPart is one counted line of an imported stock count.
+type CountedPart struct {
+	PartID string
+	// UnitID is the packaging unit EnteredCounted is typed in; empty for the
+	// base unit.
+	UnitID string
+	// EnteredCounted is the counted quantity; zero is a real count of none.
+	EnteredCounted string
+}
+
+// ImportStockCountRequest is the input for InventoryUseCase.ImportStockCount.
+type ImportStockCountRequest struct {
+	GarageID string
+	ActorID  string
+	Name     string
+	Notes    string
+	Lines    []CountedPart
+}
+
+// ImportStockCount saves a draft count whose lines arrive already counted
+// (the Excel import, FR-INV-14). It does what CreateStockCount, AddStockCountLines
+// and UpdateStockCountLine do for every line, but loads the parts and balances
+// once and inserts the lines in one statement, so a 5,000-line file costs a
+// handful of queries. A part named twice is counted once, as when adding.
+func (uc *InventoryUseCase) ImportStockCount(ctx context.Context, req ImportStockCountRequest) (*domain.StockCount, error) {
+	const op = "import stock count"
+
+	if len(req.Lines) == 0 {
+		return nil, toAppError(op, domain.ErrNoParts)
+	}
+
+	lines, ids := uniqueCounted(req.Lines)
+
+	parts, err := uc.partsByID(ctx, req.GarageID, ids)
+	if err != nil {
+		return nil, toAppError(op, err)
+	}
+
+	for _, id := range ids {
+		p, ok := parts[id]
+		if !ok {
+			return nil, toAppError(op, domain.ErrPartNotFound)
+		}
+
+		if !p.IsActive {
+			return nil, toAppError(op, domain.ErrPartInactive)
+		}
+	}
+
+	c, err := uc.CreateStockCount(ctx, CreateStockCountRequest{
+		GarageID: req.GarageID, ActorID: req.ActorID, Name: req.Name, Notes: req.Notes,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	balances, err := uc.repo.Balances(ctx, req.GarageID, ids)
+	if err != nil {
+		return nil, toAppError(op, err)
+	}
+
+	now := uc.now()
+	counted := make([]domain.StockCountLine, 0, len(lines))
+
+	for i, in := range lines {
+		bal := balances[in.PartID]
+		l := domain.StockCountLine{
+			ID: uuid.NewString(), Position: i, PartID: in.PartID, SystemQuantity: orDefault(bal.OnHand, "0"),
+			AverageCost: new(orDefault(bal.AverageCost, "0")),
+		}
+
+		if strings.TrimSpace(in.EnteredCounted) != "" {
+			if err := uc.recordCount(ctx, req.GarageID, in, &l); err != nil {
+				return nil, toAppError(op, err)
+			}
+
+			l.CountedAt = new(now)
+		}
+
+		counted = append(counted, l)
+	}
+
+	if err := uc.repo.InsertStockCountLines(ctx, req.GarageID, c.ID, actorRef(req.ActorID), counted); err != nil {
+		return nil, toAppError(op, err)
+	}
+
+	return c, nil
+}
+
+// uniqueCounted keeps the first count of each part and lists the part ids.
+func uniqueCounted(in []CountedPart) ([]CountedPart, []string) {
+	lines := make([]CountedPart, 0, len(in))
+	ids := make([]string, 0, len(in))
+	seen := make(map[string]struct{}, len(in))
+
+	for _, l := range in {
+		if _, dup := seen[l.PartID]; dup {
+			continue
+		}
+
+		seen[l.PartID] = struct{}{}
+		ids = append(ids, l.PartID)
+		lines = append(lines, l)
+	}
+
+	return lines, ids
+}
+
+// recordCount puts the typed quantity of an imported line on l. A quantity in
+// the base unit needs no conversion, so only a packaging unit asks the
+// Catalogue.
+func (uc *InventoryUseCase) recordCount(ctx context.Context, garageID string, in CountedPart, l *domain.StockCountLine) error {
+	entered, err := domain.ParseCountedQuantity(in.EnteredCounted)
+	if err != nil {
+		return err
+	}
+
+	if domain.IsZero(entered) {
+		l.EnteredCounted, l.Counted = new("0"), new("0")
+
+		return nil
+	}
+
+	if in.UnitID == "" {
+		l.EnteredCounted, l.Counted = new(entered), new(entered)
+
+		return nil
+	}
+
+	resolved, err := uc.parts.ResolveQuantity(ctx, garageID, in.PartID, in.UnitID, entered)
+	if err != nil {
+		return err
+	}
+
+	l.UnitID, l.Counted, l.EnteredCounted = resolved.UnitID, new(resolved.Base), new(resolved.Base)
+	if resolved.Entered != nil {
+		l.EnteredCounted = resolved.Entered
+	}
+
+	return nil
+}
+
 // UpdateStockCountLineRequest is the input for InventoryUseCase.UpdateStockCountLine.
 type UpdateStockCountLineRequest struct {
 	GarageID string

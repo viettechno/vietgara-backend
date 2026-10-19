@@ -52,6 +52,7 @@ flowchart LR
 | License | `internal/license` | Plans, per-user subscriptions, entitlements, plan limits |
 | Customer | `internal/customer` | Customers, vehicles |
 | Supplier | `internal/supplier` | The garage's suppliers with contact and bank details (FR-SUP-01) |
+| Data Import | `internal/dataimport` | Excel templates, preview and all-or-nothing confirm for parts, goods receipts and stock counts (FR-INV-14); the `import_runs` history that makes a confirmed file idempotent. Parts barcodes (FR-INV-13) belong to Catalogue |
 
 Shared infrastructure (db, access, mail, storage, kafka, outbox, audit,
 httpapi, auth) is in `internal/platform`. The gRPC interceptors are in

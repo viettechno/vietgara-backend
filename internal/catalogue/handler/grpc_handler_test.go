@@ -93,7 +93,7 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 17)
+	assert.Len(t, p, 19)
 	assert.NotNil(t, p[cataloguev1.CatalogueService_ListParts_FullMethodName].Garage)
 	assert.NotNil(t, p[cataloguev1.CatalogueService_DeletePartCategory_FullMethodName].Garage)
 }

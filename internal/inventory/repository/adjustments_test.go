@@ -50,8 +50,7 @@ func TestPostgresRepository_StockCount(t *testing.T) {
 
 		tx := dbtest.New(t).
 			ExpectQueryRow("INSERT INTO stock_counts", dbtest.Row(now, now)).
-			ExpectExec("INSERT INTO stock_count_lines", dbtest.Tag(1), nil).
-			ExpectExec("INSERT INTO stock_count_lines", dbtest.Tag(1), nil)
+			ExpectExec("INSERT INTO stock_count_lines", dbtest.Tag(2), nil)
 
 		c := newCount()
 		require.NoError(t, repo.CreateStockCount(tx.Context(t.Context()), c))

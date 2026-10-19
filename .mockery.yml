@@ -483,3 +483,35 @@ packages:
           filename: "notification_usecase_repository.go"
           dir: "./internal/mocks"
           structname: "MockNotificationRepository"
+  github.com/viettechno/vietgara-backend/internal/dataimport/usecase:
+    interfaces:
+      Catalogue:
+        config:
+          filename: "dataimport_usecase_catalogue.go"
+          dir: "./internal/mocks"
+          structname: "MockImportCatalogue"
+      Suppliers:
+        config:
+          filename: "dataimport_usecase_suppliers.go"
+          dir: "./internal/mocks"
+          structname: "MockImportSuppliers"
+      Inventory:
+        config:
+          filename: "dataimport_usecase_inventory.go"
+          dir: "./internal/mocks"
+          structname: "MockImportInventory"
+      Reader:
+        config:
+          filename: "dataimport_usecase_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockImportReader"
+      RunRepository:
+        config:
+          filename: "dataimport_usecase_run_repository.go"
+          dir: "./internal/mocks"
+          structname: "MockImportRunRepository"
+      AuditLogger:
+        config:
+          filename: "dataimport_usecase_audit_logger.go"
+          dir: "./internal/mocks"
+          structname: "MockImportAuditLogger"

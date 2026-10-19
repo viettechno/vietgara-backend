@@ -41,13 +41,19 @@ func Policies() middleware.Policies {
 	read, write := access.Requires(access.CatalogueRead), access.Requires(access.CatalogueWrite)
 
 	return middleware.Policies{
-		cataloguev1.CatalogueService_ListParts_FullMethodName:          middleware.GarageMethod(read),
-		cataloguev1.CatalogueService_GetPart_FullMethodName:            middleware.GarageMethod(read),
-		cataloguev1.CatalogueService_CreatePart_FullMethodName:         middleware.GarageMethod(write),
-		cataloguev1.CatalogueService_UpdatePart_FullMethodName:         middleware.GarageMethod(write),
-		cataloguev1.CatalogueService_DeletePart_FullMethodName:         middleware.GarageMethod(write),
-		cataloguev1.CatalogueService_ActivatePart_FullMethodName:       middleware.GarageMethod(write),
-		cataloguev1.CatalogueService_SetPartUnits_FullMethodName:       middleware.GarageMethod(write),
+		cataloguev1.CatalogueService_ListParts_FullMethodName:    middleware.GarageMethod(read),
+		cataloguev1.CatalogueService_GetPart_FullMethodName:      middleware.GarageMethod(read),
+		cataloguev1.CatalogueService_CreatePart_FullMethodName:   middleware.GarageMethod(write),
+		cataloguev1.CatalogueService_UpdatePart_FullMethodName:   middleware.GarageMethod(write),
+		cataloguev1.CatalogueService_DeletePart_FullMethodName:   middleware.GarageMethod(write),
+		cataloguev1.CatalogueService_ActivatePart_FullMethodName: middleware.GarageMethod(write),
+		cataloguev1.CatalogueService_SetPartUnits_FullMethodName: middleware.GarageMethod(write),
+		// Barcodes are scanned while handling stock, so they follow the
+		// Inventory permissions (FR-INV-13).
+		cataloguev1.CatalogueService_SetPartBarcodes_FullMethodName: middleware.GarageMethod(access.Requires(access.InventoryWrite)),
+		cataloguev1.CatalogueService_LookupPartByBarcode_FullMethodName: middleware.GarageMethod(
+			access.Requires(access.InventoryRead),
+		),
 		cataloguev1.CatalogueService_AddPartImage_FullMethodName:       middleware.GarageMethod(write),
 		cataloguev1.CatalogueService_RemovePartImage_FullMethodName:    middleware.GarageMethod(write),
 		cataloguev1.CatalogueService_ListUnits_FullMethodName:          middleware.GarageMethod(read),
@@ -128,6 +134,7 @@ func partToProto(p *domain.Part) *cataloguev1.Part {
 		SalePrice: p.SalePrice, CategoryId: p.CategoryID, CategoryName: p.CategoryName, Brand: p.Brand,
 		IsActive: p.IsActive, ReorderThreshold: p.ReorderThreshold,
 		PackagingUnits: make([]*cataloguev1.PackagingUnit, 0, len(p.PackagingUnits)),
+		Barcodes:       make([]*cataloguev1.PartBarcode, 0, len(p.Barcodes)),
 		Images:         make([]*cataloguev1.PartImage, 0, len(p.Images)),
 		CreatedAt:      converter.TimeToProto(p.CreatedAt), UpdatedAt: converter.TimeToProto(p.UpdatedAt),
 	}
@@ -140,11 +147,21 @@ func partToProto(p *domain.Part) *cataloguev1.Part {
 		})
 	}
 
+	for _, b := range p.Barcodes {
+		out.Barcodes = append(out.Barcodes, barcodeToProto(b))
+	}
+
 	for _, img := range p.Images {
 		out.Images = append(out.Images, &cataloguev1.PartImage{FileId: img.FileID, Url: img.URL})
 	}
 
 	return out
+}
+
+func barcodeToProto(b domain.PartBarcode) *cataloguev1.PartBarcode {
+	return &cataloguev1.PartBarcode{
+		Barcode: b.Barcode, UnitId: b.UnitID, UnitName: b.UnitName, UnitAbbreviation: b.UnitAbbreviation,
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -458,6 +475,38 @@ func (s *Server) SetPartUnits(ctx context.Context, req *cataloguev1.SetPartUnits
 		}
 
 		return &cataloguev1.SetPartUnitsResponse{Part: partToProto(p)}, nil
+	})
+}
+
+// SetPartBarcodes replaces the part's barcode table.
+func (s *Server) SetPartBarcodes(ctx context.Context, req *cataloguev1.SetPartBarcodesRequest) (*cataloguev1.SetPartBarcodesResponse, error) {
+	return run(ctx, func(actorID string) (*cataloguev1.SetPartBarcodesResponse, error) {
+		barcodes := make([]domain.PartBarcode, 0, len(req.GetBarcodes()))
+
+		for _, b := range req.GetBarcodes() {
+			barcodes = append(barcodes, domain.PartBarcode{Barcode: b.GetBarcode(), UnitID: b.UnitId})
+		}
+
+		p, err := s.catalogue.SetPartBarcodes(ctx, req.GetGarageId(), req.GetPartId(), actorID, barcodes)
+		if err != nil {
+			return nil, err
+		}
+
+		return &cataloguev1.SetPartBarcodesResponse{Part: partToProto(p)}, nil
+	})
+}
+
+// LookupPartByBarcode finds the part a scanned code belongs to.
+func (s *Server) LookupPartByBarcode(
+	ctx context.Context, req *cataloguev1.LookupPartByBarcodeRequest,
+) (*cataloguev1.LookupPartByBarcodeResponse, error) {
+	return run(ctx, func(string) (*cataloguev1.LookupPartByBarcodeResponse, error) {
+		p, barcode, err := s.catalogue.LookupPartByBarcode(ctx, req.GetGarageId(), req.GetBarcode())
+		if err != nil {
+			return nil, err
+		}
+
+		return &cataloguev1.LookupPartByBarcodeResponse{Part: partToProto(p), Barcode: barcodeToProto(*barcode)}, nil
 	})
 }
 

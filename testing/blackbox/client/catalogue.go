@@ -182,6 +182,19 @@ func (c *Client) SetPartUnits(ctx context.Context, garageID, partID string, unit
 		&cataloguev1.SetPartUnitsRequest{GarageId: garageID, PartId: partID, PackagingUnits: units})
 }
 
+// SetPartBarcodes replaces the part's barcodes (FR-INV-13).
+func (c *Client) SetPartBarcodes(ctx context.Context, garageID, partID string, barcodes []*cataloguev1.PartBarcode) (*cataloguev1.Part, error) {
+	return call[cataloguev1.Part](ctx, c, http.MethodPut, partPath(garageID, partID)+"/barcodes",
+		&cataloguev1.SetPartBarcodesRequest{GarageId: garageID, PartId: partID, Barcodes: barcodes})
+}
+
+// LookupPartByBarcode finds the part a scanned code belongs to, with the unit
+// one scan stands for.
+func (c *Client) LookupPartByBarcode(ctx context.Context, garageID, code string) (*cataloguev1.LookupPartByBarcodeResponse, error) {
+	return call[cataloguev1.LookupPartByBarcodeResponse](ctx, c, http.MethodGet,
+		garagePath(garageID)+"/barcodes:lookup?barcode="+url.QueryEscape(code), nil)
+}
+
 // AddPartImage attaches an uploaded part_image file to the part.
 func (c *Client) AddPartImage(ctx context.Context, garageID, partID, fileID string) (*cataloguev1.Part, error) {
 	return call[cataloguev1.Part](ctx, c, http.MethodPost, partPath(garageID, partID)+"/images",

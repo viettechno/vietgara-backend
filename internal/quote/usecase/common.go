@@ -63,6 +63,7 @@ var (
 		domain.ErrCustomerRequired, domain.ErrVehicleRequired, domain.ErrNoLines, domain.ErrTooManyLines,
 		domain.ErrDescriptionRequired, domain.ErrInvalidItemType, domain.ErrInvalidQuantity, domain.ErrInvalidUnitPrice,
 		domain.ErrInvalidApprovalMode, domain.ErrFieldTooLong, domain.ErrDecisionMismatch,
+		domain.ErrInvalidNonBillable, domain.ErrInvalidJobRef,
 	}
 	preconditionErrors = []error{domain.ErrNotEditable, domain.ErrNotApproved, domain.ErrLinkModeOnly}
 )

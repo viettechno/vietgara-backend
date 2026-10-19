@@ -1,6 +1,9 @@
 package main
 
 import (
+	"context"
+
+	inventoryUsecase "github.com/viettechno/vietgara-backend/internal/inventory/usecase"
 	licenseUsecase "github.com/viettechno/vietgara-backend/internal/license/usecase"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/platform/numbering"
@@ -29,13 +32,25 @@ func buildRepairOrder(
 	entitlements *licenseUsecase.EntitlementUseCase,
 	vehicles repairOrderVehicles,
 	parts partquantity.Resolver,
+	issues repairorderUsecase.StockIssues,
 ) *repairOrderModule {
 	repo := repairorderRepository.NewPostgresRepository(pool)
 	uc := repairorderUsecase.NewRepairOrderUseCase(repairorderUsecase.Deps{
 		RepairOrders: repo, Vehicles: vehicles,
 		Garages: repairOrderGarages{garages: garages}, Limits: entitlements, Sequences: numbering.NewSequencer(pool),
-		Events: events, Parts: parts,
+		Events: events, Parts: parts, StockIssues: issues,
 	})
 
 	return &repairOrderModule{server: repairorderHandler.NewServer(uc), uc: uc, repo: repo}
+}
+
+// repairOrderIssues gives the Repair Order module the state of an order's
+// stock issue over Inventory, which is built after it and filled in then.
+type repairOrderIssues struct {
+	inventory *inventoryUsecase.InventoryUseCase
+}
+
+// Posted implements repairorderUsecase.StockIssues.
+func (r *repairOrderIssues) Posted(ctx context.Context, garageID, repairOrderID string) (bool, error) {
+	return r.inventory.StockIssuePosted(ctx, garageID, repairOrderID)
 }

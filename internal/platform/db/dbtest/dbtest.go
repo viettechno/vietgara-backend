@@ -257,6 +257,12 @@ func UniqueViolation(constraint string) error {
 	return &pgconn.PgError{Code: "23505", ConstraintName: constraint}
 }
 
+// RestrictViolationOn is a Postgres restrict_violation (a foreign key with
+// ON DELETE RESTRICT) on constraint.
+func RestrictViolationOn(constraint string) error {
+	return &pgconn.PgError{Code: "23001", ConstraintName: constraint}
+}
+
 // ForeignKeyViolation is a Postgres foreign_key_violation.
 func ForeignKeyViolation() error {
 	return &pgconn.PgError{Code: "23503"}

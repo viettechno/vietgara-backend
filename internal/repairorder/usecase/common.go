@@ -49,9 +49,12 @@ var (
 	invalidErrors  = []error{
 		domain.ErrVehicleRequired, domain.ErrNoLines, domain.ErrTooManyLines, domain.ErrDescriptionRequired,
 		domain.ErrInvalidItemType, domain.ErrInvalidQuantity, domain.ErrInvalidUnitPrice, domain.ErrInvalidLineStatus,
-		domain.ErrFieldTooLong,
+		domain.ErrFieldTooLong, domain.ErrInvalidNonBillable, domain.ErrInvalidJobRef,
 	}
-	preconditionErrors = []error{domain.ErrAlreadyClosed, domain.ErrNotReadyToClose}
+	preconditionErrors = []error{
+		domain.ErrAlreadyClosed, domain.ErrNotReadyToClose, domain.ErrNotEditable, domain.ErrNotCancellable,
+		domain.ErrLastLine, domain.ErrStockIssuePosted,
+	}
 )
 
 // toAppError classifies err into an *apperror.AppError; op names the
@@ -71,6 +74,10 @@ func toAppError(op string, err error) error {
 	default:
 		return apperror.Wrap(apperror.CodeInternal, op, err)
 	}
+}
+
+func errorsIsNotFound(err error) bool {
+	return errors.Is(err, domain.ErrRepairOrderNotFound)
 }
 
 func isAny(err error, targets []error) bool {

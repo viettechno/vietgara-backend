@@ -279,7 +279,7 @@ func TestPostgresRepository_PartSuppliers(t *testing.T) {
 }
 
 func issueHeader() []any {
-	return []any{issueID, garageID, "PX-1", orderID, "LSC-1", "draft", nil, nil, nil, nil, now, now}
+	return []any{issueID, garageID, "PX-1", orderID, "LSC-1", "draft", nil, nil, nil, nil, now, now, false}
 }
 
 func TestPostgresRepository_StockIssue(t *testing.T) {
@@ -437,5 +437,67 @@ func TestPostgresRepository_Reports(t *testing.T) {
 			_, err = repo.StockValuation(ctx, garageID, now)
 			require.ErrorIs(t, err, errBoom)
 		}
+	})
+}
+
+func TestPostgresRepository_StockIssueReservation(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+	issue := &domain.StockIssue{
+		ID: issueID, GarageID: garageID, Status: domain.StockIssueDraft,
+		Lines: []domain.StockIssueLine{{ID: "l1", RepairOrderLineID: "rl1", PartID: partID, EnteredQuantity: "2", Quantity: "2"}},
+	}
+
+	t.Run("replace issue lines", func(t *testing.T) {
+		t.Parallel()
+
+		tx := dbtest.New(t).
+			ExpectExec("DELETE FROM stock_issue_lines", dbtest.Tag(1), nil).
+			ExpectExec("INSERT INTO stock_issue_lines", dbtest.Tag(1), nil).
+			ExpectExec("UPDATE stock_issues SET updated_by", dbtest.Tag(1), nil).
+			ExpectExec("DELETE FROM stock_issue_lines", dbtest.Tag(0), errBoom).
+			ExpectExec("DELETE FROM stock_issue_lines", dbtest.Tag(1), nil).
+			ExpectExec("INSERT INTO stock_issue_lines", dbtest.Tag(0), errBoom)
+		ctx := tx.Context(t.Context())
+
+		require.NoError(t, repo.ReplaceIssueLines(ctx, issue))
+		require.ErrorIs(t, repo.ReplaceIssueLines(ctx, issue), errBoom)
+		require.ErrorIs(t, repo.ReplaceIssueLines(ctx, issue), errBoom)
+	})
+
+	t.Run("set the shortage mark", func(t *testing.T) {
+		t.Parallel()
+
+		tx := dbtest.New(t).
+			ExpectExec("UPDATE stock_issues SET is_short", dbtest.Tag(1), nil).
+			ExpectExec("UPDATE stock_issues SET is_short", dbtest.Tag(0), errBoom)
+		ctx := tx.Context(t.Context())
+
+		require.NoError(t, repo.SetIssueShort(ctx, garageID, issueID, true))
+		require.ErrorIs(t, repo.SetIssueShort(ctx, garageID, issueID, false), errBoom)
+	})
+
+	t.Run("draft lines in reservation order", func(t *testing.T) {
+		t.Parallel()
+
+		tx := dbtest.New(t).
+			ExpectQuery("FROM stock_issue_lines l", dbtest.NewRows([]any{issueID, orderID, true, true, "l1", partID, "2"}), nil).
+			ExpectQuery("FROM stock_issue_lines l", nil, errBoom).
+			ExpectQuery("FROM stock_issue_lines l", dbtest.NewRows([]any{issueID}), nil)
+		ctx := tx.Context(t.Context())
+
+		got, err := repo.DraftLines(ctx, garageID, []string{partID})
+		require.NoError(t, err)
+		require.Len(t, got, 1)
+		assert.Equal(t, domain.DraftLine{
+			IssueID: issueID, RepairOrderID: orderID, IssueIsShort: true, Affected: true, LineID: "l1", PartID: partID, Quantity: "2",
+		}, got[0])
+
+		_, err = repo.DraftLines(ctx, garageID, []string{partID})
+		require.ErrorIs(t, err, errBoom)
+
+		_, err = repo.DraftLines(ctx, garageID, []string{partID})
+		require.Error(t, err) // a row that cannot be scanned
 	})
 }

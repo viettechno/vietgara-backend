@@ -232,6 +232,11 @@ packages:
           structname: "MockLicenseTransactor"
   github.com/viettechno/vietgara-backend/internal/quote/usecase:
     interfaces:
+      JobCatalogue:
+        config:
+          filename: "quote_usecase_job_catalogue.go"
+          dir: "./internal/mocks"
+          structname: "MockQuoteJobCatalogue"
       Repository:
         config:
           filename: "quote_usecase_repository.go"
@@ -284,6 +289,11 @@ packages:
           structname: "MockQuoteTransactor"
   github.com/viettechno/vietgara-backend/internal/repairorder/usecase:
     interfaces:
+      StockIssues:
+        config:
+          filename: "repairorder_usecase_stock_issues.go"
+          dir: "./internal/mocks"
+          structname: "MockRepairOrderStockIssues"
       Repository:
         config:
           filename: "repairorder_usecase_repository.go"

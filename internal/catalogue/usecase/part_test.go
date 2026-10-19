@@ -226,6 +226,7 @@ func TestUseCase_UpdatePart(t *testing.T) {
 		uc, d := newUseCase(t)
 		d.Repo.EXPECT().FindPart(mock.Anything, garageID, partID).Return(samplePart(), nil).Twice()
 		d.Usage.EXPECT().PartInUse(mock.Anything, garageID, partID).Return(false, nil).Once()
+		d.Repo.EXPECT().PartUsedByJobs(mock.Anything, garageID, partID).Return(false, nil).Once()
 		d.Repo.EXPECT().FindUnit(mock.Anything, garageID, caseID).Return(sampleCase(), nil).Once()
 		d.Repo.EXPECT().UpdatePart(mock.Anything, mock.MatchedBy(func(p *domain.Part) bool {
 			return p.BaseUnitID == caseID && p.BaseUnitAbbreviation == "ctn"
@@ -388,6 +389,7 @@ func TestUseCase_DeletePart(t *testing.T) {
 		uc, d := newUseCase(t)
 		d.Repo.EXPECT().FindPart(mock.Anything, garageID, partID).Return(samplePart(), nil).Once()
 		d.Usage.EXPECT().PartInUse(mock.Anything, garageID, partID).Return(false, nil).Once()
+		d.Repo.EXPECT().PartUsedByJobs(mock.Anything, garageID, partID).Return(false, nil).Once()
 		d.Repo.EXPECT().SoftDeletePart(mock.Anything, garageID, partID, actorID).Return(nil).Once()
 
 		outcome, err := uc.DeletePart(t.Context(), req)

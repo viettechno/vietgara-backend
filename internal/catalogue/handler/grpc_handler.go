@@ -22,7 +22,10 @@ import (
 )
 
 // Update-mask paths shared by the units, categories and parts.
-const pathName = "name"
+const (
+	pathName     = "name"
+	pathIsActive = "is_active"
+)
 
 // Server implements cataloguev1.CatalogueServiceServer.
 type Server struct {
@@ -222,7 +225,7 @@ func (s *Server) UpdateUnit(ctx context.Context, req *cataloguev1.UpdateUnitRequ
 				update.Fields.Name = new(in.GetName())
 			case "abbreviation":
 				update.Fields.Abbreviation = new(in.GetAbbreviation())
-			case "is_active":
+			case pathIsActive:
 				update.Fields.IsActive = new(in.GetIsActive())
 			default:
 				return nil, badMask(path)
@@ -305,7 +308,7 @@ func (s *Server) UpdatePartCategory(ctx context.Context, req *cataloguev1.Update
 				update.Fields.Name = new(in.GetName())
 			case "parent_id":
 				update.Fields.SetParent, update.Fields.ParentID = true, in.GetParentId()
-			case "is_active":
+			case pathIsActive:
 				update.Fields.IsActive = new(in.GetIsActive())
 			default:
 				return nil, badMask(path)
@@ -418,7 +421,7 @@ func (s *Server) UpdatePart(ctx context.Context, req *cataloguev1.UpdatePartRequ
 				update.Fields.CategoryID = new(in.GetCategoryId())
 			case "brand":
 				update.Fields.Brand = new(in.GetBrand())
-			case "is_active":
+			case pathIsActive:
 				update.Fields.IsActive = new(in.GetIsActive())
 			case "reorder_threshold":
 				update.Fields.ReorderThreshold = new(in.GetReorderThreshold())

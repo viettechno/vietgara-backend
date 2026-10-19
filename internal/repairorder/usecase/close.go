@@ -54,6 +54,10 @@ func (uc *RepairOrderUseCase) Close(ctx context.Context, garageID, repairOrderID
 		return nil, toAppError("close repair order", domain.ErrAlreadyClosed)
 	}
 
+	if ro.Status == domain.StatusCancelled {
+		return nil, toAppError("close repair order", domain.ErrNotEditable)
+	}
+
 	if !ro.ReadyToClose() {
 		return nil, toAppError("close repair order", domain.ErrNotReadyToClose)
 	}

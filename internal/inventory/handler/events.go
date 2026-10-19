@@ -16,4 +16,6 @@ func Subscribe(bus outbox.Subscriber, processor *outbox.Processor, uc *usecase.I
 	bus.Subscribe("repair_order.created", processor.Wrap(ConsumerName, uc.HandleRepairOrderCreated))
 	bus.Subscribe("repair_order.started", processor.Wrap(ConsumerName, uc.HandleRepairOrderStarted))
 	bus.Subscribe("repair_order.closed", processor.Wrap(ConsumerName, uc.HandleRepairOrderClosed))
+	bus.Subscribe("repair_order.lines_changed", processor.Wrap(ConsumerName, uc.HandleRepairOrderLinesChanged))
+	bus.Subscribe("repair_order.cancelled", processor.Wrap(ConsumerName, uc.HandleRepairOrderCancelled))
 }

@@ -40,6 +40,7 @@ var (
 
 type env struct {
 	srv   *handler.Server
+	jobs  *handler.JobServer
 	repo  *mocks.MockCatalogueRepository
 	usage *mocks.MockCatalogueUsageChecker
 	files *mocks.MockCatalogueFiles
@@ -52,7 +53,8 @@ func newEnv(t *testing.T) *env {
 		repo: mocks.NewMockCatalogueRepository(t), usage: mocks.NewMockCatalogueUsageChecker(t),
 		files: mocks.NewMockCatalogueFiles(t),
 	}
-	e.srv = handler.NewServer(usecase.NewUseCase(e.repo, e.usage, e.files))
+	uc := usecase.NewUseCase(e.repo, e.usage, e.files)
+	e.srv, e.jobs = handler.NewServer(uc), handler.NewJobServer(uc)
 
 	return e
 }

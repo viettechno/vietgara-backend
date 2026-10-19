@@ -48,6 +48,7 @@ func newEnv(t *testing.T) *env {
 		directory: mocks.NewMockInventoryDirectory(t), sequences: mocks.NewMockInventorySequencer(t),
 		audit: mocks.NewMockInventoryAuditLogger(t),
 	}
+	e.repo.EXPECT().DraftLines(mock.Anything, mock.Anything, mock.Anything).Return(nil, nil).Maybe()
 	e.srv = handler.NewServer(usecase.NewInventoryUseCase(usecase.Dependencies{
 		Repo: e.repo, Parts: e.parts, Events: e.events, Garages: e.garages, Directory: e.directory, Sequences: e.sequences,
 		Audit: e.audit, Now: func() time.Time { return time.Date(2026, time.October, 15, 3, 0, 0, 0, time.UTC) },

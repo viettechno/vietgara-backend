@@ -30,5 +30,5 @@ func quoteRow() []any {
 
 // lineRow matches the column order of lineColumns in postgres.go.
 func lineRow() []any {
-	return []any{lineID, 1, "labor", nil, "Oil change", "1", nil, nil, "", int64(250_000), int64(250_000), "pending", nil}
+	return []any{lineID, 1, "labor", nil, "Oil change", "1", nil, nil, "", int64(250_000), int64(250_000), "pending", nil, nil, false}
 }

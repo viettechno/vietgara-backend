@@ -801,7 +801,7 @@ func (uc *InventoryUseCase) adjustTo(ctx context.Context, c *domain.StockCount, 
 		tx.Type, tx.Quantity = domain.TransactionOut, domain.Subtract(l.SystemQuantity, *l.Counted)
 	}
 
-	return uc.repo.RecordTransaction(ctx, tx)
+	return uc.recordMovement(ctx, tx)
 }
 
 // CancelStockCount closes a draft count, or reverses a completed one: the
@@ -890,7 +890,7 @@ func (uc *InventoryUseCase) reverseCount(ctx context.Context, c *domain.StockCou
 			tx.Type, tx.Quantity, tx.UnitCost = domain.TransactionIn, domain.Subtract("0", diff), costOrNil(l.AverageCost)
 		}
 
-		if err := uc.repo.RecordTransaction(ctx, tx); err != nil {
+		if err := uc.recordMovement(ctx, tx); err != nil {
 			return err
 		}
 	}

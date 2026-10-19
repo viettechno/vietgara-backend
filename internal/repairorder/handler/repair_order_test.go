@@ -34,7 +34,7 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 5)
+	assert.Len(t, p, 8)
 	assert.NotNil(t, p[repairorderv1.RepairOrderService_CreateRepairOrder_FullMethodName].Garage)
 }
 
@@ -127,7 +127,7 @@ func TestUpdateRepairOrderLine(t *testing.T) {
 		_, err := e.srv.UpdateRepairOrderLine(signedIn(t), &repairorderv1.UpdateRepairOrderLineRequest{
 			GarageId: garageID, RepairOrderId: repairOrderID, LineId: "line-1",
 			Line:       &repairorderv1.RepairOrderLine{},
-			UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"description"}},
+			UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"nonsense"}},
 		})
 		require.Error(t, err)
 		assert.Equal(t, codes.InvalidArgument, status.Code(err))

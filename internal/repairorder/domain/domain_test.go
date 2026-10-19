@@ -13,11 +13,12 @@ func TestRepairOrderStatus_IsValid(t *testing.T) {
 
 	for _, s := range []domain.RepairOrderStatus{
 		domain.StatusOpen, domain.StatusInProgress, domain.StatusWaitingOnParts, domain.StatusCompleted, domain.StatusClosed,
+		domain.StatusCancelled,
 	} {
 		assert.True(t, s.IsValid())
 	}
 
-	assert.False(t, domain.RepairOrderStatus("cancelled").IsValid())
+	assert.False(t, domain.RepairOrderStatus("archived").IsValid())
 	assert.False(t, domain.RepairOrderStatus("").IsValid())
 }
 

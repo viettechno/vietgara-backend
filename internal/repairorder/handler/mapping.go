@@ -46,6 +46,7 @@ func lineToProto(line domain.Line) *repairorderv1.RepairOrderLine {
 		Quantity: line.Quantity, UnitPrice: line.UnitPrice, LineTotal: line.LineTotal, Status: lineStatusToProto(line.Status),
 		AssignedTechnicianIds: line.AssignedTechnicianIDs,
 		UnitId:                line.UnitID, EnteredQuantity: derefString(line.EnteredQuantity), UnitAbbreviation: line.UnitAbbreviation,
+		JobId: line.JobID, NonBillable: line.NonBillable,
 	}
 }
 
@@ -61,6 +62,8 @@ func statusToProto(s domain.RepairOrderStatus) repairorderv1.RepairOrderStatus {
 		return repairorderv1.RepairOrderStatus_REPAIR_ORDER_STATUS_COMPLETED
 	case domain.StatusClosed:
 		return repairorderv1.RepairOrderStatus_REPAIR_ORDER_STATUS_CLOSED
+	case domain.StatusCancelled:
+		return repairorderv1.RepairOrderStatus_REPAIR_ORDER_STATUS_CANCELLED
 	default:
 		return repairorderv1.RepairOrderStatus_REPAIR_ORDER_STATUS_UNSPECIFIED
 	}
@@ -80,6 +83,8 @@ func statusFromProto(s repairorderv1.RepairOrderStatus) domain.RepairOrderStatus
 		return domain.StatusCompleted
 	case repairorderv1.RepairOrderStatus_REPAIR_ORDER_STATUS_CLOSED:
 		return domain.StatusClosed
+	case repairorderv1.RepairOrderStatus_REPAIR_ORDER_STATUS_CANCELLED:
+		return domain.StatusCancelled
 	case repairorderv1.RepairOrderStatus_REPAIR_ORDER_STATUS_UNSPECIFIED:
 		return ""
 	default:
@@ -141,14 +146,23 @@ func lineStatusFromProto(s repairorderv1.RepairOrderLineStatus) domain.LineStatu
 func lineInputsFromProto(lines []*repairorderv1.RepairOrderLine) []usecase.LineInput {
 	out := make([]usecase.LineInput, 0, len(lines))
 	for _, line := range lines {
-		out = append(out, usecase.LineInput{
-			ItemType: itemTypeFromProto(line.GetItemType()), ItemRefID: line.ItemRefId,
-			Description: line.GetDescription(), Quantity: line.GetQuantity(), UnitID: line.GetUnitId(),
-			EnteredQuantity: line.GetEnteredQuantity(), UnitPrice: line.GetUnitPrice(),
-		})
+		out = append(out, lineInputFromProto(line))
 	}
 
 	return out
+}
+
+func lineInputFromProto(line *repairorderv1.RepairOrderLine) usecase.LineInput {
+	if line == nil {
+		return usecase.LineInput{}
+	}
+
+	return usecase.LineInput{
+		ItemType: itemTypeFromProto(line.GetItemType()), ItemRefID: line.ItemRefId,
+		Description: line.GetDescription(), Quantity: line.GetQuantity(), UnitID: line.GetUnitId(),
+		EnteredQuantity: line.GetEnteredQuantity(), UnitPrice: line.GetUnitPrice(),
+		JobID: line.JobId, NonBillable: line.GetNonBillable(),
+	}
 }
 
 func paginationToProto(p *usecase.Page[*domain.RepairOrder]) *commonv1.Pagination {

@@ -37,6 +37,7 @@ type deps struct {
 	Sequences    *mocks.MockRepairOrderSequencer
 	Events       *mocks.MockRepairOrderEventPublisher
 	Parts        *mocks.MockPartQuantityResolver
+	Issues       *mocks.MockRepairOrderStockIssues
 }
 
 func newUseCase(t *testing.T) (*usecase.RepairOrderUseCase, *deps) {
@@ -46,12 +47,12 @@ func newUseCase(t *testing.T) (*usecase.RepairOrderUseCase, *deps) {
 		RepairOrders: mocks.NewMockRepairOrderRepository(t), Vehicles: mocks.NewMockRepairOrderVehicleReader(t),
 		Garages: mocks.NewMockRepairOrderGarageReader(t), Limits: mocks.NewMockRepairOrderTransactionLimiter(t),
 		Sequences: mocks.NewMockRepairOrderSequencer(t), Events: mocks.NewMockRepairOrderEventPublisher(t),
-		Parts: mocks.NewMockPartQuantityResolver(t),
+		Parts: mocks.NewMockPartQuantityResolver(t), Issues: mocks.NewMockRepairOrderStockIssues(t),
 	}
 
 	uc := usecase.NewRepairOrderUseCase(usecase.Deps{
 		RepairOrders: d.RepairOrders, Vehicles: d.Vehicles, Garages: d.Garages, Limits: d.Limits, Sequences: d.Sequences,
-		Events: d.Events, Parts: d.Parts, Now: func() time.Time { return now },
+		Events: d.Events, Parts: d.Parts, StockIssues: d.Issues, Now: func() time.Time { return now },
 	})
 
 	return uc, d
@@ -80,6 +81,26 @@ func openRepairOrder() *domain.RepairOrder {
 		},
 		TotalAmount: 250_000, CreatedAt: now, UpdatedAt: now,
 	}
+}
+
+const (
+	partID  = "77777777-7777-7777-7777-777777777777"
+	unitID  = "88888888-8888-8888-8888-888888888888"
+	jobID   = "99999999-9999-9999-9999-999999999999"
+	partRef = "part-line"
+)
+
+// repairOrderWithPart is an open order with a labor line and a part line.
+func repairOrderWithPart() *domain.RepairOrder {
+	ro := openRepairOrder()
+	ref := partID
+	ro.Lines = append(ro.Lines, domain.Line{
+		ID: partRef, Position: 2, ItemType: domain.ItemTypePart, ItemRefID: &ref, Description: "Oil", Quantity: "4",
+		UnitPrice: 100_000, LineTotal: 400_000, Status: domain.LineNotStarted,
+	})
+	ro.TotalAmount = 650_000
+
+	return ro
 }
 
 func assertAppError(t *testing.T, err error, code apperror.Code) {

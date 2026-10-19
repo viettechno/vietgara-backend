@@ -33,8 +33,11 @@ func quoteToProto(q *domain.Quote) *quotev1.Quote {
 
 func publicQuoteToProto(q *domain.Quote) *quotev1.PublicQuote {
 	lines := make([]*quotev1.QuoteLine, 0, len(q.Lines))
+
 	for _, line := range q.Lines {
-		lines = append(lines, lineToProto(line))
+		if !line.NonBillable { // hidden consumables are never shown to the customer
+			lines = append(lines, lineToProto(line))
+		}
 	}
 
 	return &quotev1.PublicQuote{
@@ -49,6 +52,7 @@ func lineToProto(l domain.Line) *quotev1.QuoteLine {
 		Id: l.ID, ItemType: itemTypeToProto(l.ItemType), ItemRefId: l.ItemRefID, Description: l.Description,
 		Quantity: l.Quantity, UnitPrice: l.UnitPrice, LineTotal: l.LineTotal, Decision: decisionToProto(l.Decision),
 		UnitId: l.UnitID, EnteredQuantity: derefString(l.EnteredQuantity), UnitAbbreviation: l.UnitAbbreviation,
+		JobId: l.JobID, NonBillable: l.NonBillable,
 	}
 }
 
@@ -56,6 +60,7 @@ func lineFromProto(l *quotev1.QuoteLine) usecase.LineInput {
 	return usecase.LineInput{
 		ItemType: itemTypeFromProto(l.GetItemType()), ItemRefID: l.ItemRefId, Description: l.GetDescription(),
 		Quantity: l.GetQuantity(), UnitID: l.GetUnitId(), EnteredQuantity: l.GetEnteredQuantity(), UnitPrice: l.GetUnitPrice(),
+		JobID: l.JobId, NonBillable: l.GetNonBillable(),
 	}
 }
 

@@ -124,7 +124,7 @@ func (uc *InventoryUseCase) takeOutLines(ctx context.Context, m movement, lines 
 			CreatedBy: actorRef(m.actorID),
 		}
 
-		if err := uc.repo.RecordTransaction(ctx, tx); err != nil {
+		if err := uc.recordMovement(ctx, tx); err != nil {
 			return err
 		}
 
@@ -146,7 +146,7 @@ func (uc *InventoryUseCase) putBackLines(ctx context.Context, m movement, lines 
 			Reason: m.reason, CreatedBy: actorRef(m.actorID),
 		}
 
-		if err := uc.repo.RecordTransaction(ctx, tx); err != nil {
+		if err := uc.recordMovement(ctx, tx); err != nil {
 			return err
 		}
 	}

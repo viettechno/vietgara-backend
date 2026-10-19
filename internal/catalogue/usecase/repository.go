@@ -34,6 +34,16 @@ type UnitFilter struct {
 	Offset          int
 }
 
+// JobFilter selects one page of a garage's jobs.
+type JobFilter struct {
+	// Query matches the name or the category.
+	Query           string
+	Category        string
+	IncludeInactive bool
+	Limit           int
+	Offset          int
+}
+
 // ImageRef is one stored image link of a part.
 type ImageRef struct {
 	FileID   string
@@ -101,6 +111,19 @@ type Repository interface {
 	// BarcodesByCode returns the part id per lower-case code for the codes
 	// that exist in the garage.
 	BarcodesByCode(ctx context.Context, garageID string, codes []string) (map[string]string, error)
+
+	CreateJob(ctx context.Context, j *domain.Job) error
+	// FindJob returns the live job with its suggested parts (ids, amounts and
+	// units only), or domain.ErrJobNotFound.
+	FindJob(ctx context.Context, garageID, jobID string) (*domain.Job, error)
+	// UpdateJob persists the job's fields and, when replaceParts is true, its
+	// suggested parts.
+	UpdateJob(ctx context.Context, j *domain.Job, replaceParts bool) error
+	ListJobs(ctx context.Context, garageID string, filter JobFilter) ([]*domain.Job, int, error)
+	SoftDeleteJob(ctx context.Context, garageID, jobID, actorID string) error
+	SetJobActive(ctx context.Context, garageID, jobID string, active bool, actorID string) error
+	// PartUsedByJobs reports whether a live job suggests the part.
+	PartUsedByJobs(ctx context.Context, garageID, partID string) (bool, error)
 	ListImages(ctx context.Context, garageID, partID string) ([]ImageRef, error)
 	AddImage(ctx context.Context, garageID, partID, fileID, actorID string) error
 	RemoveImage(ctx context.Context, garageID, partID, fileID string) error
@@ -116,6 +139,8 @@ type Repository interface {
 type UsageChecker interface {
 	PartInUse(ctx context.Context, garageID, partID string) (bool, error)
 	UnitInUse(ctx context.Context, garageID, unitID string) (bool, error)
+	// JobInUse reports whether a quote line came from the job.
+	JobInUse(ctx context.Context, garageID, jobID string) (bool, error)
 }
 
 // Files is the Catalogue's view of the File module, implemented in

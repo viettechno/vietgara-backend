@@ -224,6 +224,7 @@ func (r quoteRepairOrders) Create(
 			Position: l.Position, ItemType: repairorderDomain.ItemType(l.ItemType), ItemRefID: l.ItemRefID,
 			Description: l.Description, Quantity: l.Quantity, UnitID: l.UnitID, EnteredQuantity: l.EnteredQuantity,
 			UnitPrice: l.UnitPrice, LineTotal: l.LineTotal, Status: repairorderDomain.LineNotStarted,
+			JobID: l.JobID, NonBillable: l.NonBillable,
 		})
 	}
 
@@ -652,6 +653,10 @@ func (q documentQuotes) Get(ctx context.Context, garageID, quoteID string) (docu
 
 	lines := make([]render.DocumentLine, 0, len(quote.Lines))
 	for _, line := range quote.Lines {
+		if line.NonBillable { // a hidden consumable is not printed (FR-CAT-08)
+			continue
+		}
+
 		lines = append(lines, render.DocumentLine{
 			Description: line.Description, Quantity: documentQuantity(line.Quantity, line.EnteredQuantity, line.UnitAbbreviation),
 			UnitPrice: line.UnitPrice, LineTotal: line.LineTotal,
@@ -694,6 +699,10 @@ func (r documentRepairOrders) Get(ctx context.Context, garageID, repairOrderID s
 
 	lines := make([]render.DocumentLine, 0, len(ro.Lines))
 	for _, line := range ro.Lines {
+		if line.NonBillable { // a hidden consumable is not printed (FR-CAT-08)
+			continue
+		}
+
 		lines = append(lines, render.DocumentLine{
 			Description: line.Description, Quantity: documentQuantity(line.Quantity, line.EnteredQuantity, line.UnitAbbreviation),
 			UnitPrice: line.UnitPrice, LineTotal: line.LineTotal,

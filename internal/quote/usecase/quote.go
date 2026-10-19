@@ -28,6 +28,8 @@ type Deps struct {
 	Tx             Transactor
 	// Parts converts part-line quantities typed in a packaging unit.
 	Parts partquantity.Resolver
+	// Jobs expands a catalogue job into quote lines (FR-CAT-06).
+	Jobs JobCatalogue
 	// AppBaseURL is the web admin origin the public approval link is
 	// built on, e.g. "https://vietgara.viettechno.com".
 	AppBaseURL string
@@ -60,6 +62,11 @@ type LineInput struct {
 	UnitID          string
 	EnteredQuantity string
 	UnitPrice       int64
+	// JobID is the catalogue job the line came from (FR-CAT-06).
+	JobID *string
+	// NonBillable makes the line a hidden consumable (FR-CAT-08): only a
+	// catalogue part line can be one, and its price is stored as zero.
+	NonBillable bool
 }
 
 // CreateQuoteRequest is the input for QuoteUseCase.Create.
@@ -352,6 +359,7 @@ func (uc *QuoteUseCase) buildLines(ctx context.Context, garageID string, inputs 
 	}
 
 	lines := make([]domain.Line, 0, len(inputs))
+	billable := 0
 
 	for i, in := range inputs {
 		description := strings.TrimSpace(in.Description)
@@ -371,6 +379,15 @@ func (uc *QuoteUseCase) buildLines(ctx context.Context, garageID string, inputs 
 			return nil, domain.ErrInvalidUnitPrice
 		}
 
+		jobID, price, err := lineOrigin(in)
+		if err != nil {
+			return nil, err
+		}
+
+		if !in.NonBillable {
+			billable++
+		}
+
 		stored, err := partquantity.ForLine(ctx, uc.Parts, garageID, in.ItemType == domain.ItemTypePart, in.ItemRefID,
 			in.Quantity, in.UnitID, in.EnteredQuantity)
 		if err != nil {
@@ -386,12 +403,42 @@ func (uc *QuoteUseCase) buildLines(ctx context.Context, garageID string, inputs 
 			ID: uuid.NewString(), Position: i + 1, ItemType: in.ItemType, ItemRefID: in.ItemRefID,
 			Description: description, Quantity: stored.Quantity, UnitID: stored.UnitID, EnteredQuantity: stored.Entered,
 			UnitAbbreviation: stored.UnitAbbreviation,
-			UnitPrice:        in.UnitPrice,
-			LineTotal:        domain.LineTotal(scaled, in.UnitPrice), Decision: domain.DecisionPending,
+			UnitPrice:        price,
+			LineTotal:        domain.LineTotal(scaled, price), Decision: domain.DecisionPending,
+			JobID: jobID, NonBillable: in.NonBillable,
 		})
 	}
 
+	if billable == 0 {
+		return nil, domain.ErrInvalidNonBillable
+	}
+
 	return lines, nil
+}
+
+// lineOrigin checks a line's job reference and hidden-consumable mark and
+// returns the job id and the price to store: a hidden consumable is a
+// catalogue part line, priced at zero.
+func lineOrigin(in LineInput) (*string, int64, error) {
+	var jobID *string
+
+	if in.JobID != nil && *in.JobID != "" {
+		if uuid.Validate(*in.JobID) != nil {
+			return nil, 0, domain.ErrInvalidJobRef
+		}
+
+		jobID = in.JobID
+	}
+
+	if !in.NonBillable {
+		return jobID, in.UnitPrice, nil
+	}
+
+	if in.ItemType != domain.ItemTypePart || in.ItemRefID == nil || *in.ItemRefID == "" {
+		return nil, 0, domain.ErrInvalidNonBillable
+	}
+
+	return jobID, 0, nil
 }
 
 // CheckLength validates a quote's free-text notes.

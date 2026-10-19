@@ -118,6 +118,13 @@ type Line struct {
 	LineTotal        int64
 	Decision         LineDecision
 	DecidedAt        *time.Time
+	// JobID is the catalogue job the line came from (FR-CAT-06); nil for a
+	// free-form line.
+	JobID *string
+	// NonBillable marks a hidden consumable (FR-CAT-08): a part line with a
+	// price of zero that the customer never sees, whose stock is deducted
+	// when the job is done.
+	NonBillable bool
 }
 
 // Quote is a price estimate awaiting the customer's approval (FR-QUO-01).
@@ -169,6 +176,20 @@ func (q *Quote) Recalculate() {
 	q.TotalAmount = total
 }
 
+// BillableCount is the number of lines the customer sees and decides on: the
+// lines other than hidden consumables.
+func (q *Quote) BillableCount() int {
+	n := 0
+
+	for _, line := range q.Lines {
+		if !line.NonBillable {
+			n++
+		}
+	}
+
+	return n
+}
+
 // Sentinel errors for business-rule violations in the Quote & Pricing
 // module.
 var (
@@ -184,6 +205,11 @@ var (
 	ErrInvalidUnitPrice    = errors.New("unit price must not be negative")
 	ErrInvalidApprovalMode = errors.New("approval mode must be link or manual")
 	ErrFieldTooLong        = errors.New("field is too long")
+	// ErrInvalidNonBillable is returned for a hidden consumable that is not a
+	// part line of the catalogue, or for a quote with no billable line.
+	ErrInvalidNonBillable = errors.New("only a catalogue part line can be non-billable, and a quote needs a billable line")
+	// ErrInvalidJobRef is returned for a job reference that is not an id.
+	ErrInvalidJobRef = errors.New("job id is not valid")
 
 	// ErrNotEditable is returned when a create/send/decision action is
 	// attempted on a quote whose status forbids it (e.g. editing a sent

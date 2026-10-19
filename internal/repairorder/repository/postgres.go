@@ -33,12 +33,13 @@ func NewPostgresRepository(pool *platformdb.Pool) *PostgresRepository {
 }
 
 const repairOrderColumns = `id, garage_id, quote_id, vehicle_id, vehicle_license_plate, customer_name, number, status,
-	total_amount, issuer, billing_party, closed_at, created_by, updated_by, created_at, updated_at`
+	total_amount, issuer, billing_party, closed_at, waiting_on_parts, created_by, updated_by, created_at, updated_at`
 
 // repairOrderListColumns is repairOrderColumns qualified by the "ro" alias
 // List's query joins repair_order_lines under.
 const repairOrderListColumns = `ro.id, ro.garage_id, ro.quote_id, ro.vehicle_id, ro.vehicle_license_plate, ro.customer_name,
-	ro.number, ro.status, ro.total_amount, ro.issuer, ro.billing_party, ro.closed_at, ro.created_by, ro.updated_by, ro.created_at, ro.updated_at`
+	ro.number, ro.status, ro.total_amount, ro.issuer, ro.billing_party, ro.closed_at, ro.waiting_on_parts, ro.created_by, ro.updated_by,
+	ro.created_at, ro.updated_at`
 
 func scanRepairOrder(row pgx.Row) (*domain.RepairOrder, error) {
 	var (
@@ -49,7 +50,7 @@ func scanRepairOrder(row pgx.Row) (*domain.RepairOrder, error) {
 	)
 
 	err := row.Scan(&ro.ID, &ro.GarageID, &ro.QuoteID, &ro.VehicleID, &ro.VehicleLicensePlate, &ro.CustomerName, &ro.Number,
-		&status, &ro.TotalAmount, &issuer, &party, &ro.ClosedAt, &ro.CreatedBy, &ro.UpdatedBy, &ro.CreatedAt, &ro.UpdatedAt)
+		&status, &ro.TotalAmount, &issuer, &party, &ro.ClosedAt, &ro.WaitingOnParts, &ro.CreatedBy, &ro.UpdatedBy, &ro.CreatedAt, &ro.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrRepairOrderNotFound
@@ -80,7 +81,7 @@ func scanRepairOrder(row pgx.Row) (*domain.RepairOrder, error) {
 const lineColumns = `id, position, item_type, item_ref_id, description, trim_scale(quantity)::text, unit_id,
 	trim_scale(entered_quantity)::text,
 	COALESCE((SELECT u.abbreviation FROM units u WHERE u.garage_id = repair_order_lines.garage_id AND u.id = repair_order_lines.unit_id), ''),
-	unit_price, line_total, status, assigned_technicians`
+	unit_price, line_total, status, assigned_technicians, job_id, non_billable`
 
 func scanLine(row pgx.Row) (domain.Line, error) {
 	var (
@@ -90,7 +91,8 @@ func scanLine(row pgx.Row) (domain.Line, error) {
 	)
 
 	err := row.Scan(&line.ID, &line.Position, &itemType, &line.ItemRefID, &line.Description, &line.Quantity,
-		&line.UnitID, &line.EnteredQuantity, &line.UnitAbbreviation, &line.UnitPrice, &line.LineTotal, &status, &line.AssignedTechnicianIDs)
+		&line.UnitID, &line.EnteredQuantity, &line.UnitAbbreviation, &line.UnitPrice, &line.LineTotal, &status, &line.AssignedTechnicianIDs,
+		&line.JobID, &line.NonBillable)
 	if err != nil {
 		return domain.Line{}, err
 	}
@@ -141,10 +143,11 @@ func (r *PostgresRepository) insertLines(ctx context.Context, q platformdb.Queri
 		_, err := q.Exec(ctx, `
 			INSERT INTO repair_order_lines
 				(id, garage_id, repair_order_id, position, item_type, item_ref_id, description, quantity, unit_id,
-				 entered_quantity, unit_price, line_total, status, assigned_technicians)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10::numeric, $11, $12, $13, $14)`,
+				 entered_quantity, unit_price, line_total, status, assigned_technicians, job_id, non_billable)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10::numeric, $11, $12, $13, $14, $15, $16)`,
 			line.ID, garageID, repairOrderID, line.Position, string(line.ItemType), line.ItemRefID, line.Description,
 			line.Quantity, line.UnitID, line.EnteredQuantity, line.UnitPrice, line.LineTotal, string(line.Status), technicianIDs(line.AssignedTechnicianIDs),
+			line.JobID, line.NonBillable,
 		)
 		if err != nil {
 			return err
@@ -205,10 +208,10 @@ func (r *PostgresRepository) Save(ctx context.Context, ro *domain.RepairOrder) e
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
 	row := q.QueryRow(ctx, `
-		UPDATE repair_orders SET status = $3, total_amount = $4, closed_at = $5, updated_by = $6
+		UPDATE repair_orders SET status = $3, total_amount = $4, closed_at = $5, waiting_on_parts = $7, updated_by = $6
 		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL
 		RETURNING updated_at`,
-		ro.GarageID, ro.ID, string(ro.Status), ro.TotalAmount, ro.ClosedAt, ro.UpdatedBy,
+		ro.GarageID, ro.ID, string(ro.Status), ro.TotalAmount, ro.ClosedAt, ro.UpdatedBy, ro.WaitingOnParts,
 	)
 
 	err := row.Scan(&ro.UpdatedAt)
@@ -231,6 +234,45 @@ func (r *PostgresRepository) Save(ctx context.Context, ro *domain.RepairOrder) e
 	}
 
 	return nil
+}
+
+// ReplaceLines persists ro like Save and also the content of its lines: lines
+// no longer in ro.Lines are deleted, the others are inserted or updated in
+// place (their ids stay, which the stock issue refers to).
+func (r *PostgresRepository) ReplaceLines(ctx context.Context, ro *domain.RepairOrder) error {
+	q := platformdb.QuerierFromContext(ctx, r.pool)
+
+	kept := make([]string, 0, len(ro.Lines))
+	for _, line := range ro.Lines {
+		kept = append(kept, line.ID)
+	}
+
+	if _, err := q.Exec(ctx,
+		`DELETE FROM repair_order_lines WHERE garage_id = $1 AND repair_order_id = $2 AND NOT (id = ANY($3::uuid[]))`,
+		ro.GarageID, ro.ID, kept); err != nil {
+		return err
+	}
+
+	for _, line := range ro.Lines {
+		_, err := q.Exec(ctx, `
+			INSERT INTO repair_order_lines
+				(id, garage_id, repair_order_id, position, item_type, item_ref_id, description, quantity, unit_id,
+				 entered_quantity, unit_price, line_total, status, assigned_technicians, job_id, non_billable)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10::numeric, $11, $12, $13, $14, $15, $16)
+			ON CONFLICT (id) DO UPDATE SET position = EXCLUDED.position, item_type = EXCLUDED.item_type,
+				item_ref_id = EXCLUDED.item_ref_id, description = EXCLUDED.description, quantity = EXCLUDED.quantity,
+				unit_id = EXCLUDED.unit_id, entered_quantity = EXCLUDED.entered_quantity, unit_price = EXCLUDED.unit_price,
+				line_total = EXCLUDED.line_total, status = EXCLUDED.status, assigned_technicians = EXCLUDED.assigned_technicians,
+				job_id = EXCLUDED.job_id, non_billable = EXCLUDED.non_billable`,
+			line.ID, ro.GarageID, ro.ID, line.Position, string(line.ItemType), line.ItemRefID, line.Description,
+			line.Quantity, line.UnitID, line.EnteredQuantity, line.UnitPrice, line.LineTotal, string(line.Status),
+			technicianIDs(line.AssignedTechnicianIDs), line.JobID, line.NonBillable)
+		if err != nil {
+			return err
+		}
+	}
+
+	return r.Save(ctx, ro)
 }
 
 // List returns one page of live repair orders (without lines), newest

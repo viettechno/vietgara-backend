@@ -36,6 +36,9 @@ func Policies() middleware.Policies {
 		repairorderv1.RepairOrderService_GetRepairOrder_FullMethodName:        middleware.GarageMethod(read),
 		repairorderv1.RepairOrderService_UpdateRepairOrderLine_FullMethodName: middleware.GarageMethod(write),
 		repairorderv1.RepairOrderService_CloseRepairOrder_FullMethodName:      middleware.GarageMethod(write),
+		repairorderv1.RepairOrderService_AddRepairOrderLine_FullMethodName:    middleware.GarageMethod(write),
+		repairorderv1.RepairOrderService_DeleteRepairOrderLine_FullMethodName: middleware.GarageMethod(write),
+		repairorderv1.RepairOrderService_CancelRepairOrder_FullMethodName:     middleware.GarageMethod(write),
 	}
 }
 

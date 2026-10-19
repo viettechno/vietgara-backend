@@ -31,6 +31,7 @@ type env struct {
 	limits       *mocks.MockRepairOrderTransactionLimiter
 	sequences    *mocks.MockRepairOrderSequencer
 	events       *mocks.MockRepairOrderEventPublisher
+	issues       *mocks.MockRepairOrderStockIssues
 }
 
 func newEnv(t *testing.T) *env {
@@ -40,11 +41,12 @@ func newEnv(t *testing.T) *env {
 		repairOrders: mocks.NewMockRepairOrderRepository(t), vehicles: mocks.NewMockRepairOrderVehicleReader(t),
 		garages: mocks.NewMockRepairOrderGarageReader(t), limits: mocks.NewMockRepairOrderTransactionLimiter(t),
 		sequences: mocks.NewMockRepairOrderSequencer(t), events: mocks.NewMockRepairOrderEventPublisher(t),
+		issues: mocks.NewMockRepairOrderStockIssues(t),
 	}
 
 	uc := usecase.NewRepairOrderUseCase(usecase.Deps{
 		RepairOrders: e.repairOrders, Vehicles: e.vehicles, Garages: e.garages, Limits: e.limits,
-		Sequences: e.sequences, Events: e.events,
+		Sequences: e.sequences, Events: e.events, StockIssues: e.issues,
 	})
 	e.srv = handler.NewServer(uc)
 

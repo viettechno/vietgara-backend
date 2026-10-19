@@ -14,7 +14,8 @@ import (
 const (
 	EventStockIssued = "stock.issued"
 
-	keyGarageID = "garage_id"
+	keyGarageID      = "garage_id"
+	keyRepairOrderID = "repair_order_id"
 )
 
 // maxLowStockScan bounds how many parts a low-stock listing examines.

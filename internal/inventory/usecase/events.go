@@ -69,6 +69,29 @@ func (uc *InventoryUseCase) HandleRepairOrderCreated(ctx context.Context, event 
 	return err
 }
 
+// HandleRepairOrderLinesChanged is the repair_order.lines_changed consumer
+// (Release 7.3): a line was added, changed or removed, so the draft stock issue
+// follows the order's part lines again.
+func (uc *InventoryUseCase) HandleRepairOrderLinesChanged(ctx context.Context, event outbox.Event) error {
+	payload, ok := decodeRepairOrder(event)
+	if !ok {
+		return nil
+	}
+
+	return uc.ResyncStockIssue(ctx, payload.request(event.GarageID))
+}
+
+// HandleRepairOrderCancelled is the repair_order.cancelled consumer (Release
+// 7.3): the draft stock issue is cancelled and its reservation released.
+func (uc *InventoryUseCase) HandleRepairOrderCancelled(ctx context.Context, event outbox.Event) error {
+	payload, ok := decodeRepairOrder(event)
+	if !ok {
+		return nil
+	}
+
+	return uc.CancelStockIssue(ctx, event.GarageID, payload.RepairOrderID)
+}
+
 // HandleRepairOrderStarted is the repair_order.started consumer: with the
 // garage setting stock_issue_mode = on_start, the order's stock issue posts
 // now instead of on close (FR-INV-20).

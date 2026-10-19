@@ -83,7 +83,7 @@ func (uc *InventoryUseCase) ReturnRepairOrderPart(ctx context.Context, req Retur
 		RefType: domain.RefRepairOrderReturn, RefID: &r.ID, Reason: reason, CreatedBy: actorRef(req.ActorID),
 	}
 
-	if err := uc.repo.RecordTransaction(ctx, tx); err != nil {
+	if err := uc.recordMovement(ctx, tx); err != nil {
 		return nil, toAppError(op, err)
 	}
 
@@ -96,7 +96,7 @@ func (uc *InventoryUseCase) ReturnRepairOrderPart(ctx context.Context, req Retur
 	}
 
 	err = uc.auditAdjustment(ctx, req.ActorID, req.GarageID, ActionPartReturned, entityPartReturn, r.ID, nil, map[string]any{
-		"repair_order_id": r.RepairOrderID, "repair_order_line_id": r.RepairOrderLineID, "part_id": r.PartID,
+		keyRepairOrderID: r.RepairOrderID, "repair_order_line_id": r.RepairOrderLineID, "part_id": r.PartID,
 		"quantity": r.Quantity, "reason": r.Reason,
 	})
 	if err != nil {

@@ -470,6 +470,63 @@ func (_c *MockRepairOrderRepository_LiveVehicleIDs_Call) RunAndReturn(run func(c
 	return _c
 }
 
+// ReplaceLines provides a mock function for the type MockRepairOrderRepository
+func (_mock *MockRepairOrderRepository) ReplaceLines(ctx context.Context, ro *domain.RepairOrder) error {
+	ret := _mock.Called(ctx, ro)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReplaceLines")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.RepairOrder) error); ok {
+		r0 = returnFunc(ctx, ro)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockRepairOrderRepository_ReplaceLines_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReplaceLines'
+type MockRepairOrderRepository_ReplaceLines_Call struct {
+	*mock.Call
+}
+
+// ReplaceLines is a helper method to define mock.On call
+//   - ctx context.Context
+//   - ro *domain.RepairOrder
+func (_e *MockRepairOrderRepository_Expecter) ReplaceLines(ctx any, ro any) *MockRepairOrderRepository_ReplaceLines_Call {
+	return &MockRepairOrderRepository_ReplaceLines_Call{Call: _e.mock.On("ReplaceLines", ctx, ro)}
+}
+
+func (_c *MockRepairOrderRepository_ReplaceLines_Call) Run(run func(ctx context.Context, ro *domain.RepairOrder)) *MockRepairOrderRepository_ReplaceLines_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.RepairOrder
+		if args[1] != nil {
+			arg1 = args[1].(*domain.RepairOrder)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRepairOrderRepository_ReplaceLines_Call) Return(err error) *MockRepairOrderRepository_ReplaceLines_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockRepairOrderRepository_ReplaceLines_Call) RunAndReturn(run func(ctx context.Context, ro *domain.RepairOrder) error) *MockRepairOrderRepository_ReplaceLines_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Save provides a mock function for the type MockRepairOrderRepository
 func (_mock *MockRepairOrderRepository) Save(ctx context.Context, ro *domain.RepairOrder) error {
 	ret := _mock.Called(ctx, ro)

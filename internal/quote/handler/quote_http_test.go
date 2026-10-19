@@ -30,7 +30,7 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 10)
+	assert.Len(t, p, 11)
 	assert.True(t, p[quotev1.PublicQuoteService_GetPublicQuote_FullMethodName].Public)
 	assert.True(t, p[quotev1.PublicQuoteService_DecidePublicQuote_FullMethodName].Public)
 	assert.NotNil(t, p[quotev1.QuoteService_CreateQuote_FullMethodName].Garage)

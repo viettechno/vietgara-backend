@@ -45,6 +45,7 @@ func Policies() middleware.Policies {
 		quotev1.QuoteService_SendQuote_FullMethodName:           middleware.GarageMethod(write),
 		quotev1.QuoteService_RecordQuoteDecision_FullMethodName: middleware.GarageMethod(write),
 		quotev1.QuoteService_ConvertQuote_FullMethodName:        middleware.GarageMethod(write),
+		quotev1.QuoteService_AddQuoteJob_FullMethodName:         middleware.GarageMethod(write),
 
 		quotev1.PublicQuoteService_GetPublicQuote_FullMethodName:    middleware.PublicMethod(),
 		quotev1.PublicQuoteService_DecidePublicQuote_FullMethodName: middleware.PublicMethod(),

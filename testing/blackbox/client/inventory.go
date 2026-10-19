@@ -346,3 +346,32 @@ func (c *Client) ListStockCard(ctx context.Context, garageID, partID string, ref
 
 	return resp.GetData(), err
 }
+
+// ---- Excel import (Release 7.2) -------------------------------------------
+
+func importPath(garageID string, importType inventoryv1.ImportType, action string) string {
+	return garagePath(garageID) + "/imports/" + importType.String() + "/" + action
+}
+
+// DownloadImportTemplate fetches the template workbook of an import type.
+func (c *Client) DownloadImportTemplate(ctx context.Context, garageID string, importType inventoryv1.ImportType) (string, []byte, error) {
+	return c.DownloadRaw(ctx, http.MethodGet, importPath(garageID, importType, "template"))
+}
+
+// PreviewImport checks a workbook and lists its problems without writing.
+func (c *Client) PreviewImport(
+	ctx context.Context, garageID string, importType inventoryv1.ImportType, fileName string, content []byte,
+) (*inventoryv1.ImportPreview, error) {
+	resp, err := call[inventoryv1.ImportPreview](ctx, c, http.MethodPost, importPath(garageID, importType, "preview"),
+		&inventoryv1.PreviewImportRequest{GarageId: garageID, ImportType: importType, FileName: fileName, Content: content})
+
+	return resp, err
+}
+
+// ConfirmImport imports a workbook as a whole or not at all.
+func (c *Client) ConfirmImport(
+	ctx context.Context, garageID string, importType inventoryv1.ImportType, fileName string, content []byte,
+) (*inventoryv1.ImportResult, error) {
+	return call[inventoryv1.ImportResult](ctx, c, http.MethodPost, importPath(garageID, importType, "confirm"),
+		&inventoryv1.ConfirmImportRequest{GarageId: garageID, ImportType: importType, FileName: fileName, Content: content})
+}

@@ -27,6 +27,7 @@ import (
 	quoteRepository "github.com/viettechno/vietgara-backend/internal/quote/repository"
 	repairorderDomain "github.com/viettechno/vietgara-backend/internal/repairorder/domain"
 	repairorderRepository "github.com/viettechno/vietgara-backend/internal/repairorder/repository"
+	repairorderUsecase "github.com/viettechno/vietgara-backend/internal/repairorder/usecase"
 	supplierRepository "github.com/viettechno/vietgara-backend/internal/supplier/repository"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 	"github.com/viettechno/vietgara-backend/pkg/lifecycle"
@@ -181,6 +182,47 @@ func TestJobsAndReservation(t *testing.T) {
 		})
 	})
 
+	t.Run("the quote reads a job's lines priced per base unit", func(t *testing.T) {
+		inGarage(func(ctx context.Context) {
+			j, err := quoteJobs{jobs: uc}.Job(ctx, garageID, job.ID)
+			require.NoError(t, err)
+			require.Len(t, j.Parts, 2)
+
+			// One jug of 5 litres: the line is priced per litre, so 5 litres cost one jug's price.
+			assert.Equal(t, jug.ID, j.Parts[0].UnitID)
+			assert.Equal(t, int64(90_000), j.Parts[0].UnitPrice)
+			assert.True(t, j.Parts[1].NonBillable)
+
+			// A suggestion whose part is deactivated is left out, an inactive job refused.
+			_, err = uc.UpdatePart(ctx, catalogueUsecase.UpdatePartRequest{
+				GarageID: garageID, PartID: rag.ID, Fields: catalogueUsecase.PartFields{IsActive: new(false)},
+			})
+			require.NoError(t, err)
+
+			j, err = quoteJobs{jobs: uc}.Job(ctx, garageID, job.ID)
+			require.NoError(t, err)
+			assert.Len(t, j.Parts, 1)
+
+			_, err = uc.UpdatePart(ctx, catalogueUsecase.UpdatePartRequest{
+				GarageID: garageID, PartID: rag.ID, Fields: catalogueUsecase.PartFields{IsActive: new(true)},
+			})
+			require.NoError(t, err)
+
+			_, err = uc.UpdateJob(ctx, catalogueUsecase.UpdateJobRequest{
+				GarageID: garageID, JobID: job.ID, ActorID: userID, Fields: catalogueUsecase.JobFields{IsActive: new(false)},
+			})
+			require.NoError(t, err)
+
+			_, err = quoteJobs{jobs: uc}.Job(ctx, garageID, job.ID)
+			require.ErrorContains(t, err, "not active")
+
+			_, err = uc.UpdateJob(ctx, catalogueUsecase.UpdateJobRequest{
+				GarageID: garageID, JobID: job.ID, ActorID: userID, Fields: catalogueUsecase.JobFields{IsActive: new(true)},
+			})
+			require.NoError(t, err)
+		})
+	})
+
 	t.Run("a job name is unique, without regard to case", func(t *testing.T) {
 		err := failing(func(ctx context.Context) error {
 			_, err := uc.CreateJob(ctx, catalogueUsecase.CreateJobRequest{
@@ -269,6 +311,52 @@ func TestJobsAndReservation(t *testing.T) {
 			again, err := uc.ActivateJob(ctx, garageID, job.ID, userID)
 			require.NoError(t, err)
 			assert.True(t, again.IsActive)
+		})
+	})
+
+	t.Run("hidden consumables are left out of the printed documents", func(t *testing.T) {
+		quoteID := uuid.NewString()
+		quote := &quoteDomain.Quote{
+			ID: quoteID, GarageID: garageID, CustomerID: customerID, VehicleID: vehicleID, CustomerName: "An",
+			VehicleLicensePlate: "51F-111.11", Number: "BG-74", Status: quoteDomain.StatusDraft, ApprovalMode: quoteDomain.ApprovalModeLink,
+			Lines: []quoteDomain.Line{
+				{ID: uuid.NewString(), Position: 1, ItemType: quoteDomain.ItemTypeLabor, Description: "Labor", Quantity: "1", UnitPrice: 1000, LineTotal: 1000, Decision: quoteDomain.DecisionPending},
+				{
+					ID: uuid.NewString(), Position: 2, ItemType: quoteDomain.ItemTypePart, ItemRefID: &rag.ID, Description: "Hidden rag",
+					Quantity: "1", NonBillable: true, Decision: quoteDomain.DecisionPending,
+				},
+			},
+			TotalAmount: 1000,
+		}
+
+		inGarage(func(ctx context.Context) {
+			require.NoError(t, quotes.Create(ctx, quote))
+
+			info, err := documentQuotes{quotes: quotes}.Get(ctx, garageID, quoteID)
+			require.NoError(t, err)
+			require.Len(t, info.Lines, 1)
+			assert.Equal(t, "Labor", info.Lines[0].Description)
+			assert.Equal(t, int64(1000), info.TotalAmount)
+
+			ro := &repairorderDomain.RepairOrder{
+				ID: uuid.NewString(), GarageID: garageID, VehicleID: vehicleID, VehicleLicensePlate: "51F-111.11", CustomerName: "An",
+				Number: "LSC-74", Status: repairorderDomain.StatusOpen,
+				Lines: []repairorderDomain.Line{
+					{ID: uuid.NewString(), Position: 1, ItemType: repairorderDomain.ItemTypeLabor, Description: "Labor", Quantity: "1", UnitPrice: 1000, LineTotal: 1000, Status: repairorderDomain.LineNotStarted},
+					{
+						ID: uuid.NewString(), Position: 2, ItemType: repairorderDomain.ItemTypePart, ItemRefID: &rag.ID, Description: "Hidden rag",
+						Quantity: "1", NonBillable: true, Status: repairorderDomain.LineNotStarted,
+					},
+				},
+				TotalAmount: 1000,
+			}
+			require.NoError(t, orders.Create(ctx, ro))
+
+			orderInfo, err := documentRepairOrders{uc: repairorderUsecase.NewRepairOrderUseCase(repairorderUsecase.Deps{RepairOrders: orders})}.
+				Get(ctx, garageID, ro.ID)
+			require.NoError(t, err)
+			require.Len(t, orderInfo.Lines, 1)
+			assert.Equal(t, "Labor", orderInfo.Lines[0].Description)
 		})
 	})
 

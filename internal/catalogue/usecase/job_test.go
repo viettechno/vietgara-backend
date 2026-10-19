@@ -87,6 +87,7 @@ func TestUseCase_CreateJob(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "ctn", job.Parts[0].UnitAbbreviation)
 		assert.Equal(t, int64(330_000), job.Parts[0].UnitPrice)
+		assert.Equal(t, int64(13_750), job.Parts[0].BasePrice, "330,000 for 24 cans is 13,750 a can: what a line priced per base unit starts at")
 	})
 
 	t.Run("the base unit named as a unit means no unit", func(t *testing.T) {

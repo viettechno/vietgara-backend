@@ -79,7 +79,7 @@ func (q quoteJobs) Job(ctx context.Context, garageID, jobID string) (quoteUsecas
 		}
 
 		part := quoteUsecase.JobPart{
-			PartID: p.PartID, Description: p.PartName, Quantity: p.Quantity, UnitPrice: p.UnitPrice, NonBillable: p.NonBillable,
+			PartID: p.PartID, Description: p.PartName, Quantity: p.Quantity, UnitPrice: p.BasePrice, NonBillable: p.NonBillable,
 		}
 		if p.UnitID != nil {
 			part.UnitID = *p.UnitID

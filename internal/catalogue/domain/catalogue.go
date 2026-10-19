@@ -287,6 +287,21 @@ func NormalizeThreshold(s string) (string, error) {
 	return out, nil
 }
 
+// PerBaseUnit is the price of one base unit when a packaging unit costs price
+// and holds factor base units, rounded to whole dong. A quote or order line
+// prices its base-unit quantity, so a pack price becomes this.
+func PerBaseUnit(price int64, factor string) int64 {
+	f, ok := ParseDecimal(factor)
+	if !ok || f.Sign() == 0 {
+		return 0
+	}
+
+	v := new(big.Rat).Quo(big.NewRat(price, 1), f)
+	v.Add(v, big.NewRat(1, 2))
+
+	return new(big.Int).Quo(v.Num(), v.Denom()).Int64()
+}
+
 // DerivedPrice is the price of one packaging unit when it has no override:
 // sale price times factor, rounded to whole dong.
 func DerivedPrice(salePrice int64, factor string) int64 {

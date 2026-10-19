@@ -30,7 +30,10 @@ type JobPart struct {
 	PartName         string
 	UnitAbbreviation string
 	UnitPrice        int64
-	PartIsActive     bool
+	// BasePrice is that price per base unit, which is what a quote or order
+	// line (priced per base-unit quantity) starts at.
+	BasePrice    int64
+	PartIsActive bool
 }
 
 // Job is one type of work of a garage with its standard labor charge and the
@@ -60,7 +63,10 @@ var (
 	ErrInvalidDuration   = errors.New("duration must not be negative")
 	ErrTooManyJobParts   = errors.New("a job suggests at most 30 parts")
 	ErrDuplicateJobPart  = errors.New("a part can be suggested only once in a job")
-	ErrJobInactive       = errors.New("the job is not active")
+	// ErrJobPartUnit is returned for a suggested unit that is not a packaging
+	// unit of the suggested part.
+	ErrJobPartUnit = errors.New("the unit is not a packaging unit of the suggested part")
+	ErrJobInactive = errors.New("the job is not active")
 	// ErrPackagingUnitUsedByJob is returned when a packaging unit that a job
 	// suggests is about to be removed from its part.
 	ErrPackagingUnitUsedByJob = errors.New("a packaging unit that a job uses cannot be removed")

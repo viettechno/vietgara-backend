@@ -47,6 +47,11 @@ jobs:
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
 
+      # The blackbox suite is a separate module with its own dependencies.
+      - name: govulncheck (testing/blackbox)
+        working-directory: testing/blackbox
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
   lint:
     name: Lint
     runs-on: ubuntu-latest

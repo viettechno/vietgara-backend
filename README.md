@@ -317,6 +317,26 @@ Locally, `go.work` in the parent directory builds against your
 version pinned in `go.mod` instead. For every contract change, push and tag
 `vietgara-proto`, then bump the version here.
 
+### Security checks
+
+CI blocks on `govulncheck` (the Go toolchain and the modules the code reaches; run it locally with
+`go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...`) and on Trivy over the built image. Two tests keep
+the authorization model honest: `TestEveryRPCDeclaresItsAuthorization` (`cmd/server`) fails when an RPC has no
+policy or the anonymous surface changes, and `TestEveryTableIsClassifiedForRowLevelSecurity` (integration) fails
+when a table has neither forced row-level security nor a reason in its exemption list. A new table or public RPC
+therefore needs an edit in a place a reviewer sees. See the
+[Security Review](https://github.com/viettechno/vietgara-docs/blob/master/docs/03-Architecture/12_Security_Review_Release_8_0.md).
+
+### Gateway edge policy
+
+`kong/kong.yml` holds the rate limits (sign-in and OTP routes 20 per minute per IP, the public quote link 30,
+everything else 600 per bearer token), the security headers and the CORS list; `kong/error.json` makes Kong's own
+errors (the `429`) use the API's error envelope. `vietgara-e2e/ci/kong.yml` and `vietgara-infra/staging/kong/kong.yml`
+copy the routes with their own limits; change all three together. The blackbox stack's gateway trusts the
+`X-Forwarded-For` the suite sends (`KONG_TRUSTED_IPS` in `testing/blackbox/compose.yml`), which no other environment
+does; behind a proxy, set `KONG_TRUSTED_IPS`, `KONG_REAL_IP_HEADER` and `KONG_REAL_IP_RECURSIVE` so the limits count
+the real client.
+
 The blackbox suite in [`testing/blackbox`](testing/blackbox/README.md) is a
 separate Go module that drives the built image over the public REST API,
 locally against stubbed third parties or against staging.

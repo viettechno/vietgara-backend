@@ -8,10 +8,12 @@ package client
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
 	"maps"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -62,6 +64,26 @@ func (c *Client) WithHeader(name, value string) *Client {
 // WithIdempotencyKey returns a client that sends key as its
 // Idempotency-Key (API Specification Section 1.1).
 func (c *Client) WithIdempotencyKey(key string) *Client { return c.WithHeader("Idempotency-Key", key) }
+
+// clientIPHeader carries the address the gateway counts rate limits against.
+const clientIPHeader = "X-Forwarded-For"
+
+// WithClientIP returns a client whose requests all come from ip, as far as
+// the gateway's rate limits are concerned. Without it every request comes
+// from a new address, so the production limits never throttle the suite;
+// a scenario that tests them pins one. The stubbed stack's gateway trusts
+// the header; staging's does not, and ignores it.
+func (c *Client) WithClientIP(ip string) *Client { return c.WithHeader(clientIPHeader, ip) }
+
+// randomClientIP returns an address from the documentation range
+// 198.18.0.0/15 (RFC 2544 benchmarking), which no real client uses.
+func randomClientIP() string {
+	var b [3]byte
+
+	_, _ = rand.Read(b[:])
+
+	return net.IPv4(198, 18+(b[0]&1), b[1], b[2]).String()
+}
 
 // APIError is a non-2xx response: the HTTP status plus the body's
 // {"error": {"code", "message", "details"}}.
@@ -149,6 +171,8 @@ func (c *Client) newRequest(ctx context.Context, method, path string, in proto.M
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
 
+	req.Header.Set(clientIPHeader, randomClientIP())
+
 	for name, value := range c.headers {
 		req.Header.Set(name, value)
 	}
@@ -163,4 +187,50 @@ func decodeError(status int, raw []byte) error {
 	}
 
 	return &APIError{Status: status, Code: body.GetError().GetCode(), Message: body.GetError().GetMessage()}
+}
+
+// Probe is a raw response, for scenarios about the gateway rather than the
+// API: status, headers and body, whatever they are.
+type Probe struct {
+	Status int
+	Header http.Header
+	Body   []byte
+}
+
+// Probe sends body (nil for none) to method path and returns the response
+// untouched, with the client's token, headers and address.
+func (c *Client) Probe(ctx context.Context, method, path string, body []byte) (*Probe, error) {
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Accept", "application/json")
+
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+
+	req.Header.Set(clientIPHeader, randomClientIP())
+
+	for name, value := range c.headers {
+		req.Header.Set(name, value)
+	}
+
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("%s %s: %w", method, path, err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	raw, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("%s %s: read body: %w", method, path, err)
+	}
+
+	return &Probe{Status: resp.StatusCode, Header: resp.Header, Body: raw}, nil
 }

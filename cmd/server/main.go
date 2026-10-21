@@ -202,7 +202,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	app.closers = append(app.closers, func() { _ = shutdownTracing(context.Background()) })
 
 	tx := platformdb.NewTxManager(pool)
-	issuer := auth.NewTokenIssuer([]byte(mustEnv("JWT_SIGNING_KEY")),
+	issuer := auth.NewTokenIssuer(mustSigningKey("JWT_SIGNING_KEY"),
 		envDuration("JWT_ACCESS_TTL", 20*time.Minute), envDuration("JWT_REFRESH_TTL", 30*24*time.Hour))
 	events := outbox.NewEventPublisher(pool)
 	auditLog := audit.NewLogger(pool)
@@ -426,13 +426,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	})
 
 	// gRPC server with the request pipeline of internal/middleware.
-	policies := middleware.Merge(
-		identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
-		customerHandler.LinkPolicies(), customerHandler.TaxProfilePolicies(),
-		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
-		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(), fileHandler.Policies(), catalogueHandler.Policies(), catalogueHandler.JobPolicies(),
-		technicianHandler.Policies(), customerportalHandler.Policies(), dataimportHandler.Policies(),
-	)
+	policies := apiPolicies()
 	app.grpcServer = grpc.NewServer(
 		grpc.StatsHandler(otelgrpc.NewServerHandler()), // one span per request (NFR-OB-01)
 		grpc.MaxRecvMsgSize(maxMessageBytes),           // Excel imports are uploaded as one message (Release 7.2)
@@ -480,7 +474,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		return nil, err
 	}
 
-	app.httpServer = &http.Server{Handler: httpapi.NoContentForDelete(httpapi.LimitBody(mux, bodyLimit)), ReadHeaderTimeout: 5 * time.Second}
+	app.httpServer = &http.Server{Handler: httpapi.NoStore(httpapi.NoContentForDelete(httpapi.LimitBody(mux, bodyLimit))), ReadHeaderTimeout: 5 * time.Second}
 
 	return app, nil
 }
@@ -540,6 +534,18 @@ func wireEvents(
 // buildGateway serves the REST API from the gRPC server over an in-memory
 // connection, plus the plain HTTP routes (Google OAuth, local files, API
 // docs).
+// apiPolicies is what every RPC of the API requires from its caller, merged
+// from the modules (middleware.Auth rejects any method missing from it).
+func apiPolicies() middleware.Policies {
+	return middleware.Merge(
+		identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
+		customerHandler.LinkPolicies(), customerHandler.TaxProfilePolicies(),
+		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
+		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(), fileHandler.Policies(), catalogueHandler.Policies(), catalogueHandler.JobPolicies(),
+		technicianHandler.Policies(), customerportalHandler.Policies(), dataimportHandler.Policies(),
+	)
+}
+
 func buildGateway(ctx context.Context, app *application, identitySrv *identityHandler.Server, files storage.Store) (*runtime.ServeMux, error) {
 	listener := bufconn.Listen(1 << 20)
 

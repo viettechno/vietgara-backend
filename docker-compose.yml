@@ -182,6 +182,9 @@ services:
       # Excel imports (5 MB) are base64 JSON of about 7 MB (Release 7.2); the backend
       # limits each route itself (6 MiB, imports 7.5 MiB).
       KONG_NGINX_HTTP_CLIENT_MAX_BODY_SIZE: 8m
+      # Gateway errors (a 429 from the rate limits) use the API's error envelope.
+      KONG_ERROR_TEMPLATE_JSON: /etc/kong/error.json
+      KONG_ERROR_DEFAULT_TYPE: application/json
     ports:
       # Single local entry point: the garage web admin is served at http://localhost:8000 and the
       # platform admin at http://admin.localhost:8000.
@@ -190,6 +193,7 @@ services:
       - "127.0.0.1:${KONG_ADMIN_PORT:-8001}:8001"
     volumes:
       - ./kong/kong.yml:/etc/kong/kong.yml:ro
+      - ./kong/error.json:/etc/kong/error.json:ro
     networks:
       - vietgara-network
 

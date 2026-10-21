@@ -22,6 +22,8 @@ func TestClientIP(t *testing.T) {
 		{name: "no metadata", ctx: context.Background()},
 		{name: "no header", ctx: metadata.NewIncomingContext(context.Background(), metadata.Pairs("a", "b"))},
 		{name: "single address", ctx: metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-forwarded-for", " 10.0.0.1 ")), want: "10.0.0.1"},
+		{name: "gateway address wins over the forwarded chain", ctx: metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-real-ip", "203.0.113.9", "x-forwarded-for", "6.6.6.6, 203.0.113.9")), want: "203.0.113.9"},
+		{name: "blank gateway address falls back", ctx: metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-real-ip", " ", "x-forwarded-for", "1.2.3.4")), want: "1.2.3.4"},
 		{name: "proxy chain", ctx: metadata.NewIncomingContext(context.Background(), metadata.Pairs("x-forwarded-for", "1.2.3.4, 10.0.0.1")), want: "1.2.3.4"},
 	}
 

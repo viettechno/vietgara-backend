@@ -89,7 +89,7 @@ func NewMux() *runtime.ServeMux {
 // incomingHeaders forwards the headers handlers need as gRPC metadata.
 func incomingHeaders(key string) (string, bool) {
 	switch strings.ToLower(key) {
-	case "authorization", "accept-language", "x-request-id", "idempotency-key":
+	case "authorization", "accept-language", "x-request-id", "idempotency-key", "x-real-ip":
 		return strings.ToLower(key), true
 	default:
 		return "", false
@@ -211,6 +211,17 @@ func LimitBody(next http.Handler, limit func(*http.Request) int64) http.Handler 
 			r.Body = http.MaxBytesReader(w, r.Body, limit(r))
 		}
 
+		next.ServeHTTP(w, r)
+	})
+}
+
+// NoStore marks every answer as not cacheable by browsers and proxies unless
+// the handler says otherwise (public file kinds opt in with their own
+// Cache-Control): API answers carry tokens and personal data (Security
+// Architecture 6).
+func NoStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r)
 	})
 }

@@ -110,9 +110,16 @@ func PlatformAdmin() grpc.UnaryServerInterceptor {
 	}
 }
 
-// ClientIP returns the caller's address as forwarded by the REST gateway
-// (X-Forwarded-For), for the audit log.
+// ClientIP returns the caller's address for the audit log. The API gateway
+// sets X-Real-IP to the client address it resolved (it overwrites any value
+// the client sent); X-Forwarded-For is only the fallback for a backend
+// reached without the gateway, and its first entry is whatever the outermost
+// proxy trusts, so it is not an authority.
 func ClientIP(ctx context.Context) string {
+	if realIP := strings.TrimSpace(firstMetadata(ctx, "x-real-ip")); realIP != "" {
+		return realIP
+	}
+
 	forwarded := firstMetadata(ctx, "x-forwarded-for")
 	if first, _, found := strings.Cut(forwarded, ","); found {
 		return strings.TrimSpace(first)

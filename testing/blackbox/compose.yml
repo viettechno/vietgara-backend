@@ -155,10 +155,20 @@ services:
       # Excel imports (5 MB) are base64 JSON of about 7 MB (Release 7.2); the backend
       # limits each route itself (6 MiB, imports 7.5 MiB).
       KONG_NGINX_HTTP_CLIENT_MAX_BODY_SIZE: 8m
+      KONG_ERROR_TEMPLATE_JSON: /etc/kong/error.json
+      KONG_ERROR_DEFAULT_TYPE: application/json
+      # Test stack only: the suite is the only client and gives every test its
+      # own address in X-Forwarded-For, so the production rate limits apply
+      # per test instead of to the whole run. Never trust a client-supplied
+      # header like this on a public gateway.
+      KONG_TRUSTED_IPS: 0.0.0.0/0,::/0
+      KONG_REAL_IP_HEADER: X-Forwarded-For
+      KONG_REAL_IP_RECURSIVE: "on"
     ports:
       - "127.0.0.1:${BLACKBOX_KONG_PORT:-18000}:8000"
     volumes:
       - ../../kong/kong.yml:/etc/kong/kong.yml:ro
+      - ../../kong/error.json:/etc/kong/error.json:ro
     healthcheck:
       test: ["CMD", "kong", "health"]
       interval: 2s

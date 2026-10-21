@@ -269,3 +269,19 @@ func TestWriteHelpers(t *testing.T) {
 	assert.Equal(t, http.StatusNoContent, rec.Code)
 	assert.Empty(t, rec.Body.String())
 }
+
+func TestNoStoreSetsADefaultThatHandlersMayOverride(t *testing.T) {
+	t.Parallel()
+
+	handler := httpapi.NoStore(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/public" {
+			w.Header().Set("Cache-Control", "public, max-age=60")
+		}
+	}))
+
+	for path, want := range map[string]string{"/private": "no-store", "/public": "public, max-age=60"} {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, path, http.NoBody))
+		assert.Equal(t, want, rec.Header().Get("Cache-Control"), path)
+	}
+}

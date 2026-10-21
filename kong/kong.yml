@@ -1,6 +1,86 @@
 _format_version: "3.0"
 _transform: true
 
+# Edge policy of the gateway (Release 8.0, NFR-SE-09 and NFR-SE-10).
+#
+# Rate limiting, per route, counted per client IP (anonymous routes) or per
+# bearer token (the default route; a request without a token falls back to
+# its IP). Counters live in each Kong node (policy "local"): with N nodes a
+# client may reach N times the limit, which is accepted until the gateway
+# runs on several nodes (the strict routes can then switch to policy "redis").
+# Kong answers 429 with Retry-After and X-RateLimit-* headers.
+#
+# The client IP is the address Kong sees. Behind a proxy, set
+# KONG_TRUSTED_IPS, KONG_REAL_IP_HEADER and KONG_REAL_IP_RECURSIVE so the
+# proxy's forwarded address is used, or every client shares the proxy's
+# bucket (see vietgara-infra/staging).
+#
+# Limits are values of this file and are set per environment: this file holds
+# the production profile; vietgara-infra/staging/kong/kong.yml and
+# vietgara-e2e/ci/kong.yml copy the routes with their own limits.
+#
+# Security headers are added to every HTTP response by the global
+# response-transformer below (never overriding a header the upstream sets).
+# The content security policy of the web consoles is set by their nginx.
+
+# Plugin configurations shared by the routes of the local admin host and the
+# default host (a Kong route with a host outranks a route without one, so the
+# admin host repeats the API routes; production has one host per proxy rule).
+_ignore:
+  - &auth_limit
+    name: rate-limiting
+    config:
+      limit_by: ip
+      policy: local
+      minute: 20
+      hour: 300
+      error_message: RATE_LIMITED
+  - &refresh_limit
+    name: rate-limiting
+    config:
+      limit_by: ip
+      policy: local
+      minute: 60
+      error_message: RATE_LIMITED
+  - &public_quote_limit
+    name: rate-limiting
+    config:
+      limit_by: ip
+      policy: local
+      minute: 30
+      hour: 300
+      error_message: RATE_LIMITED
+  - &default_limit
+    name: rate-limiting
+    config:
+      limit_by: header
+      header_name: Authorization
+      policy: local
+      minute: 600
+      error_message: RATE_LIMITED
+  - &cors
+    name: cors
+    config:
+      origins:
+        - http://localhost:8000
+        - http://admin.localhost:8000
+      methods: [GET, POST, PUT, PATCH, DELETE, OPTIONS]
+      headers: [Accept, Accept-Language, Authorization, Content-Type, Idempotency-Key, X-Request-ID]
+      exposed_headers: [Retry-After, X-RateLimit-Limit-Minute, X-RateLimit-Remaining-Minute]
+      credentials: false
+      max_age: 3600
+
+plugins:
+  - name: response-transformer
+    config:
+      add:
+        headers:
+          - "Strict-Transport-Security:max-age=31536000"
+          - "X-Content-Type-Options:nosniff"
+          - "X-Frame-Options:DENY"
+          - "Referrer-Policy:strict-origin-when-cross-origin"
+          - "Permissions-Policy:camera=(self), microphone=(), geolocation=(), payment=()"
+
 services:
   # The platform admin SPA, on its own host. Kong picks a route with a host
   # over the catch-all "/" route below, so only admin.localhost reaches it.
@@ -31,9 +111,13 @@ services:
           - https
 
   # The REST/JSON API (API Specification): grpc-gateway in the backend serves
-  # every /api/v1 path itself, so the prefix is kept.
+  # every /api/v1 path itself, so the prefix is kept. The longest matching
+  # path wins: sign-in and the public quote link get strict limits, the rest
+  # of /api the default one.
   - name: backend-http
     url: http://vietgara-backend:8080
+    plugins:
+      - *cors
     routes:
       - name: backend-http-route
         paths:
@@ -42,6 +126,40 @@ services:
         protocols:
           - http
           - https
+        plugins:
+          - *default_limit
+      # Sign-in, registration, Google sign-in, OTPs, password reset, MFA
+      # challenge (Security Architecture 6): strict, per IP.
+      - name: auth-route
+        paths:
+          - /api/v1/auth
+        strip_path: false
+        protocols:
+          - http
+          - https
+        plugins:
+          - *auth_limit
+      # Refresh and logout carry a high-entropy token and run on a schedule.
+      - name: auth-refresh-route
+        paths:
+          - /api/v1/auth/refresh
+          - /api/v1/auth/logout
+        strip_path: false
+        protocols:
+          - http
+          - https
+        plugins:
+          - *refresh_limit
+      # The customer's quote link: no sign-in, the token is the credential.
+      - name: public-quote-route
+        paths:
+          - /api/v1/public
+        strip_path: false
+        protocols:
+          - http
+          - https
+        plugins:
+          - *public_quote_limit
       # The platform admin calls the API on its own host (same origin).
       - name: admin-web-api-route
         hosts:
@@ -52,6 +170,31 @@ services:
         protocols:
           - http
           - https
+        plugins:
+          - *default_limit
+      - name: admin-auth-route
+        hosts:
+          - admin.localhost
+        paths:
+          - /api/v1/auth
+        strip_path: false
+        protocols:
+          - http
+          - https
+        plugins:
+          - *auth_limit
+      - name: admin-auth-refresh-route
+        hosts:
+          - admin.localhost
+        paths:
+          - /api/v1/auth/refresh
+          - /api/v1/auth/logout
+        strip_path: false
+        protocols:
+          - http
+          - https
+        plugins:
+          - *refresh_limit
 
   # Native gRPC for service-to-service and tooling clients on the network.
   # gRPC paths are /<package>.<Service>/<Method>: only our services and

@@ -30,6 +30,23 @@ jobs:
       - name: Unit tests with coverage gate
         run: make test-unit
 
+  # Known vulnerabilities in the Go toolchain and the modules the code reaches.
+  vulncheck:
+    name: Vulnerability scan (govulncheck)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
   lint:
     name: Lint
     runs-on: ubuntu-latest
@@ -117,7 +134,7 @@ jobs:
   image:
     name: Docker image
     runs-on: ubuntu-latest
-    needs: [build-and-test, lint, integration, blackbox]
+    needs: [build-and-test, vulncheck, lint, integration, blackbox]
     permissions:
       contents: read
       packages: write
@@ -148,6 +165,23 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # A fixable HIGH or CRITICAL finding in the image (operating-system
+      # packages, and for the backend the Go modules compiled into the binary)
+      # blocks the build before anything is pushed (Release 8.0).
+      - name: Build image for scanning
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: scan:local
+          cache-from: type=gha
+
+      - name: Scan image for vulnerabilities
+        run: >
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1
+          image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed scan:local
 
       - name: Build and push
         uses: docker/build-push-action@v6

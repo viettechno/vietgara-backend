@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -12,6 +13,21 @@ import (
 	"github.com/viettechno/vietgara-backend/testing/blackbox/env"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
+
+// inFreshWindow waits for the start of the next minute when fewer than ten
+// seconds of this one remain: the gateway counts per calendar minute, and a
+// burst that straddles the boundary would be counted in two windows.
+func inFreshWindow(t *testing.T) {
+	t.Helper()
+
+	now := time.Now()
+	if remaining := time.Until(now.Truncate(time.Minute).Add(time.Minute)); remaining < 10*time.Second {
+		select {
+		case <-time.After(remaining + 200*time.Millisecond):
+		case <-t.Context().Done():
+		}
+	}
+}
 
 // Scenario: E2E-IAM-028: a burst of 100 wrong sign-ins from one address is
 // answered with 429 RATE_LIMITED once the gateway's strict limit is spent,
@@ -27,6 +43,8 @@ func TestSignInBurstIsThrottled(t *testing.T) {
 	ctx := t.Context()
 	attacker := fixture.Anonymous(t).WithClientIP("203.0.113.27")
 	victim := fixture.NewVerifiedOwner(t, "burst")
+
+	inFreshWindow(t)
 
 	var refused, throttled int
 
@@ -80,6 +98,8 @@ func TestPublicQuoteLinkIsThrottled(t *testing.T) {
 
 	ctx := t.Context()
 	guesser := fixture.Anonymous(t).WithClientIP("203.0.113.41")
+
+	inFreshWindow(t)
 
 	var throttled bool
 

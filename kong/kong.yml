@@ -15,9 +15,11 @@ _transform: true
 # proxy's forwarded address is used, or every client shares the proxy's
 # bucket (see vietgara-infra/staging).
 #
-# Limits are values of this file and are set per environment: this file holds
-# the production profile; vietgara-infra/staging/kong/kong.yml and
-# vietgara-e2e/ci/kong.yml copy the routes with their own limits.
+# Limits and CORS origins are values of this file and are set per environment:
+# this file holds the production profile of the limits and the local console
+# origins (the production hosts are listed in the production file of Phase 9, as
+# the staging hosts are in vietgara-infra/staging/kong/kong.yml);
+# vietgara-e2e/ci/kong.yml copies the routes with its own limits.
 #
 # Security headers are added to every HTTP response by the global
 # response-transformer below (never overriding a header the upstream sets).

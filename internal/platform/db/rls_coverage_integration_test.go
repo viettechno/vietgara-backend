@@ -134,12 +134,22 @@ func TestAuditLogIsReadableOnlyWithinItsGarage(t *testing.T) {
 	appendEntry(dbpkg.GarageScope(garageA), garageA)
 	appendEntry(dbpkg.GarageScope(garageA), garageA)
 	appendEntry(dbpkg.GarageScope(garageB), garageB)
-	appendEntry(dbpkg.UserScope(uuid.NewString()), "") // a platform event
+	appendEntry(dbpkg.UserScope(uuid.NewString()), "")      // a platform event
+	appendEntry(dbpkg.UserScope(uuid.NewString()), garageB) // a platform admin acting on a garage
 
 	require.Equal(t, 2, count(dbpkg.GarageScope(garageA)))
-	require.Equal(t, 1, count(dbpkg.GarageScope(garageB)))
+	require.Equal(t, 2, count(dbpkg.GarageScope(garageB)))
 	require.Zero(t, count(dbpkg.UserScope(uuid.NewString())), "no garage in scope, nothing readable")
 	require.Zero(t, count(dbpkg.GarageScope(uuid.NewString())), "an unrelated garage sees nothing")
+
+	forged := manager.WithTransaction(t.Context(), dbpkg.GarageScope(garageA), func(ctx context.Context) error {
+		_, err := dbpkg.QuerierFromContext(ctx, pool).Exec(ctx, `
+			INSERT INTO audit_log (garage_id, action, entity_type, entity_id)
+			VALUES ($1::uuid, 'test.forged', 'test', 'x')`, garageB)
+
+		return err
+	})
+	require.Error(t, forged, "a garage's session cannot write another garage's trail")
 
 	err := manager.WithTransaction(t.Context(), dbpkg.GarageScope(garageA), func(ctx context.Context) error {
 		_, err := dbpkg.QuerierFromContext(ctx, pool).Exec(ctx, `UPDATE audit_log SET action = 'tampered'`)

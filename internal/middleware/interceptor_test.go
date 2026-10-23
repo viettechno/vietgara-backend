@@ -55,5 +55,5 @@ func TestPolicyBuilders(t *testing.T) {
 func TestPlatformMethodNeedsAPermission(t *testing.T) {
 	t.Parallel()
 
-	assert.Panics(t, func() { PlatformMethod("") })
+	assert.Panics(t, func() { middleware.PlatformMethod("") })
 }

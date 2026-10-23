@@ -51,3 +51,9 @@ func TestPolicyBuilders(t *testing.T) {
 	merged := middleware.Merge(middleware.Policies{"a": middleware.PublicMethod()}, middleware.Policies{"b": middleware.PlatformMethod(access.PlatformPlanRead)})
 	assert.Len(t, merged, 2)
 }
+
+func TestPlatformMethodNeedsAPermission(t *testing.T) {
+	t.Parallel()
+
+	assert.Panics(t, func() { PlatformMethod("") })
+}

@@ -6,6 +6,7 @@ package platform_test
 import (
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -72,13 +73,7 @@ func (tm *team) join(t *testing.T, admin, user *fixture.Actor) {
 }
 
 func hasPermission(access *platformv1.MyPlatformAccess, p platformv1.PlatformPermission) bool {
-	for _, got := range access.GetPermissions() {
-		if got == p {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(access.GetPermissions(), p)
 }
 
 // Scenario: E2E-PLT-001: the Definition of Done of Release 8.1. A platform

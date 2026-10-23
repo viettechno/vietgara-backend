@@ -69,7 +69,14 @@ func UserMethod() Policy { return Policy{} }
 func UnverifiedMethod() Policy { return Policy{AllowUnverified: true} }
 
 // PlatformMethod needs the platform permission p.
-func PlatformMethod(p access.PlatformPermission) Policy { return Policy{Platform: p} }
+func PlatformMethod(p access.PlatformPermission) Policy {
+	if p == "" {
+		// An empty permission would mean "no platform check": fail at start-up.
+		panic("middleware: PlatformMethod needs a permission")
+	}
+
+	return Policy{Platform: p}
+}
 
 // GarageMethod needs rule in the request's garage.
 func GarageMethod(rule access.Rule) Policy { return Policy{Garage: &rule} }

@@ -72,7 +72,7 @@ func (uc *IdentityUseCase) VerifyMFAChallenge(ctx context.Context, challengeToke
 		return nil, apperror.Internal("consume mfa challenge", err)
 	}
 
-	return uc.issueSession(ctx, user)
+	return uc.signIn(ctx, user)
 }
 
 // GetMFAStatus reports whether the user's second factor is on.

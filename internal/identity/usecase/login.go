@@ -44,5 +44,5 @@ func (uc *IdentityUseCase) Login(ctx context.Context, rawEmail, password string)
 		return uc.startMFAChallenge(ctx, user)
 	}
 
-	return uc.issueSession(ctx, user)
+	return uc.signIn(ctx, user)
 }

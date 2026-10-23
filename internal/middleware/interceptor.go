@@ -2,7 +2,7 @@
 // passes through -- the REST API reaches the same handlers through
 // grpc-gateway, so these checks cover both protocols:
 //
-//	Auth -> EmailVerified -> PlatformAdmin -> Garage (tx + access + license)
+//	Auth -> EmailVerified -> Garage (tx + garage or platform access + license)
 //
 // What each RPC requires is declared once in a Policy table assembled from
 // every module (see each module's handler.Policies).
@@ -29,8 +29,11 @@ type Policy struct {
 	// AllowUnverified lets users whose e-mail is not verified yet call
 	// the RPC (profile, e-mail verification, plans).
 	AllowUnverified bool
-	// PlatformAdmin restricts the RPC to platform operators.
-	PlatformAdmin bool
+	// Platform is the platform permission the RPC requires (FR-IAM-10); a
+	// Platform Admin holds them all. It is read from the database in the
+	// request's transaction, not from the token, so removing a user from a
+	// platform staff group applies at once (ADR-007).
+	Platform access.PlatformPermission
 	// Garage is checked against the request's garage_id; nil for RPCs
 	// that are not garage-scoped.
 	Garage *access.Rule
@@ -65,8 +68,8 @@ func UserMethod() Policy { return Policy{} }
 // UnverifiedMethod needs any signed-in user.
 func UnverifiedMethod() Policy { return Policy{AllowUnverified: true} }
 
-// AdminMethod needs a platform admin.
-func AdminMethod() Policy { return Policy{PlatformAdmin: true} }
+// PlatformMethod needs the platform permission p.
+func PlatformMethod(p access.PlatformPermission) Policy { return Policy{Platform: p} }
 
 // GarageMethod needs rule in the request's garage.
 func GarageMethod(rule access.Rule) Policy { return Policy{Garage: &rule} }

@@ -95,21 +95,6 @@ func EmailVerified() grpc.UnaryServerInterceptor {
 	}
 }
 
-// PlatformAdmin restricts admin RPCs to platform operators.
-func PlatformAdmin() grpc.UnaryServerInterceptor {
-	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if !policyFromContext(ctx).PlatformAdmin {
-			return handler(ctx, req)
-		}
-
-		if claims, ok := ClaimsFromContext(ctx); !ok || !claims.PlatformAdmin {
-			return nil, apperror.ToGRPCError(apperror.New(apperror.CodePermissionDenied, "platform administrators only"))
-		}
-
-		return handler(ctx, req)
-	}
-}
-
 // ClientIP returns the caller's address for the audit log. The API gateway
 // sets X-Real-IP to the client address it resolved (it overwrites any value
 // the client sent); X-Forwarded-For is only the fallback for a backend

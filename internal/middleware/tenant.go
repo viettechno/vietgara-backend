@@ -33,14 +33,19 @@ type Transactor interface {
 	WithTransaction(ctx context.Context, scope platformdb.Scope, fn func(ctx context.Context) error) error
 }
 
+// ReasonPlatformDenied is reported when the caller lacks a platform permission.
+const ReasonPlatformDenied = "PLATFORM_PERMISSION_REQUIRED"
+
 // Garage runs every authenticated RPC in one Postgres transaction scoped to
 // the caller (app.current_user_id) and, for garage-scoped RPCs, to the
 // request's garage (app.current_garage_id) so Row-Level Security applies.
+// Platform RPCs are authorized in the same transaction against the caller's
+// platform permissions (Security Architecture 3.4).
 // Inside it, garage-scoped RPCs are authorized against the policy's rule
 // (owner or active member holding the permission, Security Architecture
 // 3.2) and the garage owner's subscription is enforced (LLD 3.3): a
 // locked subscription blocks everything, a past-due one blocks writes.
-func Garage(tx Transactor, reader access.Reader, license LicenseChecker) grpc.UnaryServerInterceptor {
+func Garage(tx Transactor, reader access.Reader, platform access.PlatformReader, license LicenseChecker) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		policy := policyFromContext(ctx)
 		if policy.Public {
@@ -61,6 +66,15 @@ func Garage(tx Transactor, reader access.Reader, license LicenseChecker) grpc.Un
 		var resp any
 
 		err := tx.WithTransaction(ctx, scope, func(txCtx context.Context) error {
+			if policy.Platform != "" {
+				var err error
+
+				txCtx, err = authorizePlatform(txCtx, platform, scope.UserID, policy.Platform)
+				if err != nil {
+					return err
+				}
+			}
+
 			if scope.GarageID != "" {
 				var err error
 
@@ -82,6 +96,21 @@ func Garage(tx Transactor, reader access.Reader, license LicenseChecker) grpc.Un
 
 		return resp, nil
 	}
+}
+
+func authorizePlatform(
+	ctx context.Context, reader access.PlatformReader, userID string, required access.PlatformPermission,
+) (context.Context, error) {
+	user, err := reader.PlatformAccess(ctx, userID)
+	if err != nil {
+		return nil, apperror.Internal("load platform access", err)
+	}
+
+	if err := user.Check(required); err != nil {
+		return nil, apperror.Wrap(apperror.CodePermissionDenied, err.Error(), err).WithReason(ReasonPlatformDenied)
+	}
+
+	return access.WithPlatformAccess(ctx, user), nil
 }
 
 func authorizeGarage(

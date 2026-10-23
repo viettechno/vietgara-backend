@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/viettechno/vietgara-backend/internal/identity/domain"
+	"github.com/viettechno/vietgara-backend/internal/middleware"
+	"github.com/viettechno/vietgara-backend/internal/platform/audit"
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
@@ -39,6 +41,8 @@ type IdentityUseCase struct {
 	// with one of these e-mails (PLATFORM_ADMIN_EMAILS); verified at
 	// registration so a configured admin exists on a fresh database.
 	platformAdminEmails map[string]struct{}
+	// platformAccess, when set, audits the sign-ins of platform users.
+	platformAccess PlatformAccessChecker
 }
 
 // Option customizes an IdentityUseCase.
@@ -66,6 +70,18 @@ func WithPlatformAdminEmails(emails []string) Option {
 // stored in repo and the secrets are encrypted with box.
 func WithMFA(repo MFARepository, box SecretBox) Option {
 	return func(uc *IdentityUseCase) { uc.mfa, uc.box = repo, box }
+}
+
+// PlatformAccessChecker tells whether a user has any platform access (a
+// Platform Admin, or a member of a platform staff group).
+type PlatformAccessChecker interface {
+	HasPlatformAccess(ctx context.Context, userID string) (bool, error)
+}
+
+// WithPlatformSignInAudit writes every sign-in of a user with platform
+// access to the audit log (Release 8.1, NFR-SE-07).
+func WithPlatformSignInAudit(checker PlatformAccessChecker) Option {
+	return func(uc *IdentityUseCase) { uc.platformAccess = checker }
 }
 
 // WithAudit records MFA changes in the audit log.
@@ -137,6 +153,37 @@ func (uc *IdentityUseCase) issueSession(ctx context.Context, user *domain.User) 
 	}
 
 	return &Session{AccessToken: accessToken, RefreshToken: refreshToken, ExpiresAt: expiresAt, User: user}, nil
+}
+
+// signIn issues the session of a completed sign-in (password, second factor,
+// Google or registration; a refresh is not a sign-in) and, for a user with
+// platform access, writes it to the audit log. The audit entry is part of
+// the sign-in: if it cannot be written the sign-in fails, so a platform
+// session never exists unrecorded.
+func (uc *IdentityUseCase) signIn(ctx context.Context, user *domain.User) (*Session, error) {
+	session, err := uc.issueSession(ctx, user)
+	if err != nil {
+		return nil, err
+	}
+
+	if uc.platformAccess == nil || uc.audit == nil {
+		return session, nil
+	}
+
+	platformUser, err := uc.platformAccess.HasPlatformAccess(ctx, user.ID)
+	if err != nil {
+		return nil, apperror.Internal("check platform access", err)
+	}
+
+	if platformUser {
+		if err := uc.audit.Record(ctx, audit.Entry{
+			Actor: user.ID, Action: "platform.signed_in", EntityType: "user", EntityID: user.ID, IP: middleware.ClientIP(ctx),
+		}); err != nil {
+			return nil, apperror.Internal("audit platform sign-in", err)
+		}
+	}
+
+	return session, nil
 }
 
 // markVerified records the e-mail verification and publishes

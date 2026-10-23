@@ -17,12 +17,11 @@ var policies = middleware.Policies{
 	methodPublic:         middleware.PublicMethod(),
 	methodUser:           middleware.UserMethod(),
 	"/test.v1.Svc/GetMe": middleware.UnverifiedMethod(),
-	"/test.v1.Svc/Admin": middleware.AdminMethod(),
 }
 
-// chain runs Auth, EmailVerified and PlatformAdmin.
+// chain runs Auth and EmailVerified.
 func chain() grpc.UnaryServerInterceptor {
-	return middleware.ChainUnaryInterceptors(middleware.Auth(issuer, policies), middleware.EmailVerified(), middleware.PlatformAdmin())
+	return middleware.ChainUnaryInterceptors(middleware.Auth(issuer, policies), middleware.EmailVerified())
 }
 
 func TestAuthPipeline(t *testing.T) {
@@ -30,7 +29,6 @@ func TestAuthPipeline(t *testing.T) {
 
 	verified := token(t, auth.Identity{UserID: "user-1", EmailVerified: true})
 	unverified := token(t, auth.Identity{UserID: "user-2"})
-	admin := token(t, auth.Identity{UserID: "user-3", EmailVerified: true, PlatformAdmin: true})
 
 	tests := []struct {
 		name       string
@@ -47,8 +45,6 @@ func TestAuthPipeline(t *testing.T) {
 		{name: "verified user", method: methodUser, ctx: withToken(context.Background(), verified), wantID: "user-1"},
 		{name: "unverified blocked", method: methodUser, ctx: withToken(context.Background(), unverified), wantCode: codes.PermissionDenied, wantReason: middleware.ReasonEmailNotVerified},
 		{name: "unverified allowed", method: "/test.v1.Svc/GetMe", ctx: withToken(context.Background(), unverified), wantID: "user-2"},
-		{name: "admin method for non-admin", method: "/test.v1.Svc/Admin", ctx: withToken(context.Background(), verified), wantCode: codes.PermissionDenied, wantReason: "PERMISSION_DENIED"},
-		{name: "admin method for admin", method: "/test.v1.Svc/Admin", ctx: withToken(context.Background(), admin), wantID: "user-3"},
 	}
 
 	for _, tt := range tests {
@@ -82,11 +78,6 @@ func TestInterceptorsWithoutAuth(t *testing.T) {
 	ran := false
 	_, err := middleware.EmailVerified()(context.Background(), nil, info(methodUser), okHandler(&ran))
 	require.Error(t, err, "no policy means a signed-in user is required")
-
-	ran = false
-	_, err = middleware.PlatformAdmin()(context.Background(), nil, info(methodUser), okHandler(&ran))
-	require.NoError(t, err)
-	assert.True(t, ran)
 }
 
 func TestClaimsHelpers(t *testing.T) {

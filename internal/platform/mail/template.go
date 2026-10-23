@@ -15,6 +15,7 @@ const (
 	TemplatePasswordReset            = "password_reset"
 	TemplateCustomerLink             = "customer_link"
 	TemplateStaffInvitation          = "staff_invitation"
+	TemplatePlatformStaffInvitation  = "platform_staff_invitation"
 	TemplateQuoteReadyForApproval    = "quote_ready_for_approval"
 	TemplateRegistrationConfirmation = "registration_confirmation"
 	TemplateSubscriptionExpiringSoon = "subscription_expiring_soon"

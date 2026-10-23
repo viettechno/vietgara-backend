@@ -85,11 +85,11 @@ func TestEveryRPCDeclaresItsAuthorization(t *testing.T) {
 		if policy.Public {
 			public = append(public, method)
 			assert.Nil(t, policy.Garage, "%s is public and garage-scoped at once", method)
-			assert.False(t, policy.PlatformAdmin, "%s is public and admin-only at once", method)
+			assert.Empty(t, policy.Platform, "%s is public and platform-only at once", method)
 		}
 
 		if policy.Garage != nil {
-			assert.False(t, policy.PlatformAdmin, "%s is garage-scoped and admin-only at once", method)
+			assert.Empty(t, policy.Platform, "%s is garage-scoped and platform-only at once", method)
 		}
 
 		if policy.Idempotent {

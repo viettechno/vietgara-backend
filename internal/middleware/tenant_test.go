@@ -38,7 +38,7 @@ func garagePipeline(t *testing.T, tx middleware.Transactor, reader access.Reader
 
 	tok := token(t, auth.Identity{UserID: "user-1", EmailVerified: true})
 	pols := middleware.Policies{method: policy}
-	run := middleware.ChainUnaryInterceptors(middleware.Auth(issuer, pols), middleware.Garage(tx, reader, license))
+	run := middleware.ChainUnaryInterceptors(middleware.Auth(issuer, pols), middleware.Garage(tx, reader, nil, license))
 
 	return func(req any, h func(ctx context.Context) error) error {
 		_, err := run(withToken(context.Background(), tok), req, info(method), func(ctx context.Context, _ any) (any, error) {
@@ -73,7 +73,7 @@ func TestGarage_PublicSkipsTransaction(t *testing.T) {
 	ran := false
 	_, err := middleware.ChainUnaryInterceptors(
 		middleware.Auth(issuer, middleware.Policies{methodPublic: middleware.PublicMethod()}),
-		middleware.Garage(tx, nil, nil),
+		middleware.Garage(tx, nil, nil, nil),
 	)(context.Background(), nil, info(methodPublic), okHandler(&ran))
 	require.NoError(t, err)
 	assert.True(t, ran)
@@ -180,3 +180,56 @@ func TestGarage_NilLicenseChecker(t *testing.T) {
 }
 
 //go:fix inline
+
+type fakePlatform struct {
+	access *access.PlatformAccess
+	err    error
+	asked  string
+}
+
+func (f *fakePlatform) PlatformAccess(_ context.Context, userID string) (*access.PlatformAccess, error) {
+	f.asked = userID
+
+	return f.access, f.err
+}
+
+func TestGarage_PlatformPermission(t *testing.T) {
+	t.Parallel()
+
+	const method = "/test.v1.Svc/PlatformThing"
+
+	run := func(reader access.PlatformReader, required access.PlatformPermission) (ran bool, got *access.PlatformAccess, err error) {
+		tok := token(t, auth.Identity{UserID: "user-1", EmailVerified: true})
+		pols := middleware.Policies{method: middleware.PlatformMethod(required)}
+		chain := middleware.ChainUnaryInterceptors(middleware.Auth(issuer, pols), middleware.Garage(&fakeTx{}, nil, reader, nil))
+
+		_, err = chain(withToken(context.Background(), tok), nil, info(method), func(ctx context.Context, _ any) (any, error) {
+			ran = true
+			got, _ = access.PlatformFromContext(ctx)
+
+			return nil, nil
+		})
+
+		return ran, got, err
+	}
+
+	staff := &fakePlatform{access: &access.PlatformAccess{UserID: "user-1", Permissions: []access.PlatformPermission{access.PlatformSubscriptionRead}}}
+
+	ran, got, err := run(staff, access.PlatformSubscriptionRead)
+	require.NoError(t, err)
+	assert.True(t, ran)
+	assert.Equal(t, "user-1", staff.asked, "the user comes from the token, the permissions from the database")
+	assert.Same(t, staff.access, got, "the handler can read the caller's platform access")
+
+	ran, _, err = run(staff, access.PlatformSubscriptionWrite)
+	requireCode(t, err, codes.PermissionDenied, middleware.ReasonPlatformDenied)
+	assert.False(t, ran, "the handler does not run without the permission")
+
+	admin := &fakePlatform{access: &access.PlatformAccess{UserID: "user-1", Admin: true}}
+	ran, _, err = run(admin, access.PlatformPlanWrite)
+	require.NoError(t, err)
+	assert.True(t, ran, "a Platform Admin passes every check")
+
+	_, _, err = run(&fakePlatform{err: errMiddlewareHandler}, access.PlatformPlanRead)
+	requireCode(t, err, codes.Internal, "")
+}

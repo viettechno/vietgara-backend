@@ -11,7 +11,7 @@ require (
 	github.com/redis/go-redis/v9 v9.22.0
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.43.0
-	github.com/viettechno/vietgara-proto v1.15.0
+	github.com/viettechno/vietgara-proto v1.15.1-0.20261022043555-51049276319d
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.12
 )

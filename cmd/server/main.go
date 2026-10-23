@@ -39,6 +39,7 @@ import (
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
+	platformv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/platform/v1"
 	quotev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/quote/v1"
 	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
 	reportingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/reporting/v1"
@@ -78,6 +79,8 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
 	"github.com/viettechno/vietgara-backend/internal/platform/storage"
 	"github.com/viettechno/vietgara-backend/internal/platform/tracing"
+	platformStaffHandler "github.com/viettechno/vietgara-backend/internal/platformstaff/handler"
+	staffRepository "github.com/viettechno/vietgara-backend/internal/platformstaff/repository"
 	quoteHandler "github.com/viettechno/vietgara-backend/internal/quote/handler"
 	repairorderHandler "github.com/viettechno/vietgara-backend/internal/repairorder/handler"
 	reportingHandler "github.com/viettechno/vietgara-backend/internal/reporting/handler"
@@ -263,7 +266,9 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		slog.Warn("REDIS_ADDR is not set: sessions, OTPs and the entitlement cache live in memory (single instance only)")
 	}
 
-	identityOpts, err := identityOptions(pool, auditLog)
+	staffRepo := staffRepository.NewPostgres(pool)
+
+	identityOpts, err := identityOptions(pool, auditLog, staffRepo)
 	if err != nil {
 		return nil, err
 	}
@@ -310,6 +315,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		AppBaseURL:  appBaseURL(),
 	})
 	tenantSrv := tenantHandler.NewServer(tenantUC)
+	platformStaff := buildPlatformStaff(staffRepo, auditLog, mailer, users)
 
 	// Catalogue (Release 6.0): parts, units, categories and part images. What
 	// refers to a part or a unit is filled in once Inventory, Quote and
@@ -433,8 +439,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		grpc.ChainUnaryInterceptor(
 			middleware.Auth(issuer, policies),
 			middleware.EmailVerified(),
-			middleware.PlatformAdmin(),
-			middleware.Garage(tx, accessReader, license.enforcement),
+			middleware.Garage(tx, accessReader, platformStaff.repo, license.enforcement),
 			middleware.Idempotency(idempotencyKeys),
 		),
 	)
@@ -442,6 +447,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	identityv1.RegisterAuthServiceServer(app.grpcServer, identitySrv)
 	identityv1.RegisterUserServiceServer(app.grpcServer, identitySrv)
 	identityv1.RegisterMfaServiceServer(app.grpcServer, identitySrv)
+	platformv1.RegisterPlatformStaffServiceServer(app.grpcServer, platformStaff.server)
+	platformv1.RegisterPlatformAccessServiceServer(app.grpcServer, platformStaff.server)
 	tenantv1.RegisterGarageServiceServer(app.grpcServer, tenantSrv)
 	tenantv1.RegisterStaffServiceServer(app.grpcServer, tenantSrv)
 	tenantv1.RegisterInvitationServiceServer(app.grpcServer, tenantSrv)
@@ -538,7 +545,7 @@ func wireEvents(
 // from the modules (middleware.Auth rejects any method missing from it).
 func apiPolicies() middleware.Policies {
 	return middleware.Merge(
-		identityHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
+		identityHandler.Policies(), platformStaffHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
 		customerHandler.LinkPolicies(), customerHandler.TaxProfilePolicies(),
 		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
 		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(), fileHandler.Policies(), catalogueHandler.Policies(), catalogueHandler.JobPolicies(),
@@ -573,6 +580,7 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 		tenantv1.RegisterInvitationServiceHandler, tenantv1.RegisterRoleServiceHandler,
 		tenantv1.RegisterStaffGroupServiceHandler,
 		licensev1.RegisterLicenseServiceHandler, licensev1.RegisterLicenseAdminServiceHandler,
+		platformv1.RegisterPlatformStaffServiceHandler, platformv1.RegisterPlatformAccessServiceHandler,
 		customerv1.RegisterCustomerServiceHandler, customerv1.RegisterVehicleServiceHandler,
 		customerv1.RegisterCustomerLinkServiceHandler, customerv1.RegisterCustomerTaxProfileServiceHandler,
 		supplierv1.RegisterSupplierServiceHandler, filev1.RegisterFileServiceHandler,

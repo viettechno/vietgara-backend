@@ -16,6 +16,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/license/handler"
 	"github.com/viettechno/vietgara-backend/internal/license/licensetest"
 	"github.com/viettechno/vietgara-backend/internal/middleware"
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
 )
@@ -50,7 +51,7 @@ func TestPoliciesAndWiring(t *testing.T) {
 
 	p := handler.Policies()
 	assert.Len(t, p, 23)
-	assert.True(t, p[licensev1.LicenseAdminService_CreatePlan_FullMethodName].PlatformAdmin)
+	assert.Equal(t, access.PlatformPlanWrite, p[licensev1.LicenseAdminService_CreatePlan_FullMethodName].Platform)
 	assert.True(t, p[licensev1.LicenseService_GetGarageEntitlements_FullMethodName].SkipLicense)
 	assert.True(t, p[licensev1.LicenseService_ListPlans_FullMethodName].AllowUnverified)
 

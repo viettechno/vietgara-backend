@@ -45,14 +45,14 @@ func TestInviteByEmailAndAccept(t *testing.T) {
 		time.Now().Add(6*24*time.Hour), time.Now().Add(8*24*time.Hour))
 
 	// The invitee already has their sign-up e-mails (the welcome one can
-	// still be arriving), so wait for the invitation itself.
+	// still be arriving), so wait for the invitation itself: the e-mail
+	// with its link.
 	msg, err := mail.WaitForMatching(ctx, invitee.Email, func(m *client.Message) bool {
 		return strings.Contains(m.Text, "/invitations/"+inv.GetId())
 	})
 	require.NoError(t, err)
 	assert.Contains(t, msg.Subject, owner.Session.GetUser().GetFullName())
 	assert.Contains(t, msg.Subject, garage.GetName())
-	assert.Contains(t, msg.Text, "/invitations/"+inv.GetId())
 
 	listed, err := owner.API.ListInvitations(ctx, garage.GetId())
 	require.NoError(t, err)

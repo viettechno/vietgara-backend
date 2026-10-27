@@ -2,7 +2,6 @@ package iam_test
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -10,7 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 
-	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/env"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
@@ -100,9 +98,7 @@ func TestResetSessionExpires(t *testing.T) {
 	_, err := api.RequestPasswordReset(ctx, owner.Email)
 	require.NoError(t, err)
 
-	msg, err := mail.WaitForMatching(ctx, owner.Email, func(m *client.Message) bool {
-		return strings.Contains(m.Subject, "đặt lại mật khẩu")
-	})
+	msg, err := mail.WaitForMatching(ctx, owner.Email, isPasswordResetMail)
 	require.NoError(t, err)
 
 	code, err := msg.OTP()

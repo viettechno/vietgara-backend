@@ -184,7 +184,7 @@ function runFlow(owner, g) {
     const stamp = String(Date.now() % 10000).padStart(4, '0');
     const c = step('create customer', call('POST', `${g}/customers`, {
       fullName: `Khach Le ${__VU}-${__ITER}-${stamp}`,
-      phone: `08${String(__VU % 100).padStart(2, '0')}${String(__ITER % 10000).padStart(4, '0')}${stamp.slice(2)}`,
+      phone: `08${String(__VU % 1000).padStart(3, '0')}${String(__ITER % 1000).padStart(3, '0')}${stamp.slice(2)}`,
       personalDataConsent: true,
     }, 'write', 'garages/{id}/customers'));
     if (!c) return false;
@@ -268,8 +268,39 @@ function runFlow(owner, g) {
   businessTransactions.add(1);
   check(paid, { 'settlement is PAID': (s) => s.status === 'SETTLEMENT_STATUS_PAID' });
 
+  // Now and then the garage also receives goods and counts its stock.
+  if (Math.random() < 0.15 && !inventoryWork(owner, g)) return false;
+
   // The owner's dashboard.
   return !!dashboard(g);
+}
+
+// inventoryWork receives a goods receipt and completes a stock count of three
+// parts (the inventory documents of Release 7).
+function inventoryWork(owner, g) {
+  const suppliers = step('list suppliers', call('GET', `${g}/suppliers`, null, 'read', 'garages/{id}/suppliers'));
+  if (!suppliers || !suppliers.data || suppliers.data.length === 0) return false;
+  const receipt = step('create goods receipt', call('POST', `${g}/goods-receipts`, {
+    defaultSupplierId: suppliers.data[0].id,
+    lines: [{ partId: pick(owner.parts).id, enteredQuantity: '10', unitCost: '60000' }],
+  }, 'write', 'garages/{id}/goods-receipts'));
+  if (!receipt) return false;
+  if (!step('complete goods receipt', call('POST', `${g}/goods-receipts/${receipt.id}:complete`, {}, 'write', 'garages/{id}/goods-receipts/{id}:complete'))) return false;
+  businessTransactions.add(1);
+
+  const count = step('create stock count', call('POST', `${g}/stock-counts`, { name: `Count ${__VU}-${__ITER}` }, 'write', 'garages/{id}/stock-counts'));
+  if (!count) return false;
+  const filled = step('add stock count lines', call('POST', `${g}/stock-counts/${count.id}/lines`, {
+    partIds: owner.parts.slice(0, 3).map((p) => p.id),
+  }, 'write', 'garages/{id}/stock-counts/{id}/lines'));
+  if (!filled) return false;
+  for (const line of filled.lines) {
+    if (!step('count line', call('PATCH', `${g}/stock-counts/${count.id}/lines/${line.id}`, { enteredCountedQuantity: '4990' }, 'write', 'garages/{id}/stock-counts/{id}/lines/{id}'))) return false;
+  }
+  if (!step('complete stock count', call('POST', `${g}/stock-counts/${count.id}:complete`, { skipUncounted: true }, 'write', 'garages/{id}/stock-counts/{id}:complete'))) return false;
+  businessTransactions.add(1);
+
+  return true;
 }
 
 // awaitEvent polls the API until the consumer's result is visible and records

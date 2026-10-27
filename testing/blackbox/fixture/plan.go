@@ -136,8 +136,15 @@ func datasetAdmin(tb testing.TB) testdata.User {
 func datasetAdminPassword(tb testing.TB) string {
 	tb.Helper()
 
-	if password := env.Get(tb).AdminPassword; password != "" {
-		return password
+	cfg := env.Get(tb)
+	if cfg.AdminPassword != "" {
+		return cfg.AdminPassword
+	}
+
+	// The dataset's admin password is public: it may only sign in the
+	// stubbed stack's admin, never create or guess another target's.
+	if cfg.Target != env.Stubbed {
+		tb.Fatalf("BLACKBOX_ADMIN_PASSWORD is required for target %s", cfg.Target)
 	}
 
 	environment, ok := Dataset(tb).Environments["stubbed"]

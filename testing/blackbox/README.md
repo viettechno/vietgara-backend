@@ -79,8 +79,14 @@ export BLACKBOX_TARGET=staging
 export BLACKBOX_API_URL=https://vietgara-api-staging.viettechno.com
 export BLACKBOX_EMAIL_DOMAIN=blackbox.vietgara.test
 export BLACKBOX_MAILPIT_URL=https://blackbox:<password>@vietgara-mailpit-staging.viettechno.com
+# The platform admin (admin@<email domain>, listed in PLATFORM_ADMIN_EMAILS):
+export BLACKBOX_ADMIN_PASSWORD=<the ADMIN_PASSWORD secret>
 make blackbox-staging
 ```
+
+The dataset's admin password is public, so it is used on the stubbed stack
+only: on staging a scenario that needs the platform admin fails without
+`BLACKBOX_ADMIN_PASSWORD`.
 
 Or run the **Blackbox tests (staging)** workflow in GitHub Actions, which
 reads the same values from repository secrets (see

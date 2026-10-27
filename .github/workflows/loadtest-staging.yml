@@ -21,6 +21,9 @@ on:
         description: Garages running the full flow at once (default all of the profile)
         default: ""
 
+permissions:
+  contents: read
+
 concurrency:
   group: loadtest-staging
   cancel-in-progress: false

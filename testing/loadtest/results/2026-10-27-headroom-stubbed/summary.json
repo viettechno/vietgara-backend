@@ -1,0 +1,590 @@
+{
+  "root_group": {
+    "name": "",
+    "path": "",
+    "id": "d41d8cd98f00b204e9800998ecf8427e",
+    "groups": [],
+    "checks": [
+        {
+          "name": "login 200",
+          "path": "::login 200",
+          "id": "48b06dc5cde7f6ebb606ad7da726a2a5",
+          "passes": 225,
+          "fails": 0
+        },
+        {
+          "name": "create customer 2xx",
+          "path": "::create customer 2xx",
+          "id": "48742bf11bb127043a3d315ddd455b65",
+          "passes": 1083,
+          "fails": 0
+        },
+        {
+          "name": "create vehicle 2xx",
+          "path": "::create vehicle 2xx",
+          "id": "9302438dd2501e9afb7c5e5c63233471",
+          "passes": 1083,
+          "fails": 0
+        },
+        {
+          "name": "search parts 2xx",
+          "path": "::search parts 2xx",
+          "id": "73e53d081e3bc731fd6fee978e62998b",
+          "passes": 5332,
+          "fails": 0
+        },
+        {
+          "passes": 5332,
+          "fails": 0,
+          "name": "list jobs 2xx",
+          "path": "::list jobs 2xx",
+          "id": "4eaf22bbcebeafa2031df16ad945ddfa"
+        },
+        {
+          "path": "::create quote 2xx",
+          "id": "1c9ea1abc3c4ca03acdbaf42c7bb0f95",
+          "passes": 5332,
+          "fails": 0,
+          "name": "create quote 2xx"
+        },
+        {
+          "name": "add job to quote 2xx",
+          "path": "::add job to quote 2xx",
+          "id": "9daa0a6d89b094fe88264933b4f8459e",
+          "passes": 2671,
+          "fails": 0
+        },
+        {
+          "passes": 5332,
+          "fails": 0,
+          "name": "send quote 2xx",
+          "path": "::send quote 2xx",
+          "id": "a569c3b9ca6d9c927c2a3e51bdb286d3"
+        },
+        {
+          "id": "ea93b12fa163f5f09880de430d4c7f74",
+          "passes": 5332,
+          "fails": 0,
+          "name": "open public quote 2xx",
+          "path": "::open public quote 2xx"
+        },
+        {
+          "name": "approve quote 2xx",
+          "path": "::approve quote 2xx",
+          "id": "3869d9e3093effc1b3668ee1442dd40f",
+          "passes": 5332,
+          "fails": 0
+        },
+        {
+          "name": "convert quote 2xx",
+          "path": "::convert quote 2xx",
+          "id": "dbd2167184ef55c281c90c5fb5a60179",
+          "passes": 5332,
+          "fails": 0
+        },
+        {
+          "fails": 0,
+          "name": "open customer 2xx",
+          "path": "::open customer 2xx",
+          "id": "d88843e669a4d05d9f8cec9365618db9",
+          "passes": 4249
+        },
+        {
+          "name": "lookup 200",
+          "path": "::lookup 200",
+          "id": "205585b1f07a04fa06f7807e3fd3d500",
+          "passes": 8051,
+          "fails": 587
+        },
+        {
+          "path": "::open repair order 2xx",
+          "id": "a413ab8c7846397708067e209df37d1b",
+          "passes": 5332,
+          "fails": 0,
+          "name": "open repair order 2xx"
+        },
+        {
+          "id": "f33e1883dbc51178ea2438b2c2d2cb4d",
+          "passes": 16006,
+          "fails": 0,
+          "name": "complete line 2xx",
+          "path": "::complete line 2xx"
+        },
+        {
+          "path": "::close repair order 2xx",
+          "id": "ea35522ede0390bb23b56b5b8d6d1646",
+          "passes": 5332,
+          "fails": 0,
+          "name": "close repair order 2xx"
+        },
+        {
+          "name": "create settlement 2xx",
+          "path": "::create settlement 2xx",
+          "id": "cd455ebc47c7a21ee5010212be259bc9",
+          "passes": 5332,
+          "fails": 0
+        },
+        {
+          "path": "::record payment 2xx",
+          "id": "d87bad5aab728917573e7ed2f50a9c07",
+          "passes": 5332,
+          "fails": 0,
+          "name": "record payment 2xx"
+        },
+        {
+          "name": "settlement is PAID",
+          "path": "::settlement is PAID",
+          "id": "0e4ea788419b1e4d789e0562cb474fda",
+          "passes": 5332,
+          "fails": 0
+        },
+        {
+          "name": "revenue report 2xx",
+          "path": "::revenue report 2xx",
+          "id": "b98dce5ad83070513b4d1f0e2a3caf6b",
+          "passes": 5332,
+          "fails": 0
+        },
+        {
+          "name": "list suppliers 2xx",
+          "path": "::list suppliers 2xx",
+          "id": "7ed407d0e2632202e96bdc7a86d8b806",
+          "passes": 810,
+          "fails": 0
+        },
+        {
+          "name": "create goods receipt 2xx",
+          "path": "::create goods receipt 2xx",
+          "id": "f8df72e19caf0ff82252940f5933d2de",
+          "passes": 810,
+          "fails": 0
+        },
+        {
+          "name": "complete goods receipt 2xx",
+          "path": "::complete goods receipt 2xx",
+          "id": "41d1ad695c35f72964a40763f7134572",
+          "passes": 810,
+          "fails": 0
+        },
+        {
+          "name": "create stock count 2xx",
+          "path": "::create stock count 2xx",
+          "id": "84e6c2b155193dfd370bb31f0d8ac70a",
+          "passes": 810,
+          "fails": 0
+        },
+        {
+          "fails": 0,
+          "name": "add stock count lines 2xx",
+          "path": "::add stock count lines 2xx",
+          "id": "7dd1387048324df73d9d651c1b91eaf1",
+          "passes": 810
+        },
+        {
+          "fails": 0,
+          "name": "count line 2xx",
+          "path": "::count line 2xx",
+          "id": "0fabb9ecdffb2301aba91a4a2b5c7fc9",
+          "passes": 2430
+        },
+        {
+          "name": "complete stock count 2xx",
+          "path": "::complete stock count 2xx",
+          "id": "d332dba814a17144d1ea9e081819eea8",
+          "passes": 810,
+          "fails": 0
+        }
+      ]
+  },
+  "options": {
+    "summaryTrendStats": [
+      "avg",
+      "min",
+      "med",
+      "p(90)",
+      "p(95)",
+      "p(99)",
+      "max"
+    ],
+    "summaryTimeUnit": "",
+    "noColor": false
+  },
+  "state": {
+    "isStdOutTTY": false,
+    "isStdErrTTY": false,
+    "testRunDurationMs": 399427.55
+  },
+  "metrics": {
+    "http_req_failed": {
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 46851
+      },
+      "type": "rate"
+    },
+    "event_latency_ms{event:repair_order.closed}": {
+      "thresholds": {
+        "max>=0": {
+          "ok": true
+        }
+      },
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "max": 1823,
+        "avg": 959.9144786196549,
+        "min": 262,
+        "med": 1027,
+        "p(90)": 1044,
+        "p(95)": 1055,
+        "p(99)": 1122.07
+      }
+    },
+    "http_req_duration{kind:read}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(95)": 11.361599999999996,
+        "p(99)": 26.981399999999997,
+        "max": 435.534,
+        "avg": 5.255333870208428,
+        "min": 1.475,
+        "med": 3.878,
+        "p(90)": 7.9948000000000015
+      },
+      "thresholds": {
+        "p(95)<300": {
+          "ok": true
+        }
+      }
+    },
+    "event_timeouts": {
+      "contains": "default",
+      "values": {
+        "count": 0,
+        "rate": 0
+      },
+      "thresholds": {
+        "count==0": {
+          "ok": true
+        }
+      },
+      "type": "counter"
+    },
+    "http_req_sending": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(95)": 0.03,
+        "p(99)": 0.061,
+        "max": 6.043,
+        "avg": 0.015936307661913524,
+        "min": 0.003,
+        "med": 0.012,
+        "p(90)": 0.024
+      }
+    },
+    "data_sent": {
+      "values": {
+        "count": 89397106,
+        "rate": 223813.0694790582
+      },
+      "type": "counter",
+      "contains": "data"
+    },
+    "http_reqs{kind:read}": {
+      "values": {
+        "count": 40357,
+        "rate": 101.03709671503631
+      },
+      "thresholds": {
+        "count>=0": {
+          "ok": true
+        }
+      },
+      "type": "counter",
+      "contains": "default"
+    },
+    "http_req_waiting": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(99)": 31.29867999999999,
+        "max": 438.635,
+        "avg": 6.2686283230713356,
+        "min": 1.415,
+        "med": 4.647,
+        "p(90)": 9.98,
+        "p(95)": 13.839
+      }
+    },
+    "flows_failed": {
+      "values": {
+        "count": 0,
+        "rate": 0
+      },
+      "thresholds": {
+        "count==0": {
+          "ok": true
+        }
+      },
+      "type": "counter",
+      "contains": "default"
+    },
+    "data_received": {
+      "type": "counter",
+      "contains": "data",
+      "values": {
+        "rate": 744537.914322635,
+        "count": 297388955
+      }
+    },
+    "iteration_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(95)": 12840.8609602,
+        "p(99)": 13694.01100648,
+        "max": 14477.299541,
+        "avg": 5617.8491831896245,
+        "min": 1503.62725,
+        "med": 3940.542187,
+        "p(90)": 11764.529066399999
+      }
+    },
+    "http_req_failed{kind:read}": {
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 0
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      },
+      "type": "rate"
+    },
+    "event_latency_ms{event:repair_order.created}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "med": 771,
+        "p(90)": 1034,
+        "p(95)": 1270.4499999999998,
+        "p(99)": 1525.69,
+        "max": 1800,
+        "avg": 783.4915603900976,
+        "min": 256
+      },
+      "thresholds": {
+        "max>=0": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_receiving": {
+      "contains": "time",
+      "values": {
+        "max": 9.078,
+        "avg": 0.05135780185045107,
+        "min": 0.011,
+        "med": 0.038,
+        "p(90)": 0.077,
+        "p(95)": 0.098,
+        "p(99)": 0.213
+      },
+      "type": "trend"
+    },
+    "http_reqs": {
+      "values": {
+        "count": 151855,
+        "rate": 380.18158737423096
+      },
+      "type": "counter",
+      "contains": "default"
+    },
+    "vus_max": {
+      "values": {
+        "min": 225,
+        "max": 225,
+        "value": 225
+      },
+      "type": "gauge",
+      "contains": "default"
+    },
+    "http_req_tls_handshaking": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(99)": 0,
+        "max": 0,
+        "avg": 0,
+        "min": 0,
+        "med": 0,
+        "p(90)": 0,
+        "p(95)": 0
+      }
+    },
+    "business_transactions": {
+      "contains": "default",
+      "values": {
+        "count": 29363,
+        "rate": 73.51270587118991
+      },
+      "type": "counter"
+    },
+    "http_reqs{kind:write}": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 64647,
+        "rate": 161.84912633092034
+      },
+      "thresholds": {
+        "count>=0": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_failed{kind:write}": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0,
+        "passes": 0,
+        "fails": 0
+      },
+      "thresholds": {
+        "rate<0.01": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_connecting": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 0.0006099897928945372,
+        "min": 0,
+        "med": 0,
+        "p(90)": 0,
+        "p(95)": 0,
+        "p(99)": 0,
+        "max": 2.059
+      }
+    },
+    "checks": {
+      "type": "rate",
+      "contains": "default",
+      "values": {
+        "rate": 0.9946907137236458,
+        "passes": 109974,
+        "fails": 587
+      }
+    },
+    "event_latency_ms": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(90)": 1041,
+        "p(95)": 1061,
+        "p(99)": 1296,
+        "max": 1823,
+        "avg": 871.7030195048762,
+        "min": 256,
+        "med": 1021
+      },
+      "thresholds": {
+        "p(95)<2000": {
+          "ok": true
+        }
+      }
+    },
+    "vus": {
+      "type": "gauge",
+      "contains": "default",
+      "values": {
+        "max": 225,
+        "value": 1,
+        "min": 1
+      }
+    },
+    "iterations": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 13970,
+        "rate": 34.975053673688755
+      }
+    },
+    "http_req_duration": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "min": 1.475,
+        "med": 4.713,
+        "p(90)": 10.06,
+        "p(95)": 13.909,
+        "p(99)": 31.38146,
+        "max": 438.679,
+        "avg": 6.335922432583786
+      }
+    },
+    "http_req_blocked": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "avg": 0.0045056073227701075,
+        "min": 0,
+        "med": 0.003,
+        "p(90)": 0.006,
+        "p(95)": 0.007,
+        "p(99)": 0.016,
+        "max": 5.809
+      }
+    },
+    "flows_completed": {
+      "type": "counter",
+      "contains": "default",
+      "values": {
+        "count": 5332,
+        "rate": 13.349104236800892
+      }
+    },
+    "http_req_duration{kind:write}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "p(99)": 29.05616,
+        "max": 438.679,
+        "avg": 6.969333379739168,
+        "min": 1.898,
+        "med": 5.422,
+        "p(90)": 11.421,
+        "p(95)": 15.251499999999986
+      },
+      "thresholds": {
+        "p(95)<800": {
+          "ok": true
+        }
+      }
+    },
+    "http_req_duration{expected_response:true}": {
+      "type": "trend",
+      "contains": "time",
+      "values": {
+        "max": 406.421,
+        "avg": 6.39272367718941,
+        "min": 1.902,
+        "med": 4.57,
+        "p(90)": 9.348,
+        "p(95)": 13.41149999999998,
+        "p(99)": 45.39099999999986
+      }
+    }
+  }
+}

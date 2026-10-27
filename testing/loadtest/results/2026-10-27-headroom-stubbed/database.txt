@@ -1,0 +1,35 @@
+Event latency since 2026-10-27T09:30:49Z (published = the relay marked it published; created = the business change wrote it)
+      event_type      | consumer  | events | published_to_done_p50_ms | published_to_done_p95_ms | published_to_done_max_ms | created_to_done_p95_ms | not_published 
+----------------------+-----------+--------+--------------------------+--------------------------+--------------------------+------------------------+---------------
+ repair_order.closed  | inventory |   5332 |                       11 |                       43 |                      218 |                    946 |             0
+ repair_order.created | inventory |   5332 |                       18 |                       63 |                      191 |                   1024 |             0
+ repair_order.started | inventory |   5332 |                        9 |                       36 |                      215 |                    953 |             0
+(3 rows)
+
+ status | events | oldest 
+--------+--------+--------
+(0 rows)
+
+
+Database after the run
+       table       | rows  | seq_scan | seq_tup_read | rows_per_seq_scan | idx_scan 
+-------------------+-------+----------+--------------+-------------------+----------
+ stock_issues      |  5336 |     9340 |      1658413 |               177 |  1829079
+ stock_issue_lines |  8011 |     4165 |      1142544 |               274 |   266029
+ users             |    51 |    31428 |       796336 |                25 |     2120
+ subscriptions     |    51 |    11594 |       591141 |                50 |      791
+ repair_orders     |  5342 |     2976 |       524321 |               176 |   100297
+ quotes            |  5341 |     2523 |       437294 |               173 |    79565
+ stock_counts      |   812 |     1690 |       161981 |                95 |     8844
+ settlements       |  5341 |      893 |       137954 |               154 |    38217
+ outbox_events     | 32482 |        4 |        64888 |             16222 |    65323
+ processed_events  | 16318 |        2 |        16299 |              8149 |    16299
+ stock_count_lines |  2436 |      231 |        13116 |                56 |     8683
+ garages           |    50 |      103 |         2525 |                24 |   257788
+(12 rows)
+
+ open_connections | xact_commit | xact_rollback | deadlocks 
+------------------+-------------+---------------+-----------
+                9 |      204315 |         16803 |         0
+(1 row)
+

@@ -32,7 +32,7 @@ import (
 var (
 	errUnknownTarget   = errors.New("target must be stubbed or staging")
 	errNoPassword      = errors.New("the dataset has no password for this target")
-	errSecretMissing   = errors.New("environment variable is empty")
+	errSecretMissing   = errors.New("an environment variable named by the dataset for a password is empty")
 	errStagingNotHTTPS = errors.New("staging URLs must be https")
 )
 
@@ -163,7 +163,9 @@ func secret(name string) (string, error) {
 
 	value := os.Getenv(name)
 	if value == "" {
-		return "", fmt.Errorf("%w: %s", errSecretMissing, name)
+		// The error says which kind of secret, not the dataset's reference, so
+		// nothing derived from the secret configuration reaches the log.
+		return "", errSecretMissing
 	}
 
 	return value, nil

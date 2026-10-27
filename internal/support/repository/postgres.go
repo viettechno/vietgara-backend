@@ -27,10 +27,16 @@ func (r *Postgres) q(ctx context.Context) platformdb.Querier {
 	return platformdb.QuerierFromContext(ctx, r.pool)
 }
 
+var errNoTransaction = errors.New("support: the directory setting needs a transaction")
+
 // withDirectory lets fn see garages outside the caller's scope -- their name
 // and owner, which is all these queries select -- and closes that again
 // before returning (migration 000034).
 func (r *Postgres) withDirectory(ctx context.Context, fn func(q platformdb.Querier) error) error {
+	if !platformdb.InTransaction(ctx) {
+		return errNoTransaction
+	}
+
 	q := r.q(ctx)
 
 	if _, err := q.Exec(ctx, `SELECT set_config('app.garage_directory', 'on', true)`); err != nil {
@@ -116,13 +122,17 @@ func (r *Postgres) Update(ctx context.Context, g *domain.Grant) error {
 	tag, err := r.q(ctx).Exec(ctx, `
 		UPDATE support_access_grants
 		SET approved_by = NULLIF($2, '')::uuid, approved_at = $3, expires_at = $4, revoked_at = $5
-		WHERE id = $1`, g.ID, g.ApprovedBy, g.ApprovedAt, g.ExpiresAt, g.RevokedAt)
+		WHERE id = $1 AND revoked_at IS NULL AND (approved_at IS NULL OR approved_at = $3)`,
+		g.ID, g.ApprovedBy, g.ApprovedAt, g.ExpiresAt, g.RevokedAt)
 	if err != nil {
 		return err
 	}
 
+	// The grant was loaded a moment ago: no row means another request
+	// answered it first (a revoked grant never changes, an approved one is
+	// never approved again).
 	if tag.RowsAffected() == 0 {
-		return domain.ErrGrantNotFound
+		return domain.ErrGrantNotOpen
 	}
 
 	return nil
@@ -157,6 +167,12 @@ func (r *Postgres) ListByGarage(ctx context.Context, garageID string) ([]*domain
 // the garage.
 func (r *Postgres) HasOpen(ctx context.Context, garageID, staffUserID string, now time.Time) (bool, error) {
 	var open bool
+
+	// Serializes the requests of one staff member for one garage until the
+	// transaction ends, so a double submit cannot open two grants.
+	if _, err := r.q(ctx).Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1::text || $2::text, 0))`, garageID, staffUserID); err != nil {
+		return false, err
+	}
 
 	err := r.q(ctx).QueryRow(ctx, `
 		SELECT EXISTS (
@@ -332,7 +348,7 @@ func (r *Postgres) ListNotifications(ctx context.Context, garageID string, page 
 	q := r.q(ctx)
 	filter := ` FROM notification_log n WHERE n.user_id IN (
 			SELECT user_id FROM garages WHERE id = $1
-			UNION SELECT user_id FROM garage_staff WHERE garage_id = $1)`
+			UNION SELECT user_id FROM garage_staff WHERE garage_id = $1 AND status = 'active')`
 
 	var total int
 	if err := q.QueryRow(ctx, `SELECT count(*)::int`+filter, garageID).Scan(&total); err != nil {

@@ -440,17 +440,23 @@ func (uc *UseCase) BeginRead(ctx context.Context, a *access.Access, method, enti
 	return uc.Repo.SetReadOnly(ctx)
 }
 
-// logRead appends one read to the owner's log and to the audit log.
+// logRead appends one read to the owner's log and to the audit log. It
+// commits on its own, before the read runs: a read that finds nothing or
+// fails is still on record, so ids cannot be probed unseen.
 func (uc *UseCase) logRead(ctx context.Context, grantID, garageID, userID, method, entityType, entityID string) error {
 	event := &domain.AccessEvent{
 		GrantID: grantID, GarageID: garageID, StaffUserID: userID,
 		Method: path.Base(method), EntityType: entityType, EntityID: entityID,
 	}
-	if err := uc.Repo.InsertEvent(ctx, event); err != nil {
-		return err
-	}
+	scope := platformdb.Scope{GarageID: garageID, UserID: userID}
 
-	return uc.audit(ctx, garageID, "support.read", entityType, entityID, map[string]string{"grantId": grantID, "method": event.Method})
+	return uc.Tx.WithTransaction(platformdb.Detached(ctx), scope, func(ctx context.Context) error {
+		if err := uc.Repo.InsertEvent(ctx, event); err != nil {
+			return err
+		}
+
+		return uc.audit(ctx, garageID, "support.read", entityType, entityID, map[string]string{"grantId": grantID, "method": event.Method})
+	})
 }
 
 // --- e-mail ---

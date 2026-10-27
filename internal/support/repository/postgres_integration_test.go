@@ -297,3 +297,47 @@ func TestDiagnosticQueries(t *testing.T) {
 		assert.Equal(t, "quote_ready_for_approval", notifications[0].Template)
 	})
 }
+
+// TestAStaleAnswerCannotReopenAGrant is the race of an owner approving while
+// the grant is revoked: the revoked grant stays revoked.
+func TestAStaleAnswerCannotReopenAGrant(t *testing.T) {
+	e := setup(t)
+	now := time.Now().UTC()
+
+	var stale, grant *domain.Grant
+
+	e.as(t, e.staff, "", func(ctx context.Context) {
+		grant = domain.NewGrant(e.garage, e.staff, "r", time.Hour, false, now)
+		require.NoError(t, e.repo.Create(ctx, grant))
+	})
+
+	e.as(t, e.owner, e.garage, func(ctx context.Context) {
+		var err error
+
+		stale, err = e.repo.Find(ctx, grant.ID)
+		require.NoError(t, err)
+
+		other, err := e.repo.Find(ctx, grant.ID)
+		require.NoError(t, err)
+		require.NoError(t, other.Revoke(now))
+		require.NoError(t, e.repo.Update(ctx, other))
+
+		require.NoError(t, stale.Approve(e.owner, now))
+		require.ErrorIs(t, e.repo.Update(ctx, stale), domain.ErrGrantNotOpen)
+	})
+
+	e.as(t, e.owner, e.garage, func(ctx context.Context) {
+		found, err := e.repo.Find(ctx, grant.ID)
+		require.NoError(t, err)
+		assert.Equal(t, domain.StatusRevoked, found.Status(now))
+		assert.Nil(t, found.ApprovedAt)
+	})
+}
+
+// TestDirectoryNeedsATransaction guards the one place the garages policy is opened.
+func TestDirectoryNeedsATransaction(t *testing.T) {
+	e := setup(t)
+
+	_, err := e.repo.Garage(t.Context(), e.garage)
+	require.Error(t, err)
+}

@@ -95,7 +95,7 @@ func supportEntity(fullMethod string, req any) (entityType, entityID string) {
 			continue
 		}
 
-		if value := msg.ProtoReflect().Get(field).String(); value != "" {
+		if value := loggable(msg.ProtoReflect().Get(field).String()); value != "" {
 			return entityType, value
 		}
 	}
@@ -119,4 +119,18 @@ func snakeCase(name string) string {
 	}
 
 	return b.String()
+}
+
+// maxLoggedID is the width of the log's entity id column.
+const maxLoggedID = 100
+
+// loggable makes a client-supplied id fit the log: valid text without NUL
+// bytes, cut to the column's width.
+func loggable(id string) string {
+	id = strings.ReplaceAll(strings.ToValidUTF8(id, ""), "\x00", "")
+	if len(id) > maxLoggedID {
+		id = strings.ToValidUTF8(id[:maxLoggedID], "")
+	}
+
+	return id
 }

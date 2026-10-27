@@ -2,6 +2,7 @@ package middleware_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -118,4 +119,15 @@ func TestGarage_SupportSession(t *testing.T) {
 		_, err = supportPipeline(t, &fakeSupport{grant: grant, beginErr: errMiddlewareDBDown}, access.Member(), "/x.v1.Svc/GetThing")(garageReq{garageID})
 		requireCode(t, err, codes.Internal, "")
 	})
+}
+
+func TestSupportEntity_FitsTheLog(t *testing.T) {
+	t.Parallel()
+
+	long := strings.Repeat("x", 300)
+	_, id := middleware.SupportEntityForTest("/x.v1.Svc/GetThing", &supportv1.ListSupportAccessLogRequest{GarageId: garageID, GrantId: long + "\x00"})
+	assert.Len(t, id, 100)
+
+	_, id = middleware.SupportEntityForTest("/x.v1.Svc/GetThing", &supportv1.ListSupportAccessLogRequest{GarageId: garageID, GrantId: "a\x00b\xff"})
+	assert.Equal(t, "ab", id)
 }

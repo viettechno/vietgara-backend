@@ -83,12 +83,13 @@ func (s *sampled) Collect(ch chan<- prometheus.Metric) {
 
 // NewPoolCollector exports the database connection pool, read at scrape time.
 func NewPoolCollector(stat func() *pgxpool.Stat) prometheus.Collector {
-	conns := prometheus.NewDesc("vietgara_db_pool_connections", "Pool connections by state.", []string{"state"}, nil)
+	conns := prometheus.NewDesc("vietgara_db_pool_connections", "Open pool connections by state (acquired, idle).", []string{"state"}, nil)
+	maxConns := prometheus.NewDesc("vietgara_db_pool_max_connections", "Largest number of connections the pool opens.", nil, nil)
 	acquires := prometheus.NewDesc("vietgara_db_pool_acquires_total", "Connection acquisitions.", nil, nil)
 	waits := prometheus.NewDesc("vietgara_db_pool_empty_acquires_total", "Acquisitions that had to wait for a free connection.", nil, nil)
 	waited := prometheus.NewDesc("vietgara_db_pool_acquire_wait_seconds_total", "Time spent waiting for a free connection.", nil, nil)
 
-	return poolCollector{stat: stat, descs: []*prometheus.Desc{conns, acquires, waits, waited}}
+	return poolCollector{stat: stat, descs: []*prometheus.Desc{conns, acquires, waits, waited, maxConns}}
 }
 
 type poolCollector struct {
@@ -108,11 +109,11 @@ func (c poolCollector) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	for state, n := range map[string]int32{
-		"acquired": s.AcquiredConns(), "idle": s.IdleConns(), "total": s.TotalConns(), "max": s.MaxConns(),
-	} {
+	for state, n := range map[string]int32{"acquired": s.AcquiredConns(), "idle": s.IdleConns()} {
 		ch <- prometheus.MustNewConstMetric(c.descs[0], prometheus.GaugeValue, float64(n), state)
 	}
+
+	ch <- prometheus.MustNewConstMetric(c.descs[4], prometheus.GaugeValue, float64(s.MaxConns()))
 
 	ch <- prometheus.MustNewConstMetric(c.descs[1], prometheus.CounterValue, float64(s.AcquireCount()))
 
@@ -144,7 +145,7 @@ func NewOutboxCollector(read func(context.Context) (outbox.Backlog, error)) prom
 
 // NewConsumerLagCollector exports the event consumer's lag per topic.
 func NewConsumerLagCollector(read func(context.Context) (map[string]int64, error)) prometheus.Collector {
-	lag := prometheus.NewDesc("vietgara_kafka_consumer_lag", "Records the consumer group has not committed, by topic.", []string{"topic"}, nil)
+	lag := prometheus.NewDesc("vietgara_kafka_consumer_lag", "Records the consumer group has not committed, by topic. The value is group-wide: use max by (topic) across replicas.", []string{"topic"}, nil)
 
 	return newSampled("kafka_lag", []*prometheus.Desc{lag}, func(ctx context.Context) ([]prometheus.Metric, error) {
 		byTopic, err := read(ctx)

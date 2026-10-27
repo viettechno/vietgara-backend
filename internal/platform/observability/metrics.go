@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
@@ -17,7 +18,11 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-const labelModule = "module"
+const (
+	labelModule = "module"
+	// maxCauseLen bounds the cause in a log line; a driver error can quote a statement.
+	maxCauseLen = 500
+)
 
 // Metrics holds the registry and the request instruments. The REST API
 // reaches the same gRPC handlers, so one interceptor measures both.
@@ -84,7 +89,7 @@ func (m *Metrics) Observe() grpc.UnaryServerInterceptor {
 			m.faults.WithLabelValues(module).Inc()
 
 			if cause := apperror.InternalCause(err); cause != nil {
-				attrs = append(attrs, "error", cause.Error())
+				attrs = append(attrs, "error", truncate(cause.Error(), maxCauseLen))
 			}
 
 			slog.ErrorContext(ctx, "request failed", attrs...)
@@ -121,4 +126,17 @@ func moduleOf(fullMethod string) string {
 	}
 
 	return "other"
+}
+
+// truncate cuts s to at most n bytes, on a rune boundary.
+func truncate(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+
+	return s[:n] + "…"
 }

@@ -709,10 +709,17 @@ func serve(ctx context.Context, app *application) error {
 	metricsMux := http.NewServeMux()
 	metricsMux.Handle("GET /metrics", app.metrics.Handler())
 
-	app.metricsServer = &http.Server{Addr: ":" + envOr("METRICS_PORT", "9090"), Handler: metricsMux, ReadHeaderTimeout: 5 * time.Second}
+	app.metricsServer = &http.Server{Handler: metricsMux, ReadHeaderTimeout: 5 * time.Second}
+
+	// Bound here, so a port in use stops the start instead of leaving an
+	// instance that serves traffic and exports nothing.
+	metricsLis, err := (&net.ListenConfig{}).Listen(ctx, "tcp", ":"+envOr("METRICS_PORT", "9090"))
+	if err != nil {
+		return fmt.Errorf("metrics listener: %w", err)
+	}
 
 	go func() {
-		if err := app.metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := app.metricsServer.Serve(metricsLis); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("metrics server exited", "error", err)
 		}
 	}()

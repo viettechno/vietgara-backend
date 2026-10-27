@@ -131,6 +131,11 @@ func TestInternalCause(t *testing.T) {
 		require.ErrorIs(t, apperror.InternalCause(err), errApperrorDBDown, name)
 	}
 
+	// The Garage interceptor translates what a handler already translated.
+	twice := apperror.ToGRPCError(apperror.ToGRPCError(apperror.Internal("load", errApperrorDBDown)))
+	require.ErrorIs(t, apperror.InternalCause(twice), errApperrorDBDown)
+	assert.Equal(t, "INTERNAL: load: db down", apperror.InternalCause(twice).Error())
+
 	assert.NoError(t, apperror.InternalCause(apperror.ToGRPCError(apperror.New(apperror.CodeNotFound, "missing"))))
 	assert.NoError(t, apperror.InternalCause(nil))
 }

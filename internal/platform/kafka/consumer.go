@@ -26,6 +26,7 @@ const (
 var (
 	errMalformedEvent = errors.New("malformed event")
 	errNotRunning     = errors.New("kafka: consumer is not running")
+	errNoLag          = errors.New("kafka: the broker reports no lag for the group (not joined yet?)")
 )
 
 // Consumer reads the topics of the subscribed event types in one consumer
@@ -171,6 +172,10 @@ func (c *Consumer) Lag(ctx context.Context) (map[string]int64, error) {
 	group := lags[c.group]
 	if err := group.Error(); err != nil {
 		return nil, fmt.Errorf("kafka: group lag: %w", err)
+	}
+
+	if len(group.Lag) == 0 {
+		return nil, errNoLag
 	}
 
 	byTopic := make(map[string]int64, len(group.Lag))

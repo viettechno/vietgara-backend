@@ -5,12 +5,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
@@ -124,6 +127,18 @@ func TestObserve(t *testing.T) {
 		line := lastLine(t, buf)
 		assert.Equal(t, "ERROR", line["level"])
 		assert.Equal(t, "INTERNAL: load quote: sample failed", line["error"])
+	})
+
+	t.Run("a very long cause is cut", func(t *testing.T) {
+		buf := logTo(t)
+
+		run(observability.NewMetrics(), apperror.ToGRPCError(apperror.Internal("load", fmt.Errorf("%w: %s", errSample, strings.Repeat("é", 400)))))
+
+		cause, ok := lastLine(t, buf)["error"].(string)
+		require.True(t, ok)
+		assert.LessOrEqual(t, len(cause), 504)
+		assert.True(t, strings.HasSuffix(cause, "…"))
+		assert.True(t, utf8.ValidString(cause))
 	})
 
 	t.Run("a method outside the vietgara packages is the module other", func(t *testing.T) {

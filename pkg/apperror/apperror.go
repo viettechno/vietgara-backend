@@ -204,6 +204,13 @@ func defaultReason(code Code) string {
 // reason (ErrorInfo) and field violations (BadRequest). Errors that already
 // are gRPC statuses pass through; anything else is an opaque internal error.
 func ToGRPCError(err error) error {
+	// Already translated (the Garage interceptor translates what a handler
+	// returned): keep the first cause instead of wrapping the wrapper.
+	var internal *internalError
+	if errors.As(err, &internal) {
+		return internal
+	}
+
 	appErr, ok := As(err)
 	if !ok {
 		if _, isStatus := status.FromError(err); isStatus {

@@ -2,12 +2,14 @@ package iam_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
@@ -36,7 +38,7 @@ func TestPasswordReset(t *testing.T) {
 		time.Now().Add(90*time.Second), time.Now().Add(150*time.Second))
 
 	// The reset e-mail is Vietnamese (the default language).
-	msg, err := mail.WaitForMessage(ctx, owner.Email)
+	msg, err := mail.WaitForMatching(ctx, owner.Email, isPasswordResetMail)
 	require.NoError(t, err)
 	code, err := msg.OTP()
 	require.NoError(t, err)
@@ -88,4 +90,11 @@ func TestPasswordResetUnknownUser(t *testing.T) {
 
 	_, err = api.VerifyPasswordResetOtp(ctx, email, "123456")
 	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "OTP_EXPIRED")
+}
+
+// isPasswordResetMail tells a reset e-mail, in either language, from the
+// sign-up e-mails already in a verified owner's inbox (the welcome one can
+// still be arriving when the reset is requested).
+func isPasswordResetMail(m *client.Message) bool {
+	return strings.Contains(m.Subject, "password reset code") || strings.Contains(m.Subject, "Mã đặt lại mật khẩu")
 }

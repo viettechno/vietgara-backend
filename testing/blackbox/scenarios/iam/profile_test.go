@@ -81,7 +81,7 @@ func TestInterfaceLanguage(t *testing.T) {
 	_, err = api.RequestPasswordReset(ctx, owner.Email)
 	require.NoError(t, err)
 
-	msg, err := mail.WaitForMessage(ctx, owner.Email)
+	msg, err := mail.WaitForMatching(ctx, owner.Email, isPasswordResetMail)
 	require.NoError(t, err)
 	assert.Contains(t, msg.Subject, "Your VietGara password reset code:")
 	assert.Contains(t, msg.Text, "Hello "+owner.Session.GetUser().GetFullName())

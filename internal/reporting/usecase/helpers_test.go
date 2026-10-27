@@ -34,22 +34,12 @@ func newUseCase(t *testing.T) (*usecase.ReportingUseCase, *deps) {
 	return usecase.NewReportingUseCase(usecase.Deps{Settlements: d.Settlements, Garages: d.Garages}), d
 }
 
-// localMidnight matches the instant that starts day (YYYY-MM-DD) in zone.
-func localMidnight(t *testing.T, day, zone string) any {
-	t.Helper()
-
-	loc, err := time.LoadLocation(zone)
-	require.NoError(t, err)
-
-	want, err := time.ParseInLocation("2006-01-02", day, loc)
-	require.NoError(t, err)
+// onDate matches the calendar date day (YYYY-MM-DD) as the use case passes
+// it to the reader: a UTC midnight.
+func onDate(day string) any {
+	want := date(day)
 
 	return mock.MatchedBy(func(got time.Time) bool { return got.Equal(want) })
-}
-
-// inZone matches a *time.Location named zone.
-func inZone(zone string) any {
-	return mock.MatchedBy(func(loc *time.Location) bool { return loc.String() == zone })
 }
 
 func date(s string) time.Time {

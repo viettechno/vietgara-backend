@@ -22,8 +22,7 @@ func TestReportingUseCase_GetRevenueReport(t *testing.T) {
 
 		d.Garages.EXPECT().Timezone(mock.Anything, garageID).Return(hcm, nil).Once()
 		d.Settlements.EXPECT().
-			RevenueByPeriod(mock.Anything, garageID, usecase.PeriodDay, inZone(hcm),
-				localMidnight(t, "2026-09-01", hcm), localMidnight(t, "2026-10-01", hcm)).
+			RevenueByPeriod(mock.Anything, garageID, usecase.PeriodDay, hcm, onDate("2026-09-01"), onDate("2026-10-01")).
 			Return(want, nil).Once()
 
 		report, err := uc.GetRevenueReport(t.Context(), usecase.GetRevenueReportRequest{
@@ -86,14 +85,13 @@ func TestReportingUseCase_GetRevenueReport(t *testing.T) {
 		assertAppError(t, err, apperror.CodeInternal)
 	})
 
-	t.Run("a day is the garage's day, whatever zone the dates carry", func(t *testing.T) {
+	t.Run("the dates are calendar dates of the garage's zone, whatever zone they carry", func(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
 		d.Garages.EXPECT().Timezone(mock.Anything, garageID).Return("America/New_York", nil).Once()
 		d.Settlements.EXPECT().
-			RevenueByPeriod(mock.Anything, garageID, usecase.PeriodDay, inZone("America/New_York"),
-				localMidnight(t, "2026-10-28", "America/New_York"), localMidnight(t, "2026-10-29", "America/New_York")).
+			RevenueByPeriod(mock.Anything, garageID, usecase.PeriodDay, "America/New_York", onDate("2026-10-28"), onDate("2026-10-29")).
 			Return(nil, nil).Once()
 
 		// Late on the 28th in Vietnam is still the 28th as a calendar date.
@@ -117,15 +115,16 @@ func TestReportingUseCase_GetRevenueReport(t *testing.T) {
 		assertAppError(t, err, apperror.CodeInternal)
 	})
 
-	t.Run("unknown time zone", func(t *testing.T) {
+	t.Run("the range is checked on the dates, not the times", func(t *testing.T) {
 		t.Parallel()
 
-		uc, d := newUseCase(t)
-		d.Garages.EXPECT().Timezone(mock.Anything, garageID).Return("Mars/Olympus", nil).Once()
+		uc, _ := newUseCase(t)
 
+		// 10:00 to 20:00 on one day is an empty range of dates.
 		_, err := uc.GetRevenueReport(t.Context(), usecase.GetRevenueReportRequest{
-			GarageID: garageID, Period: usecase.PeriodDay, From: date("2026-09-01"), To: date("2026-10-01"),
+			GarageID: garageID, Period: usecase.PeriodDay,
+			From: time.Date(2026, 10, 28, 10, 0, 0, 0, time.UTC), To: time.Date(2026, 10, 28, 20, 0, 0, 0, time.UTC),
 		})
-		assertAppError(t, err, apperror.CodeInternal)
+		assertAppError(t, err, apperror.CodeInvalidArgument)
 	})
 }

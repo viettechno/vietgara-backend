@@ -404,8 +404,11 @@ var truncUnits = map[string]bool{"day": true, "month": true, "quarter": true, "y
 // RevenueByPeriod sums settlements.total_amount per period, bucketed by
 // the settlement's created_at in timezone (the garage's IANA zone, so a
 // day is the garage's day) truncated to unit ("day", "month", "quarter"
-// or "year") -- FR-RPT-01. A bucket's PeriodStart is that local start as a
-// wall-clock time (its location is not meaningful). Called directly by an adapter in
+// or "year") -- FR-RPT-01. from (inclusive) and to (exclusive) are
+// calendar dates of timezone (only their year, month and day are read):
+// Postgres turns them into instants with the same zone rules it buckets
+// with. A bucket's PeriodStart is that local start as a wall-clock time
+// (its location is not meaningful). Called directly by an adapter in
 // cmd/server for the Reporting module (HLD module #15), the same choice
 // documentQuotes already makes for a single cross-module read with no
 // business rule attached, rather than going through this module's own
@@ -420,10 +423,12 @@ func (r *PostgresRepository) RevenueByPeriod(ctx context.Context, garageID, unit
 	rows, err := q.Query(ctx, `
 		SELECT date_trunc($2, created_at AT TIME ZONE $5) AS period, COALESCE(SUM(total_amount), 0)
 		FROM settlements
-		WHERE garage_id = $1 AND created_at >= $3 AND created_at < $4
+		WHERE garage_id = $1
+			AND created_at >= $3::date::timestamp AT TIME ZONE $5
+			AND created_at < $4::date::timestamp AT TIME ZONE $5
 		GROUP BY period
 		ORDER BY period`,
-		garageID, unit, from, to, timezone,
+		garageID, unit, from.Format(time.DateOnly), to.Format(time.DateOnly), timezone,
 	)
 	if err != nil {
 		return nil, err

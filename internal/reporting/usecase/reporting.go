@@ -3,7 +3,6 @@ package usecase
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
@@ -48,7 +47,8 @@ func (uc *ReportingUseCase) GetRevenueReport(ctx context.Context, req GetRevenue
 		return nil, toAppError("get revenue report", ErrInvalidPeriod)
 	}
 
-	if !req.From.Before(req.To) {
+	from, to := calendarDate(req.From), calendarDate(req.To)
+	if !from.Before(to) {
 		return nil, toAppError("get revenue report", ErrInvalidDateRange)
 	}
 
@@ -57,15 +57,7 @@ func (uc *ReportingUseCase) GetRevenueReport(ctx context.Context, req GetRevenue
 		return nil, toAppError("get revenue report", err)
 	}
 
-	// The time zone is validated when it is saved (FR-TEN-05).
-	loc, err := time.LoadLocation(timezone)
-	if err != nil {
-		return nil, toAppError("get revenue report", fmt.Errorf("garage time zone %q: %w", timezone, err))
-	}
-
-	from, to := localMidnight(req.From, loc), localMidnight(req.To, loc)
-
-	points, err := uc.Settlements.RevenueByPeriod(ctx, req.GarageID, req.Period, loc, from, to)
+	points, err := uc.Settlements.RevenueByPeriod(ctx, req.GarageID, req.Period, timezone, from, to)
 	if err != nil {
 		return nil, toAppError("get revenue report", err)
 	}
@@ -78,9 +70,9 @@ func (uc *ReportingUseCase) GetRevenueReport(ctx context.Context, req GetRevenue
 	return &RevenueReport{Points: points, TotalAmount: total}, nil
 }
 
-// localMidnight is the start of date's calendar day in loc.
-func localMidnight(date time.Time, loc *time.Location) time.Time {
-	return time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, loc)
+// calendarDate keeps only the calendar date of t, as a UTC midnight.
+func calendarDate(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 // toAppError classifies err into an *apperror.AppError; op names the

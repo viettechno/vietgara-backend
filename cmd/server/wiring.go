@@ -1086,9 +1086,9 @@ var reportingTruncUnits = map[reportingUsecase.Period]string{
 }
 
 func (s reportingSettlements) RevenueByPeriod(
-	ctx context.Context, garageID string, period reportingUsecase.Period, loc *time.Location, from, to time.Time,
+	ctx context.Context, garageID string, period reportingUsecase.Period, timezone string, from, to time.Time,
 ) ([]reportingUsecase.RevenuePoint, error) {
-	buckets, err := s.settlements.RevenueByPeriod(ctx, garageID, reportingTruncUnits[period], loc.String(), from, to)
+	buckets, err := s.settlements.RevenueByPeriod(ctx, garageID, reportingTruncUnits[period], timezone, from, to)
 	if err != nil {
 		return nil, err
 	}

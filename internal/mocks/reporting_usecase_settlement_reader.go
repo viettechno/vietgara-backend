@@ -40,8 +40,8 @@ func (_m *MockReportingSettlementReader) EXPECT() *MockReportingSettlementReader
 }
 
 // RevenueByPeriod provides a mock function for the type MockReportingSettlementReader
-func (_mock *MockReportingSettlementReader) RevenueByPeriod(ctx context.Context, garageID string, period usecase.Period, loc *time.Location, from time.Time, to time.Time) ([]usecase.RevenuePoint, error) {
-	ret := _mock.Called(ctx, garageID, period, loc, from, to)
+func (_mock *MockReportingSettlementReader) RevenueByPeriod(ctx context.Context, garageID string, period usecase.Period, timezone string, from time.Time, to time.Time) ([]usecase.RevenuePoint, error) {
+	ret := _mock.Called(ctx, garageID, period, timezone, from, to)
 
 	if len(ret) == 0 {
 		panic("no return value specified for RevenueByPeriod")
@@ -49,18 +49,18 @@ func (_mock *MockReportingSettlementReader) RevenueByPeriod(ctx context.Context,
 
 	var r0 []usecase.RevenuePoint
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.Period, *time.Location, time.Time, time.Time) ([]usecase.RevenuePoint, error)); ok {
-		return returnFunc(ctx, garageID, period, loc, from, to)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.Period, string, time.Time, time.Time) ([]usecase.RevenuePoint, error)); ok {
+		return returnFunc(ctx, garageID, period, timezone, from, to)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.Period, *time.Location, time.Time, time.Time) []usecase.RevenuePoint); ok {
-		r0 = returnFunc(ctx, garageID, period, loc, from, to)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.Period, string, time.Time, time.Time) []usecase.RevenuePoint); ok {
+		r0 = returnFunc(ctx, garageID, period, timezone, from, to)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]usecase.RevenuePoint)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, usecase.Period, *time.Location, time.Time, time.Time) error); ok {
-		r1 = returnFunc(ctx, garageID, period, loc, from, to)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, usecase.Period, string, time.Time, time.Time) error); ok {
+		r1 = returnFunc(ctx, garageID, period, timezone, from, to)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -76,14 +76,14 @@ type MockReportingSettlementReader_RevenueByPeriod_Call struct {
 //   - ctx context.Context
 //   - garageID string
 //   - period usecase.Period
-//   - loc *time.Location
+//   - timezone string
 //   - from time.Time
 //   - to time.Time
-func (_e *MockReportingSettlementReader_Expecter) RevenueByPeriod(ctx any, garageID any, period any, loc any, from any, to any) *MockReportingSettlementReader_RevenueByPeriod_Call {
-	return &MockReportingSettlementReader_RevenueByPeriod_Call{Call: _e.mock.On("RevenueByPeriod", ctx, garageID, period, loc, from, to)}
+func (_e *MockReportingSettlementReader_Expecter) RevenueByPeriod(ctx any, garageID any, period any, timezone any, from any, to any) *MockReportingSettlementReader_RevenueByPeriod_Call {
+	return &MockReportingSettlementReader_RevenueByPeriod_Call{Call: _e.mock.On("RevenueByPeriod", ctx, garageID, period, timezone, from, to)}
 }
 
-func (_c *MockReportingSettlementReader_RevenueByPeriod_Call) Run(run func(ctx context.Context, garageID string, period usecase.Period, loc *time.Location, from time.Time, to time.Time)) *MockReportingSettlementReader_RevenueByPeriod_Call {
+func (_c *MockReportingSettlementReader_RevenueByPeriod_Call) Run(run func(ctx context.Context, garageID string, period usecase.Period, timezone string, from time.Time, to time.Time)) *MockReportingSettlementReader_RevenueByPeriod_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -97,9 +97,9 @@ func (_c *MockReportingSettlementReader_RevenueByPeriod_Call) Run(run func(ctx c
 		if args[2] != nil {
 			arg2 = args[2].(usecase.Period)
 		}
-		var arg3 *time.Location
+		var arg3 string
 		if args[3] != nil {
-			arg3 = args[3].(*time.Location)
+			arg3 = args[3].(string)
 		}
 		var arg4 time.Time
 		if args[4] != nil {
@@ -126,7 +126,7 @@ func (_c *MockReportingSettlementReader_RevenueByPeriod_Call) Return(revenuePoin
 	return _c
 }
 
-func (_c *MockReportingSettlementReader_RevenueByPeriod_Call) RunAndReturn(run func(ctx context.Context, garageID string, period usecase.Period, loc *time.Location, from time.Time, to time.Time) ([]usecase.RevenuePoint, error)) *MockReportingSettlementReader_RevenueByPeriod_Call {
+func (_c *MockReportingSettlementReader_RevenueByPeriod_Call) RunAndReturn(run func(ctx context.Context, garageID string, period usecase.Period, timezone string, from time.Time, to time.Time) ([]usecase.RevenuePoint, error)) *MockReportingSettlementReader_RevenueByPeriod_Call {
 	_c.Call.Return(run)
 	return _c
 }

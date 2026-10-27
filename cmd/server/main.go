@@ -77,6 +77,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/idempotency"
 	"github.com/viettechno/vietgara-backend/internal/platform/kafka"
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
+	"github.com/viettechno/vietgara-backend/internal/platform/observability"
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
 	"github.com/viettechno/vietgara-backend/internal/platform/storage"
 	"github.com/viettechno/vietgara-backend/internal/platform/tracing"
@@ -95,9 +96,15 @@ import (
 	tenantUsecase "github.com/viettechno/vietgara-backend/internal/tenant/usecase"
 )
 
-const defaultMigrationsPath = "file://db/migrations"
+const (
+	defaultMigrationsPath = "file://db/migrations"
+	readinessTimeout      = 2 * time.Second
+)
 
 func main() {
+	// Structured logs for the central log store (NFR-OB-03).
+	slog.SetDefault(observability.NewLogger(os.Stderr, slog.LevelInfo))
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
 	if err := run(ctx); err != nil {
@@ -159,10 +166,12 @@ func runMigrations(dsn string) error {
 type worker func(ctx context.Context)
 
 type application struct {
-	grpcServer *grpc.Server
-	httpServer *http.Server
-	workers    []worker
-	closers    []func()
+	grpcServer    *grpc.Server
+	httpServer    *http.Server
+	metricsServer *http.Server
+	metrics       *observability.Metrics
+	workers       []worker
+	closers       []func()
 }
 
 func (a *application) close() {
@@ -194,7 +203,12 @@ func bodyLimit(r *http.Request) int64 {
 
 //nolint:funlen // the composition root wires every module in one place
 func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
-	app := &application{}
+	app := &application{metrics: observability.NewMetrics()}
+
+	app.metrics.Register(observability.NewPoolCollector(pool.Stat))
+	app.metrics.Register(observability.NewOutboxCollector(func(ctx context.Context) (outbox.Backlog, error) {
+		return outbox.ReadBacklog(ctx, pool)
+	}))
 
 	// Distributed tracing (NFR-OB-01): without OTEL_EXPORTER_OTLP_ENDPOINT,
 	// spans are still created (every request still carries a trace id to
@@ -440,6 +454,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		grpc.StatsHandler(otelgrpc.NewServerHandler()), // one span per request (NFR-OB-01)
 		grpc.MaxRecvMsgSize(maxMessageBytes),           // Excel imports are uploaded as one message (Release 7.2)
 		grpc.ChainUnaryInterceptor(
+			app.metrics.Observe(),
 			middleware.Auth(issuer, policies),
 			middleware.EmailVerified(),
 			middleware.Garage(tx, accessReader, platformStaff.repo, license.enforcement, support.uc),
@@ -481,7 +496,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	customerportalv1.RegisterCustomerPortalServiceServer(app.grpcServer, customerPortalSrv)
 	reflection.Register(app.grpcServer)
 
-	mux, err := buildGateway(ctx, app, identitySrv, files)
+	mux, err := buildGateway(ctx, app, pool, identitySrv, files)
 	if err != nil {
 		return nil, err
 	}
@@ -531,6 +546,8 @@ func wireEvents(
 	repairorderHandler.Subscribe(consumer, processor, repairOrder.uc)
 	notificationHandler.Subscribe(consumer, processor, notification.uc)
 
+	app.metrics.Register(observability.NewConsumerLagCollector(consumer.Lag))
+
 	app.workers = append(app.workers,
 		outbox.NewRelay(pool, tx, producer, relayOpts...).Run,
 		func(ctx context.Context) {
@@ -558,7 +575,7 @@ func apiPolicies() middleware.Policies {
 	)
 }
 
-func buildGateway(ctx context.Context, app *application, identitySrv *identityHandler.Server, files storage.Store) (*runtime.ServeMux, error) {
+func buildGateway(ctx context.Context, app *application, pool *platformdb.Pool, identitySrv *identityHandler.Server, files storage.Store) (*runtime.ServeMux, error) {
 	listener := bufconn.Listen(1 << 20)
 
 	go func() {
@@ -623,13 +640,40 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 		}
 	}
 
-	if err := mux.HandlePath(http.MethodGet, "/healthz", func(w http.ResponseWriter, _ *http.Request, _ map[string]string) {
-		httpapi.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
-	}); err != nil {
+	if err := registerProbes(mux, pool); err != nil {
 		return nil, err
 	}
 
 	return mux, nil
+}
+
+// registerProbes adds the liveness and readiness endpoints.
+func registerProbes(mux *runtime.ServeMux, pool *platformdb.Pool) error {
+	if err := mux.HandlePath(http.MethodGet, "/healthz", func(w http.ResponseWriter, _ *http.Request, _ map[string]string) {
+		httpapi.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	}); err != nil {
+		return err
+	}
+
+	// Readiness (NFR-OB-02): the instance takes traffic only while the
+	// database answers. /healthz stays a liveness check that never touches it.
+	if err := mux.HandlePath(http.MethodGet, "/readyz", func(w http.ResponseWriter, r *http.Request, _ map[string]string) {
+		ctx, cancel := context.WithTimeout(r.Context(), readinessTimeout)
+		defer cancel()
+
+		if err := pool.Ping(ctx); err != nil {
+			slog.WarnContext(r.Context(), "readiness check failed", "error", err)
+			httpapi.WriteJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "unavailable"})
+
+			return
+		}
+
+		httpapi.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	}); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func newRedis(ctx context.Context) (redis.UniversalClient, error) {
@@ -660,6 +704,19 @@ func serve(ctx context.Context, app *application) error {
 		}
 	}()
 
+	// The metrics listen on their own port, which the gateway does not
+	// route and the deployment does not publish.
+	metricsMux := http.NewServeMux()
+	metricsMux.Handle("GET /metrics", app.metrics.Handler())
+
+	app.metricsServer = &http.Server{Addr: ":" + envOr("METRICS_PORT", "9090"), Handler: metricsMux, ReadHeaderTimeout: 5 * time.Second}
+
+	go func() {
+		if err := app.metricsServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("metrics server exited", "error", err)
+		}
+	}()
+
 	go func() {
 		<-ctx.Done()
 		slog.Info("shutting down")
@@ -669,6 +726,10 @@ func serve(ctx context.Context, app *application) error {
 
 		if err := app.httpServer.Shutdown(shutdownCtx); err != nil {
 			slog.Error("HTTP server shutdown failed", "error", err)
+		}
+
+		if err := app.metricsServer.Shutdown(shutdownCtx); err != nil {
+			slog.Error("metrics server shutdown failed", "error", err)
 		}
 
 		app.grpcServer.GracefulStop()

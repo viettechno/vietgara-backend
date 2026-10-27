@@ -230,3 +230,41 @@ func (r *Relay) recordFailure(ctx context.Context, id string, cause error) {
 		slog.Error("outbox relay: recording a failed delivery failed", "event_id", id, "error", err)
 	}
 }
+
+// Backlog is what the relay has not delivered yet: the outbox backlog metric
+// and alert (NFR-OB-02).
+type Backlog struct {
+	// Pending counts events waiting for delivery.
+	Pending int64
+	// OldestPending is the age of the oldest pending event, zero when none waits.
+	OldestPending time.Duration
+	// Failed counts events parked after maxAttempts, for manual follow-up.
+	Failed int64
+}
+
+// ReadBacklog reads the outbox backlog. Each count follows a partial index,
+// so the cost does not grow with the published events.
+func ReadBacklog(ctx context.Context, pool *platformdb.Pool) (Backlog, error) {
+	q := platformdb.QuerierFromContext(ctx, pool)
+
+	var (
+		backlog Backlog
+		oldest  float64
+	)
+
+	err := q.QueryRow(ctx, `
+		SELECT count(*), COALESCE(EXTRACT(EPOCH FROM now() - min(created_at)), 0)::float8
+		FROM outbox_events WHERE status = 'pending'`).Scan(&backlog.Pending, &oldest)
+	if err != nil {
+		return Backlog{}, err
+	}
+
+	backlog.OldestPending = time.Duration(oldest * float64(time.Second))
+
+	err = q.QueryRow(ctx, `SELECT count(*) FROM outbox_events WHERE status = 'failed'`).Scan(&backlog.Failed)
+	if err != nil {
+		return Backlog{}, err
+	}
+
+	return backlog, nil
+}

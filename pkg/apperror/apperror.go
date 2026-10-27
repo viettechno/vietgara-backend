@@ -210,12 +210,12 @@ func ToGRPCError(err error) error {
 			return err
 		}
 
-		return status.Error(codes.Internal, "internal error")
+		return &internalError{cause: err}
 	}
 
 	code, known := grpcCodes[appErr.Code]
 	if !known || code == codes.Internal {
-		return status.Error(codes.Internal, "internal error")
+		return &internalError{cause: err}
 	}
 
 	st := status.New(code, appErr.Message)
@@ -236,4 +236,29 @@ func ToGRPCError(err error) error {
 	}
 
 	return withDetails.Err()
+}
+
+// internalError is the gRPC error of an unexpected failure. Clients receive
+// an opaque Internal status; the cause stays on the error, where
+// InternalCause finds it for the request log (it was never logged before).
+type internalError struct{ cause error }
+
+func (e *internalError) Error() string { return "internal error" }
+
+func (e *internalError) Unwrap() error { return e.cause }
+
+// GRPCStatus implements the interface gRPC uses to answer with the status.
+func (e *internalError) GRPCStatus() *status.Status {
+	return status.New(codes.Internal, "internal error")
+}
+
+// InternalCause returns the cause of an error that ToGRPCError turned into an
+// opaque Internal status, or nil for any other error.
+func InternalCause(err error) error {
+	var internal *internalError
+	if errors.As(err, &internal) {
+		return internal.cause
+	}
+
+	return nil
 }

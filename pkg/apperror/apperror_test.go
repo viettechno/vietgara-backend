@@ -117,3 +117,20 @@ func TestToGRPCError(t *testing.T) {
 		})
 	}
 }
+
+func TestInternalCause(t *testing.T) {
+	t.Parallel()
+
+	for name, err := range map[string]error{
+		"an internal app error": apperror.ToGRPCError(apperror.Internal("load", errApperrorDBDown)),
+		"an unknown error":      apperror.ToGRPCError(errApperrorDBDown),
+	} {
+		assert.Equal(t, codes.Internal, status.Code(err), name)
+		assert.Equal(t, "internal error", status.Convert(err).Message(), "the client sees no cause: %s", name)
+		require.ErrorIs(t, err, errApperrorDBDown, name)
+		require.ErrorIs(t, apperror.InternalCause(err), errApperrorDBDown, name)
+	}
+
+	assert.NoError(t, apperror.InternalCause(apperror.ToGRPCError(apperror.New(apperror.CodeNotFound, "missing"))))
+	assert.NoError(t, apperror.InternalCause(nil))
+}

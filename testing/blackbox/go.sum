@@ -42,12 +42,8 @@ github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWD
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 github.com/tiendc/go-deepcopy v1.7.2 h1:Ut2yYR7W9tWjTQitganoIue4UGxZwCcJy3orjrrIj44=
 github.com/tiendc/go-deepcopy v1.7.2/go.mod h1:4bKjNC2r7boYOkD2IOuZpYjmlDdzjbpTRyCx+goBCJQ=
-github.com/viettechno/vietgara-proto v1.16.0 h1:PoWqPPFna0+Xtvy+h0qJ72Qqta9aP+sLLxNNVoGG4FU=
-github.com/viettechno/vietgara-proto v1.16.0/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
-github.com/viettechno/vietgara-proto v1.16.1-0.20261027022347-481102343073 h1:yTyLAolqXT9Sh4qvramPIHSFADMeKPDGIF3ghQLUhTI=
-github.com/viettechno/vietgara-proto v1.16.1-0.20261027022347-481102343073/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
-github.com/viettechno/vietgara-proto v1.16.1-0.20261027052505-87e4eca609c6 h1:lMDEM8bhbU+Y8EGmObR189d83ybfawWHGUrNjtf9FV8=
-github.com/viettechno/vietgara-proto v1.16.1-0.20261027052505-87e4eca609c6/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
+github.com/viettechno/vietgara-proto v1.17.0 h1:JwhWu2z+lNGF1MD8R1qaN3vp2okJRKdV6fMnGEwRui4=
+github.com/viettechno/vietgara-proto v1.17.0/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
 github.com/viettechno/vietgara-testdata v0.3.0 h1:ndr3rW5lPdypSW/OHR2B9icyAeWiL0+6HYTBPyfOwmk=
 github.com/viettechno/vietgara-testdata v0.3.0/go.mod h1:U0TReHiBgomNBgvyFNxgMpcvQA5V8CDaOiLmeOXr1W4=
 github.com/xuri/efp v0.0.2 h1:74yhBh0nfIWLOrN76wtShYVse94pADGYS0/c86jOp8Q=

@@ -1,0 +1,4 @@
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE USAGE, SELECT ON SEQUENCES FROM vietgara_app;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM vietgara_app;
+REVOKE USAGE ON SCHEMA public FROM vietgara_app;
+-- The role itself is cluster-wide and is left in place.

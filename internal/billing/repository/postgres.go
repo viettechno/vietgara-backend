@@ -2,7 +2,7 @@
 // Settlement module on top of the shared Postgres pool. Every query
 // filters on garage_id explicitly on top of Row-Level Security; it never
 // queries another module's tables (customer name and vehicle plate are
-// denormalized on the settlement itself, see migration 000018). See: Database Design Section 6.1.
+// denormalized on the settlement itself, see the settlements migration). See: Database Design Section 6.1.
 package repository
 
 import (

@@ -267,7 +267,7 @@ func TestCustomerAndVehicleRepositories(t *testing.T) {
 	})
 }
 
-// The Customer Portal's lookup (Release 2.4, migration 000020) finds a
+// The Customer Portal's lookup (Release 2.4) finds a
 // person's customer records in every garage by e-mail, case-insensitively,
 // although the caller belongs to none of those garages and RLS still hides
 // the rows themselves.

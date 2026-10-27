@@ -3,7 +3,7 @@
 // garage_id explicitly on top of Row-Level Security and skips soft-deleted
 // rows; it never queries another module's tables (customer name and
 // vehicle plate are denormalized on the repair order itself, see
-// migration 000016). See: Database Design Section 4.3-4.4.
+// the repair order migrations). See: Database Design Section 4.3-4.4.
 package repository
 
 import (

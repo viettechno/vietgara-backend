@@ -3,7 +3,7 @@
 // retries a settlement or payment creation gets the first response back
 // instead of creating it twice. See middleware.Idempotency for the flow.
 //
-// Records live in idempotency_keys (migration 000021), under the garage's
+// Records live in idempotency_keys, under the garage's
 // RLS, and are written in the request's own transaction: a key, and the
 // change made with it, commit or roll back together.
 package idempotency

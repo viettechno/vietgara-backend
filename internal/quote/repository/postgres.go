@@ -2,8 +2,7 @@
 // Pricing module on top of the shared Postgres pool. Every query filters
 // on garage_id explicitly on top of Row-Level Security and skips
 // soft-deleted rows; it never queries another module's tables (customer
-// name and vehicle plate are denormalized on the quote itself, see
-// migration 000015).
+// name and vehicle plate are denormalized on the quote itself, see the quote tables).
 // See: Database Design Section 4.1-4.2, LLD Section 2.
 package repository
 

@@ -122,7 +122,7 @@ func (r *PostgresRepository) SetActive(ctx context.Context, garageID, fileID str
 }
 
 // KeyByID returns the object key and content type of a live file by its id,
-// whoever owns it, through the SECURITY DEFINER file_object_key() (000023).
+// whoever owns it, through the SECURITY DEFINER file_object_key().
 // The caller authorizes the read.
 func (r *PostgresRepository) KeyByID(ctx context.Context, fileID string) (key, contentType string, err error) {
 	if uuid.Validate(fileID) != nil {

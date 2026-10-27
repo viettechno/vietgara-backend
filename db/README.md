@@ -7,46 +7,28 @@ and tenant isolation is enforced by Row-Level Security.
 
 ## Migrations
 
-The application has not been deployed yet, so each migration creates its
-objects in their final shape: a change to an existing table is made in the
-migration that created it, not in a new `ALTER` migration. New migrations
-are only added for new tables or objects. (Once staging or production
-exists, schema changes must become new, forward-only migrations.)
+Each migration creates one object, or two that belong together: a table with
+its enum types, constraints, indexes, triggers, row-level security policies
+and seed rows; a shared enum; or a function. They are numbered in dependency
+order, so a table comes after the tables it references. Where a policy of an
+earlier table reads a later table (for example the policies of `garages`
+read `garage_staff`), it is created with the later table.
 
-**Migration freeze.** The rule is to edit in place only while no non-test tenant exists. Staging counts as test data: after an in-place change, rebuild the local database (`make docker-clean`, then `make docker-up`) and wipe the staging database before deploying. From the first real tenant, every change is a new forward-only migration.
+Until the first real tenant exists, the migrations are edited in place and
+the database is rebuilt: locally with `make docker-clean` and `make docker-up`,
+on staging by wiping its database (staging holds test data only). From the
+first real tenant on, every change is a new forward-only migration.
 
-Planned in-place changes (Release Plan, Phases 3-8; the audit columns and `full_name_source` of Release 5.0 are done): `users` and `user_id` everywhere (Phase 3, backend done in #20); `partners` becomes `suppliers` without the `partner_type` enum (done), the insurer columns, the allocation split and `payer_type` go from `settlements` and `settlement_payments` (done), voucher columns on `settlement_payments`, quantities become `NUMERIC(14,3)` and `stock_transactions.unit_cost` `NUMERIC(18,4)` (done, Release 5.0); units, categories, jobs, goods receipts and the other tables listed in the Database Design, Section 11, arrive with their releases.
+| Migrations | Creates |
+| --- | --- |
+| `enable_pg_trgm_extension`, `create_app_role` | Trigram search; the `vietgara_app` role (not a superuser, no `BYPASSRLS`) and the default privileges that grant it every later table and sequence. Append-only tables (`audit_log`, `notification_log`, `support_access_events`) revoke `UPDATE` and `DELETE` |
+| `create_rls_context_functions`, `create_row_audit_functions` | `app_current_garage_id()` and `app_current_user_id()`, read by every policy; the row-audit trigger functions that fill `created_by` and `updated_by` (NFR-MT-07) |
+| `create_<table>_table` | One file per table, in module order: identity, tenant, license, platform, customer, supplier, quote, repair order, catalogue, inventory, billing, notification, file, MFA, platform staff, support access. `db/audit_columns_test.go` fails when a table has neither the audit columns nor an allowlist entry |
+| `create_<type>_enum` | An enum used by more than one table |
+| `create_<name>_function` | `SECURITY DEFINER` lookups and helpers that need their tables first: `owner_usage()`, `find_customers_by_email()`, `find_quote_by_public_token()`, `file_object_key()`, `purge_idempotency_keys()` |
 
-| Version | Module | Creates |
-| --- | --- | --- |
-| 000001 | Identity | `users` with enums `user_status` (`active`, `suspended`), `user_auth_provider` (`email`, `google`), `user_locale` (`vi` default, `en`); required e-mail unique case-insensitively; `email_verified_at` |
-| 000002 | Tenant | RLS helpers `app_current_garage_id()` / `app_current_user_id()`; `garages` with `garage_status` (`active`, `inactive`), `Asia/Ho_Chi_Minh` time zone, contact details, legal profile (legal name, address, representative, bank), operating hours, numbering templates (quote, repair order, settlement, payment voucher) |
-| 000003 | Tenant | `garage_staff` with `staff_status` (`active`, `inactive`); permissions come from staff groups |
-| 000004 | Platform | `outbox_events` (`outbox_status`, garage or user, relay bookkeeping) |
-| 000005–000007 | Customer | `customers` (consent log, trigram search), `vehicles` (normalized plate key), `suppliers` (000007, Supplier module, bank details), each with its tenant RLS policy and an `is_active` flag for the delete-or-deactivate rule (FR-CAT-07) |
-| 000008 | License | `plans` (limits on garages, staff and transactions per day; `plan_feature[]`; seeded catalogue), `subscriptions` (one per owner user), `entitlements` (per user and feature) |
-| 000009 | Identity | `platform_admins` |
-| 000010 | Tenant | `permission` and `default_role` enums, `roles`, `role_permissions`, `staff_groups`, `staff_group_members`, the shared `set_updated_at()` trigger |
-| 000011 | Tenant | `staff_invitations` (`invitation_status`, one pending invitation per garage and user) |
-| 000012 | Platform | `processed_events` (idempotent consumers), `audit_log` (append-only) |
-| 000013 | Platform | RLS policies of the tenant/access tables, `owner_usage()`, the `vietgara_app` role and its grants |
-| 000014 | Platform | `document_sequences`: the per-garage, per-document-type, per-period counter behind numbering templates (FR-TEN-05) |
-| 000015 | Quote & Pricing | `quotes` (`quote_status`, `quote_approval_mode` from 000002, the public approval token hash), `quote_lines` (`quote_item_type`, `quote_line_decision`), `find_quote_by_public_token()` |
-| 000016 | Repair Order | `repair_orders` (`repair_order_status`, incl. `waiting_on_parts`), `repair_order_lines` (`repair_order_line_status`, `assigned_technicians`) -- FR-REP-01..03/06 |
-| 000017 | Catalogue + Inventory | Catalogue: `units`, `part_categories` (tree, three levels), `parts` (the part: base unit, sale price, category, brand; trigram search), `part_units` (packaging), `part_images`; Inventory: `stock_balance` (per-part running total), `stock_transactions` (append-only, `stock_transaction_type`, `stock_transaction_ref_type`, entered unit). Adds the unit foreign keys of `quote_lines` and `repair_order_lines` -- FR-CAT-01..04/09, FR-INV-01..03/05 |
-| 000018 | Billing & Settlement | `settlements` (`settlement_status`, paid total), `settlement_payments` (append-only, `payment_method`; each payment is a numbered payment voucher with payer, reason, collector and the issuer snapshot) -- FR-BIL-01..03, FR-REC-01 |
-| 000019 | Notification | `notification_log` (append-only, `notification_channel`, `notification_status`): what was sent, for visibility -- not a dedup mechanism, the Outbox Pattern's `processed_events` already gives exactly-once delivery -- FR-NOT-04 |
-| 000020 | Customer | `find_customers_by_email()`: the Customer BFF's `SECURITY DEFINER` lookup of a person's customer records across garages (ids only) |
-| 000021 | Platform | `idempotency_keys`: the stored answer of a financial request, kept 24 hours (API Specification 1.3) |
-| 000022 | Platform | Row audit (NFR-MT-07): `set_row_audit()` and `set_created_audit()` and their triggers fill `created_by` / `updated_by` from `app.current_user_id` (NULL for a system job) on every business table; `created_at` / `created_by` never change; `db/audit_columns_test.go` fails when a table has neither the columns nor an allowlist entry |
-| 000023 | File | `files` (`file_kind`): the registry of uploaded files, owned by a garage or a user, with the object key, content type, size and SHA-256; garage files under the garage's row-level security. `garages.logo_url` becomes `logo_key` |
-| 000028 | Inventory | `goods_receipts` and `goods_receipt_lines` (a numbered multi-line delivery with a supplier per line), `part_suppliers` (the usual suppliers of a part, last cost, default), `stock_issues` and `stock_issue_lines` (the draft that reserves a repair order's parts, then posts); in 000017 `stock_balance.average_cost` and the `quantity_after`, `average_cost_after` and `supplier_id` of each movement, in 000002 the receipt and issue numbering templates and `stock_issue_mode`, in 000010 `inventory.cost.read` -- FR-INV-06/07/19/20 |
-| 000029 | Inventory | `stock_counts` and `stock_count_lines` (a numbered count: counted against the system quantity snapshot, the cost the difference is valued at), `write_offs` and `write_off_lines`, `supplier_returns` and `supplier_return_lines` (the credit per line, the average cost to put stock back at), `repair_order_part_returns` (immutable); in 000017 the `reason` of a movement and four more `stock_transaction_ref_type` values, in 000002 the three numbering templates, in 000010 `inventory.adjust` and `inventory.count` -- FR-INV-09..12 |
-
-Tables from 000002, 000003, 000010 and 000011 enable `FORCE ROW LEVEL
-SECURITY` when created; their policies are created together in 000013,
-because they reference tables created later (a garage is visible to its
-staff and invitees, a role to the members of the owner's garages, and so on).
+Tenant tables enable and `FORCE` row-level security in their own file, so
+the `vietgara_app` role is always subject to the policies.
 
 `owner_usage(owner)` returns the owner's active garages and staff (members
 plus live invitations) across all their garages. It is `SECURITY DEFINER`
@@ -63,7 +45,7 @@ flowchart LR
 
 - Migrations run as the schema owner. `FORCE ROW LEVEL SECURITY` also binds
   the owner, so any future data migration on a tenant table needs a role that
-  bypasses RLS (the local superuser does; in Cloud SQL use a migration user
+  bypasses RLS (the local superuser does; in a managed database use a migration user
   with `BYPASSRLS`).
 - The backend connects as `APP_DB_USER`. When the variable is set, the server
   creates that login `IN ROLE vietgara_app` on startup if it is missing

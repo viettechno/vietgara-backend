@@ -290,7 +290,7 @@ func TestStockCountDraftsMerge(t *testing.T) {
 }
 
 // Scenario: E2E-INV-023, Release 7.1, a count reversal is refused when the stock it added
-// has since been used (FR-INV-12).
+// has since been used (FR-INV-12); cancelling a draft closes it and moves no stock.
 func TestStockCountReversalNeedsTheStock(t *testing.T) {
 	t.Parallel()
 
@@ -323,6 +323,21 @@ func TestStockCountReversalNeedsTheStock(t *testing.T) {
 
 	_, err = owner.API.CancelStockCount(ctx, garageID, count.GetId())
 	fixture.RequireAPIError(t, err, http.StatusConflict, "INSUFFICIENT_STOCK_TO_REVERSE")
+
+	// Cancelling a draft closes it and moves no stock.
+	draft, err := owner.API.CreateStockCount(ctx, garageID, &inventoryv1.StockCount{Name: "Abandoned"})
+	require.NoError(t, err)
+
+	draft, err = owner.API.AddStockCountLines(ctx, garageID, draft.GetId(), []string{oil.GetId()}, "")
+	require.NoError(t, err)
+
+	draft, err = owner.API.CountStockLine(ctx, garageID, draft.GetId(), draft.GetLines()[0].GetId(), "", "0")
+	require.NoError(t, err)
+
+	draft, err = owner.API.CancelStockCount(ctx, garageID, draft.GetId())
+	require.NoError(t, err)
+	assert.Equal(t, inventoryv1.StockCountStatus_STOCK_COUNT_STATUS_CANCELLED, draft.GetStatus())
+	assert.Equal(t, "1", onHand(t, owner.API, garageID, oil), "9 counted, 8 written off; the draft's 0 moved nothing")
 }
 
 // Scenario: E2E-INV-025, Release 7.1, write-off (FR-INV-09): a document with a reason

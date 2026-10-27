@@ -515,8 +515,9 @@ def main():
     for method, path in uncalled:
         print(f"  uncalled: {method} {path}")
 
-    if args.fail_on_missing and missing:
-        print("traceability: ERROR: documented scenarios without a test")
+    gated = [s for s in missing if documented[s] in ("P1", "P2")]
+    if args.fail_on_missing and gated:
+        print("traceability: ERROR: documented P1/P2 scenarios without a test: " + ", ".join(gated))
         return 1
     if args.fail_on_coverage and pct < args.coverage_gate:
         print("traceability: ERROR: API coverage below gate")

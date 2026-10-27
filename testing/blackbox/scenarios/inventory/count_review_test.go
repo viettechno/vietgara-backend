@@ -111,10 +111,11 @@ func TestStockCountExcelHidesCostWithoutAccess(t *testing.T) {
 	count, err = owner.API.AddStockCountLines(ctx, garageID, count.GetId(), []string{oil.GetId(), filter.GetId()}, "")
 	require.NoError(t, err)
 
-	for part, counted := range map[*cataloguev1.Part]string{oil: "10", filter: "18"} {
-		count, err = owner.API.CountStockLine(ctx, garageID, count.GetId(), lineOfPart(t, count, part).GetId(), "", counted)
-		require.NoError(t, err)
-	}
+	count, err = owner.API.CountStockLine(ctx, garageID, count.GetId(), lineOfPart(t, count, oil).GetId(), "", "10")
+	require.NoError(t, err)
+
+	count, err = owner.API.CountStockLine(ctx, garageID, count.GetId(), lineOfPart(t, count, filter).GetId(), "", "18")
+	require.NoError(t, err)
 
 	withCost := countSheet(t, owner.API, garageID, count.GetId())
 	assert.Equal(t, []string{
@@ -122,6 +123,7 @@ func TestStockCountExcelHidesCostWithoutAccess(t *testing.T) {
 	}, withCost[0])
 
 	row := sheetRow(t, withCost, filter.GetSku())
+	require.Len(t, row, 9)
 	assert.Equal(t, []string{"20", "18", "-2"}, row[3:6])
 	assert.Equal(t, []string{"50", "-100"}, row[7:9], "valued at average cost")
 
@@ -133,6 +135,7 @@ func TestStockCountExcelHidesCostWithoutAccess(t *testing.T) {
 	}
 
 	row = sheetRow(t, quantitiesOnly, filter.GetSku())
+	require.Len(t, row, 7)
 	assert.Equal(t, []string{"20", "18", "-2"}, row[3:6])
 }
 

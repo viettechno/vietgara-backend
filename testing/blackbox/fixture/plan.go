@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -30,9 +31,13 @@ var errNoPublicPlan = errors.New("no public plan matches")
 var adminMu sync.Mutex
 
 // PlatformAdmin returns the platform admin actor. On targets with a test
-// inbox it is the shared dataset's admin user (registered and verified on
-// first use); on other targets it signs in BLACKBOX_ADMIN_EMAIL /
-// BLACKBOX_ADMIN_PASSWORD, skipping tb when they are not configured.
+// inbox it is the shared dataset's admin user, admin@<email domain>, with
+// the password of datasetAdminPassword. The stubbed stack registers and
+// verifies it on first use; any other target must already have it (it is a
+// platform admin only through the deployment's PLATFORM_ADMIN_EMAILS), so a
+// failed sign-in there fails tb instead of registering a user. Targets
+// without an inbox sign in BLACKBOX_ADMIN_EMAIL / BLACKBOX_ADMIN_PASSWORD,
+// skipping tb when they are not configured.
 func PlatformAdmin(tb testing.TB) *Actor {
 	tb.Helper()
 
@@ -49,8 +54,14 @@ func PlatformAdmin(tb testing.TB) *Actor {
 	password := datasetAdminPassword(tb)
 	api := Anonymous(tb)
 
-	if session, err := api.Login(tb.Context(), email, password); err == nil && session.GetUser().GetEmailVerified() {
+	session, err := api.Login(tb.Context(), email, password)
+	if err == nil && session.GetUser().GetEmailVerified() {
 		return &Actor{Email: email, Password: password, Session: session, API: api.WithToken(session.GetAccessToken())}
+	}
+
+	if cfg.Target != env.Stubbed {
+		tb.Fatalf("sign in platform admin %s on %s (it must exist, be verified and have the dataset's password secret): verified=%t, err=%v",
+			email, cfg.Target, session.GetUser().GetEmailVerified(), err)
 	}
 
 	return registerVerifiedUser(tb, api, email, password, user.Name)
@@ -141,18 +152,29 @@ func datasetAdminPassword(tb testing.TB) string {
 		return cfg.AdminPassword
 	}
 
-	// The dataset's admin password is public: it may only sign in the
-	// stubbed stack's admin, never create or guess another target's.
-	if cfg.Target != env.Stubbed {
-		tb.Fatalf("BLACKBOX_ADMIN_PASSWORD is required for target %s", cfg.Target)
+	// The dataset gives each target its admin password: a literal for the
+	// stubbed stack (public, like the dataset), or the name of the
+	// environment variable holding the secret (staging: ADMIN_PASSWORD).
+	environment, ok := Dataset(tb).Environments[string(cfg.Target)]
+	if !ok {
+		tb.Fatalf("the shared dataset has no environment %q", cfg.Target)
 	}
 
-	environment, ok := Dataset(tb).Environments["stubbed"]
-	if !ok || environment.AdminPassword == "" {
-		tb.Fatal("BLACKBOX_ADMIN_PASSWORD is not set and the shared dataset has no stubbed admin password")
+	if environment.AdminPassword != "" {
+		return environment.AdminPassword
 	}
 
-	return environment.AdminPassword
+	if ref := environment.AdminPasswordRef; ref != "" {
+		if password := os.Getenv(ref); password != "" {
+			return password
+		}
+
+		tb.Fatalf("%s is not set: it holds the platform admin's password on target %s", ref, cfg.Target)
+	}
+
+	tb.Fatalf("the shared dataset has no admin password for target %s", cfg.Target)
+
+	return ""
 }
 
 func registerVerifiedUser(tb testing.TB, api *client.Client, email, password, fullName string) *Actor {

@@ -59,4 +59,4 @@ blackbox-lint: ## Lint the blackbox module with the repository's golangci-lint c
 blackbox-traceability: ## Check E2E scenario traceability and API-op coverage (no stack needed)
 	@printf "$(CYAN)▶ Checking blackbox traceability and API coverage...$(RESET)\n"
 	@proto_dir="$$(cd "$(BLACKBOX_DIR)" && go list -m -f '{{.Dir}}' github.com/viettechno/vietgara-proto)" && \
-	python3 "$(BLACKBOX_DIR)/scripts/check_traceability.py" --proto-dir "$$proto_dir"
+	python3 "$(BLACKBOX_DIR)/scripts/check_traceability.py" --proto-dir "$$proto_dir" --fail-on-missing

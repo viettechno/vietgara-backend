@@ -100,11 +100,12 @@ func joinAs(t *testing.T, owner *fixture.Actor, garageID, group, label string) *
 	return member
 }
 
-// Scenario: Release 7.1, stock count (FR-INV-12): counting 3 parts with 2
+// Scenario: E2E-INV-020, E2E-INV-023, Release 7.1, stock count (FR-INV-12): counting 3 parts with 2
 // differences gives one document with matched, over and short lines;
 // completing it makes stock equal the count and values the difference at
 // average cost; it cannot be edited afterwards, appears in the part's stock
 // card, and cancelling it reverses the adjustments.
+// Scenario: E2E-INV-028 (partial): the count's stock card entry; the screens are not covered.
 func TestStockCountMakesStockEqualTheCount(t *testing.T) {
 	t.Parallel()
 
@@ -200,7 +201,7 @@ func TestStockCountMakesStockEqualTheCount(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusConflict, "STOCK_COUNT_ALREADY_CANCELLED")
 }
 
-// Scenario: Release 7.1, drafts can be merged (FR-INV-12): two people count
+// Scenario: E2E-INV-022, Release 7.1, drafts can be merged (FR-INV-12): two people count
 // different shelves, the drafts merge into one with the counted quantities of
 // a shared part added up, and parts nobody counted can be skipped on completion.
 func TestStockCountDraftsMerge(t *testing.T) {
@@ -288,7 +289,7 @@ func TestStockCountDraftsMerge(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "")
 }
 
-// Scenario: Release 7.1, a count reversal is refused when the stock it added
+// Scenario: E2E-INV-023, Release 7.1, a count reversal is refused when the stock it added
 // has since been used (FR-INV-12).
 func TestStockCountReversalNeedsTheStock(t *testing.T) {
 	t.Parallel()
@@ -324,7 +325,7 @@ func TestStockCountReversalNeedsTheStock(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusConflict, "INSUFFICIENT_STOCK_TO_REVERSE")
 }
 
-// Scenario: Release 7.1, write-off (FR-INV-09): a document with a reason
+// Scenario: E2E-INV-025, Release 7.1, write-off (FR-INV-09): a document with a reason
 // reduces stock at average cost, is refused beyond what is on hand, shows in
 // the stock card, and cancelling it puts the parts back.
 func TestWriteOffReducesStockAtAverageCost(t *testing.T) {
@@ -392,7 +393,7 @@ func TestWriteOffReducesStockAtAverageCost(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusConflict, "WRITE_OFF_ALREADY_CANCELLED")
 }
 
-// Scenario: Release 7.1, return to supplier (FR-INV-10): stock falls and the
+// Scenario: E2E-INV-026, Release 7.1, return to supplier (FR-INV-10): stock falls and the
 // supplier credit is recorded, defaulting to what the linked receipt paid; a
 // receipt of another supplier is refused; cancelling restores the stock.
 func TestSupplierReturnRecordsTheCredit(t *testing.T) {
@@ -462,7 +463,7 @@ func TestSupplierReturnRecordsTheCredit(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusConflict, "SUPPLIER_RETURN_ALREADY_CANCELLED")
 }
 
-// Scenario: Release 7.1, return of unused parts from a repair order
+// Scenario: E2E-INV-027, Release 7.1, return of unused parts from a repair order
 // (FR-INV-11): once the stock issue is posted a part line can give parts back,
 // with a reason, restoring stock and cost; more than was issued is refused.
 func TestUnusedRepairOrderPartsReturnToStock(t *testing.T) {
@@ -529,7 +530,7 @@ func TestUnusedRepairOrderPartsReturnToStock(t *testing.T) {
 	assert.Equal(t, "7.5", card[0].GetQuantityAfter())
 }
 
-// Scenario: Release 7.1, permissions: inventory.count and inventory.adjust are
+// Scenario: E2E-INV-029, Release 7.1, permissions: inventory.count and inventory.adjust are
 // separate from inventory.write. A technician reads stock but cannot count,
 // write off, return to supplier or return repair order parts; inventory staff
 // can; the count's cost fields follow inventory.cost.read.

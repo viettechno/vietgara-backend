@@ -10,6 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	cataloguev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/catalogue/v1"
+	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
+	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
 
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
@@ -138,4 +140,78 @@ func TestPartBarcodes(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, cola.GetId(), found.GetPart().GetId(), "this garage still answers with its own part")
 	})
+}
+
+// Scenario: E2E-INV-031 (partial), Release 7.2, scanning into a goods receipt
+// (FR-INV-13, FR-INV-06): the API side of a scan. A can code and a carton code
+// both find the part, the carton code with the carton as its unit, so a
+// receipt line in cartons adds 24 cans each on completion; an unknown code is
+// not found, and an inactive part's code is found as inactive so the caller
+// can say so. Turning scans into lines (one more of the same, the messages)
+// is the web console's, covered by vietgara-e2e's E2E-INV-031.
+func TestScannedCodesFillAGoodsReceipt(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	owner, garage := setup(t, "inv-scan-receipt")
+	garageID := garage.GetId()
+
+	can := fixture.NewUnit(t, owner.API, garageID, "Can", "can")
+	carton := fixture.NewUnit(t, owner.API, garageID, "Carton", "ctn")
+	beer := fixture.NewPart(t, owner.API, garageID, sku(), "Beer 330 ml", can)
+	old := fixture.NewPart(t, owner.API, garageID, sku(), "Old part", can)
+
+	_, err := owner.API.SetPartUnits(ctx, garageID, beer.GetId(), []*cataloguev1.PackagingUnit{{UnitId: carton.GetId(), Factor: "24"}})
+	require.NoError(t, err)
+
+	_, err = owner.API.SetPartBarcodes(ctx, garageID, beer.GetId(), []*cataloguev1.PartBarcode{
+		{Barcode: "8930001"},
+		{Barcode: "8930024", UnitId: new(carton.GetId())},
+	})
+	require.NoError(t, err)
+
+	// A part with stock history is deactivated, not deleted, and keeps its code.
+	_, err = owner.API.SetPartBarcodes(ctx, garageID, old.GetId(), []*cataloguev1.PartBarcode{{Barcode: "8930099"}})
+	require.NoError(t, err)
+
+	_, err = owner.API.ReceiveStock(ctx, garageID, old.GetId(), "1", "", 100)
+	require.NoError(t, err)
+
+	deleted, err := owner.API.DeletePart(ctx, garageID, old.GetId(), false)
+	require.NoError(t, err)
+	require.Equal(t, commonv1.DeleteOutcome_DELETE_OUTCOME_DEACTIVATED, deleted.GetOutcome())
+
+	canScan, err := owner.API.LookupPartByBarcode(ctx, garageID, "8930001")
+	require.NoError(t, err)
+	assert.Equal(t, beer.GetId(), canScan.GetPart().GetId())
+	assert.Empty(t, canScan.GetBarcode().GetUnitId(), "a can code stands for the base unit")
+
+	cartonScan, err := owner.API.LookupPartByBarcode(ctx, garageID, "8930024")
+	require.NoError(t, err)
+	assert.Equal(t, beer.GetId(), cartonScan.GetPart().GetId())
+	assert.Equal(t, carton.GetId(), cartonScan.GetBarcode().GetUnitId())
+
+	_, err = owner.API.LookupPartByBarcode(ctx, garageID, "0000000")
+	fixture.RequireAPIError(t, err, http.StatusNotFound, "")
+
+	inactive, err := owner.API.LookupPartByBarcode(ctx, garageID, "8930099")
+	require.NoError(t, err)
+	assert.Equal(t, old.GetId(), inactive.GetPart().GetId())
+	assert.False(t, inactive.GetPart().GetIsActive(), "found, so the caller can say the part is inactive")
+
+	// Two cans and two cartons, as the scans would have filled them.
+	receipt, err := owner.API.CreateGoodsReceipt(ctx, garageID, &inventoryv1.GoodsReceipt{
+		DefaultSupplierId: new(supplier(t, owner.API, garageID, "Scan ").GetId()),
+		Lines: []*inventoryv1.GoodsReceiptLine{
+			{PartId: canScan.GetPart().GetId(), EnteredQuantity: "2", UnitCost: new(int64(10000))},
+			{PartId: cartonScan.GetPart().GetId(), UnitId: new(cartonScan.GetBarcode().GetUnitId()), EnteredQuantity: "2", UnitCost: new(int64(10000))},
+		},
+	})
+	require.NoError(t, err)
+	require.Len(t, receipt.GetLines(), 2)
+	assert.Equal(t, "48", receipt.GetLines()[1].GetQuantity(), "2 cartons of 24 cans")
+
+	_, err = owner.API.CompleteGoodsReceipt(ctx, garageID, receipt.GetId())
+	require.NoError(t, err)
+	assert.Equal(t, "50", onHand(t, owner.API, garageID, beer))
 }

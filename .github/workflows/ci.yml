@@ -124,8 +124,8 @@ jobs:
 
   # Scenario traceability and API coverage need no running stack: the check
   # reads the scenario sources, the checked-in ID snapshot and the OpenAPI
-  # document. Unknown scenario IDs fail the job; missing scenarios and
-  # coverage below the gate report as warnings until the 4.1 batches land.
+  # document. Unknown scenario IDs and documented P1/P2 scenarios without a
+  # test fail the job; coverage below the gate reports as a warning.
   traceability:
     name: Scenario traceability and API coverage
     runs-on: ubuntu-latest

@@ -119,7 +119,7 @@ type CustomerRef struct {
 
 // FindByEmailAcrossGarages returns every live customer record, in any
 // garage, whose e-mail is email (case-insensitive) -- through the
-// SECURITY DEFINER find_customers_by_email() (000020), since the caller
+// SECURITY DEFINER find_customers_by_email(), since the caller
 // (the Customer App's signed-in person) belongs to none of those garages.
 // It returns ids only: the records are then read in each garage's scope.
 func (r *PostgresCustomerRepository) FindByEmailAcrossGarages(ctx context.Context, email string) ([]CustomerRef, error) {

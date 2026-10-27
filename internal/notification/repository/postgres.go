@@ -1,6 +1,6 @@
 // Package repository implements the persistence layer of the Notification
 // module on top of the shared Postgres pool. See: Database Design, the
-// notification_log table (migration 000019).
+// notification_log table.
 package repository
 
 import (

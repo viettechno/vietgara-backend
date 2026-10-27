@@ -1,5 +1,5 @@
 // Package repository stores the platform staff model in PostgreSQL
-// (migration 000033). The tables belong to no garage and have no row-level
+// The tables belong to no garage and have no row-level
 // security; the platform permission interceptor protects the RPCs.
 package repository
 

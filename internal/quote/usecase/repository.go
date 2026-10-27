@@ -44,7 +44,7 @@ type Repository interface {
 	SoftDelete(ctx context.Context, garageID, quoteID, deletedBy string) error
 	// FindByPublicToken resolves an approval-link token to the garage and
 	// quote it belongs to, bypassing the caller's garage scope (see
-	// find_quote_by_public_token, migration 000015): the public flow has
+	// find_quote_by_public_token): the public flow has
 	// no garage_id to scope a transaction with until this call returns.
 	// domain.ErrPublicTokenInvalid for an unknown or expired token.
 	FindByPublicToken(ctx context.Context, tokenHash string) (garageID, quoteID string, err error)

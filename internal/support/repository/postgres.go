@@ -1,5 +1,5 @@
 // Package repository stores support grants and their access log in
-// PostgreSQL (migration 000034). Both tables have row-level security: the
+// PostgreSQL. Both tables have row-level security: the
 // owner's side is scoped to the garage, the staff's side to the user.
 package repository
 
@@ -31,7 +31,7 @@ var errNoTransaction = errors.New("support: the directory setting needs a transa
 
 // withDirectory lets fn see garages outside the caller's scope -- their name
 // and owner, which is all these queries select -- and closes that again
-// before returning (migration 000034).
+// before returning.
 func (r *Postgres) withDirectory(ctx context.Context, fn func(q platformdb.Querier) error) error {
 	if !platformdb.InTransaction(ctx) {
 		return errNoTransaction

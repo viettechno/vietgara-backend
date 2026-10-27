@@ -17,7 +17,7 @@ import (
 // auditAllowlist names the tables that carry no row audit columns, with
 // the reason. A new table must either have created_at / created_by (plus
 // updated_at / updated_by when its rows change) with the matching trigger
-// from migration 000022, or be added here deliberately (NFR-MT-07).
+// from create_row_audit_functions, or be added here deliberately (NFR-MT-07).
 var auditAllowlist = map[string]string{
 	"processed_events": "idempotent-consumer ledger of the event bus, keyed by consumer and event",
 	"idempotency_keys": "request replay cache keyed by user and key, purged after 24 hours",

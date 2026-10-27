@@ -25,7 +25,7 @@ import (
 )
 
 // TestQuantitiesAreNumeric runs the quantity and cost columns (NUMERIC,
-// migrations 000015-000017) through the real repositories: a decimal
+// the quote, repair order and inventory tables) through the real repositories: a decimal
 // string goes in and comes back without padding zeros, and the stock
 // balance is exact arithmetic.
 //

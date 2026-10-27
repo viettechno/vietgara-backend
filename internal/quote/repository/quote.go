@@ -289,7 +289,7 @@ func (r *PostgresRepository) SoftDelete(ctx context.Context, garageID, quoteID, 
 }
 
 // FindByPublicToken resolves an approval-link token via the SECURITY
-// DEFINER function find_quote_by_public_token (migration 000015), which
+// DEFINER function find_quote_by_public_token, which
 // bypasses the caller's (nonexistent) garage scope.
 func (r *PostgresRepository) FindByPublicToken(ctx context.Context, tokenHash string) (string, string, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)

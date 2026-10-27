@@ -104,7 +104,7 @@ var noRLS = map[string]string{ //nolint:gosec // G101 matches the table name cre
 	"schema_migrations":            "migration bookkeeping; the application role has no grant",
 }
 
-// TestAuditLogIsReadableOnlyWithinItsGarage covers migration 000032: any
+// TestAuditLogIsReadableOnlyWithinItsGarage covers the audit_log policies: any
 // scope may append, a SELECT sees only the scoped garage's entries, and the
 // log cannot be rewritten.
 func TestAuditLogIsReadableOnlyWithinItsGarage(t *testing.T) {

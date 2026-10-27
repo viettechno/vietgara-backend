@@ -476,6 +476,11 @@ packages:
           filename: "reporting_usecase_settlement_reader.go"
           dir: "./internal/mocks"
           structname: "MockReportingSettlementReader"
+      GarageReader:
+        config:
+          filename: "reporting_usecase_garage_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockReportingGarageReader"
   github.com/viettechno/vietgara-backend/internal/notification/usecase:
     interfaces:
       Mailer:

@@ -4,6 +4,7 @@ import (
 	billingRepository "github.com/viettechno/vietgara-backend/internal/billing/repository"
 	reportingHandler "github.com/viettechno/vietgara-backend/internal/reporting/handler"
 	reportingUsecase "github.com/viettechno/vietgara-backend/internal/reporting/usecase"
+	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 )
 
 // reportingModule is the wired Reporting module (FRD 3.15, Release 1.5):
@@ -16,9 +17,10 @@ type reportingModule struct {
 	uc     *reportingUsecase.ReportingUseCase
 }
 
-func buildReporting(settlements *billingRepository.PostgresRepository) *reportingModule {
+func buildReporting(settlements *billingRepository.PostgresRepository, garages *tenantRepo.PostgresGarageRepository) *reportingModule {
 	uc := reportingUsecase.NewReportingUseCase(reportingUsecase.Deps{
 		Settlements: reportingSettlements{settlements: settlements},
+		Garages:     reportingGarages{garages: garages},
 	})
 
 	return &reportingModule{server: reportingHandler.NewServer(uc), uc: uc}

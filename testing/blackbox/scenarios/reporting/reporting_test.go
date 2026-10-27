@@ -71,6 +71,23 @@ func paidSettlement(t *testing.T, label string) (*fixture.Actor, string, string)
 	return owner, garage.GetId(), settlement.GetId()
 }
 
+// garageToday returns today's and tomorrow's dates in the garage's time
+// zone: the revenue report counts the garage's days (FR-TEN-05), which
+// differ from the machine's around midnight.
+func garageToday(t *testing.T, owner *fixture.Actor, garageID string) (string, string) {
+	t.Helper()
+
+	garage, err := owner.API.GetGarage(t.Context(), garageID)
+	require.NoError(t, err)
+
+	loc, err := time.LoadLocation(garage.GetTimezone())
+	require.NoError(t, err)
+
+	now := time.Now().In(loc)
+
+	return now.Format("2006-01-02"), now.AddDate(0, 0, 1).Format("2006-01-02")
+}
+
 // Scenario: E2E-BIL-008 (partial): the dashboard revenue follows the
 // settlement — asserted at API level through the revenue report; the
 // dashboard figure itself is web-E2E.
@@ -80,8 +97,7 @@ func TestRevenueReportFollowsSettlement(t *testing.T) {
 	ctx := t.Context()
 	owner, garageID, _ := paidSettlement(t, "rep-revenue")
 
-	today := time.Now().Format("2006-01-02")
-	tomorrow := time.Now().Add(24 * time.Hour).Format("2006-01-02")
+	today, tomorrow := garageToday(t, owner, garageID)
 
 	report, err := owner.API.GetRevenueReport(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, today, tomorrow)
 	require.NoError(t, err)
@@ -188,8 +204,7 @@ func TestRevenueExcelDownload(t *testing.T) {
 	ctx := t.Context()
 	owner, garageID, _ := paidSettlement(t, "rep-revenue-xlsx")
 
-	today := time.Now().Format("2006-01-02")
-	tomorrow := time.Now().Add(24 * time.Hour).Format("2006-01-02")
+	today, tomorrow := garageToday(t, owner, garageID)
 
 	report, err := owner.API.GetRevenueReport(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, today, tomorrow)
 	require.NoError(t, err)

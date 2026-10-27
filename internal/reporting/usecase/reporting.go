@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
@@ -11,6 +12,7 @@ import (
 // Deps are the dependencies of ReportingUseCase.
 type Deps struct {
 	Settlements SettlementReader
+	Garages     GarageReader
 }
 
 // ReportingUseCase implements the Reporting module's revenue report.
@@ -27,7 +29,8 @@ func NewReportingUseCase(deps Deps) *ReportingUseCase {
 type GetRevenueReportRequest struct {
 	GarageID string
 	Period   Period
-	// From is inclusive, To is exclusive.
+	// From is inclusive, To is exclusive. They are calendar dates: only
+	// their year, month and day are read, as days of the garage's time zone.
 	From, To time.Time
 }
 
@@ -49,7 +52,20 @@ func (uc *ReportingUseCase) GetRevenueReport(ctx context.Context, req GetRevenue
 		return nil, toAppError("get revenue report", ErrInvalidDateRange)
 	}
 
-	points, err := uc.Settlements.RevenueByPeriod(ctx, req.GarageID, req.Period, req.From, req.To)
+	timezone, err := uc.Garages.Timezone(ctx, req.GarageID)
+	if err != nil {
+		return nil, toAppError("get revenue report", err)
+	}
+
+	// The time zone is validated when it is saved (FR-TEN-05).
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		return nil, toAppError("get revenue report", fmt.Errorf("garage time zone %q: %w", timezone, err))
+	}
+
+	from, to := localMidnight(req.From, loc), localMidnight(req.To, loc)
+
+	points, err := uc.Settlements.RevenueByPeriod(ctx, req.GarageID, req.Period, loc, from, to)
 	if err != nil {
 		return nil, toAppError("get revenue report", err)
 	}
@@ -60,6 +76,11 @@ func (uc *ReportingUseCase) GetRevenueReport(ctx context.Context, req GetRevenue
 	}
 
 	return &RevenueReport{Points: points, TotalAmount: total}, nil
+}
+
+// localMidnight is the start of date's calendar day in loc.
+func localMidnight(date time.Time, loc *time.Location) time.Time {
+	return time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, loc)
 }
 
 // toAppError classifies err into an *apperror.AppError; op names the

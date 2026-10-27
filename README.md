@@ -13,7 +13,7 @@
 
 The Go modular monolith behind the VietGara front ends: the owner web
 (`vietgara-owner-web`), the platform admin (`vietgara-admin-web`) and the
-mobile apps (Release 1.0–1.5). One
+mobile apps. One
 process serves:
 
 - **gRPC** on `GRPC_PORT`, using the contracts in `vietgara-proto`.
@@ -38,7 +38,7 @@ flowchart LR
   M --> ST["Files<br/>local disk / GCS"]
 ```
 
-**Contents:** [Modules](#modules) · [Roadmap](#roadmap) · [Run locally](#run-locally) ·
+**Contents:** [Modules](#modules) · [Run locally](#run-locally) ·
 [Configuration](#configuration) · [Platform admins](#platform-admins) ·
 [E-mail](#e-mail) · [File storage](#file-storage) · [Events](#events) ·
 [Development](#development) · [Container image and staging](#container-image-and-staging)

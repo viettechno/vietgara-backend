@@ -311,9 +311,15 @@ func TestSupportDiagnosticViews(t *testing.T) {
 	require.NoError(t, err)
 
 	// The log row is written after the e-mail is sent, so it can trail the
-	// verification the owner already completed.
+	// verification the owner already completed. Every read is audited, so
+	// the polls are counted for the access log below.
+	notificationReads := 0
+
 	require.Eventually(t, func() bool {
 		notifications, listErr := c.staff.API.ListSupportNotifications(ctx, grant.GetId())
+		if listErr == nil {
+			notificationReads++
+		}
 
 		return listErr == nil && len(notifications) > 0
 	}, 10*time.Second, 200*time.Millisecond, "the owner's registration e-mails are in the log")
@@ -327,7 +333,7 @@ func TestSupportDiagnosticViews(t *testing.T) {
 
 	log, err := c.owner.API.ListSupportAccessLog(ctx, gid, 50)
 	require.NoError(t, err)
-	require.Len(t, log, 2)
+	require.Len(t, log, notificationReads+1, "one entry per read through the grant")
 	assert.Equal(t, "ListSupportNotifications", log[0].GetMethod())
-	assert.Equal(t, "ListSupportOutboxEvents", log[1].GetMethod())
+	assert.Equal(t, "ListSupportOutboxEvents", log[len(log)-1].GetMethod())
 }

@@ -10,6 +10,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/platform/access"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
+	"github.com/viettechno/vietgara-backend/internal/platform/observability"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
@@ -63,6 +64,7 @@ func Garage(
 			}
 
 			scope.GarageID = scoped.GetGarageId()
+			observability.SetGarage(ctx, scope.GarageID)
 		}
 
 		var resp any

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/twmb/franz-go/pkg/kadm"
 	"github.com/twmb/franz-go/pkg/kgo"
 
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
@@ -22,7 +23,11 @@ const (
 	maxBackoff         = 10 * time.Second
 )
 
-var errMalformedEvent = errors.New("malformed event")
+var (
+	errMalformedEvent = errors.New("malformed event")
+	errNotRunning     = errors.New("kafka: consumer is not running")
+	errNoLag          = errors.New("kafka: the broker reports no lag for the group (not joined yet?)")
+)
 
 // Consumer reads the topics of the subscribed event types in one consumer
 // group and runs the handlers of each record. Offsets are committed only
@@ -39,6 +44,7 @@ type Consumer struct {
 
 	mu       sync.RWMutex
 	handlers map[string][]outbox.Handler
+	admin    *kadm.Client // set while Run is consuming; reads the group's lag
 }
 
 // ConsumerOption customizes a Consumer.
@@ -116,6 +122,9 @@ func (c *Consumer) Run(ctx context.Context) error {
 	}
 	defer client.Close()
 
+	c.setAdmin(kadm.NewClient(client))
+	defer c.setAdmin(nil)
+
 	for {
 		fetches := client.PollFetches(ctx)
 		if ctx.Err() != nil {
@@ -134,6 +143,47 @@ func (c *Consumer) Run(ctx context.Context) error {
 			slog.Warn("kafka: committing offsets failed", "group", c.group, "error", err)
 		}
 	}
+}
+
+func (c *Consumer) setAdmin(admin *kadm.Client) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.admin = admin
+}
+
+// Lag returns, per subscribed topic, how many records the group has not
+// committed yet (the consumer lag of NFR-OB-02's alerting). It fails while
+// the consumer is not running.
+func (c *Consumer) Lag(ctx context.Context) (map[string]int64, error) {
+	c.mu.RLock()
+	admin := c.admin
+	c.mu.RUnlock()
+
+	if admin == nil {
+		return nil, errNotRunning
+	}
+
+	lags, err := admin.Lag(ctx, c.group)
+	if err != nil {
+		return nil, fmt.Errorf("kafka: group lag: %w", err)
+	}
+
+	group := lags[c.group]
+	if err := group.Error(); err != nil {
+		return nil, fmt.Errorf("kafka: group lag: %w", err)
+	}
+
+	if len(group.Lag) == 0 {
+		return nil, errNoLag
+	}
+
+	byTopic := make(map[string]int64, len(group.Lag))
+	for topic, total := range group.Lag.TotalByTopic() {
+		byTopic[topic] = total.Lag
+	}
+
+	return byTopic, nil
 }
 
 // handleRecord runs every handler of the record's event type, retrying

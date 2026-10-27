@@ -131,6 +131,13 @@ local defaults.
 | `ENTITLEMENT_CACHE_TTL`, `LICENSE_EXPIRY_JOB_INTERVAL` | License enforcement |
 | `KAFKA_BROKERS`, `KAFKA_TOPIC_PREFIX`, `KAFKA_CONSUMER_GROUP`, `OUTBOX_RELAY_INTERVAL` | Domain events. If `KAFKA_BROKERS` is empty, events are delivered in-process. See [Events](#events) |
 
+**Observability**
+
+| Variable | Purpose |
+| --- | --- |
+| `METRICS_PORT` | Port of the Prometheus endpoint `/metrics` (default `9090`). It is a separate listener that the gateway does not route and the deployment must not publish; scrape it from inside the network. See [Observability](#observability) |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP endpoint for traces. If empty, spans are created (so logs carry a trace id) but not exported |
+
 **E-mail and files**
 
 | Variable | Purpose |
@@ -293,6 +300,29 @@ cleanup fails.
 
 Without `KAFKA_BROKERS`, events are delivered in-process after commit. The
 event catalogue is in the Event Design document.
+
+## Observability
+
+- **Health.** `GET /healthz` is liveness (the process answers). `GET /readyz`
+  is readiness: it answers `503` while the database does not, so a load
+  balancer or Kubernetes stops sending traffic.
+- **Metrics** (`:9090/metrics`, Prometheus format), per module (the second
+  element of the proto package, for example `quote`):
+  `vietgara_requests_total{module,code}`,
+  `vietgara_request_errors_total{module}` (server-side faults, HTTP 5xx),
+  `vietgara_request_duration_seconds{module}`, the database pool
+  (`vietgara_db_pool_*`), `vietgara_outbox_pending_events`,
+  `vietgara_outbox_oldest_pending_age_seconds`, `vietgara_outbox_failed_events`
+  and `vietgara_kafka_consumer_lag{topic}`. The outbox and lag values are read
+  at most every 5 seconds; a failed read exports no series and raises
+  `vietgara_collector_errors_total`.
+- **Logs** are JSON on stderr. Every request writes one line (`request`,
+  `request rejected` or `request failed`) with `module`, `method`, `code`,
+  `duration_ms`, `trace_id` and `garage_id`; a failed request also carries the
+  `error` cause that the client never sees. Any record logged with a context
+  (`slog.*Context`) gets `trace_id` and `garage_id` too.
+- Alert rules, dashboards and log shipping live in `vietgara-infra`
+  (`staging/observability`).
 
 ## Development
 

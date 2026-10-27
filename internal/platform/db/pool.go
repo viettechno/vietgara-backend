@@ -59,6 +59,23 @@ func NewPool(_ context.Context, pool ConnPool) *Pool {
 	return &Pool{pool: pool}
 }
 
+// Stat returns the connection pool statistics (the pool metrics of
+// NFR-OB-02/04), or nil when the pool is a test double.
+func (p *Pool) Stat() *pgxpool.Stat {
+	if pgx, ok := p.pool.(*pgxpool.Pool); ok {
+		return pgx.Stat()
+	}
+
+	return nil
+}
+
+// Ping checks that the database answers (the readiness probe).
+func (p *Pool) Ping(ctx context.Context) error {
+	var one int
+
+	return p.pool.QueryRow(ctx, "SELECT 1").Scan(&one)
+}
+
 // Close releases the underlying connection pool.
 func (p *Pool) Close() {
 	p.pool.Close()

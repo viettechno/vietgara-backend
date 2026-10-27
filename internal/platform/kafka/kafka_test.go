@@ -230,3 +230,41 @@ func TestConsumer_CancelledWhileRetrying(t *testing.T) {
 	cancel()
 	require.NoError(t, <-stopped)
 }
+
+func TestConsumer_Lag(t *testing.T) {
+	t.Parallel()
+
+	brokers := newCluster(t)
+
+	producer, err := kafka.NewProducer(brokers, "")
+	require.NoError(t, err)
+	t.Cleanup(producer.Close)
+
+	consumer := kafka.NewConsumer(brokers, "lag-group", "")
+	consumer.Subscribe("garage.created", func(context.Context, outbox.Event) error { return nil })
+
+	_, err = consumer.Lag(t.Context())
+	require.Error(t, err, "no lag is reported before the consumer runs")
+
+	// Records published before the group commits anything are all lag.
+	for _, id := range []string{"a", "b", "c"} {
+		require.NoError(t, producer.Publish(t.Context(), event(id, "garage.created")))
+	}
+
+	ctx, cancel := context.WithCancel(t.Context())
+	stopped := make(chan error, 1)
+
+	go func() { stopped <- consumer.Run(ctx) }()
+
+	assert.Eventually(t, func() bool {
+		lag, err := consumer.Lag(t.Context())
+
+		return err == nil && lag["vietgara.tenant.events"] == 0
+	}, 10*time.Second, 50*time.Millisecond, "the consumer commits what it handled")
+
+	cancel()
+	require.NoError(t, <-stopped)
+
+	_, err = consumer.Lag(t.Context())
+	require.Error(t, err, "no lag is reported once the consumer stopped")
+}

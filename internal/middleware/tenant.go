@@ -45,7 +45,9 @@ const ReasonPlatformDenied = "PLATFORM_PERMISSION_REQUIRED"
 // (owner or active member holding the permission, Security Architecture
 // 3.2) and the garage owner's subscription is enforced (LLD 3.3): a
 // locked subscription blocks everything, a past-due one blocks writes.
-func Garage(tx Transactor, reader access.Reader, platform access.PlatformReader, license LicenseChecker) grpc.UnaryServerInterceptor {
+func Garage(
+	tx Transactor, reader access.Reader, platform access.PlatformReader, license LicenseChecker, support SupportSessions,
+) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		policy := policyFromContext(ctx)
 		if policy.Public {
@@ -78,7 +80,7 @@ func Garage(tx Transactor, reader access.Reader, platform access.PlatformReader,
 			if scope.GarageID != "" {
 				var err error
 
-				txCtx, err = authorizeGarage(txCtx, reader, license, scope, policy, info.FullMethod)
+				txCtx, err = authorizeGarage(txCtx, reader, license, support, scope, policy, info.FullMethod, req)
 				if err != nil {
 					return err
 				}
@@ -114,10 +116,15 @@ func authorizePlatform(
 }
 
 func authorizeGarage(
-	ctx context.Context, reader access.Reader, license LicenseChecker, scope platformdb.Scope, policy Policy, method string,
+	ctx context.Context, reader access.Reader, license LicenseChecker, support SupportSessions,
+	scope platformdb.Scope, policy Policy, method string, req any,
 ) (context.Context, error) {
 	user, err := reader.GarageAccess(ctx, scope.GarageID, scope.UserID)
 	if err != nil {
+		if errors.Is(err, access.ErrNoMembership) && support != nil {
+			return authorizeSupport(ctx, support, *policy.Garage, scope.UserID, scope.GarageID, method, req)
+		}
+
 		if errors.Is(err, access.ErrNoMembership) {
 			return nil, apperror.Wrap(apperror.CodePermissionDenied, access.ErrNoMembership.Error(), err).WithReason(ReasonGarageAccessDenied)
 		}
@@ -125,15 +132,8 @@ func authorizeGarage(
 		return nil, apperror.Internal("load garage access", err)
 	}
 
-	if err := user.Check(*policy.Garage); err != nil {
-		switch {
-		case errors.Is(err, access.ErrGarageClosed):
-			return nil, apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err).WithReason(ReasonGarageInactive)
-		case errors.Is(err, access.ErrOwnerOnly):
-			return nil, apperror.Wrap(apperror.CodePermissionDenied, err.Error(), err).WithReason(ReasonOwnerOnly)
-		default:
-			return nil, apperror.Wrap(apperror.CodePermissionDenied, err.Error(), err)
-		}
+	if err := checkRule(user, *policy.Garage); err != nil {
+		return nil, err
 	}
 
 	ctx = access.WithAccess(ctx, user)
@@ -153,6 +153,22 @@ func authorizeGarage(
 	}
 
 	return ctx, nil
+}
+
+// checkRule reports why user is not allowed rule, as an API error.
+func checkRule(user *access.Access, rule access.Rule) error {
+	err := user.Check(rule)
+
+	switch {
+	case err == nil:
+		return nil
+	case errors.Is(err, access.ErrGarageClosed):
+		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err).WithReason(ReasonGarageInactive)
+	case errors.Is(err, access.ErrOwnerOnly):
+		return apperror.Wrap(apperror.CodePermissionDenied, err.Error(), err).WithReason(ReasonOwnerOnly)
+	default:
+		return apperror.Wrap(apperror.CodePermissionDenied, err.Error(), err)
+	}
 }
 
 func licenseMode(ctx context.Context, checker LicenseChecker, garageID string) LicenseMode {

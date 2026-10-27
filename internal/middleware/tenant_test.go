@@ -38,7 +38,7 @@ func garagePipeline(t *testing.T, tx middleware.Transactor, reader access.Reader
 
 	tok := token(t, auth.Identity{UserID: "user-1", EmailVerified: true})
 	pols := middleware.Policies{method: policy}
-	run := middleware.ChainUnaryInterceptors(middleware.Auth(issuer, pols), middleware.Garage(tx, reader, nil, license))
+	run := middleware.ChainUnaryInterceptors(middleware.Auth(issuer, pols), middleware.Garage(tx, reader, nil, license, nil))
 
 	return func(req any, h func(ctx context.Context) error) error {
 		_, err := run(withToken(context.Background(), tok), req, info(method), func(ctx context.Context, _ any) (any, error) {
@@ -73,7 +73,7 @@ func TestGarage_PublicSkipsTransaction(t *testing.T) {
 	ran := false
 	_, err := middleware.ChainUnaryInterceptors(
 		middleware.Auth(issuer, middleware.Policies{methodPublic: middleware.PublicMethod()}),
-		middleware.Garage(tx, nil, nil, nil),
+		middleware.Garage(tx, nil, nil, nil, nil),
 	)(context.Background(), nil, info(methodPublic), okHandler(&ran))
 	require.NoError(t, err)
 	assert.True(t, ran)
@@ -201,7 +201,7 @@ func TestGarage_PlatformPermission(t *testing.T) {
 	run := func(reader access.PlatformReader, required access.PlatformPermission) (ran bool, got *access.PlatformAccess, err error) {
 		tok := token(t, auth.Identity{UserID: "user-1", EmailVerified: true})
 		pols := middleware.Policies{method: middleware.PlatformMethod(required)}
-		chain := middleware.ChainUnaryInterceptors(middleware.Auth(issuer, pols), middleware.Garage(&fakeTx{}, nil, reader, nil))
+		chain := middleware.ChainUnaryInterceptors(middleware.Auth(issuer, pols), middleware.Garage(&fakeTx{}, nil, reader, nil, nil))
 
 		_, err = chain(withToken(context.Background(), tok), nil, info(method), func(ctx context.Context, _ any) (any, error) {
 			ran = true

@@ -25,6 +25,9 @@ const (
 	TemplatePaymentApproved          = "plan_payment_approved"
 	TemplatePaymentRejected          = "plan_payment_rejected"
 	TemplatePaymentReviewReminder    = "payment_review_reminder"
+	TemplateSupportGrantRequested    = "support_grant_requested"
+	TemplateSupportGrantOpened       = "support_grant_opened"
+	TemplateSupportGrantAnswered     = "support_grant_answered"
 )
 
 // Supported locales; Vietnamese is the default.

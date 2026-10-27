@@ -1,0 +1,9 @@
+{{define "subject"}}{{if .Approved}}Your support access to {{.GarageName}} was approved{{else}}Your support access to {{.GarageName}} was declined{{end}}{{end}}
+{{define "text"}}Hello {{.Name}},
+
+{{if .Approved}}The owner of {{.GarageName}} approved your read-only access. It lasts until {{.ExpiresAt}}.{{else}}The owner of {{.GarageName}} declined your request, or ended your read-only access.{{end}}
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p>{{if .Approved}}The owner of <strong>{{.GarageName}}</strong> approved your read-only access. It lasts until {{.ExpiresAt}}.{{else}}The owner of <strong>{{.GarageName}}</strong> declined your request, or ended your read-only access.{{end}}</p>
+<p>VietGara</p>{{end}}

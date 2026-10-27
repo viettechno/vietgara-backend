@@ -1,0 +1,9 @@
+{{define "subject"}}{{if .Approved}}Quyền hỗ trợ {{.GarageName}} của bạn đã được đồng ý{{else}}Quyền hỗ trợ {{.GarageName}} của bạn đã bị từ chối{{end}}{{end}}
+{{define "text"}}Xin chào {{.Name}},
+
+{{if .Approved}}Chủ gara {{.GarageName}} đã đồng ý cho bạn xem ở chế độ chỉ xem. Quyền có hiệu lực đến {{.ExpiresAt}}.{{else}}Chủ gara {{.GarageName}} đã từ chối yêu cầu của bạn, hoặc đã kết thúc quyền chỉ xem của bạn.{{end}}
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.Name}},</p>
+<p>{{if .Approved}}Chủ gara <strong>{{.GarageName}}</strong> đã đồng ý cho bạn xem ở chế độ chỉ xem. Quyền có hiệu lực đến {{.ExpiresAt}}.{{else}}Chủ gara <strong>{{.GarageName}}</strong> đã từ chối yêu cầu của bạn, hoặc đã kết thúc quyền chỉ xem của bạn.{{end}}</p>
+<p>VietGara</p>{{end}}

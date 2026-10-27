@@ -23,3 +23,10 @@ func InTransaction(ctx context.Context) bool {
 
 	return ok
 }
+
+// Detached returns ctx without its transaction, so the next WithTransaction
+// starts and commits a separate one -- for a record that must survive the
+// rollback of the request, such as the log of a support read.
+func Detached(ctx context.Context) context.Context {
+	return context.WithValue(ctx, TxKey{}, struct{}{})
+}

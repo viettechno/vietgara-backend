@@ -1,0 +1,17 @@
+{{define "subject"}}VietGara support asks to read {{.GarageName}}{{end}}
+{{define "text"}}Hello {{.Name}},
+
+{{.StaffName}} ({{.StaffEmail}}) of VietGara support asks for read-only access to {{.GarageName}} for {{.Hours}} hours.
+
+Reason: {{.Reason}}
+
+Support can only read, never change anything, and every page they open is listed in your Support access log. The session starts when you approve. Open this link to approve or decline:
+{{.ReviewURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p><strong>{{.StaffName}}</strong> ({{.StaffEmail}}) of VietGara support asks for read-only access to <strong>{{.GarageName}}</strong> for {{.Hours}} hours.</p>
+<p>Reason: {{.Reason}}</p>
+<p>Support can only read, never change anything, and every page they open is listed in your Support access log. The session starts when you approve.</p>
+<p><a href="{{.ReviewURL}}" style="display:inline-block;padding:10px 18px;background:#2E74B5;color:#fff;border-radius:8px;text-decoration:none">Review the request</a></p>
+<p>VietGara</p>{{end}}

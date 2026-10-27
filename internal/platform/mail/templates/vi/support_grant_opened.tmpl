@@ -1,0 +1,17 @@
+{{define "subject"}}VietGara đã mở {{.GarageName}} để hỗ trợ{{end}}
+{{define "text"}}Xin chào {{.Name}},
+
+{{.StaffName}} ({{.StaffEmail}}), quản trị viên nền tảng VietGara, đã mở {{.GarageName}} để hỗ trợ ở chế độ chỉ xem đến {{.ExpiresAt}}. Việc này không cần bạn đồng ý.
+
+Lý do: {{.Reason}}
+
+Nhân viên hỗ trợ chỉ xem, không thể thay đổi gì, và mọi trang họ mở đều được ghi trong Nhật ký truy cập hỗ trợ của bạn, nơi bạn có thể kết thúc phiên ngay:
+{{.ReviewURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.Name}},</p>
+<p><strong>{{.StaffName}}</strong> ({{.StaffEmail}}), quản trị viên nền tảng VietGara, đã mở <strong>{{.GarageName}}</strong> để hỗ trợ ở chế độ chỉ xem đến {{.ExpiresAt}}. Việc này không cần bạn đồng ý.</p>
+<p>Lý do: {{.Reason}}</p>
+<p>Nhân viên hỗ trợ chỉ xem, không thể thay đổi gì, và mọi trang họ mở đều được ghi trong Nhật ký truy cập hỗ trợ của bạn, nơi bạn có thể kết thúc phiên ngay.</p>
+<p><a href="{{.ReviewURL}}" style="display:inline-block;padding:10px 18px;background:#2E74B5;color:#fff;border-radius:8px;text-decoration:none">Mở Nhật ký truy cập hỗ trợ</a></p>
+<p>VietGara</p>{{end}}

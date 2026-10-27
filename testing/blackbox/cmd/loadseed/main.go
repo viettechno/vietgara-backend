@@ -9,6 +9,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"encoding/json"
 	"errors"
@@ -46,11 +47,12 @@ func run() error {
 	flags := flag.NewFlagSet("loadseed", flag.ContinueOnError)
 	target := flags.String("target", "stubbed", "stubbed or staging")
 	apiURL := flags.String("api-url", "http://localhost:18000", "API gateway URL")
-	mailpitURL := flags.String("mailpit-url", "http://localhost:18025", "Mailpit API URL (staging: with the basic-auth credentials)")
+	mailpitURL := flags.String("mailpit-url", "", "Mailpit API URL (default $BLACKBOX_MAILPIT_URL, else http://localhost:18025); staging's carries basic-auth credentials, so prefer the variable")
 	emailDomain := flags.String("email-domain", "blackbox.vietgara.test", "reserved test domain of the environment")
 	dataDir := flags.String("data-dir", "../../.data/vietgara-testdata/data", "directory of the pinned dataset YAML files")
 	profile := flags.String("profile", "", "load profile key (default: the only profile)")
 	out := flags.String("out", "population.json", "where to write the population")
+	printPassword := flags.Bool("print-password", false, "print the owners' password for the target and exit (the k6 run signs in with it)")
 
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -58,6 +60,10 @@ func run() error {
 		}
 
 		return err
+	}
+
+	if *mailpitURL == "" {
+		*mailpitURL = cmp.Or(os.Getenv("BLACKBOX_MAILPIT_URL"), "http://localhost:18025")
 	}
 
 	if err := seed.ValidateTestDomain(*emailDomain); err != nil {
@@ -71,6 +77,12 @@ func run() error {
 
 	password, adminPassword, err := passwords(*target, dataset, *apiURL, *mailpitURL)
 	if err != nil {
+		return err
+	}
+
+	if *printPassword {
+		_, err := fmt.Fprintln(os.Stdout, password)
+
 		return err
 	}
 

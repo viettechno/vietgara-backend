@@ -9,7 +9,8 @@
 export LOADTEST_DIR		?= testing/loadtest
 LOADTEST_PROFILE		?=
 # Names the results directory (<stamp>-<target>): the date, or a label such as 2026-10-27-headroom.
-LOADTEST_STAMP			?= $(shell date +%Y-%m-%d)
+LOADTEST_STAMP			:= $(or $(LOADTEST_STAMP),$(shell date +%Y-%m-%d))
+export LOADTEST_STAMP
 K6						?= k6
 
 loadtest-seed: testdata ## Create the load-test population (BLACKBOX_TARGET stubbed|staging; writes testing/loadtest/population.json)
@@ -17,18 +18,20 @@ loadtest-seed: testdata ## Create the load-test population (BLACKBOX_TARGET stub
 	@data_dir="$$(cd "$(TESTDATA_DIR)/data" && pwd)"; \
 	target="$${BLACKBOX_TARGET:-stubbed}"; \
 	if [ "$$target" = staging ]; then \
-		api="$${BLACKBOX_API_URL:?set BLACKBOX_API_URL}"; mail="$${BLACKBOX_MAILPIT_URL:?set BLACKBOX_MAILPIT_URL}"; domain="$${BLACKBOX_EMAIL_DOMAIN:?set BLACKBOX_EMAIL_DOMAIN}"; \
+		api="$${BLACKBOX_API_URL:?set BLACKBOX_API_URL}"; : "$${BLACKBOX_MAILPIT_URL:?set BLACKBOX_MAILPIT_URL}"; domain="$${BLACKBOX_EMAIL_DOMAIN:?set BLACKBOX_EMAIL_DOMAIN}"; \
 	else \
-		api="http://localhost:$${BLACKBOX_KONG_PORT:-18000}"; mail="http://localhost:$${BLACKBOX_MAILPIT_PORT:-18025}"; domain=blackbox.vietgara.test; \
+		api="http://localhost:$${BLACKBOX_KONG_PORT:-18000}"; domain=blackbox.vietgara.test; \
+		export BLACKBOX_MAILPIT_URL="http://localhost:$${BLACKBOX_MAILPIT_PORT:-18025}"; \
 	fi; \
-	cd $(BLACKBOX_DIR) && go run ./cmd/loadseed --target "$$target" --api-url "$$api" --mailpit-url "$$mail" \
+	cd $(BLACKBOX_DIR) && go run ./cmd/loadseed --target "$$target" --api-url "$$api" \
 		--email-domain "$$domain" --data-dir "$$data_dir" --profile "$(LOADTEST_PROFILE)" --out ../loadtest/population.json
 
 loadtest-run: ## Run the k6 flow against a seeded environment; results go to testing/loadtest/results/<date>-<target>/
 	@command -v $(K6) >/dev/null || { printf "$(RED)k6 is not installed (brew install k6, or see testing/loadtest/README.md)$(RESET)\n" >&2; exit 1; }
 	@target="$${BLACKBOX_TARGET:-stubbed}"; dir="$(LOADTEST_DIR)/results/$(LOADTEST_STAMP)-$$target"; mkdir -p "$$dir"; \
 	if [ "$$target" = staging ]; then api="$${BLACKBOX_API_URL:?set BLACKBOX_API_URL}"; password="$${TEST_PASSWORD:?set TEST_PASSWORD}"; forward=0; \
-	else api="http://localhost:$${BLACKBOX_KONG_PORT:-18000}"; password="$$(sed -n 's/^ *password: *"\(.*\)"/\1/p' $(TESTDATA_DIR)/data/environments.yaml | head -1)"; forward=1; fi; \
+	else api="http://localhost:$${BLACKBOX_KONG_PORT:-18000}"; forward=1; \
+		password="$$(cd $(BLACKBOX_DIR) && go run ./cmd/loadseed --target stubbed --data-dir "$$(cd $(CURDIR)/$(TESTDATA_DIR)/data && pwd)" --print-password)"; fi; \
 	{ echo "date: $$(date -u +%Y-%m-%dT%H:%M:%SZ)"; echo "target: $$target"; echo "api: $$api"; \
 	  echo "backend: $$(git describe --tags --always --dirty)"; echo "testdata: $$(cat $(TESTDATA_VERSION_FILE))"; \
 	  echo "k6: $$($(K6) version)"; echo "host: $$(uname -srm), $$(getconf _NPROCESSORS_ONLN 2>/dev/null) cpus"; \

@@ -59,7 +59,10 @@ jobs:
       - name: Summary
         if: always()
         run: |
-          for f in testing/loadtest/results/*-staging/summary.md; do cat "$f" >> "$GITHUB_STEP_SUMMARY"; done
+          for f in testing/loadtest/results/*-staging/summary.md; do
+            [ -f "$f" ] && cat "$f" >> "$GITHUB_STEP_SUMMARY"
+          done
+          exit 0
 
       - name: Upload results
         if: always()

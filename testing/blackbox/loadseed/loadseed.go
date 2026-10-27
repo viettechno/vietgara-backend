@@ -21,6 +21,7 @@ var (
 	errUnknownProfile = errors.New("unknown load profile")
 	errNoAdmin        = errors.New("the dataset has no platform admin to approve the owners' plans")
 	errGarageMissing  = errors.New("garage not found after seeding")
+	errPoolTooBig     = errors.New("the part and job pools must each fit one page of 100 (the seeder lists them in one request)")
 )
 
 const (
@@ -48,6 +49,10 @@ func Run(ctx context.Context, dataset *testdata.Dataset, options Options) (*Popu
 	profile, err := profileByKey(dataset.Load, options.Profile)
 	if err != nil {
 		return nil, err
+	}
+
+	if len(dataset.Load.Parts) > pageSize || len(dataset.Load.Jobs) > pageSize {
+		return nil, errPoolTooBig
 	}
 
 	var admin *testdata.User
@@ -95,6 +100,8 @@ func seedRest(
 		firstErr error
 	)
 
+	parent := ctx
+
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -136,6 +143,10 @@ feed:
 
 	close(numbers)
 	wg.Wait()
+
+	if firstErr == nil {
+		return parent.Err() // cancelled or timed out between garages
+	}
 
 	return firstErr
 }
@@ -207,29 +218,19 @@ func seedGarage(
 }
 
 // seedParts creates the pool's parts under one base unit and receives the
-// opening stock for every part it created. A part that already exists is
-// assumed stocked.
+// opening stock for every part that has none on hand.
 func seedParts(ctx context.Context, api *client.Client, garageID string, profile testdata.LoadProfile, pool *testdata.LoadTest) ([]Part, error) {
-	units, err := api.ListUnits(ctx, garageID, false)
+	unit, err := ensureUnit(ctx, api, garageID)
 	if err != nil {
 		return nil, err
 	}
 
-	var unit *cataloguev1.Unit
-
-	for _, existing := range units {
-		if existing.GetAbbreviation() == "pc" {
-			unit = existing
-		}
-	}
-
-	if unit == nil {
-		if unit, err = api.CreateUnit(ctx, garageID, "Piece", "pc"); err != nil {
-			return nil, err
-		}
-	}
-
 	existing, err := api.ListParts(ctx, garageID, url.Values{"pageSize": {strconv.Itoa(pageSize)}})
+	if err != nil {
+		return nil, err
+	}
+
+	empty, err := partsWithoutStock(ctx, api, garageID)
 	if err != nil {
 		return nil, err
 	}
@@ -250,6 +251,10 @@ func seedParts(ctx context.Context, api *client.Client, garageID string, profile
 				return nil, fmt.Errorf("create %s: %w", spec.SKU, err)
 			}
 
+			empty[part.GetId()] = true
+		}
+
+		if empty[part.GetId()] {
 			if _, err = api.ReceiveStock(ctx, garageID, part.GetId(), strconv.Itoa(profile.OpeningStock), "", int64(profile.UnitCost)); err != nil {
 				return nil, fmt.Errorf("receive %s: %w", spec.SKU, err)
 			}
@@ -259,6 +264,41 @@ func seedParts(ctx context.Context, api *client.Client, garageID string, profile
 	}
 
 	return parts, nil
+}
+
+// ensureUnit returns the garage's piece unit, creating it when missing.
+func ensureUnit(ctx context.Context, api *client.Client, garageID string) (*cataloguev1.Unit, error) {
+	units, err := api.ListUnits(ctx, garageID, false)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, existing := range units {
+		if existing.GetAbbreviation() == "pc" {
+			return existing, nil
+		}
+	}
+
+	return api.CreateUnit(ctx, garageID, "Piece", "pc")
+}
+
+// partsWithoutStock maps part ids to whether nothing is on hand. A run
+// interrupted between creating a part and receiving its stock leaves a part
+// with none, so every such part gets its opening stock.
+func partsWithoutStock(ctx context.Context, api *client.Client, garageID string) (map[string]bool, error) {
+	levels, err := api.SearchStockLevels(ctx, garageID, url.Values{"pageSize": {strconv.Itoa(pageSize)}})
+	if err != nil {
+		return nil, err
+	}
+
+	empty := make(map[string]bool, len(levels))
+
+	for _, level := range levels {
+		quantity, _ := strconv.ParseFloat(level.GetQuantityOnHand(), 64)
+		empty[level.GetPartId()] = quantity <= 0
+	}
+
+	return empty, nil
 }
 
 // seedJobs creates the pool's jobs; job i suggests part i, so the job picker

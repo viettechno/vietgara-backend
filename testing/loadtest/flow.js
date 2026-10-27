@@ -178,16 +178,19 @@ function runFlow(owner, g) {
   let customerId;
   let vehicleId;
   if (Math.random() < 0.2) {
-    // Unique per garage and per run: the clock in milliseconds, which two
-    // users of one garage do not share.
-    const n = Date.now() % 100000000;
+    // Unique within the run (virtual user and iteration) and across runs (the
+    // clock), so two users of one garage never collide. The phone starts with 08
+    // and the seeded customers' with 09.
+    const stamp = String(Date.now() % 10000).padStart(4, '0');
     const c = step('create customer', call('POST', `${g}/customers`, {
-      fullName: `Khach Le ${n}`, phone: `09${String(n).padStart(8, '0')}`, personalDataConsent: true,
+      fullName: `Khach Le ${__VU}-${__ITER}-${stamp}`,
+      phone: `08${String(__VU % 100).padStart(2, '0')}${String(__ITER % 10000).padStart(4, '0')}${stamp.slice(2)}`,
+      personalDataConsent: true,
     }, 'write', 'garages/{id}/customers'));
     if (!c) return false;
     customerId = c.id;
     const v = step('create vehicle', call('POST', `${g}/vehicles`, {
-      customerId, licensePlate: `9${__VU % 10}Z-${String(n).padStart(8, '0')}`, make: 'Toyota', model: 'Vios', year: 2020,
+      customerId, licensePlate: `9Z-${__VU}-${__ITER}-${stamp}`, make: 'Toyota', model: 'Vios', year: 2020,
     }, 'write', 'garages/{id}/vehicles'));
     if (!v) return false;
     vehicleId = v.id;
@@ -226,7 +229,7 @@ function runFlow(owner, g) {
   if (!sent) return false;
 
   // The customer opens the public link and approves every line (no sign-in).
-  const token = sent.publicUrl.split('/').filter(Boolean).pop();
+  const token = sent.publicUrl.split(/[?#]/)[0].split('/').filter(Boolean).pop();
   const pub = step('open public quote', call('GET', `/api/v1/public/quotes/${token}`, null, 'read', 'public/quotes/{token}', { anonymous: true }));
   if (!pub) return false;
   const decided = step('approve quote', call('POST', `/api/v1/public/quotes/${token}/decision`, {

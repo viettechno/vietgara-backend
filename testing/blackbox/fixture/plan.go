@@ -169,7 +169,7 @@ func datasetAdminPassword(tb testing.TB) string {
 			return password
 		}
 
-		tb.Fatalf("%s is not set: it holds the platform admin's password on target %s", ref, cfg.Target)
+		tb.Fatalf("the platform admin's password is not set for target %s: set the variable the dataset's adminPasswordRef names", cfg.Target)
 	}
 
 	tb.Fatalf("the shared dataset has no admin password for target %s", cfg.Target)

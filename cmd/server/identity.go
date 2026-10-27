@@ -15,10 +15,11 @@ import (
 // (FR-IAM-09) is on when MFA_ENCRYPTION_KEY is set: the TOTP secrets are
 // encrypted with it. Without the key the sign-in never asks for a second
 // factor and the MFA API answers MFA_NOT_CONFIGURED.
-func identityOptions(pool *platformdb.Pool, auditLog *audit.Logger) ([]identityUsecase.Option, error) {
+func identityOptions(pool *platformdb.Pool, auditLog *audit.Logger, platformAccess identityUsecase.PlatformAccessChecker) ([]identityUsecase.Option, error) {
 	opts := []identityUsecase.Option{
 		identityUsecase.WithPlatformAdminEmails(envList("PLATFORM_ADMIN_EMAILS")),
 		identityUsecase.WithAudit(auditLog),
+		identityUsecase.WithPlatformSignInAudit(platformAccess),
 	}
 
 	key := envOr("MFA_ENCRYPTION_KEY", "")

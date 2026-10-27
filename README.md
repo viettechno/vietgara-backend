@@ -121,6 +121,7 @@ local defaults.
 | `GOOGLE_AUTH_ENDPOINT`, `GOOGLE_TOKEN_ENDPOINT`, `GOOGLE_USERINFO_URL`, `GOOGLE_CERTS_URL` | Google's OAuth endpoints and the JWKS that mobile ID tokens are verified against. Default to Google's own; override them only to point the backend at a Google stub (the blackbox tests) |
 | `PLATFORM_ADMIN_EMAILS` | Comma-separated e-mails granted platform admin. See [Platform admins](#platform-admins) |
 | `APP_BASE_URL` | Public URL of the deployment, such as `https://vietgara.viettechno.com`. The owner web origin for the Google popup, the Google callback host, and the base of e-mailed links. Defaults to `http://localhost:8000` |
+| `ADMIN_APP_BASE_URL` | Public URL of the platform admin web, the base of the platform staff invitation links (`<url>/invitations/<id>`). Defaults to `http://admin.localhost:8000` |
 
 **Cache, licensing and events**
 

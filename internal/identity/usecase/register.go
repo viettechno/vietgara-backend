@@ -70,7 +70,7 @@ func (uc *IdentityUseCase) Register(ctx context.Context, req RegisterRequest) (*
 		return nil, err
 	}
 
-	return uc.issueSession(ctx, user)
+	return uc.signIn(ctx, user)
 }
 
 func (uc *IdentityUseCase) isConfiguredAdmin(email string) bool {

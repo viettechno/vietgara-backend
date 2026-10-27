@@ -184,6 +184,7 @@ func TestRender(t *testing.T) {
 	t.Parallel()
 
 	otp := map[string]any{"Name": "Minh", "Code": "123456", "Minutes": 2}
+	platformInvite := map[string]any{"Name": "Lan", "GroupName": "Billing <support>", "InviterName": "Minh", "AcceptURL": "https://admin/invitations/1", "ExpiresAt": "02/10/2026"}
 	invite := map[string]any{"Name": "Lan", "GarageName": "Gara <A>", "InviterName": "Minh", "AcceptURL": "https://app/invitations/1", "ExpiresAt": "02/10/2026"}
 
 	tests := []struct {
@@ -198,6 +199,8 @@ func TestRender(t *testing.T) {
 		{"en reset", mail.TemplatePasswordReset, "en", otp, "Your VietGara password reset code: 123456", "reset code"},
 		{"vi invitation", mail.TemplateStaffInvitation, "vi", invite, "Minh mời bạn tham gia Gara <A> trên VietGara", "https://app/invitations/1"},
 		{"en invitation", mail.TemplateStaffInvitation, "en", invite, "Minh invited you to join Gara <A> on VietGara", "02/10/2026"},
+		{"vi platform invitation", mail.TemplatePlatformStaffInvitation, "vi", platformInvite, "Minh mời bạn vào đội ngũ nền tảng VietGara", "https://admin/invitations/1"},
+		{"en platform invitation", mail.TemplatePlatformStaffInvitation, "en", platformInvite, "Minh invited you to the VietGara platform team", "Billing <support>"},
 	}
 
 	for _, tt := range tests {
@@ -211,6 +214,7 @@ func TestRender(t *testing.T) {
 			assert.NotEmpty(t, msg.HTML)
 			assert.Equal(t, tt.template, msg.Tag)
 			assert.NotContains(t, msg.HTML, "<A>", "html is escaped")
+			assert.NotContains(t, msg.HTML, "<support>", "html is escaped")
 		})
 	}
 

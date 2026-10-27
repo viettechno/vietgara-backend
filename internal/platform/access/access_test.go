@@ -122,3 +122,48 @@ func TestCustomerCorrectIncludesRead(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, access.CustomerCorrect, back)
 }
+
+func TestPlatformCatalogue(t *testing.T) {
+	t.Parallel()
+
+	assert.Len(t, access.AllPlatform(), 12)
+	assert.True(t, access.PlatformPlanRead.IsValid())
+	assert.False(t, access.PlatformPermission("plan.delete").IsValid())
+	assert.Equal(t, "write", access.PlatformStaffWrite.Action())
+	assert.Equal(t, "platform_staff", access.PlatformStaffWrite.Module())
+
+	got := access.NormalizePlatform([]access.PlatformPermission{
+		access.PlatformSubscriptionWrite, "nope", access.PlatformPlanRead, access.PlatformSubscriptionWrite,
+	})
+	assert.Equal(t, []access.PlatformPermission{
+		access.PlatformPlanRead, access.PlatformSubscriptionRead, access.PlatformSubscriptionWrite,
+	}, got, "a write includes its read; unknown and duplicate entries are dropped; catalogue order")
+}
+
+func TestPlatformAccessCheck(t *testing.T) {
+	t.Parallel()
+
+	staff := &access.PlatformAccess{UserID: "u", Permissions: []access.PlatformPermission{access.PlatformSubscriptionRead}}
+	admin := &access.PlatformAccess{UserID: "a", Admin: true}
+	nobody := &access.PlatformAccess{UserID: "n"}
+
+	require.NoError(t, staff.Check(access.PlatformSubscriptionRead))
+	require.ErrorIs(t, staff.Check(access.PlatformSubscriptionWrite), access.ErrPlatformDenied)
+	require.ErrorIs(t, staff.Check(access.PlatformPlanRead), access.ErrPlatformDenied)
+	require.NoError(t, admin.Check(access.PlatformAuditRead), "a Platform Admin holds every permission")
+	require.NoError(t, nobody.Check(""), "no permission required")
+
+	assert.True(t, staff.Any())
+	assert.True(t, admin.Any())
+	assert.False(t, nobody.Any())
+	assert.Len(t, admin.Effective(), 12)
+	assert.Equal(t, []access.PlatformPermission{access.PlatformSubscriptionRead}, staff.Effective())
+
+	ctx := access.WithPlatformAccess(t.Context(), staff)
+	got, ok := access.PlatformFromContext(ctx)
+	require.True(t, ok)
+	assert.Same(t, staff, got)
+
+	_, ok = access.PlatformFromContext(t.Context())
+	assert.False(t, ok)
+}

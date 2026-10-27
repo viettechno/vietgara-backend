@@ -49,7 +49,7 @@ func (uc *IdentityUseCase) GoogleLogin(ctx context.Context, profile GoogleProfil
 		return nil, apperror.Internal("verify google user", err)
 	}
 
-	return uc.issueSession(ctx, user)
+	return uc.signIn(ctx, user)
 }
 
 func (uc *IdentityUseCase) findGoogleUser(ctx context.Context, subject, email string) (*domain.User, error) {

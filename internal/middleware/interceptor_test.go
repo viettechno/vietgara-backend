@@ -41,13 +41,19 @@ func TestPolicyBuilders(t *testing.T) {
 
 	assert.True(t, middleware.PublicMethod().Public)
 	assert.True(t, middleware.UnverifiedMethod().AllowUnverified)
-	assert.True(t, middleware.AdminMethod().PlatformAdmin)
+	assert.Equal(t, access.PlatformPlanWrite, middleware.PlatformMethod(access.PlatformPlanWrite).Platform)
 	assert.Equal(t, middleware.Policy{}, middleware.UserMethod())
 
 	p := middleware.GarageMethod(access.Requires(access.CustomerRead))
 	require.NotNil(t, p.Garage)
 	assert.Equal(t, access.CustomerRead, p.Garage.Permission)
 
-	merged := middleware.Merge(middleware.Policies{"a": middleware.PublicMethod()}, middleware.Policies{"b": middleware.AdminMethod()})
+	merged := middleware.Merge(middleware.Policies{"a": middleware.PublicMethod()}, middleware.Policies{"b": middleware.PlatformMethod(access.PlatformPlanRead)})
 	assert.Len(t, merged, 2)
+}
+
+func TestPlatformMethodNeedsAPermission(t *testing.T) {
+	t.Parallel()
+
+	assert.Panics(t, func() { middleware.PlatformMethod("") })
 }

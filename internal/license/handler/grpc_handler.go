@@ -59,20 +59,20 @@ func Policies() middleware.Policies {
 		licensev1.LicenseService_GetPaymentInstructions_FullMethodName:    middleware.UserMethod(),
 		licensev1.LicenseService_GetGarageEntitlements_FullMethodName:     entitlements,
 
-		licensev1.LicenseAdminService_ListAllPlans_FullMethodName:       middleware.AdminMethod(),
-		licensev1.LicenseAdminService_CreatePlan_FullMethodName:         middleware.AdminMethod(),
-		licensev1.LicenseAdminService_UpdatePlan_FullMethodName:         middleware.AdminMethod(),
-		licensev1.LicenseAdminService_ListSubscriptions_FullMethodName:  middleware.AdminMethod(),
-		licensev1.LicenseAdminService_ExtendSubscription_FullMethodName: middleware.AdminMethod(),
+		licensev1.LicenseAdminService_ListAllPlans_FullMethodName:       middleware.PlatformMethod(access.PlatformPlanRead),
+		licensev1.LicenseAdminService_CreatePlan_FullMethodName:         middleware.PlatformMethod(access.PlatformPlanWrite),
+		licensev1.LicenseAdminService_UpdatePlan_FullMethodName:         middleware.PlatformMethod(access.PlatformPlanWrite),
+		licensev1.LicenseAdminService_ListSubscriptions_FullMethodName:  middleware.PlatformMethod(access.PlatformSubscriptionRead),
+		licensev1.LicenseAdminService_ExtendSubscription_FullMethodName: middleware.PlatformMethod(access.PlatformSubscriptionWrite),
 
-		licensev1.LicenseAdminService_ListPlanPaymentRequests_FullMethodName:       middleware.AdminMethod(),
-		licensev1.LicenseAdminService_GetPlanPaymentRequest_FullMethodName:         middleware.AdminMethod(),
-		licensev1.LicenseAdminService_ApprovePlanPayment_FullMethodName:            middleware.AdminMethod(),
-		licensev1.LicenseAdminService_RejectPlanPayment_FullMethodName:             middleware.AdminMethod(),
-		licensev1.LicenseAdminService_AdjustCredit_FullMethodName:                  middleware.AdminMethod(),
-		licensev1.LicenseAdminService_GetPlatformPaymentSettings_FullMethodName:    middleware.AdminMethod(),
-		licensev1.LicenseAdminService_UpdatePlatformPaymentSettings_FullMethodName: middleware.AdminMethod(),
-		licensev1.LicenseAdminService_UploadPaymentQr_FullMethodName:               middleware.AdminMethod(),
+		licensev1.LicenseAdminService_ListPlanPaymentRequests_FullMethodName:       middleware.PlatformMethod(access.PlatformSubscriptionRead),
+		licensev1.LicenseAdminService_GetPlanPaymentRequest_FullMethodName:         middleware.PlatformMethod(access.PlatformSubscriptionRead),
+		licensev1.LicenseAdminService_ApprovePlanPayment_FullMethodName:            middleware.PlatformMethod(access.PlatformSubscriptionWrite),
+		licensev1.LicenseAdminService_RejectPlanPayment_FullMethodName:             middleware.PlatformMethod(access.PlatformSubscriptionWrite),
+		licensev1.LicenseAdminService_AdjustCredit_FullMethodName:                  middleware.PlatformMethod(access.PlatformSubscriptionWrite),
+		licensev1.LicenseAdminService_GetPlatformPaymentSettings_FullMethodName:    middleware.PlatformMethod(access.PlatformPlanRead),
+		licensev1.LicenseAdminService_UpdatePlatformPaymentSettings_FullMethodName: middleware.PlatformMethod(access.PlatformPlanWrite),
+		licensev1.LicenseAdminService_UploadPaymentQr_FullMethodName:               middleware.PlatformMethod(access.PlatformPlanWrite),
 	}
 }
 

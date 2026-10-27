@@ -122,29 +122,41 @@ func All() []Permission {
 // unknown ones and adds the read permission every write permission
 // includes (when its module has one).
 func Normalize(perms []Permission) []Permission {
-	order := make(map[Permission]int, len(Catalog))
+	catalog := make([]string, len(Catalog))
 	for i, e := range Catalog {
-		order[e.Permission] = i
+		catalog[i] = string(e.Permission)
 	}
 
-	seen := make(map[Permission]bool, len(perms))
-	out := make([]Permission, 0, len(perms))
-	add := func(p Permission) {
-		if _, known := order[p]; known && !seen[p] {
-			seen[p] = true
-			out = append(out, p)
+	return normalizeNames(catalog, perms)
+}
+
+// normalizeNames is the engine the garage and the platform catalogues share:
+// "<module>.<action>" names in a fixed order, where write, correct and
+// cost.read include the read permission of their module.
+func normalizeNames[P ~string](catalog []string, perms []P) []P {
+	order := make(map[string]int, len(catalog))
+	for i, name := range catalog {
+		order[name] = i
+	}
+
+	seen := make(map[string]bool, len(perms))
+	out := make([]P, 0, len(perms))
+	add := func(name string) {
+		if _, known := order[name]; known && !seen[name] {
+			seen[name] = true
+			out = append(out, P(name))
 		}
 	}
 
 	for _, p := range perms {
-		add(p)
+		add(string(p))
 
 		if module, action, _ := strings.Cut(string(p), "."); action == "write" || action == "correct" || action == "cost.read" {
-			add(Permission(module + ".read"))
+			add(module + ".read")
 		}
 	}
 
-	sort.Slice(out, func(i, j int) bool { return order[out[i]] < order[out[j]] })
+	sort.Slice(out, func(i, j int) bool { return order[string(out[i])] < order[string(out[j])] })
 
 	return out
 }

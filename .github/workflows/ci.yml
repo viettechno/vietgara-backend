@@ -120,7 +120,7 @@ jobs:
           k6-version: 2.3.0
 
       - name: Load test script parses
-        run: POPULATION="$PWD/testing/loadtest/sample-population.json" k6 inspect testing/loadtest/flow.js > /dev/null
+        run: k6 inspect -e POPULATION="$PWD/testing/loadtest/sample-population.json" testing/loadtest/flow.js > /dev/null
 
   # Scenario traceability and API coverage need no running stack: the check
   # reads the scenario sources, the checked-in ID snapshot and the OpenAPI

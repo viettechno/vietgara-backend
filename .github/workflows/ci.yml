@@ -113,6 +113,15 @@ jobs:
       - name: Blackbox tests
         run: make blackbox-stubbed
 
+      # The load test is run by hand, so CI only proves its script still parses.
+      - name: Set up k6
+        uses: grafana/setup-k6-action@v1
+        with:
+          k6-version: 2.3.0
+
+      - name: Load test script parses
+        run: POPULATION="$PWD/testing/loadtest/sample-population.json" k6 inspect testing/loadtest/flow.js > /dev/null
+
   # Scenario traceability and API coverage need no running stack: the check
   # reads the scenario sources, the checked-in ID snapshot and the OpenAPI
   # document. Unknown scenario IDs fail the job; missing scenarios and

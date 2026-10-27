@@ -7,18 +7,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"net"
-	"net/mail"
-	"net/url"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
-	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
-	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
-	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 	testdata "github.com/viettechno/vietgara-testdata/go"
 
 	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
@@ -29,63 +22,7 @@ var (
 	errUnexpectedPositionalArguments    = errors.New("unexpected positional arguments")
 	errDatasetHasNoStubbedPassword      = errors.New("dataset has no stubbed password")
 	errDatasetHasNoStubbedAdminPassword = errors.New("dataset has no stubbed admin password")
-	errInvalidLoopbackURL               = errors.New("must be a plain HTTP URL without credentials, path, query, or fragment")
-	errNonLoopbackURL                   = errors.New("must resolve to a loopback host; remote targets are not supported")
-	errInvalidReservedTestDomain        = errors.New("must be a valid reserved test domain")
-	errTestDomainMissingSuffix          = errors.New("must end in .test, .example, .invalid, or .localhost")
 )
-
-type apiClient struct {
-	client *client.Client
-}
-
-func (a apiClient) Login(ctx context.Context, email, password string) (*identityv1.Session, error) {
-	return a.client.Login(ctx, email, password)
-}
-
-func (a apiClient) Register(ctx context.Context, request *identityv1.RegisterRequest) (*identityv1.Session, error) {
-	return a.client.Register(ctx, request)
-}
-
-func (a apiClient) VerifyEmail(ctx context.Context, otp, refreshToken string) (*identityv1.Session, error) {
-	return a.client.VerifyEmail(ctx, otp, refreshToken)
-}
-
-func (a apiClient) MySubscription(ctx context.Context) (*licensev1.Subscription, error) {
-	return a.client.MySubscription(ctx)
-}
-
-func (a apiClient) ListPlans(ctx context.Context) ([]*licensev1.Plan, error) {
-	return a.client.ListPlans(ctx)
-}
-
-func (a apiClient) CreatePlanPaymentRequest(ctx context.Context, planID string,
-	kind licensev1.PlanPaymentKind,
-) (*licensev1.PlanPaymentRequest, error) {
-	return a.client.CreatePlanPaymentRequest(ctx, planID, kind)
-}
-
-func (a apiClient) SubmitPlanPayment(ctx context.Context,
-	req *licensev1.SubmitPlanPaymentRequest,
-) (*licensev1.PlanPaymentRequest, error) {
-	return a.client.SubmitPlanPayment(ctx, req)
-}
-
-func (a apiClient) ApprovePlanPayment(ctx context.Context, requestID, note string) (*licensev1.Subscription, error) {
-	return a.client.ApprovePlanPayment(ctx, requestID, note)
-}
-
-func (a apiClient) ListGarages(ctx context.Context) ([]*tenantv1.Garage, error) {
-	return a.client.ListGarages(ctx)
-}
-
-func (a apiClient) CreateGarage(ctx context.Context, garage *tenantv1.Garage) (*tenantv1.Garage, error) {
-	return a.client.CreateGarage(ctx, garage)
-}
-
-func (a apiClient) WithToken(token string) seed.API {
-	return apiClient{client: a.client.WithToken(token)}
-}
 
 func main() {
 	if err := run(); err != nil {
@@ -113,15 +50,15 @@ func run() error {
 		return errUnexpectedPositionalArguments
 	}
 
-	if err := validateLoopbackURL(*apiURL); err != nil {
+	if err := seed.ValidateLoopbackURL(*apiURL); err != nil {
 		return fmt.Errorf("api url: %w", err)
 	}
 
-	if err := validateLoopbackURL(*mailpitURL); err != nil {
+	if err := seed.ValidateLoopbackURL(*mailpitURL); err != nil {
 		return fmt.Errorf("mailpit url: %w", err)
 	}
 
-	if err := validateTestDomain(*emailDomain); err != nil {
+	if err := seed.ValidateTestDomain(*emailDomain); err != nil {
 		return fmt.Errorf("e-mail domain: %w", err)
 	}
 
@@ -145,7 +82,7 @@ func run() error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Minute)
 	defer cancel()
 
-	summary, err := seed.Run(ctx, dataset, apiClient{client: client.New(*apiURL)}, client.NewMailpit(*mailpitURL),
+	summary, err := seed.Run(ctx, dataset, seed.NewClientAPI(client.New(*apiURL)), client.NewMailpit(*mailpitURL),
 		*emailDomain, environment.Password, environment.AdminPassword)
 	if err != nil {
 		return err
@@ -160,45 +97,4 @@ func run() error {
 	}
 
 	return nil
-}
-
-func validateLoopbackURL(raw string) error {
-	parsed, err := url.ParseRequestURI(raw)
-	if err != nil {
-		return fmt.Errorf("parse URL: %w", err)
-	}
-
-	if parsed.Scheme != "http" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" ||
-		(parsed.Path != "" && parsed.Path != "/") {
-		return errInvalidLoopbackURL
-	}
-
-	host := parsed.Hostname()
-	if host != "localhost" {
-		ip := net.ParseIP(host)
-		if ip == nil || !ip.IsLoopback() {
-			return errNonLoopbackURL
-		}
-	}
-
-	return nil
-}
-
-func validateTestDomain(domain string) error {
-	if strings.TrimSpace(domain) != domain || strings.ContainsAny(domain, "@/ ") {
-		return errInvalidReservedTestDomain
-	}
-
-	address, err := mail.ParseAddress("seed@" + domain)
-	if err != nil || address.Address != "seed@"+domain {
-		return errInvalidReservedTestDomain
-	}
-
-	for _, suffix := range []string{".test", ".example", ".invalid", ".localhost"} {
-		if strings.HasSuffix(strings.ToLower(domain), suffix) {
-			return nil
-		}
-	}
-
-	return errTestDomainMissingSuffix
 }

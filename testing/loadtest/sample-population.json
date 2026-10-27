@@ -1,0 +1,12 @@
+{
+  "profile": "sample",
+  "owners": [
+    {
+      "email": "loadowner1@blackbox.vietgara.test",
+      "garageId": "00000000-0000-4000-8000-000000000001",
+      "customers": [{ "id": "00000000-0000-4000-8000-000000000002", "vehicleIds": ["00000000-0000-4000-8000-000000000003"] }],
+      "parts": [{ "id": "00000000-0000-4000-8000-000000000004", "name": "Engine oil 5W-30", "salePrice": 120000 }],
+      "jobs": [{ "id": "00000000-0000-4000-8000-000000000005", "name": "Oil change", "laborPrice": 150000 }]
+    }
+  ]
+}

@@ -44,8 +44,8 @@ github.com/tiendc/go-deepcopy v1.7.2 h1:Ut2yYR7W9tWjTQitganoIue4UGxZwCcJy3orjrrI
 github.com/tiendc/go-deepcopy v1.7.2/go.mod h1:4bKjNC2r7boYOkD2IOuZpYjmlDdzjbpTRyCx+goBCJQ=
 github.com/viettechno/vietgara-proto v1.17.0 h1:JwhWu2z+lNGF1MD8R1qaN3vp2okJRKdV6fMnGEwRui4=
 github.com/viettechno/vietgara-proto v1.17.0/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
-github.com/viettechno/vietgara-testdata v0.3.0 h1:ndr3rW5lPdypSW/OHR2B9icyAeWiL0+6HYTBPyfOwmk=
-github.com/viettechno/vietgara-testdata v0.3.0/go.mod h1:U0TReHiBgomNBgvyFNxgMpcvQA5V8CDaOiLmeOXr1W4=
+github.com/viettechno/vietgara-testdata v0.4.0 h1:BcPuQRShp598SlQIQvZGW9J9KLHy+xSVA9KllBakyF8=
+github.com/viettechno/vietgara-testdata v0.4.0/go.mod h1:U0TReHiBgomNBgvyFNxgMpcvQA5V8CDaOiLmeOXr1W4=
 github.com/xuri/efp v0.0.2 h1:74yhBh0nfIWLOrN76wtShYVse94pADGYS0/c86jOp8Q=
 github.com/xuri/efp v0.0.2/go.mod h1:ybY/Jr0T0GTCnYjKqmdwxyxn2BQf2RcQIIvex5QldPI=
 github.com/xuri/excelize/v2 v2.11.1-0.20261003002531-6258dcebc4e2 h1:YJqtDi2ShO2fh/qMNO0MyPHXiki9h1OH3i3zGRunGRQ=

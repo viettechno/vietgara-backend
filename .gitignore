@@ -9,3 +9,8 @@ out/*
 .codex/*
 .opencode/*
 .data/
+
+# Load test (testing/loadtest): generated per run
+testing/loadtest/population.json
+testing/loadtest/results/smoke/
+testing/loadtest/results/*/.started

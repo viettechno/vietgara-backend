@@ -10,6 +10,7 @@ include make/mock.mk
 include make/migrate.mk
 include make/blackbox.mk
 include make/testdata.mk
+include make/loadtest.mk
 
 # Styles
 BOLD 	:= \033[1m

@@ -1,0 +1,70 @@
+name: Load test (staging)
+
+# Runs the Release 9.0 load test (testing/loadtest, NFR-PF-06) against the
+# staging deployment, on demand. It seeds about 50 garages on the reserved
+# test domain first (idempotent), runs k6 and uploads the results. The values
+# come from repository secrets; on the staging VM, `make blackbox-env`
+# (vietgara-infra) prints the first three:
+#   BLACKBOX_STAGING_API_URL       e.g. https://vietgara-api-staging.viettechno.com
+#   BLACKBOX_STAGING_EMAIL_DOMAIN  the deployment's TEST_USERS_EMAIL_DOMAIN
+#   BLACKBOX_STAGING_MAILPIT_URL   https://blackbox:<password>@<MAILPIT_ADDRESS>
+#   TEST_PASSWORD, ADMIN_PASSWORD  the dataset's passwordRef secrets
+# Commit the run's results directory (testing/loadtest/results) from the
+# downloaded artifact to keep it in the repository.
+on:
+  workflow_dispatch:
+    inputs:
+      duration:
+        description: Steady-state duration of the run (k6 duration)
+        default: 10m
+      flow_vus:
+        description: Garages running the full flow at once (default all of the profile)
+        default: ""
+
+concurrency:
+  group: loadtest-staging
+  cancel-in-progress: false
+
+jobs:
+  loadtest-staging:
+    name: Load test (staging)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: testing/blackbox/go.mod
+          cache-dependency-path: testing/blackbox/go.sum
+
+      - name: Set up k6
+        uses: grafana/setup-k6-action@v1
+        with:
+          k6-version: 2.3.0
+
+      - name: Seed and run
+        env:
+          BLACKBOX_API_URL: ${{ secrets.BLACKBOX_STAGING_API_URL }}
+          BLACKBOX_EMAIL_DOMAIN: ${{ secrets.BLACKBOX_STAGING_EMAIL_DOMAIN }}
+          BLACKBOX_MAILPIT_URL: ${{ secrets.BLACKBOX_STAGING_MAILPIT_URL }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          DURATION: ${{ inputs.duration }}
+          FLOW_VUS: ${{ inputs.flow_vus }}
+        run: make loadtest-staging
+
+      - name: Summary
+        if: always()
+        run: |
+          for f in testing/loadtest/results/*-staging/summary.md; do cat "$f" >> "$GITHUB_STEP_SUMMARY"; done
+
+      - name: Upload results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loadtest-staging
+          path: testing/loadtest/results/*-staging/
+          retention-days: 30

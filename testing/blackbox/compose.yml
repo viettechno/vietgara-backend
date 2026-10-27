@@ -118,7 +118,8 @@ services:
       KAFKA_BROKERS: vietgara-kafka:9092
       KAFKA_TOPIC_PREFIX: vietgara
       KAFKA_CONSUMER_GROUP: vietgara-backend
-      OUTBOX_RELAY_INTERVAL: 500ms
+      # The load test sets 1s, the staging value (BLACKBOX_OUTBOX_RELAY_INTERVAL).
+      OUTBOX_RELAY_INTERVAL: ${BLACKBOX_OUTBOX_RELAY_INTERVAL:-500ms}
       # Short, so the period-end, grace-end and reminder scenarios wait
       # seconds instead of the default hour, and the entitlement cache
       # never hides a status change for long.

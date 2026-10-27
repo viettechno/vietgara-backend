@@ -44,6 +44,7 @@ import (
 	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
 	reportingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/reporting/v1"
 	supplierv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/supplier/v1"
+	supportv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/support/v1"
 	technicianv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/technician/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 	"github.com/viettechno/vietgara-proto/openapi"
@@ -87,6 +88,7 @@ import (
 	supplierHandler "github.com/viettechno/vietgara-backend/internal/supplier/handler"
 	supplierRepository "github.com/viettechno/vietgara-backend/internal/supplier/repository"
 	supplierUsecase "github.com/viettechno/vietgara-backend/internal/supplier/usecase"
+	supportHandler "github.com/viettechno/vietgara-backend/internal/support/handler"
 	technicianHandler "github.com/viettechno/vietgara-backend/internal/technician/handler"
 	tenantHandler "github.com/viettechno/vietgara-backend/internal/tenant/handler"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
@@ -316,6 +318,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	})
 	tenantSrv := tenantHandler.NewServer(tenantUC)
 	platformStaff := buildPlatformStaff(staffRepo, auditLog, mailer, users)
+	support := buildSupport(pool, tx, platformStaff.repo, auditLog, mailer)
 
 	// Catalogue (Release 6.0): parts, units, categories and part images. What
 	// refers to a part or a unit is filled in once Inventory, Quote and
@@ -439,7 +442,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		grpc.ChainUnaryInterceptor(
 			middleware.Auth(issuer, policies),
 			middleware.EmailVerified(),
-			middleware.Garage(tx, accessReader, platformStaff.repo, license.enforcement),
+			middleware.Garage(tx, accessReader, platformStaff.repo, license.enforcement, support.uc),
 			middleware.Idempotency(idempotencyKeys),
 		),
 	)
@@ -449,6 +452,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	identityv1.RegisterMfaServiceServer(app.grpcServer, identitySrv)
 	platformv1.RegisterPlatformStaffServiceServer(app.grpcServer, platformStaff.server)
 	platformv1.RegisterPlatformAccessServiceServer(app.grpcServer, platformStaff.server)
+	supportv1.RegisterSupportServiceServer(app.grpcServer, support.server)
+	supportv1.RegisterGarageSupportServiceServer(app.grpcServer, support.server)
 	tenantv1.RegisterGarageServiceServer(app.grpcServer, tenantSrv)
 	tenantv1.RegisterStaffServiceServer(app.grpcServer, tenantSrv)
 	tenantv1.RegisterInvitationServiceServer(app.grpcServer, tenantSrv)
@@ -545,7 +550,7 @@ func wireEvents(
 // from the modules (middleware.Auth rejects any method missing from it).
 func apiPolicies() middleware.Policies {
 	return middleware.Merge(
-		identityHandler.Policies(), platformStaffHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
+		identityHandler.Policies(), platformStaffHandler.Policies(), supportHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
 		customerHandler.LinkPolicies(), customerHandler.TaxProfilePolicies(),
 		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
 		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(), fileHandler.Policies(), catalogueHandler.Policies(), catalogueHandler.JobPolicies(),
@@ -581,6 +586,7 @@ func buildGateway(ctx context.Context, app *application, identitySrv *identityHa
 		tenantv1.RegisterStaffGroupServiceHandler,
 		licensev1.RegisterLicenseServiceHandler, licensev1.RegisterLicenseAdminServiceHandler,
 		platformv1.RegisterPlatformStaffServiceHandler, platformv1.RegisterPlatformAccessServiceHandler,
+		supportv1.RegisterSupportServiceHandler, supportv1.RegisterGarageSupportServiceHandler,
 		customerv1.RegisterCustomerServiceHandler, customerv1.RegisterVehicleServiceHandler,
 		customerv1.RegisterCustomerLinkServiceHandler, customerv1.RegisterCustomerTaxProfileServiceHandler,
 		supplierv1.RegisterSupplierServiceHandler, filev1.RegisterFileServiceHandler,

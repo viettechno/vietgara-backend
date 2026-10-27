@@ -185,6 +185,8 @@ func TestRender(t *testing.T) {
 
 	otp := map[string]any{"Name": "Minh", "Code": "123456", "Minutes": 2}
 	platformInvite := map[string]any{"Name": "Lan", "GroupName": "Billing <support>", "InviterName": "Minh", "AcceptURL": "https://admin/invitations/1", "ExpiresAt": "02/10/2026"}
+	support := map[string]any{"Name": "Lan", "GarageName": "Gara <A>", "StaffName": "Minh", "StaffEmail": "m@x.test", "Reason": "ticket 7", "Hours": 24, "ReviewURL": "https://app/support-access?garageId=1", "ExpiresAt": "02/10/2026"}
+	answered := map[string]any{"Name": "Lan", "GarageName": "Gara <A>", "Approved": true, "ExpiresAt": "02/10/2026"}
 	invite := map[string]any{"Name": "Lan", "GarageName": "Gara <A>", "InviterName": "Minh", "AcceptURL": "https://app/invitations/1", "ExpiresAt": "02/10/2026"}
 
 	tests := []struct {
@@ -201,6 +203,12 @@ func TestRender(t *testing.T) {
 		{"en invitation", mail.TemplateStaffInvitation, "en", invite, "Minh invited you to join Gara <A> on VietGara", "02/10/2026"},
 		{"vi platform invitation", mail.TemplatePlatformStaffInvitation, "vi", platformInvite, "Minh mời bạn vào đội ngũ nền tảng VietGara", "https://admin/invitations/1"},
 		{"en platform invitation", mail.TemplatePlatformStaffInvitation, "en", platformInvite, "Minh invited you to the VietGara platform team", "Billing <support>"},
+		{"vi support request", mail.TemplateSupportGrantRequested, "vi", support, "Bộ phận hỗ trợ VietGara xin quyền xem Gara <A>", "https://app/support-access"},
+		{"en support request", mail.TemplateSupportGrantRequested, "en", support, "VietGara support asks to read Gara <A>", "ticket 7"},
+		{"vi support opened", mail.TemplateSupportGrantOpened, "vi", support, "VietGara đã mở Gara <A> để hỗ trợ", "02/10/2026"},
+		{"en support opened", mail.TemplateSupportGrantOpened, "en", support, "VietGara opened Gara <A> for support", "02/10/2026"},
+		{"vi support approved", mail.TemplateSupportGrantAnswered, "vi", answered, "Quyền hỗ trợ Gara <A> của bạn đã được đồng ý", "02/10/2026"},
+		{"en support declined", mail.TemplateSupportGrantAnswered, "en", map[string]any{"Name": "Lan", "GarageName": "Gara <A>", "Approved": false, "ExpiresAt": ""}, "Your support access to Gara <A> was declined", "declined your request"},
 	}
 
 	for _, tt := range tests {

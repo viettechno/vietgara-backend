@@ -118,6 +118,21 @@ func All() []Permission {
 	return all
 }
 
+// ReadOnly returns the permissions that only read: the read permission of
+// every module and the cost view of inventory. A support session holds
+// exactly these (FR-IAM-11).
+func ReadOnly() []Permission {
+	var reads []Permission
+
+	for _, p := range All() {
+		if action := p.Action(); action == "read" || action == "cost.read" {
+			reads = append(reads, p)
+		}
+	}
+
+	return reads
+}
+
 // Normalize sorts and de-duplicates permissions in catalog order, drops
 // unknown ones and adds the read permission every write permission
 // includes (when its module has one).
@@ -178,6 +193,10 @@ type Access struct {
 	Owner       bool
 	Active      bool // the garage is active
 	Permissions []Permission
+	// SupportGrantID is set when the user is not a member but admin staff
+	// reading the garage under a support grant (Release 8.2): the session is
+	// read-only and holds only the read permissions.
+	SupportGrantID string
 }
 
 // Has reports whether the user holds p (owners hold everything).

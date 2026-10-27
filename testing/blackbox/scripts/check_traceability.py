@@ -40,6 +40,7 @@ DOC_FILES = [
     "07_Inventory.md",
     "08_Settlement.md",
     "09_Catalogue.md",
+    "10_Platform_Staff.md",
 ]
 DOC_BASE = "docs/05-Testing/E2E_Scenarios"
 RAW_BASE = "https://raw.githubusercontent.com/viettechno/vietgara-docs/{ref}/" + DOC_BASE

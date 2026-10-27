@@ -1,0 +1,17 @@
+{{define "subject"}}Bộ phận hỗ trợ VietGara xin quyền xem {{.GarageName}}{{end}}
+{{define "text"}}Xin chào {{.Name}},
+
+{{.StaffName}} ({{.StaffEmail}}) của bộ phận hỗ trợ VietGara xin quyền chỉ xem {{.GarageName}} trong {{.Hours}} giờ.
+
+Lý do: {{.Reason}}
+
+Nhân viên hỗ trợ chỉ xem, không thể thay đổi gì, và mọi trang họ mở đều được ghi trong Nhật ký truy cập hỗ trợ của bạn. Phiên bắt đầu khi bạn đồng ý. Mở liên kết này để đồng ý hoặc từ chối:
+{{.ReviewURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.Name}},</p>
+<p><strong>{{.StaffName}}</strong> ({{.StaffEmail}}) của bộ phận hỗ trợ VietGara xin quyền chỉ xem <strong>{{.GarageName}}</strong> trong {{.Hours}} giờ.</p>
+<p>Lý do: {{.Reason}}</p>
+<p>Nhân viên hỗ trợ chỉ xem, không thể thay đổi gì, và mọi trang họ mở đều được ghi trong Nhật ký truy cập hỗ trợ của bạn. Phiên bắt đầu khi bạn đồng ý.</p>
+<p><a href="{{.ReviewURL}}" style="display:inline-block;padding:10px 18px;background:#2E74B5;color:#fff;border-radius:8px;text-decoration:none">Xem yêu cầu</a></p>
+<p>VietGara</p>{{end}}

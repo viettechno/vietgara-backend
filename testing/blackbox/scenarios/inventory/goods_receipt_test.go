@@ -31,10 +31,11 @@ func supplier(t *testing.T, api *client.Client, garageID, name string) *supplier
 	return created
 }
 
-// Scenario: Release 7.0, goods receipt documents (FR-INV-06): a delivery of
+// Scenario: E2E-INV-012, E2E-INV-013, Release 7.0, goods receipt documents (FR-INV-06): a delivery of
 // three parts from two suppliers is one numbered document with a supplier on
 // each line; it is saved as a draft, a line without a supplier blocks
 // completion, and completing it updates stock and the weighted-average cost.
+// Scenario: E2E-INV-011 (partial): the receipt screens are in vietgara-e2e.
 func TestGoodsReceiptSeveralSuppliers(t *testing.T) {
 	t.Parallel()
 
@@ -129,7 +130,7 @@ func TestGoodsReceiptSeveralSuppliers(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusConflict, "GOODS_RECEIPT_ALREADY_CANCELLED")
 }
 
-// Scenario: a completed receipt whose stock was already used cannot be
+// Scenario: E2E-INV-013, a completed receipt whose stock was already used cannot be
 // reversed (FR-INV-06).
 func TestCancelReceiptWithUsedStockIsRefused(t *testing.T) {
 	t.Parallel()
@@ -150,7 +151,7 @@ func TestCancelReceiptWithUsedStockIsRefused(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusConflict, "INSUFFICIENT_STOCK_TO_REVERSE")
 }
 
-// Scenario: part suppliers (FR-INV-19): a part lists its usual suppliers, one
+// Scenario: E2E-INV-014, part suppliers (FR-INV-19): a part lists its usual suppliers, one
 // the default that pre-fills a receipt line; completing a receipt records the
 // last cost paid.
 func TestPartSuppliersDefaultAndLastCost(t *testing.T) {
@@ -191,8 +192,9 @@ func TestPartSuppliersDefaultAndLastCost(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "")
 }
 
-// Scenario: cost reports (FR-INV-07, FR-INV-19): purchases by supplier and
+// Scenario: E2E-INV-012, cost reports (FR-INV-07, FR-INV-19): purchases by supplier and
 // period, and the valuation of stock.
+// Scenario: E2E-INV-015 (partial): the Excel workbooks are checked by hand.
 func TestPurchasesAndValuationReports(t *testing.T) {
 	t.Parallel()
 
@@ -241,8 +243,8 @@ func TestPurchasesAndValuationReports(t *testing.T) {
 	assert.Empty(t, yesterday.GetData(), "nothing was in stock two days ago")
 }
 
-// Scenario: cost visibility (FR-INV-08): a technician sees quantities but no
-// cost, and cannot read the cost reports.
+// Scenario: E2E-INV-016 (partial): cost visibility (FR-INV-08): a technician sees quantities but no
+// cost, and cannot read the cost reports. The screens are in vietgara-e2e.
 func TestCostIsHiddenFromTechnicians(t *testing.T) {
 	t.Parallel()
 
@@ -373,7 +375,7 @@ func waitForReserved(t *testing.T, api *client.Client, garageID, partID, want st
 	}
 }
 
-// Scenario: Release 7.0, stock issue document (FR-INV-20): creating a repair
+// Scenario: E2E-INV-017 (partial): Release 7.0, stock issue document (FR-INV-20): creating a repair
 // order with two part lines creates a numbered draft stock issue that reserves
 // them (available drops, on hand does not); "issue now" posts it earlier and
 // the stock movements carry the average cost.
@@ -423,7 +425,7 @@ func TestStockIssueReservesThenIssuesNow(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusConflict, "STOCK_ISSUE_NOT_DRAFT")
 }
 
-// Scenario: closing the repair order posts its stock issue, once.
+// Scenario: E2E-INV-018, closing the repair order posts its stock issue, once.
 func TestClosingTheOrderPostsTheStockIssue(t *testing.T) {
 	t.Parallel()
 
@@ -463,7 +465,7 @@ func TestClosingTheOrderPostsTheStockIssue(t *testing.T) {
 	assert.EqualValues(t, 100, outs[0].GetUnitCost(), "stamped with the average cost")
 }
 
-// Scenario: with the garage setting stock_issue_mode = on_start, the stock
+// Scenario: E2E-INV-019, with the garage setting stock_issue_mode = on_start, the stock
 // issue posts when work starts instead of when the order closes.
 func TestStockIssueModeOnStart(t *testing.T) {
 	t.Parallel()

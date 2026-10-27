@@ -31,7 +31,7 @@ blackbox-stubbed-down: ## Stop the stubbed stack and discard its data
 	@printf "$(YELLOW)▶ Stopping the stubbed blackbox stack...$(RESET)\n"
 	@$(BLACKBOX_COMPOSE) down --volumes --remove-orphans
 
-blackbox-staging: ## Run the blackbox suite against staging (BLACKBOX_API_URL, optional BLACKBOX_OWNER_EMAIL/PASSWORD)
+blackbox-staging: ## Run the blackbox suite against staging (BLACKBOX_API_URL, BLACKBOX_MAILPIT_URL, ADMIN_PASSWORD)
 	@BLACKBOX_TARGET=staging $(MAKE) --no-print-directory blackbox-test
 
 blackbox-seed: ## Seed supported shared owners and garages into the running stubbed stack
@@ -59,4 +59,4 @@ blackbox-lint: ## Lint the blackbox module with the repository's golangci-lint c
 blackbox-traceability: ## Check E2E scenario traceability and API-op coverage (no stack needed)
 	@printf "$(CYAN)▶ Checking blackbox traceability and API coverage...$(RESET)\n"
 	@proto_dir="$$(cd "$(BLACKBOX_DIR)" && go list -m -f '{{.Dir}}' github.com/viettechno/vietgara-proto)" && \
-	python3 "$(BLACKBOX_DIR)/scripts/check_traceability.py" --proto-dir "$$proto_dir"
+	python3 "$(BLACKBOX_DIR)/scripts/check_traceability.py" --proto-dir "$$proto_dir" --fail-on-missing

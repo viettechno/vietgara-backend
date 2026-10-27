@@ -6,8 +6,14 @@ name: Blackbox tests (staging)
 #   BLACKBOX_STAGING_API_URL       e.g. https://vietgara-api-staging.viettechno.com
 #   BLACKBOX_STAGING_EMAIL_DOMAIN  the deployment's TEST_USERS_EMAIL_DOMAIN
 #   BLACKBOX_STAGING_MAILPIT_URL   https://blackbox:<password>@<MAILPIT_ADDRESS>
+# ADMIN_PASSWORD is the platform admin's (admin@<email domain>), named by
+# the dataset's adminPasswordRef and shared with the staging load test; that
+# user must exist and be in the deployment's PLATFORM_ADMIN_EMAILS.
 on:
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: blackbox-staging
@@ -32,4 +38,5 @@ jobs:
           BLACKBOX_API_URL: ${{ secrets.BLACKBOX_STAGING_API_URL }}
           BLACKBOX_EMAIL_DOMAIN: ${{ secrets.BLACKBOX_STAGING_EMAIL_DOMAIN }}
           BLACKBOX_MAILPIT_URL: ${{ secrets.BLACKBOX_STAGING_MAILPIT_URL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
         run: make blackbox-staging

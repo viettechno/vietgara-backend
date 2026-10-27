@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -309,9 +310,13 @@ func TestSupportDiagnosticViews(t *testing.T) {
 	_, err = c.staff.API.ListSupportOutboxEvents(ctx, grant.GetId())
 	require.NoError(t, err)
 
-	notifications, err := c.staff.API.ListSupportNotifications(ctx, grant.GetId())
-	require.NoError(t, err)
-	assert.NotEmpty(t, notifications, "the owner's registration e-mails are in the log")
+	// The log row is written after the e-mail is sent, so it can trail the
+	// verification the owner already completed.
+	require.Eventually(t, func() bool {
+		notifications, listErr := c.staff.API.ListSupportNotifications(ctx, grant.GetId())
+
+		return listErr == nil && len(notifications) > 0
+	}, 10*time.Second, 200*time.Millisecond, "the owner's registration e-mails are in the log")
 
 	// Another staff member cannot use this grant.
 	other := fixture.NewVerifiedOwner(t, "plt010-x")

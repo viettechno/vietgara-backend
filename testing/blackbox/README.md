@@ -79,8 +79,16 @@ export BLACKBOX_TARGET=staging
 export BLACKBOX_API_URL=https://vietgara-api-staging.viettechno.com
 export BLACKBOX_EMAIL_DOMAIN=blackbox.vietgara.test
 export BLACKBOX_MAILPIT_URL=https://blackbox:<password>@vietgara-mailpit-staging.viettechno.com
+# The platform admin's password (admin@<email domain>, which must exist and
+# be in PLATFORM_ADMIN_EMAILS), named by the dataset's adminPasswordRef:
+export ADMIN_PASSWORD=<the ADMIN_PASSWORD secret>
 make blackbox-staging
 ```
+
+Only the stubbed stack has a literal admin password in the dataset (it is
+public, like the dataset). On staging the suite reads the variable that
+`adminPasswordRef` names, never creates the admin, and fails a scenario
+that needs it when the variable is missing or the sign-in fails.
 
 Or run the **Blackbox tests (staging)** workflow in GitHub Actions, which
 reads the same values from repository secrets (see
@@ -179,15 +187,15 @@ It reports three things against `scenarios/documented-ids.txt` (a snapshot
 of the documented IDs with priorities, regenerated from vietgara-docs with
 `check_traceability.py --regen`) and the OpenAPI document in
 `vietgara-proto`: tests naming an unknown ID (**fails the build**),
-documented scenarios without a test, and the share of API operations the
-suite calls (path templates resolved from the typed client; only methods
+documented P1/P2 scenarios without a test (**fails the build**, unless the
+scenario is listed in `MANUAL_ONLY` with the reason), and the share of API
+operations the suite calls (path templates resolved from the typed client; only methods
 invoked from `scenarios/` or `fixture/` count, `seed/` does not).
 
-Baseline (Release 4.0): 114 documented scenarios, 5 partial, 109 missing;
-20/124 operations (16%). Missing scenarios and coverage below the 80% gate
-report as warnings; each Release 4.1 batch shrinks them, and the
-`--fail-on-missing` / `--fail-on-coverage` flags turn them into gates once
-the P1 coverage lands.
+Every documented P1/P2 scenario has a test or a `MANUAL_ONLY` entry, so a
+release that documents a scenario must add its test (the Phase 4 rule).
+Coverage below the 80% gate reports as a warning (`--fail-on-coverage`
+makes it a gate).
 
 ## Layout
 

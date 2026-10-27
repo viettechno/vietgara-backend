@@ -16,10 +16,10 @@ Documented IDs come from a checked-in snapshot (regenerate with --regen
 from a vietgara-docs checkout) because that repository is internal and CI
 has no credentials for it. The snapshot header records the source commit.
 
-Exit status: 1 when a test names an unknown ID. Missing scenarios and
-coverage below the gate only fail with --fail-on-missing /
---fail-on-coverage; until the Release 4.1 batches land they report as
-warnings (the missing list is the 4.1 burn-down).
+Exit status: 1 when a test names an unknown ID, and with --fail-on-missing
+(used by `make blackbox-traceability` and CI) when a documented P1/P2
+scenario has no test: every release adds its scenarios (Phase 4 rule).
+Coverage below the gate only fails with --fail-on-coverage.
 """
 
 import argparse
@@ -58,6 +58,7 @@ HTTP_VERBS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
 # stay manual, with the reason. They are reported but never count as missing.
 MANUAL_ONLY = {
     "E2E-IAM-021": "edits PLATFORM_ADMIN_EMAILS and restarts the backend twice",
+    "E2E-INV-032": "cursor and scroll behaviour of the web and phone screens; the camera",
 }
 # Test-harness packages whose calls execute as part of a test run. seed/
 # is deliberately excluded: seeding is setup, not coverage.
@@ -514,8 +515,9 @@ def main():
     for method, path in uncalled:
         print(f"  uncalled: {method} {path}")
 
-    if args.fail_on_missing and missing:
-        print("traceability: ERROR: documented scenarios without a test")
+    gated = [s for s in missing if documented[s] in ("P1", "P2")]
+    if args.fail_on_missing and gated:
+        print("traceability: ERROR: documented P1/P2 scenarios without a test: " + ", ".join(gated))
         return 1
     if args.fail_on_coverage and pct < args.coverage_gate:
         print("traceability: ERROR: API coverage below gate")

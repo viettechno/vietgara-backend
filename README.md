@@ -302,6 +302,7 @@ make test-unit          # unit tests with the 90% coverage gate
 make test-integration   # repository and migration tests on a disposable Postgres (testcontainers)
 make lint               # golangci-lint
 make blackbox-stubbed   # API-level tests of the built image with stubbed third parties (testing/blackbox)
+make loadtest-stubbed   # k6 load test of about 50 garages against the stubbed stack (testing/loadtest, about 14 minutes)
 make generate-mocks     # mockery
 make migrate-up         # apply migrations; also migrate-down N=…, migrate-force VERSION=…, migrate-version
 ```
@@ -341,6 +342,11 @@ the real client.
 The blackbox suite in [`testing/blackbox`](testing/blackbox/README.md) is a
 separate Go module that drives the built image over the public REST API,
 locally against stubbed third parties or against staging.
+
+The load test in [`testing/loadtest`](testing/loadtest/README.md) (Release 9.0) is a
+k6 script that runs the quote-to-payment flow of about 50 garages, seeded by
+`testing/blackbox/cmd/loadseed` from the shared dataset, and checks NFR-PF-01,
+02 and 05.
 
 ## Container image and staging
 

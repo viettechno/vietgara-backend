@@ -1,0 +1,35 @@
+Event latency since 2026-10-27T09:38:20Z (published = the relay marked it published; created = the business change wrote it)
+      event_type      | consumer  | events | published_to_done_p50_ms | published_to_done_p95_ms | published_to_done_max_ms | created_to_done_p95_ms | not_published 
+----------------------+-----------+--------+--------------------------+--------------------------+--------------------------+------------------------+---------------
+ repair_order.closed  | inventory |   3338 |                        6 |                       21 |                      517 |                    948 |             0
+ repair_order.created | inventory |   3338 |                        9 |                       25 |                      141 |                    963 |             0
+ repair_order.started | inventory |   3338 |                        5 |                       19 |                      518 |                    958 |             0
+(3 rows)
+
+ status | events | oldest 
+--------+--------+--------
+(0 rows)
+
+
+Database after the run
+        table        | rows  | seq_scan | seq_tup_read | rows_per_seq_scan | idx_scan 
+---------------------+-------+----------+--------------+-------------------+----------
+ stock_issues        |  3338 |    15735 |      3352215 |               213 |   933529
+ stock_issue_lines   |  5090 |     8526 |      2571268 |               301 |   163955
+ repair_orders       |  3338 |     4668 |       769496 |               164 |    60467
+ subscriptions       |    51 |    10984 |       560031 |                50 |      614
+ quotes              |  3338 |     3482 |       540567 |               155 |    48192
+ users               |    51 |    19638 |       467358 |                23 |     1672
+ stock_counts        |   482 |     2848 |       329749 |               115 |     3422
+ settlements         |  3338 |     1464 |       212012 |               144 |    23017
+ repair_order_lines  | 10180 |      747 |       100478 |               134 |    64007
+ settlement_payments |  3338 |      363 |        69995 |               192 |     6316
+ quote_lines         | 10180 |      518 |        67470 |               130 |    46882
+ stock_count_lines   |  1446 |      477 |        48534 |               101 |     4829
+(12 rows)
+
+ open_connections | xact_commit | xact_rollback | deadlocks 
+------------------+-------------+---------------+-----------
+                9 |      133090 |          9090 |         0
+(1 row)
+

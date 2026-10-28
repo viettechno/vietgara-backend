@@ -112,3 +112,45 @@ func TestGrantPlatformAdmins(t *testing.T) {
 	e.users.findErr = errBoom
 	require.Error(t, e.uc.GrantPlatformAdmins(t.Context(), []string{"a@b.vn"}))
 }
+
+// TestPlatformAdminNeedsVerifiedEmail covers SR-25: a configured admin
+// address is granted once its e-mail is verified, not when it registers.
+func TestPlatformAdminNeedsVerifiedEmail(t *testing.T) {
+	t.Parallel()
+
+	t.Run("by OTP", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t, usecase.WithPlatformAdminEmails([]string{"Owner@Example.com"}))
+		registered := e.register(t)
+		assert.False(t, registered.User.PlatformAdmin)
+		assert.Empty(t, e.users.granted, "nothing is granted before the e-mail is verified")
+
+		verified, err := e.uc.VerifyEmail(t.Context(), registered.User.ID, e.mailer.lastCode(t, "owner@example.com"), registered.RefreshToken)
+		require.NoError(t, err)
+		assert.True(t, verified.User.PlatformAdmin)
+		assert.Equal(t, []string{"owner@example.com"}, e.users.granted)
+	})
+
+	t.Run("by Google", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t, usecase.WithPlatformAdminEmails([]string{"owner@example.com"}))
+
+		session, err := e.uc.GoogleLogin(t.Context(), usecase.GoogleProfile{Subject: "g-7", Email: "owner@example.com", EmailVerified: true, FullName: "Minh"})
+		require.NoError(t, err)
+		assert.True(t, session.User.PlatformAdmin)
+	})
+
+	t.Run("another address is never granted", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t, usecase.WithPlatformAdminEmails([]string{"admin@viettechno.com"}))
+		registered := e.register(t)
+
+		verified, err := e.uc.VerifyEmail(t.Context(), registered.User.ID, e.mailer.lastCode(t, "owner@example.com"), registered.RefreshToken)
+		require.NoError(t, err)
+		assert.False(t, verified.User.PlatformAdmin)
+		assert.Empty(t, e.users.granted)
+	})
+}

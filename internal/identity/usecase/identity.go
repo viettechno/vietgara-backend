@@ -37,9 +37,9 @@ type IdentityUseCase struct {
 	box SecretBox
 	// audit is optional (WithAudit).
 	audit AuditLogger
-	// platformAdminEmails grants platform admin to users registering
-	// with one of these e-mails (PLATFORM_ADMIN_EMAILS); verified at
-	// registration so a configured admin exists on a fresh database.
+	// platformAdminEmails grants platform admin to users whose e-mail is
+	// one of these (PLATFORM_ADMIN_EMAILS) once it is verified, never
+	// before: anyone can register an address they do not own (SR-25).
 	platformAdminEmails map[string]struct{}
 	// platformAccess, when set, audits the sign-ins of platform users.
 	platformAccess PlatformAccessChecker
@@ -53,8 +53,8 @@ func WithClock(now func() time.Time) Option {
 	return func(uc *IdentityUseCase) { uc.now = now }
 }
 
-// WithPlatformAdminEmails lets users registering with one of these e-mails
-// become platform admins immediately.
+// WithPlatformAdminEmails lets users with one of these e-mails become
+// platform admins when their e-mail is verified.
 func WithPlatformAdminEmails(emails []string) Option {
 	return func(uc *IdentityUseCase) {
 		uc.platformAdminEmails = make(map[string]struct{}, len(emails))
@@ -199,6 +199,14 @@ func (uc *IdentityUseCase) markVerified(ctx context.Context, user *domain.User) 
 			return err
 		}
 
+		if uc.isConfiguredAdmin(user.Email) {
+			if _, err := uc.users.GrantPlatformAdmins(ctx, []string{user.Email}); err != nil {
+				return err
+			}
+
+			user.PlatformAdmin = true
+		}
+
 		return uc.events.Publish(ctx, EventUserEmailVerified, "", user.ID, map[string]any{
 			"user_id":     user.ID,
 			"email":       user.Email,
@@ -224,7 +232,7 @@ func (uc *IdentityUseCase) findUser(ctx context.Context, id string) (*domain.Use
 }
 
 // GrantPlatformAdmins makes the users with these e-mails platform
-// admins (PLATFORM_ADMIN_EMAILS at startup).
+// admins (PLATFORM_ADMIN_EMAILS at startup), if their e-mail is verified.
 func (uc *IdentityUseCase) GrantPlatformAdmins(ctx context.Context, emails []string) error {
 	normalized := make([]string, 0, len(emails))
 

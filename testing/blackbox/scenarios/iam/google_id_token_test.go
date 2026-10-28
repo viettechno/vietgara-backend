@@ -64,6 +64,28 @@ func TestGoogleIDTokenSignIn(t *testing.T) {
 		require.NoError(t, err, "the password still works after linking")
 	})
 
+	// SR-25: anyone can register an address they do not own. When its owner
+	// signs in with Google, the account must not stay open to the registrant.
+	t.Run("an unverified account loses its password when Google links", func(t *testing.T) {
+		email := fixture.UniqueEmail(t, "google-prehijack")
+
+		attacker, err := api.Register(ctx, &identityv1.RegisterRequest{Email: email, Password: fixture.Password, FullName: "Attacker"})
+		require.NoError(t, err)
+		require.False(t, attacker.GetUser().GetEmailVerified())
+
+		claims := idtoken.Claims{Subject: "google-" + email, Email: email, EmailVerified: true, Name: "Real Owner", Audience: audience}
+		session, err := api.SignInWithGoogleIDToken(ctx, mint(t, claims))
+		require.NoError(t, err)
+		assert.Equal(t, attacker.GetUser().GetId(), session.GetUser().GetId())
+		assert.True(t, session.GetUser().GetEmailVerified())
+
+		_, err = api.Login(ctx, email, fixture.Password)
+		fixture.RequireAPIError(t, err, http.StatusUnauthorized, "INVALID_CREDENTIALS")
+
+		_, err = api.Refresh(ctx, attacker.GetRefreshToken())
+		fixture.RequireAPIError(t, err, http.StatusUnauthorized, "REFRESH_TOKEN_INVALID")
+	})
+
 	t.Run("rejects tokens the backend must not trust", func(t *testing.T) {
 		email := fixture.UniqueEmail(t, "google-bad")
 		valid := idtoken.Claims{Subject: "google-" + email, Email: email, EmailVerified: true, Audience: audience}

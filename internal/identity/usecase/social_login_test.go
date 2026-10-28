@@ -45,6 +45,71 @@ func TestGoogleLoginLinksEmailUser(t *testing.T) {
 	assert.True(t, session.User.EmailVerified(), "Google verified the address")
 }
 
+// TestGoogleLoginUnverifiedAccount covers SR-25: someone who registered an
+// address they do not own must not keep access once the owner signs in with
+// Google.
+func TestGoogleLoginUnverifiedAccount(t *testing.T) {
+	t.Parallel()
+
+	profile := usecase.GoogleProfile{Subject: "g-6", Email: "owner@example.com", EmailVerified: true, FullName: "Minh"}
+
+	t.Run("the password and sessions of an unverified account are dropped", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+		attacker := e.register(t)
+
+		session, err := e.uc.GoogleLogin(t.Context(), profile)
+		require.NoError(t, err)
+		assert.Equal(t, attacker.User.ID, session.User.ID)
+		assert.True(t, session.User.EmailVerified())
+		assert.Nil(t, e.users.get(attacker.User.ID).PasswordHash)
+
+		_, err = e.uc.Login(t.Context(), "owner@example.com", "secret123")
+		requireReason(t, err, domain.ReasonInvalidCredentials)
+
+		_, err = e.uc.Refresh(t.Context(), attacker.RefreshToken)
+		requireReason(t, err, domain.ReasonRefreshTokenInvalid)
+
+		_, err = e.uc.Refresh(t.Context(), session.RefreshToken)
+		require.NoError(t, err, "the Google session is the one that stays")
+	})
+
+	t.Run("a verified account keeps its password", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+		registered := e.register(t)
+		_, err := e.uc.VerifyEmail(t.Context(), registered.User.ID, e.mailer.lastCode(t, "owner@example.com"), registered.RefreshToken)
+		require.NoError(t, err)
+
+		_, err = e.uc.GoogleLogin(t.Context(), profile)
+		require.NoError(t, err)
+		assert.NotNil(t, e.users.get(registered.User.ID).PasswordHash)
+
+		_, err = e.uc.Login(t.Context(), "owner@example.com", "secret123")
+		require.NoError(t, err)
+	})
+
+	t.Run("a failed attempt can be repeated", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+		attacker := e.register(t)
+
+		e.users.updateErr = errBoom
+		_, err := e.uc.GoogleLogin(t.Context(), profile)
+		requireReason(t, err, apperror.ReasonInternal)
+
+		e.users.updateErr = nil
+		_, err = e.uc.GoogleLogin(t.Context(), profile)
+		require.NoError(t, err)
+
+		_, err = e.uc.Refresh(t.Context(), attacker.RefreshToken)
+		requireReason(t, err, domain.ReasonRefreshTokenInvalid)
+	})
+}
+
 func TestGoogleLoginFailures(t *testing.T) {
 	t.Parallel()
 

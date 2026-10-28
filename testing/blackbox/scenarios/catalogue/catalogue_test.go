@@ -660,10 +660,17 @@ func TestCataloguePermissions(t *testing.T) {
 
 		reader := join("reader", tenantv1.Permission_PERMISSION_CATALOGUE_READ)
 
+		// The parallel "add and edit" subtest adds parts to the same garage,
+		// so the list holds at least PERM-1.
 		parts, err := reader.API.ListParts(ctx, garageID, nil)
 		require.NoError(t, err)
-		require.Len(t, parts, 1)
-		assert.NotEmpty(t, parts[0].GetSku())
+
+		skus := make([]string, 0, len(parts))
+		for _, p := range parts {
+			skus = append(skus, p.GetSku())
+		}
+
+		assert.Contains(t, skus, "PERM-1")
 
 		_, err = reader.API.ListUnits(ctx, garageID, false)
 		require.NoError(t, err)

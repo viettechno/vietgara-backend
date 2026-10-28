@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
+	"github.com/viettechno/vietgara-backend/internal/platform/testusers"
 )
 
 func TestTestUsersFromEnv(t *testing.T) {
@@ -25,6 +26,7 @@ func TestTestUsersFromEnv(t *testing.T) {
 	t.Run("set on staging: routed to the test inbox", func(t *testing.T) {
 		t.Setenv("TEST_USERS_EMAIL_DOMAIN", "blackbox.vietgara.test")
 		t.Setenv("TEST_USERS_SMTP_HOST", "vietgara-mailpit")
+		t.Setenv("TEST_USERS_SMTP_PORT", "1025")
 		t.Setenv("APP_ENV", "staging")
 
 		domain, sender, err := testUsersFromEnv(nil, from)
@@ -39,6 +41,15 @@ func TestTestUsersFromEnv(t *testing.T) {
 		t.Setenv("APP_ENV", "production")
 
 		_, _, err := testUsersFromEnv(nil, from)
-		require.ErrorIs(t, err, errTestUsersInProduction)
+		require.ErrorIs(t, err, testusers.ErrEnvironment)
+	})
+
+	t.Run("in production the refusal comes before any other check", func(t *testing.T) {
+		t.Setenv("TEST_USERS_EMAIL_DOMAIN", "not-reserved.com")
+		t.Setenv("TEST_USERS_SMTP_HOST", "")
+		t.Setenv("APP_ENV", "Prod")
+
+		_, _, err := testUsersFromEnv(nil, from)
+		require.ErrorIs(t, err, testusers.ErrEnvironment)
 	})
 }

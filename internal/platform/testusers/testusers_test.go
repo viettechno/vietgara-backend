@@ -43,3 +43,15 @@ func TestOwns(t *testing.T) {
 	assert.True(t, zero.IsZero())
 	assert.False(t, zero.Owns("a@blackbox.vietgara.test"))
 }
+
+func TestAllowed(t *testing.T) {
+	t.Parallel()
+
+	for _, env := range []string{"", "local", "staging", " Staging "} {
+		require.NoError(t, testusers.Allowed(env), env)
+	}
+
+	for _, env := range []string{"production", "Production", "prod", "staging2", "test"} {
+		require.ErrorIs(t, testusers.Allowed(env), testusers.ErrEnvironment, env)
+	}
+}

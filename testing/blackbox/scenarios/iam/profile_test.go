@@ -2,12 +2,14 @@ package iam_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 
+	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
@@ -81,9 +83,12 @@ func TestInterfaceLanguage(t *testing.T) {
 	_, err = api.RequestPasswordReset(ctx, owner.Email)
 	require.NoError(t, err)
 
-	msg, err := mail.WaitForMessage(ctx, owner.Email)
-	require.NoError(t, err)
-	assert.Contains(t, msg.Subject, "Your VietGara password reset code:")
+	// Waiting for the English subject is the language check: a reset
+	// e-mail in Vietnamese never matches, and the wait fails.
+	msg, err := mail.WaitForMatching(ctx, owner.Email, func(m *client.Message) bool {
+		return strings.Contains(m.Subject, "Your VietGara password reset code:")
+	})
+	require.NoError(t, err, "an English password reset e-mail")
 	assert.Contains(t, msg.Text, "Hello "+owner.Session.GetUser().GetFullName())
 
 	back, err := owner.API.UpdateMe(ctx, &identityv1.User{Locale: identityv1.Locale_LOCALE_VI}, "locale")

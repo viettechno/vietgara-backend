@@ -311,7 +311,8 @@ func TestSupportDiagnosticViews(t *testing.T) {
 	require.NoError(t, err)
 
 	// The log row is written after the e-mail is sent, so it can trail the
-	// verification the owner already completed.
+	// verification the owner already completed. Every poll is a read
+	// through the grant and is audited (even one that then fails).
 	require.Eventually(t, func() bool {
 		notifications, listErr := c.staff.API.ListSupportNotifications(ctx, grant.GetId())
 
@@ -325,9 +326,15 @@ func TestSupportDiagnosticViews(t *testing.T) {
 	_, err = other.API.ListSupportNotifications(ctx, grant.GetId())
 	fixture.RequireAPIError(t, err, http.StatusNotFound, "")
 
-	log, err := c.owner.API.ListSupportAccessLog(ctx, gid, 50)
+	// Newest first: the notification polls, then the one outbox read. The
+	// other staff member's refused read is not on the grant's log.
+	log, err := c.owner.API.ListSupportAccessLog(ctx, gid, 100)
 	require.NoError(t, err)
-	require.Len(t, log, 2)
-	assert.Equal(t, "ListSupportNotifications", log[0].GetMethod())
-	assert.Equal(t, "ListSupportOutboxEvents", log[1].GetMethod())
+	require.GreaterOrEqual(t, len(log), 2)
+	require.Less(t, len(log), 100, "the whole log fits in the page")
+	assert.Equal(t, "ListSupportOutboxEvents", log[len(log)-1].GetMethod())
+
+	for _, entry := range log[:len(log)-1] {
+		assert.Equal(t, "ListSupportNotifications", entry.GetMethod())
+	}
 }

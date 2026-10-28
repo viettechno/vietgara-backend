@@ -51,8 +51,11 @@ func (m *Message) OTP() (string, error) {
 var ErrNoMessage = errors.New("no e-mail arrived")
 
 // WaitForMessage returns the newest e-mail to address, polling until one
-// arrives or ctx ends. Every user the suite creates has a unique
-// address, so the newest message is the one the step under test sent.
+// arrives or ctx ends. Use it for the first e-mail to a new address (the
+// suite gives every user a unique one): once a user has signed up, their
+// inbox already holds the sign-up e-mails, and the welcome e-mail can
+// still be arriving, so a later step must wait for its own e-mail with
+// WaitForMatching.
 // Absence proofs pass a timeout ctx and expect ErrNoMessage: when the
 // deadline outlives a poll round, nothing arrived in time. A failed poll
 // with ctx still alive is a real Mailpit failure and surfaces as such.

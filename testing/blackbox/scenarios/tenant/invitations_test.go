@@ -2,6 +2,7 @@ package tenant_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
+	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
@@ -42,11 +44,15 @@ func TestInviteByEmailAndAccept(t *testing.T) {
 	assert.WithinRange(t, inv.GetExpiresAt().AsTime(),
 		time.Now().Add(6*24*time.Hour), time.Now().Add(8*24*time.Hour))
 
-	msg, err := mail.WaitForMessage(ctx, invitee.Email)
+	// The invitee already has their sign-up e-mails (the welcome one can
+	// still be arriving), so wait for the invitation itself: the e-mail
+	// with its link.
+	msg, err := mail.WaitForMatching(ctx, invitee.Email, func(m *client.Message) bool {
+		return strings.Contains(m.Text, "/invitations/"+inv.GetId())
+	})
 	require.NoError(t, err)
 	assert.Contains(t, msg.Subject, owner.Session.GetUser().GetFullName())
 	assert.Contains(t, msg.Subject, garage.GetName())
-	assert.Contains(t, msg.Text, "/invitations/"+inv.GetId())
 
 	listed, err := owner.API.ListInvitations(ctx, garage.GetId())
 	require.NoError(t, err)

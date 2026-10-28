@@ -358,7 +358,9 @@ the authorization model honest: `TestEveryRPCDeclaresItsAuthorization` (`cmd/ser
 policy or the anonymous surface changes, and `TestEveryTableIsClassifiedForRowLevelSecurity` (integration) fails
 when a table has neither forced row-level security nor a reason in its exemption list. A new table or public RPC
 therefore needs an edit in a place a reviewer sees. See the
-[Security Review](https://github.com/viettechno/vietgara-docs/blob/master/docs/03-Architecture/12_Security_Review_Release_8_0.md).
+[Security Review](https://github.com/viettechno/vietgara-docs/blob/master/docs/07-Assurance/Security_Reviews/2026-10-22_Release-8.0.md)
+and the current status of every finding in the
+[Findings Register](https://github.com/viettechno/vietgara-docs/blob/master/docs/07-Assurance/Findings_Register.md).
 
 ### Gateway edge policy
 

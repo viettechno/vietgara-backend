@@ -1,0 +1,28 @@
+{
+  "garage": {
+    "name": "Công ty TNHH Gara An Phát",
+    "address": "12 Nguyễn Huệ, Quận 1, TP.HCM",
+    "phone": "0281234567",
+    "taxCode": "0301234567",
+    "representative": "Nguyễn Văn An",
+    "bank": "Vietcombank - 0011 2233 - An Phat"
+  },
+  "billTo": {
+    "name": "Công ty Vận tải Á Châu",
+    "taxId": "0309876543",
+    "address": "45 Lê Lợi, Quận 1"
+  },
+  "number": "QT-202610-0001",
+  "status": "partially_paid",
+  "customerName": "Trần Thị Bình",
+  "vehiclePlate": "51F-123.45",
+  "totalAmount": 490000,
+  "paidAmount": 200000,
+  "payments": [
+    {
+      "date": "29/10/2026",
+      "method": "cash",
+      "amount": 200000
+    }
+  ]
+}

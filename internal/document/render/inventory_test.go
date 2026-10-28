@@ -8,16 +8,17 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/xuri/excelize/v2"
 
+	"github.com/viettechno/vietgara-backend/internal/document/printmodel"
 	"github.com/viettechno/vietgara-backend/internal/document/render"
 )
 
 func TestGoodsReceiptPDF(t *testing.T) {
 	t.Parallel()
 
-	data := render.GoodsReceiptPDFData{
-		Garage: render.GarageHeader{Name: "Gara Một"}, Number: "PN-202610-0001", Status: "completed", Date: "2026-10-15",
+	data := printmodel.GoodsReceipt{
+		Garage: printmodel.GarageHeader{Name: "Gara Một"}, Number: "PN-202610-0001", Status: "completed", Date: "2026-10-15",
 		DeliveryNoteNumber: "DN-9", Notes: "morning",
-		Lines: []render.GoodsReceiptRow{
+		Lines: []printmodel.GoodsReceiptRow{
 			{SKU: "OIL", Name: "Dầu nhớt", Quantity: "10", Unit: "case", Supplier: "Phụ tùng Sài Gòn", UnitCost: 150000, Amount: 1500000},
 		},
 		TotalAmount: 1500000,
@@ -26,7 +27,7 @@ func TestGoodsReceiptPDF(t *testing.T) {
 	for _, showCost := range []bool{true, false} {
 		data.ShowCost = showCost
 
-		pdf, err := render.GoodsReceiptPDF(data)
+		pdf, err := a4(data)
 		require.NoError(t, err)
 		assert.True(t, bytes.HasPrefix(pdf, []byte("%PDF")), "showCost=%v", showCost)
 	}
@@ -35,10 +36,10 @@ func TestGoodsReceiptPDF(t *testing.T) {
 func TestStockIssuePDF(t *testing.T) {
 	t.Parallel()
 
-	pdf, err := render.StockIssuePDF(render.StockIssuePDFData{
-		Garage: render.GarageHeader{Name: "Gara Một"}, Number: "PX-202610-0007", Status: "posted", RepairOrderNumber: "LSC-1",
+	pdf, err := a4(printmodel.StockIssue{
+		Garage: printmodel.GarageHeader{Name: "Gara Một"}, Number: "PX-202610-0007", Status: "posted", RepairOrderNumber: "LSC-1",
 		PostedAt: "2026-10-15", PostedBy: "Lan",
-		Lines: []render.StockIssueRow{{SKU: "OIL", Name: "Dầu nhớt", Quantity: "4", Unit: "L"}, {SKU: "BOLT", Name: "Bu lông", Quantity: "2"}},
+		Lines: []printmodel.StockIssueRow{{SKU: "OIL", Name: "Dầu nhớt", Quantity: "4", Unit: "L"}, {SKU: "BOLT", Name: "Bu lông", Quantity: "2"}},
 	})
 	require.NoError(t, err)
 	assert.True(t, bytes.HasPrefix(pdf, []byte("%PDF")))

@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/viettechno/vietgara-backend/internal/document/printmodel"
 	"github.com/viettechno/vietgara-backend/internal/document/render"
 )
 
@@ -43,18 +44,18 @@ func TestAmountInWords(t *testing.T) {
 func TestPaymentVoucherPDF(t *testing.T) {
 	t.Parallel()
 
-	data := render.VoucherPDFData{
-		Garage: render.GarageHeader{Name: "Công ty TNHH Gara Ánh Dương", Address: "12 Nguyễn Huệ, Quận 1"},
+	data := printmodel.PaymentVoucher{
+		Garage: printmodel.GarageHeader{Name: "Công ty TNHH Gara Ánh Dương", Address: "12 Nguyễn Huệ, Quận 1"},
 		Number: "PT-202610-0001", Date: "12/10/2026", PayerName: "Nguyễn Thị Bích Ngọc", Reason: "Thanh toán quyết toán QT-1",
 		Amount: 1_500_000, Method: "Tiền mặt", SettlementNumber: "QT-1", CollectorName: "Lê Thu Ngân",
 	}
 
-	pdf, err := render.PaymentVoucherPDF(data)
+	pdf, err := a4(data)
 	require.NoError(t, err)
 	assert.Equal(t, "%PDF", string(pdf[:4]))
 
 	data.Voided, data.VoidReason = true, "nhập nhầm"
-	voided, err := render.PaymentVoucherPDF(data)
+	voided, err := a4(data)
 	require.NoError(t, err)
 	assert.NotEqual(t, len(pdf), len(voided), "a voided voucher is marked")
 }

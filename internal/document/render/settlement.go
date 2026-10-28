@@ -1,31 +1,12 @@
 package render
 
-// PaymentRow is one payment line on a settlement receipt.
-type PaymentRow struct {
-	Date   string
-	Method string
-	Amount int64
-}
+import "github.com/viettechno/vietgara-backend/internal/document/printmodel"
 
-// SettlementReceiptData is everything a settlement receipt's PDF needs
-// (FR-DOC-01).
-type SettlementReceiptData struct {
-	Garage       GarageHeader
-	BillTo       BillTo
-	Number       string
-	Status       string
-	CustomerName string
-	VehiclePlate string
-	TotalAmount  int64
-	PaidAmount   int64
-	Payments     []PaymentRow
-}
-
-// SettlementReceiptPDF renders a settlement as a receipt PDF using
-// the garage's standard layout.
-func SettlementReceiptPDF(data SettlementReceiptData) ([]byte, error) {
-	pdf := newPDF()
-	writeHeader(pdf, data.Garage, "RECEIPT", data.Number)
+// settlementTemplate renders a settlement as a receipt (FR-DOC-01).
+func settlementTemplate(data printmodel.Settlement, o Options) ([]byte, error) {
+	lay := layoutFor(o.Paper)
+	pdf := newPDF(lay, copyLabel(o, "COPY"))
+	writeHeader(pdf, lay, data.Garage, "RECEIPT", data.Number)
 
 	writeBillTo(pdf, data.BillTo)
 	writeKeyValue(pdf, "Customer", data.CustomerName)
@@ -48,7 +29,7 @@ func SettlementReceiptPDF(data SettlementReceiptData) ([]byte, error) {
 		return finish(pdf)
 	}
 
-	widths := [3]float64{50, 60, 75}
+	widths := lay.payments
 	headers := [3]string{"Date", "Method", "Amount"}
 
 	pdf.SetFillColor(240, 240, 240)

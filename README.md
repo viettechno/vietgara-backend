@@ -151,6 +151,7 @@ local defaults.
 
 | Variable | Purpose |
 | --- | --- |
+| `APP_ENV` | `production` on the production VM: the server then refuses to start with `TEST_USERS_EMAIL_DOMAIN` set. Other values (`staging`, empty) change nothing |
 | `TEST_USERS_EMAIL_DOMAIN` | E-mail domain of the blackbox suite's users, under `.test`, `.example`, `.invalid` or `.localhost`. Unset (the default, and always in production) disables everything below. See [Test users](#test-users) |
 | `TEST_USERS_SMTP_HOST`, `TEST_USERS_SMTP_PORT` | SMTP server (Mailpit) that receives the test users' e-mail. Required with the domain; port defaults to `1025` |
 | `TEST_USERS_RETENTION` | How long a test user lives before it is purged with everything it owns. Defaults to `24h` |

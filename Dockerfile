@@ -30,7 +30,13 @@ WORKDIR /app
 COPY --from=builder /out/vietgara-backend /app/vietgara-backend
 COPY --from=builder /out/purge-test-users /app/purge-test-users
 COPY db/migrations /app/db/migrations
-RUN mkdir -p /app/data/uploads
+# The backend runs as an unprivileged user (Security Review SR-11). It owns
+# only the uploads directory; a volume mounted there takes this ownership
+# when it is created empty.
+RUN addgroup -S -g 10001 vietgara && adduser -S -D -H -u 10001 -G vietgara vietgara \
+    && mkdir -p /app/data/uploads && chown -R vietgara:vietgara /app/data
+
+USER 10001:10001
 
 EXPOSE 50051 8080
 

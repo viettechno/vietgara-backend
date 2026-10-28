@@ -32,7 +32,7 @@ type UserRepository interface {
 	// password, verification, Google link).
 	Update(ctx context.Context, user *domain.User) error
 	// GrantPlatformAdmins makes the users with these e-mails platform
-	// admins and returns how many were granted.
+	// admins, if their e-mail is verified, and returns how many were granted.
 	GrantPlatformAdmins(ctx context.Context, emails []string) (int, error)
 }
 

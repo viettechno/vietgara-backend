@@ -190,7 +190,7 @@ type env struct {
 	issuer *auth.TokenIssuer
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t *testing.T, opts ...usecase.Option) *env {
 	t.Helper()
 
 	now := time.Now().UTC().Truncate(time.Second)
@@ -200,7 +200,7 @@ func newEnv(t *testing.T) *env {
 	}
 	e.clock = &now
 	e.uc = usecase.NewIdentityUseCase(e.users, e.store, e.store, e.mailer, e.events, passTx{}, e.issuer,
-		usecase.WithClock(func() time.Time { return *e.clock }))
+		append([]usecase.Option{usecase.WithClock(func() time.Time { return *e.clock })}, opts...)...)
 
 	return e
 }

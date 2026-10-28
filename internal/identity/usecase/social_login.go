@@ -23,7 +23,10 @@ type GoogleProfile struct {
 // GoogleLogin signs a user in with Google (FR-IAM-01/02). The user
 // is found by its Google subject, else by its (Google-verified) e-mail --
 // which links Google to an existing e-mail user -- else created. Google
-// verified the e-mail, so the user is marked verified.
+// verified the e-mail, so the user is marked verified. An account whose
+// e-mail was never verified may have been registered by someone else who
+// does not own the address (SR-25), so it loses its password and sessions
+// before Google is linked.
 func (uc *IdentityUseCase) GoogleLogin(ctx context.Context, profile GoogleProfile) (*Session, error) {
 	addr, err := email.Normalize(profile.Email)
 	if profile.Subject == "" || err != nil || !profile.EmailVerified {
@@ -41,8 +44,14 @@ func (uc *IdentityUseCase) GoogleLogin(ctx context.Context, profile GoogleProfil
 		if err != nil {
 			return nil, err
 		}
-	} else if err := uc.syncGoogleUser(ctx, user, profile); err != nil {
-		return nil, err
+	} else {
+		if err := uc.dropUnverifiedCredentials(ctx, user); err != nil {
+			return nil, err
+		}
+
+		if err := uc.syncGoogleUser(ctx, user, profile); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := uc.markVerified(ctx, user); err != nil {
@@ -72,6 +81,31 @@ func (uc *IdentityUseCase) findGoogleUser(ctx context.Context, subject, email st
 	}
 
 	return nil, nil //nolint:nilnil // no user yet
+}
+
+// dropUnverifiedCredentials removes the password and revokes the sessions of
+// a user whose e-mail was never verified (SR-25). Whoever registered it had
+// to know no more than the address, and Google has now proved that the
+// caller owns that address. It is idempotent, so a failed attempt can be
+// repeated.
+func (uc *IdentityUseCase) dropUnverifiedCredentials(ctx context.Context, user *domain.User) error {
+	if user.EmailVerified() {
+		return nil
+	}
+
+	if user.PasswordHash != nil {
+		user.PasswordHash = nil
+
+		if err := uc.users.Update(ctx, user); err != nil {
+			return apperror.Internal("drop unverified password", err)
+		}
+	}
+
+	if err := uc.sessions.RevokeAllRefreshTokens(ctx, user.ID); err != nil {
+		return apperror.Internal("revoke sessions of unverified user", err)
+	}
+
+	return nil
 }
 
 // syncGoogleUser links Google to an existing user and refreshes a display

@@ -184,13 +184,13 @@ func (r *PostgresUserRepository) ListPlatformAdmins(ctx context.Context) ([]*dom
 }
 
 // GrantPlatformAdmins adds the users with the given e-mails to
-// platform_admins.
+// platform_admins, if their e-mail is verified (SR-25).
 func (r *PostgresUserRepository) GrantPlatformAdmins(ctx context.Context, emails []string) (int, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
 	tag, err := q.Exec(ctx, `
 		INSERT INTO platform_admins (user_id)
-		SELECT id FROM users WHERE lower(email) = ANY($1)
+		SELECT id FROM users WHERE lower(email) = ANY($1) AND email_verified_at IS NOT NULL
 		ON CONFLICT DO NOTHING`, emails)
 	if err != nil {
 		return 0, err

@@ -11,6 +11,7 @@ import (
 // Deps are the dependencies of ReportingUseCase.
 type Deps struct {
 	Settlements SettlementReader
+	Garages     GarageReader
 }
 
 // ReportingUseCase implements the Reporting module's revenue report.
@@ -27,7 +28,8 @@ func NewReportingUseCase(deps Deps) *ReportingUseCase {
 type GetRevenueReportRequest struct {
 	GarageID string
 	Period   Period
-	// From is inclusive, To is exclusive.
+	// From is inclusive, To is exclusive. They are calendar dates: only
+	// their year, month and day are read, as days of the garage's time zone.
 	From, To time.Time
 }
 
@@ -45,11 +47,17 @@ func (uc *ReportingUseCase) GetRevenueReport(ctx context.Context, req GetRevenue
 		return nil, toAppError("get revenue report", ErrInvalidPeriod)
 	}
 
-	if !req.From.Before(req.To) {
+	from, to := calendarDate(req.From), calendarDate(req.To)
+	if !from.Before(to) {
 		return nil, toAppError("get revenue report", ErrInvalidDateRange)
 	}
 
-	points, err := uc.Settlements.RevenueByPeriod(ctx, req.GarageID, req.Period, req.From, req.To)
+	timezone, err := uc.Garages.Timezone(ctx, req.GarageID)
+	if err != nil {
+		return nil, toAppError("get revenue report", err)
+	}
+
+	points, err := uc.Settlements.RevenueByPeriod(ctx, req.GarageID, req.Period, timezone, from, to)
 	if err != nil {
 		return nil, toAppError("get revenue report", err)
 	}
@@ -60,6 +68,11 @@ func (uc *ReportingUseCase) GetRevenueReport(ctx context.Context, req GetRevenue
 	}
 
 	return &RevenueReport{Points: points, TotalAmount: total}, nil
+}
+
+// calendarDate keeps only the calendar date of t, as a UTC midnight.
+func calendarDate(t time.Time) time.Time {
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }
 
 // toAppError classifies err into an *apperror.AppError; op names the

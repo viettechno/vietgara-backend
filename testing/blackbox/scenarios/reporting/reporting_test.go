@@ -71,6 +71,25 @@ func paidSettlement(t *testing.T, label string) (*fixture.Actor, string, string)
 	return owner, garage.GetId(), settlement.GetId()
 }
 
+// garageDays returns the range from yesterday to tomorrow (exclusive) in
+// the garage's time zone: the revenue report counts the garage's days
+// (FR-TEN-05), which differ from the machine's around midnight, and a
+// settlement made just before the garage's midnight is still in range
+// when the clock is read just after it.
+func garageDays(t *testing.T, owner *fixture.Actor, garageID string) (string, string) {
+	t.Helper()
+
+	garage, err := owner.API.GetGarage(t.Context(), garageID)
+	require.NoError(t, err)
+
+	loc, err := time.LoadLocation(garage.GetTimezone())
+	require.NoError(t, err)
+
+	now := time.Now().In(loc)
+
+	return now.AddDate(0, 0, -1).Format("2006-01-02"), now.AddDate(0, 0, 1).Format("2006-01-02")
+}
+
 // Scenario: E2E-BIL-008 (partial): the dashboard revenue follows the
 // settlement — asserted at API level through the revenue report; the
 // dashboard figure itself is web-E2E.
@@ -80,10 +99,9 @@ func TestRevenueReportFollowsSettlement(t *testing.T) {
 	ctx := t.Context()
 	owner, garageID, _ := paidSettlement(t, "rep-revenue")
 
-	today := time.Now().Format("2006-01-02")
-	tomorrow := time.Now().Add(24 * time.Hour).Format("2006-01-02")
+	from, to := garageDays(t, owner, garageID)
 
-	report, err := owner.API.GetRevenueReport(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, today, tomorrow)
+	report, err := owner.API.GetRevenueReport(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, from, to)
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, report.GetTotalAmount(), int64(500000))
 	require.NotEmpty(t, report.GetPoints())
@@ -188,14 +206,13 @@ func TestRevenueExcelDownload(t *testing.T) {
 	ctx := t.Context()
 	owner, garageID, _ := paidSettlement(t, "rep-revenue-xlsx")
 
-	today := time.Now().Format("2006-01-02")
-	tomorrow := time.Now().Add(24 * time.Hour).Format("2006-01-02")
+	from, to := garageDays(t, owner, garageID)
 
-	report, err := owner.API.GetRevenueReport(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, today, tomorrow)
+	report, err := owner.API.GetRevenueReport(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, from, to)
 	require.NoError(t, err)
 	require.EqualValues(t, 500000, report.GetTotalAmount())
 
-	contentType, body, err := owner.API.DownloadRevenueExcel(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, today, tomorrow)
+	contentType, body, err := owner.API.DownloadRevenueExcel(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, from, to)
 	require.NoError(t, err)
 	assert.Contains(t, contentType, "spreadsheet")
 	require.Greater(t, len(body), 100)
@@ -225,10 +242,10 @@ func TestRevenueExcelDownload(t *testing.T) {
 	assert.Contains(t, sheet, "<v>500000</v>")
 
 	// A bad range or a missing period is refused.
-	_, _, err = owner.API.DownloadRevenueExcel(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, tomorrow, today)
+	_, _, err = owner.API.DownloadRevenueExcel(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_DAY, to, from)
 	assert.Equal(t, http.StatusUnprocessableEntity, client.AsAPIError(err).Status)
 
-	_, _, err = owner.API.DownloadRevenueExcel(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_UNSPECIFIED, today, tomorrow)
+	_, _, err = owner.API.DownloadRevenueExcel(ctx, garageID, reportingv1.RevenuePeriod_REVENUE_PERIOD_UNSPECIFIED, from, to)
 	assert.Equal(t, http.StatusUnprocessableEntity, client.AsAPIError(err).Status)
 }
 

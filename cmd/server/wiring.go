@@ -1086,9 +1086,9 @@ var reportingTruncUnits = map[reportingUsecase.Period]string{
 }
 
 func (s reportingSettlements) RevenueByPeriod(
-	ctx context.Context, garageID string, period reportingUsecase.Period, from, to time.Time,
+	ctx context.Context, garageID string, period reportingUsecase.Period, timezone string, from, to time.Time,
 ) ([]reportingUsecase.RevenuePoint, error) {
-	buckets, err := s.settlements.RevenueByPeriod(ctx, garageID, reportingTruncUnits[period], from, to)
+	buckets, err := s.settlements.RevenueByPeriod(ctx, garageID, reportingTruncUnits[period], timezone, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -1099,6 +1099,21 @@ func (s reportingSettlements) RevenueByPeriod(
 	}
 
 	return points, nil
+}
+
+// reportingGarages lets the Reporting module read a garage's time zone
+// without importing Tenant.
+type reportingGarages struct {
+	garages *tenantRepo.PostgresGarageRepository
+}
+
+func (g reportingGarages) Timezone(ctx context.Context, garageID string) (string, error) {
+	garage, err := g.garages.FindByID(ctx, garageID)
+	if err != nil {
+		return "", err
+	}
+
+	return garage.Timezone, nil
 }
 
 // notificationUsers lets the Notification module address a reminder

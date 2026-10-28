@@ -41,10 +41,18 @@ type RevenuePoint struct {
 }
 
 // SettlementReader reads a garage's settlement revenue, bucketed by
-// period; implemented by an adapter over the Billing & Settlement module
-// in cmd/server.
+// period in timezone, an IANA zone name (a day, month, quarter or year is
+// the garage's, not UTC's); implemented by an adapter over the Billing &
+// Settlement module in cmd/server. from (inclusive) and to (exclusive) are
+// calendar dates of that zone: only their year, month and day are read.
 type SettlementReader interface {
-	RevenueByPeriod(ctx context.Context, garageID string, period Period, from, to time.Time) ([]RevenuePoint, error)
+	RevenueByPeriod(ctx context.Context, garageID string, period Period, timezone string, from, to time.Time) ([]RevenuePoint, error)
+}
+
+// GarageReader reads a garage's IANA time zone (FR-TEN-05); implemented by
+// an adapter over the Tenant module in cmd/server.
+type GarageReader interface {
+	Timezone(ctx context.Context, garageID string) (string, error)
 }
 
 // Sentinel errors for this module's own validation.

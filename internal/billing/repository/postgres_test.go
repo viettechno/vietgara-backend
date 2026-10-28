@@ -424,7 +424,7 @@ func TestPostgresRepository_RevenueByPeriod(t *testing.T) {
 		tx := dbtest.New(t).ExpectQuery("date_trunc", dbtest.NewRows([]any{now, int64(1_000_000)}), nil)
 		ctx := tx.Context(t.Context())
 
-		buckets, err := repo.RevenueByPeriod(ctx, garageID, "day", from, to)
+		buckets, err := repo.RevenueByPeriod(ctx, garageID, "day", "Asia/Ho_Chi_Minh", from, to)
 		require.NoError(t, err)
 		require.Equal(t, []repository.RevenueBucket{{PeriodStart: now, Amount: 1_000_000}}, buckets)
 	})
@@ -436,7 +436,7 @@ func TestPostgresRepository_RevenueByPeriod(t *testing.T) {
 		tx := dbtest.New(t).ExpectQuery("date_trunc", dbtest.NewRows(), nil)
 		ctx := tx.Context(t.Context())
 
-		buckets, err := repo.RevenueByPeriod(ctx, garageID, "month", from, to)
+		buckets, err := repo.RevenueByPeriod(ctx, garageID, "month", "Asia/Ho_Chi_Minh", from, to)
 		require.NoError(t, err)
 		require.Empty(t, buckets)
 	})
@@ -446,7 +446,7 @@ func TestPostgresRepository_RevenueByPeriod(t *testing.T) {
 
 		repo := repository.NewPostgresRepository(nil)
 
-		_, err := repo.RevenueByPeriod(t.Context(), garageID, "week", from, to)
+		_, err := repo.RevenueByPeriod(t.Context(), garageID, "week", "Asia/Ho_Chi_Minh", from, to)
 		require.Error(t, err)
 	})
 
@@ -457,7 +457,7 @@ func TestPostgresRepository_RevenueByPeriod(t *testing.T) {
 		tx := dbtest.New(t).ExpectQuery("date_trunc", nil, errBoom)
 		ctx := tx.Context(t.Context())
 
-		_, err := repo.RevenueByPeriod(ctx, garageID, "day", from, to)
+		_, err := repo.RevenueByPeriod(ctx, garageID, "day", "Asia/Ho_Chi_Minh", from, to)
 		require.ErrorIs(t, err, errBoom)
 	})
 
@@ -468,7 +468,7 @@ func TestPostgresRepository_RevenueByPeriod(t *testing.T) {
 		tx := dbtest.New(t).ExpectQuery("date_trunc", dbtest.NewRows([]any{now, int64(1_000_000)}).WithScanError(errBoom), nil)
 		ctx := tx.Context(t.Context())
 
-		_, err := repo.RevenueByPeriod(ctx, garageID, "day", from, to)
+		_, err := repo.RevenueByPeriod(ctx, garageID, "day", "Asia/Ho_Chi_Minh", from, to)
 		require.ErrorIs(t, err, errBoom)
 	})
 }

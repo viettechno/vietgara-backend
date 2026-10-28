@@ -24,13 +24,15 @@ var anyArg = mock.Anything
 type env struct {
 	srv         *handler.Server
 	settlements *mocks.MockReportingSettlementReader
+	garages     *mocks.MockReportingGarageReader
 }
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
 
-	e := &env{settlements: mocks.NewMockReportingSettlementReader(t)}
-	uc := usecase.NewReportingUseCase(usecase.Deps{Settlements: e.settlements})
+	e := &env{settlements: mocks.NewMockReportingSettlementReader(t), garages: mocks.NewMockReportingGarageReader(t)}
+	e.garages.EXPECT().Timezone(anyArg, garageID).Return("UTC", nil).Maybe()
+	uc := usecase.NewReportingUseCase(usecase.Deps{Settlements: e.settlements, Garages: e.garages})
 	e.srv = handler.NewServer(uc)
 
 	return e
@@ -52,7 +54,7 @@ func TestGetRevenueReport(t *testing.T) {
 
 		e := newEnv(t)
 		e.settlements.EXPECT().
-			RevenueByPeriod(anyArg, garageID, usecase.PeriodDay, date(t, "2026-09-01"), date(t, "2026-10-01")).
+			RevenueByPeriod(anyArg, garageID, usecase.PeriodDay, anyArg, sameInstant(date(t, "2026-09-01")), sameInstant(date(t, "2026-10-01"))).
 			Return([]usecase.RevenuePoint{{PeriodLabel: "2026-09-30", Amount: 1_000_000}}, nil).Once()
 
 		resp, err := e.srv.GetRevenueReport(t.Context(), &reportingv1.GetRevenueReportRequest{
@@ -93,7 +95,7 @@ func TestGetRevenueReport(t *testing.T) {
 
 		e := newEnv(t)
 		e.settlements.EXPECT().
-			RevenueByPeriod(anyArg, garageID, usecase.PeriodDay, date(t, "2026-09-01"), date(t, "2026-10-01")).
+			RevenueByPeriod(anyArg, garageID, usecase.PeriodDay, anyArg, sameInstant(date(t, "2026-09-01")), sameInstant(date(t, "2026-10-01"))).
 			Return(nil, assert.AnError).Once()
 
 		_, err := e.srv.GetRevenueReport(t.Context(), &reportingv1.GetRevenueReportRequest{
@@ -221,4 +223,9 @@ func date(t *testing.T, s string) time.Time {
 	require.NoError(t, err)
 
 	return parsed
+}
+
+// sameInstant matches a time.Time equal to want, whatever its location.
+func sameInstant(want time.Time) any {
+	return mock.MatchedBy(func(got time.Time) bool { return got.Equal(want) })
 }

@@ -21,6 +21,10 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	// Garages keep an IANA time zone (FR-TEN-05) that documents, numbering
+	// and reports follow; the runtime image has no zone database, so the
+	// binary carries its own.
+	_ "time/tzdata"
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/redis/go-redis/v9"
@@ -405,7 +409,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 
 	// Document/Print (Release 1.4): quote, repair order and settlement
 	// receipt PDFs, the stock movement report as Excel.
-	reporting := buildReporting(billing.settlements)
+	reporting := buildReporting(billing.settlements, garages)
 
 	document := buildDocument(quote.quotes, repairOrder.uc, billing.uc, inventory.uc, reporting.uc, garages, files)
 

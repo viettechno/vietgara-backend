@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/viettechno/vietgara-backend/internal/mocks"
@@ -16,17 +17,29 @@ const garageID = "11111111-1111-1111-1111-111111111111"
 
 var errBoomReporting = errors.New("boom")
 
+// hcm is the default garage time zone (FR-TEN-05), UTC+7 without DST.
+const hcm = "Asia/Ho_Chi_Minh"
+
 // deps are the mocked dependencies of one ReportingUseCase under test.
 type deps struct {
 	Settlements *mocks.MockReportingSettlementReader
+	Garages     *mocks.MockReportingGarageReader
 }
 
 func newUseCase(t *testing.T) (*usecase.ReportingUseCase, *deps) {
 	t.Helper()
 
-	d := &deps{Settlements: mocks.NewMockReportingSettlementReader(t)}
+	d := &deps{Settlements: mocks.NewMockReportingSettlementReader(t), Garages: mocks.NewMockReportingGarageReader(t)}
 
-	return usecase.NewReportingUseCase(usecase.Deps{Settlements: d.Settlements}), d
+	return usecase.NewReportingUseCase(usecase.Deps{Settlements: d.Settlements, Garages: d.Garages}), d
+}
+
+// onDate matches the calendar date day (YYYY-MM-DD) as the use case passes
+// it to the reader: a UTC midnight.
+func onDate(day string) any {
+	want := date(day)
+
+	return mock.MatchedBy(func(got time.Time) bool { return got.Equal(want) })
 }
 
 func date(s string) time.Time {

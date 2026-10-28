@@ -1,0 +1,23 @@
+{
+  "garage": {
+    "name": "Công ty TNHH Gara An Phát",
+    "address": "12 Nguyễn Huệ, Quận 1, TP.HCM",
+    "phone": "0281234567",
+    "taxCode": "0301234567",
+    "representative": "Nguyễn Văn An",
+    "bank": "Vietcombank - 0011 2233 - An Phat"
+  },
+  "number": "XK-202610-0001",
+  "status": "posted",
+  "repairOrderNumber": "LSC-202610-0001",
+  "postedAt": "29/10/2026 09:30",
+  "postedBy": "Lê Văn Cường",
+  "lines": [
+    {
+      "sku": "OIL-5W30",
+      "name": "Dầu nhớt 5W-30",
+      "quantity": "4",
+      "unit": "L"
+    }
+  ]
+}

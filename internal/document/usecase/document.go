@@ -1,12 +1,12 @@
 // Package usecase renders the documents of the Document/Print module
-// (FRD 3.13): a quote PDF, a settlement receipt PDF (FR-DOC-01), the
-// goods receipt and stock issue PDFs and the inventory reports as Excel
-// workbooks (FR-INV-06/07/19/20), and the stock movement report as an Excel
-// workbook (FR-DOC-02). It owns no
-// tables of its own -- every document is generated fresh from the owning
-// module's own data, read through narrow reader interfaces implemented
-// by adapters in cmd/server, the same cross-module decoupling pattern
-// used everywhere else (HLD Section 2).
+// (FRD 3.13): the PDFs of quotes, repair orders, settlements, payment
+// vouchers, goods receipts and stock issues (FR-DOC-01, FR-DOC-04) and the
+// inventory, revenue and stock movement reports as Excel workbooks
+// (FR-DOC-02). Every document is generated fresh from the owning module's
+// own data, read through narrow reader interfaces implemented by adapters in
+// cmd/server, the same cross-module decoupling pattern used everywhere else
+// (HLD Section 2). The module owns the print settings of a garage and the
+// log of its prints (Release 10.0), see print.go.
 package usecase
 
 import (
@@ -14,6 +14,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/viettechno/vietgara-backend/internal/document/printmodel"
 	"github.com/viettechno/vietgara-backend/internal/document/render"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 	"github.com/viettechno/vietgara-backend/pkg/billingparty"
@@ -24,7 +25,7 @@ import (
 // Document/Print needs to render its PDF.
 type QuoteInfo struct {
 	Number, Status, CustomerName, VehiclePlate, Notes string
-	Lines                                             []render.DocumentLine
+	Lines                                             []printmodel.DocumentLine
 	TotalAmount                                       int64
 	// Issuer is the garage's legal identity when the quote was issued
 	// (FR-TEN-06).
@@ -46,7 +47,7 @@ type QuoteReader interface {
 // that Document/Print needs to render its PDF.
 type RepairOrderInfo struct {
 	Number, Status, CustomerName, VehiclePlate string
-	Lines                                      []render.DocumentLine
+	Lines                                      []printmodel.DocumentLine
 	TotalAmount                                int64
 	// Issuer is the garage's legal identity when the repair order was
 	// created (FR-TEN-06).
@@ -67,7 +68,7 @@ type SettlementInfo struct {
 	Number, Status, CustomerName, VehiclePlate string
 	TotalAmount, PaidAmount                    int64
 	// Payments are the payments that count, for the receipt.
-	Payments []render.PaymentRow
+	Payments []printmodel.PaymentRow
 	// Vouchers are every payment voucher of the settlement, voided ones
 	// included.
 	Vouchers []VoucherInfo
@@ -99,7 +100,7 @@ type SettlementReader interface {
 // Document/Print needs to render its PDF.
 type GoodsReceiptInfo struct {
 	Number, Status, Date, DeliveryNoteNumber, Notes string
-	Lines                                           []render.GoodsReceiptRow
+	Lines                                           []printmodel.GoodsReceiptRow
 	// ShowCost is false for a caller without inventory.cost.read: the
 	// document then prints quantities only (FR-INV-08).
 	ShowCost    bool
@@ -110,7 +111,7 @@ type GoodsReceiptInfo struct {
 // Document/Print needs to render its PDF.
 type StockIssueInfo struct {
 	Number, Status, RepairOrderNumber, PostedAt, PostedBy string
-	Lines                                                 []render.StockIssueRow
+	Lines                                                 []printmodel.StockIssueRow
 }
 
 // StockCountInfo is the Inventory module's view of a stock count that
@@ -194,123 +195,18 @@ type DocumentUseCase struct {
 	Revenue        RevenueReader
 	Garages        GarageReader
 	Inventory      InventoryDocumentReader
+	Prints         PrintStore
 }
 
 // NewDocumentUseCase wires the use case to its dependencies.
 func NewDocumentUseCase(
 	quotes QuoteReader, repairOrders RepairOrderReader, settlements SettlementReader, stockMovements StockMovementReader,
-	revenue RevenueReader, garages GarageReader, inventory InventoryDocumentReader,
+	revenue RevenueReader, garages GarageReader, inventory InventoryDocumentReader, prints PrintStore,
 ) *DocumentUseCase {
 	return &DocumentUseCase{
 		Quotes: quotes, RepairOrders: repairOrders, Settlements: settlements, StockMovements: stockMovements,
-		Revenue: revenue, Garages: garages, Inventory: inventory,
+		Revenue: revenue, Garages: garages, Inventory: inventory, Prints: prints,
 	}
-}
-
-// QuotePDF renders a quote as a PDF (FR-DOC-01).
-//
-//nolint:dupl // each export reads one kind of document and renders it with its own layout
-func (uc *DocumentUseCase) QuotePDF(ctx context.Context, garageID, quoteID string) ([]byte, error) {
-	quote, err := uc.Quotes.Get(ctx, garageID, quoteID)
-	if err != nil {
-		return nil, toAppError("export quote pdf", err)
-	}
-
-	garage, err := uc.letterhead(ctx, garageID, quote.Issuer)
-	if err != nil {
-		return nil, err
-	}
-
-	pdf, err := render.QuotePDF(render.QuotePDFData{
-		Garage: garage, BillTo: billTo(quote.BillingParty), Number: quote.Number, Status: quote.Status, CustomerName: quote.CustomerName,
-		VehiclePlate: quote.VehiclePlate, Notes: quote.Notes, Lines: quote.Lines, TotalAmount: quote.TotalAmount,
-	})
-	if err != nil {
-		return nil, apperror.Internal("export quote pdf", err)
-	}
-
-	return pdf, nil
-}
-
-// RepairOrderPDF renders a repair order as a PDF (FR-DOC-01).
-func (uc *DocumentUseCase) RepairOrderPDF(ctx context.Context, garageID, repairOrderID string) ([]byte, error) {
-	ro, err := uc.RepairOrders.Get(ctx, garageID, repairOrderID)
-	if err != nil {
-		return nil, toAppError("export repair order pdf", err)
-	}
-
-	garage, err := uc.letterhead(ctx, garageID, ro.Issuer)
-	if err != nil {
-		return nil, err
-	}
-
-	pdf, err := render.RepairOrderPDF(render.RepairOrderPDFData{
-		Garage: garage, BillTo: billTo(ro.BillingParty), Number: ro.Number, Status: ro.Status, CustomerName: ro.CustomerName,
-		VehiclePlate: ro.VehiclePlate, Lines: ro.Lines, TotalAmount: ro.TotalAmount,
-	})
-	if err != nil {
-		return nil, apperror.Internal("export repair order pdf", err)
-	}
-
-	return pdf, nil
-}
-
-// SettlementReceiptPDF renders a settlement as a receipt PDF (FR-DOC-01).
-//
-//nolint:dupl // each export reads one kind of document and renders it with its own layout
-func (uc *DocumentUseCase) SettlementReceiptPDF(ctx context.Context, garageID, settlementID string) ([]byte, error) {
-	settlement, err := uc.Settlements.Get(ctx, garageID, settlementID)
-	if err != nil {
-		return nil, toAppError("export settlement receipt pdf", err)
-	}
-
-	garage, err := uc.letterhead(ctx, garageID, settlement.Issuer)
-	if err != nil {
-		return nil, err
-	}
-
-	pdf, err := render.SettlementReceiptPDF(render.SettlementReceiptData{
-		Garage: garage, BillTo: billTo(settlement.BillingParty), Number: settlement.Number, Status: settlement.Status,
-		CustomerName: settlement.CustomerName,
-		VehiclePlate: settlement.VehiclePlate, TotalAmount: settlement.TotalAmount,
-		PaidAmount: settlement.PaidAmount, Payments: settlement.Payments,
-	})
-	if err != nil {
-		return nil, apperror.Internal("export settlement receipt pdf", err)
-	}
-
-	return pdf, nil
-}
-
-// PaymentVoucherPDF renders one payment voucher as a PDF in the 01-TT
-// layout (FR-BIL-05), from the legal identity it was issued with.
-func (uc *DocumentUseCase) PaymentVoucherPDF(ctx context.Context, garageID, settlementID, paymentID string) ([]byte, error) {
-	settlement, err := uc.Settlements.Get(ctx, garageID, settlementID)
-	if err != nil {
-		return nil, toAppError("export payment voucher pdf", err)
-	}
-
-	voucher, ok := findVoucher(settlement.Vouchers, paymentID)
-	if !ok {
-		return nil, apperror.New(apperror.CodeNotFound, "payment not found")
-	}
-
-	garage, err := uc.letterhead(ctx, garageID, voucher.Issuer)
-	if err != nil {
-		return nil, err
-	}
-
-	pdf, err := render.PaymentVoucherPDF(render.VoucherPDFData{
-		Garage: garage, Number: voucher.Number, Date: voucher.Date, PayerName: voucher.PayerName,
-		PayerAddress: voucher.PayerAddress, Reason: voucher.Reason, Amount: voucher.Amount, Method: voucher.Method,
-		SettlementNumber: settlement.Number, CollectorName: voucher.CollectorName,
-		Voided: voucher.Voided, VoidReason: voucher.VoidReason,
-	})
-	if err != nil {
-		return nil, apperror.Internal("export payment voucher pdf", err)
-	}
-
-	return pdf, nil
 }
 
 func findVoucher(vouchers []VoucherInfo, paymentID string) (VoucherInfo, bool) {
@@ -354,54 +250,6 @@ func (uc *DocumentUseCase) RevenueExcel(ctx context.Context, garageID, period st
 	}
 
 	return workbook, nil
-}
-
-// GoodsReceiptPDF renders a goods receipt as a PDF (FR-INV-06).
-func (uc *DocumentUseCase) GoodsReceiptPDF(ctx context.Context, garageID, receiptID string) ([]byte, error) {
-	receipt, err := uc.Inventory.GoodsReceipt(ctx, garageID, receiptID)
-	if err != nil {
-		return nil, toAppError("export goods receipt pdf", err)
-	}
-
-	garage, err := uc.letterhead(ctx, garageID, issuer.Issuer{})
-	if err != nil {
-		return nil, err
-	}
-
-	pdf, err := render.GoodsReceiptPDF(render.GoodsReceiptPDFData{
-		Garage: garage, Number: receipt.Number, Status: receipt.Status, Date: receipt.Date,
-		DeliveryNoteNumber: receipt.DeliveryNoteNumber, Notes: receipt.Notes, Lines: receipt.Lines,
-		ShowCost: receipt.ShowCost, TotalAmount: receipt.TotalAmount,
-	})
-	if err != nil {
-		return nil, apperror.Internal("export goods receipt pdf", err)
-	}
-
-	return pdf, nil
-}
-
-// StockIssuePDF renders a repair order's stock issue (phiếu xuất kho) as a
-// PDF (FR-INV-20).
-func (uc *DocumentUseCase) StockIssuePDF(ctx context.Context, garageID, repairOrderID string) ([]byte, error) {
-	issue, err := uc.Inventory.StockIssue(ctx, garageID, repairOrderID)
-	if err != nil {
-		return nil, toAppError("export stock issue pdf", err)
-	}
-
-	garage, err := uc.letterhead(ctx, garageID, issuer.Issuer{})
-	if err != nil {
-		return nil, err
-	}
-
-	pdf, err := render.StockIssuePDF(render.StockIssuePDFData{
-		Garage: garage, Number: issue.Number, Status: issue.Status, RepairOrderNumber: issue.RepairOrderNumber,
-		PostedAt: issue.PostedAt, PostedBy: issue.PostedBy, Lines: issue.Lines,
-	})
-	if err != nil {
-		return nil, apperror.Internal("export stock issue pdf", err)
-	}
-
-	return pdf, nil
 }
 
 // StockCountExcel renders a stock count as an Excel workbook for review
@@ -458,20 +306,20 @@ func (uc *DocumentUseCase) StockValuationExcel(ctx context.Context, garageID, at
 // identity as it was when the document was issued (FR-TEN-06) or, for a
 // document without a snapshot, the garage's current profile. A logo that
 // cannot be read is left out.
-func (uc *DocumentUseCase) letterhead(ctx context.Context, garageID string, snapshot issuer.Issuer) (render.GarageHeader, error) {
+func (uc *DocumentUseCase) letterhead(ctx context.Context, garageID string, snapshot issuer.Issuer) (printmodel.GarageHeader, error) {
 	if snapshot.IsZero() {
 		g, err := uc.Garages.Get(ctx, garageID)
 		if err != nil {
-			return render.GarageHeader{}, apperror.Internal("read garage", err)
+			return printmodel.GarageHeader{}, apperror.Internal("read garage", err)
 		}
 
-		return render.GarageHeader{
+		return printmodel.GarageHeader{
 			Name: g.Name, Address: g.Address, Phone: g.Phone, TaxCode: g.TaxCode, Representative: g.Representative,
 			Bank: g.Bank, Logo: g.Logo,
 		}, nil
 	}
 
-	header := render.GarageHeader{
+	header := printmodel.GarageHeader{
 		Name: snapshot.Name, Address: snapshot.Address, Phone: snapshot.Phone, TaxCode: snapshot.TaxCode,
 		Representative: snapshot.Representative, Bank: snapshot.BankLine(),
 	}
@@ -489,8 +337,8 @@ func (uc *DocumentUseCase) letterhead(ctx context.Context, garageID string, snap
 }
 
 // billTo is the party a document prints under its header.
-func billTo(p billingparty.Party) render.BillTo {
-	return render.BillTo{Name: p.LegalName, TaxID: p.TaxID, Address: p.Address}
+func billTo(p billingparty.Party) printmodel.BillTo {
+	return printmodel.BillTo{Name: p.LegalName, TaxID: p.TaxID, Address: p.Address}
 }
 
 // toAppError passes an already-classified error (from a reader adapter)

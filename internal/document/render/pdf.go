@@ -1,11 +1,9 @@
-// Package render turns plain data structs into PDF/Excel bytes (FRD
-// 3.13). It has no database or use-case dependencies and knows nothing
-// about any other module -- the document use case reads the data through
-// its own narrow reader interfaces and hands this package only what a
-// layout needs, the same cross-module decoupling pattern used everywhere
-// else (HLD Section 2). No templates are stored (FR-DOC-03, customizing
-// the logo and layout, is Phase 4): the layout below is the garage's one
-// standard layout for every document of its kind.
+// Package render turns print models into PDF and Excel bytes (FRD 3.13). It
+// has no database or use-case dependencies and knows nothing about any other
+// module -- the document use case reads the data through its own narrow
+// reader interfaces, builds the print model (package printmodel) and picks a
+// template from the registry (registry.go). A template reads the model and
+// nothing else.
 package render
 
 import (
@@ -16,38 +14,113 @@ import (
 	"strconv"
 
 	"github.com/go-pdf/fpdf"
+
+	"github.com/viettechno/vietgara-backend/internal/document/printmodel"
 )
 
-// GarageHeader is the letterhead shown at the top of every PDF: the
-// garage's legal identity (FR-TEN-06), with its logo when it has one.
-type GarageHeader struct {
-	// Name is the legal name, or the trading name when none is set.
-	Name string
-	// Address is the legal address, or the trading address.
-	Address string
-	Phone   string
-	// TaxCode, Representative and Bank are printed when set; Bank is one
-	// line such as "Vietcombank - 0011 2233 - Cong ty An Phat".
-	TaxCode        string
-	Representative string
-	Bank           string
-	// Logo is the image content (PNG or JPEG); empty prints no logo.
-	Logo []byte
+// Options are what a template needs besides the model.
+type Options struct {
+	// Paper is the paper size the template was looked up for.
+	Paper printmodel.Paper
+	// Copy prints the copy mark: the document was printed before.
+	Copy bool
 }
 
-// BillTo is who a document is billed to (FR-CUS-07), printed under the
-// header when the document was billed to a tax profile.
-type BillTo struct {
-	Name    string
-	TaxID   string
-	Address string
+// layout holds the measures of one paper size, in mm. The A4 values are the
+// layout every document had before Release 10.0 (template version 1).
+type layout struct {
+	paper  printmodel.Paper
+	margin float64
+	// content is the printable width.
+	content float64
+	// fieldLabel is the label width of a voucher field.
+	fieldLabel float64
+	// signature is the size of the role headings of the voucher's signature
+	// blocks and of the line under them.
+	signature, signatureNote float64
+	// lines are the column widths of the line table: description, quantity,
+	// unit price, line total.
+	lines [4]float64
+	// payments are the columns of the payments table of a receipt.
+	payments [3]float64
+	// goods are the columns of a goods receipt: SKU, part, quantity,
+	// supplier, unit cost, amount.
+	goods [6]float64
+	// stock are the columns of a stock issue: SKU, part, quantity.
+	stock [3]float64
 }
 
-// IsZero reports whether the document is a retail receipt.
-func (b BillTo) IsZero() bool { return b.Name == "" }
+func layoutFor(paper printmodel.Paper) layout {
+	if paper == printmodel.A5 {
+		return layout{
+			paper: paper, margin: 10, content: 128, fieldLabel: 54, signature: 7.5, signatureNote: 7,
+			lines:    [4]float64{58, 16, 27, 27},
+			payments: [3]float64{30, 38, 60},
+			goods:    [6]float64{16, 34, 14, 22, 20, 22},
+			stock:    [3]float64{26, 70, 32},
+		}
+	}
+
+	return layout{
+		paper: printmodel.A4, margin: 18, content: 174, fieldLabel: 50, signature: 9, signatureNote: 8,
+		lines:    [4]float64{90, 25, 35, 35},
+		payments: [3]float64{50, 60, 75},
+		goods:    [6]float64{24, 52, 22, 30, 24, 22},
+		stock:    [3]float64{35, 100, 40},
+	}
+}
+
+// fontFamily is the embedded TrueType family every document uses: the PDF
+// core fonts are Latin-1 only and cannot print Vietnamese diacritics.
+// DejaVu Sans is free to embed (fonts/LICENSE).
+const fontFamily = "DejaVu"
+
+var (
+	//go:embed fonts/DejaVuSans.ttf
+	fontRegular []byte
+	//go:embed fonts/DejaVuSans-Bold.ttf
+	fontBold []byte
+)
+
+// newPDF starts a document on lay's paper. A non-empty copyLabel is printed
+// at the top right of every page.
+func newPDF(lay layout, copyLabel string) *fpdf.Fpdf {
+	pdf := fpdf.New("P", "mm", string(lay.paper), "")
+	pdf.AddUTF8FontFromBytes(fontFamily, "", fontRegular)
+	pdf.AddUTF8FontFromBytes(fontFamily, "B", fontBold)
+	pdf.SetMargins(lay.margin, lay.margin, lay.margin)
+
+	if copyLabel != "" {
+		pdf.SetHeaderFunc(func() { drawCopyMark(pdf, lay, copyLabel) })
+	}
+
+	pdf.AddPage()
+	pdf.SetFont(fontFamily, "", 10)
+
+	return pdf
+}
+
+// copyMarkWidth is the width of the copy mark's box, in mm.
+const copyMarkWidth = 28
+
+// drawCopyMark prints the copy mark above the top right corner of the text
+// area.
+func drawCopyMark(pdf *fpdf.Fpdf, lay layout, label string) {
+	pageWidth, _ := pdf.GetPageSize()
+
+	pdf.SetXY(pageWidth-lay.margin-copyMarkWidth, lay.margin/3)
+	pdf.SetFont(fontFamily, "B", 9)
+	pdf.SetTextColor(180, 0, 0)
+	pdf.SetDrawColor(180, 0, 0)
+	pdf.CellFormat(copyMarkWidth, 5, label, "1", 0, "C", false, 0, "")
+	pdf.SetTextColor(0, 0, 0)
+	pdf.SetDrawColor(0, 0, 0)
+	pdf.SetFont(fontFamily, "", 10)
+	pdf.SetXY(lay.margin, lay.margin)
+}
 
 // writeBillTo prints the party the document is billed to, if any.
-func writeBillTo(pdf *fpdf.Fpdf, b BillTo) {
+func writeBillTo(pdf *fpdf.Fpdf, b printmodel.BillTo) {
 	if b.IsZero() {
 		return
 	}
@@ -63,44 +136,13 @@ func writeBillTo(pdf *fpdf.Fpdf, b BillTo) {
 	}
 }
 
-// DocumentLine is one line item row (a quote line, a repair order line).
-type DocumentLine struct {
-	Description string
-	Quantity    string
-	UnitPrice   int64
-	LineTotal   int64
-}
-
-// fontFamily is the embedded TrueType family every document uses: the PDF
-// core fonts are Latin-1 only and cannot print Vietnamese diacritics.
-// DejaVu Sans is free to embed (fonts/LICENSE).
-const fontFamily = "DejaVu"
-
-var (
-	//go:embed fonts/DejaVuSans.ttf
-	fontRegular []byte
-	//go:embed fonts/DejaVuSans-Bold.ttf
-	fontBold []byte
-)
-
-func newPDF() *fpdf.Fpdf {
-	pdf := fpdf.New("P", "mm", "A4", "")
-	pdf.AddUTF8FontFromBytes(fontFamily, "", fontRegular)
-	pdf.AddUTF8FontFromBytes(fontFamily, "B", fontBold)
-	pdf.SetMargins(18, 18, 18)
-	pdf.AddPage()
-	pdf.SetFont(fontFamily, "", 10)
-
-	return pdf
-}
-
 // logoHeight is the height of the logo in the header, in mm.
 const logoHeight = 18
 
 // drawLogo puts the logo at the top right of the page. An image the PDF
 // library cannot read (a WebP, a corrupt file) is left out: a document
 // without a logo is better than no document.
-func drawLogo(pdf *fpdf.Fpdf, logo []byte) {
+func drawLogo(pdf *fpdf.Fpdf, lay layout, logo []byte) {
 	var imageType string
 
 	switch http.DetectContentType(logo) {
@@ -127,13 +169,13 @@ func drawLogo(pdf *fpdf.Fpdf, logo []byte) {
 
 	width := logoHeight * info.Width() / info.Height()
 	pageWidth, _ := pdf.GetPageSize()
-	pdf.ImageOptions("logo", pageWidth-18-width, 18, width, logoHeight, false, fpdf.ImageOptions{ImageType: imageType}, 0, "")
+	pdf.ImageOptions("logo", pageWidth-lay.margin-width, lay.margin, width, logoHeight, false, fpdf.ImageOptions{ImageType: imageType}, 0, "")
 }
 
 // writeLetterhead prints the logo and the garage's legal identity.
-func writeLetterhead(pdf *fpdf.Fpdf, garage GarageHeader) {
+func writeLetterhead(pdf *fpdf.Fpdf, lay layout, garage printmodel.GarageHeader) {
 	if len(garage.Logo) > 0 {
-		drawLogo(pdf, garage.Logo)
+		drawLogo(pdf, lay, garage.Logo)
 	}
 
 	pdf.SetFont(fontFamily, "B", 16)
@@ -150,8 +192,8 @@ func writeLetterhead(pdf *fpdf.Fpdf, garage GarageHeader) {
 	}
 }
 
-func writeHeader(pdf *fpdf.Fpdf, garage GarageHeader, title, number string) {
-	writeLetterhead(pdf, garage)
+func writeHeader(pdf *fpdf.Fpdf, lay layout, garage printmodel.GarageHeader, title, number string) {
+	writeLetterhead(pdf, lay, garage)
 
 	pdf.Ln(4)
 	pdf.SetFont(fontFamily, "B", 14)
@@ -177,9 +219,9 @@ func writeKeyValue(pdf *fpdf.Fpdf, label, value string) {
 	pdf.CellFormat(0, 6, value, "", 1, "L", false, 0, "")
 }
 
-var lineColumnWidths = [4]float64{90, 25, 35, 35}
+func writeLineTable(pdf *fpdf.Fpdf, lay layout, lines []printmodel.DocumentLine, total int64) {
+	widths := lay.lines
 
-func writeLineTable(pdf *fpdf.Fpdf, lines []DocumentLine, total int64) {
 	pdf.Ln(2)
 	pdf.SetFont(fontFamily, "B", 10)
 	pdf.SetFillColor(240, 240, 240)
@@ -187,7 +229,7 @@ func writeLineTable(pdf *fpdf.Fpdf, lines []DocumentLine, total int64) {
 	headers := [4]string{"Description", "Qty", "Unit Price", "Line Total"}
 
 	for i, h := range headers {
-		pdf.CellFormat(lineColumnWidths[i], 7, h, "1", 0, "L", true, 0, "")
+		pdf.CellFormat(widths[i], 7, h, "1", 0, "L", true, 0, "")
 	}
 
 	pdf.Ln(-1)
@@ -195,16 +237,16 @@ func writeLineTable(pdf *fpdf.Fpdf, lines []DocumentLine, total int64) {
 	pdf.SetFont(fontFamily, "", 10)
 
 	for _, line := range lines {
-		pdf.CellFormat(lineColumnWidths[0], 7, line.Description, "1", 0, "L", false, 0, "")
-		pdf.CellFormat(lineColumnWidths[1], 7, line.Quantity, "1", 0, "R", false, 0, "")
-		pdf.CellFormat(lineColumnWidths[2], 7, formatVND(line.UnitPrice), "1", 0, "R", false, 0, "")
-		pdf.CellFormat(lineColumnWidths[3], 7, formatVND(line.LineTotal), "1", 0, "R", false, 0, "")
+		pdf.CellFormat(widths[0], 7, line.Description, "1", 0, "L", false, 0, "")
+		pdf.CellFormat(widths[1], 7, line.Quantity, "1", 0, "R", false, 0, "")
+		pdf.CellFormat(widths[2], 7, formatVND(line.UnitPrice), "1", 0, "R", false, 0, "")
+		pdf.CellFormat(widths[3], 7, formatVND(line.LineTotal), "1", 0, "R", false, 0, "")
 		pdf.Ln(-1)
 	}
 
 	pdf.SetFont(fontFamily, "B", 10)
-	pdf.CellFormat(lineColumnWidths[0]+lineColumnWidths[1]+lineColumnWidths[2], 8, labelTotal, "1", 0, "R", false, 0, "")
-	pdf.CellFormat(lineColumnWidths[3], 8, formatVND(total), "1", 0, "R", false, 0, "")
+	pdf.CellFormat(widths[0]+widths[1]+widths[2], 8, labelTotal, "1", 0, "R", false, 0, "")
+	pdf.CellFormat(widths[3], 8, formatVND(total), "1", 0, "R", false, 0, "")
 	pdf.Ln(-1)
 }
 

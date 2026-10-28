@@ -53,6 +53,17 @@ func Policies() middleware.Policies {
 		documentv1.DocumentService_ExportStockCountExcel_FullMethodName:      middleware.GarageMethod(inventoryRead),
 		documentv1.DocumentService_ExportPurchasesExcel_FullMethodName:       middleware.GarageMethod(costRead),
 		documentv1.DocumentService_ExportStockValuationExcel_FullMethodName:  middleware.GarageMethod(costRead),
+
+		documentv1.DocumentService_PrintQuotePdf_FullMethodName:             middleware.GarageMethod(quoteRead),
+		documentv1.DocumentService_PrintRepairOrderPdf_FullMethodName:       middleware.GarageMethod(repairOrderRead),
+		documentv1.DocumentService_PrintSettlementReceiptPdf_FullMethodName: middleware.GarageMethod(billingRead),
+		documentv1.DocumentService_PrintPaymentVoucherPdf_FullMethodName:    middleware.GarageMethod(billingRead),
+		documentv1.DocumentService_PrintGoodsReceiptPdf_FullMethodName:      middleware.GarageMethod(inventoryRead),
+		documentv1.DocumentService_PrintStockIssuePdf_FullMethodName:        middleware.GarageMethod(inventoryRead),
+
+		// The print settings belong to the garage, like its profile.
+		documentv1.DocumentService_GetPrintSettings_FullMethodName:   middleware.GarageMethod(access.Member()),
+		documentv1.DocumentService_UpdatePrintSetting_FullMethodName: middleware.GarageMethod(access.Requires(access.GarageWrite)),
 	}
 }
 

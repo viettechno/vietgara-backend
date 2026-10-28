@@ -1,0 +1,21 @@
+{
+  "garage": {
+    "name": "Công ty TNHH Gara An Phát",
+    "address": "12 Nguyễn Huệ, Quận 1, TP.HCM",
+    "phone": "0281234567",
+    "taxCode": "0301234567",
+    "representative": "Nguyễn Văn An",
+    "bank": "Vietcombank - 0011 2233 - An Phat"
+  },
+  "number": "PT-202610-0001",
+  "date": "29/10/2026",
+  "payerName": "Trần Thị Bình",
+  "payerAddress": "7 Hai Bà Trưng",
+  "reason": "Thanh toán quyết toán",
+  "amount": 200000,
+  "method": "Tiền mặt",
+  "settlementNumber": "QT-202610-0001",
+  "collectorName": "Lê Văn Cường",
+  "voided": false,
+  "voidReason": ""
+}

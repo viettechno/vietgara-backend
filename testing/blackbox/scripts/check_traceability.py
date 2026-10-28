@@ -41,6 +41,7 @@ DOC_FILES = [
     "08_Settlement.md",
     "09_Catalogue.md",
     "10_Platform_Staff.md",
+    "11_Documents.md",
 ]
 DOC_BASE = "docs/05-Testing/E2E_Scenarios"
 RAW_BASE = "https://raw.githubusercontent.com/viettechno/vietgara-docs/{ref}/" + DOC_BASE
@@ -59,6 +60,7 @@ HTTP_VERBS = {"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"}
 MANUAL_ONLY = {
     "E2E-IAM-021": "edits PLATFORM_ADMIN_EMAILS and restarts the backend twice",
     "E2E-INV-032": "cursor and scroll behaviour of the web and phone screens; the camera",
+    "E2E-DOC-005": "the print dialog of a browser and a phone, and a real network printer",
 }
 # Test-harness packages whose calls execute as part of a test run. seed/
 # is deliberately excluded: seeding is setup, not coverage.

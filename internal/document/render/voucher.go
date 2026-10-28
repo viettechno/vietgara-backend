@@ -1,32 +1,19 @@
 package render
 
-import "github.com/go-pdf/fpdf"
+import (
+	"github.com/go-pdf/fpdf"
 
-// VoucherPDFData is everything a payment voucher's PDF needs (FR-BIL-05).
-type VoucherPDFData struct {
-	Garage GarageHeader
-	Number string
-	// Date is the day the voucher was issued, "02/01/2006".
-	Date             string
-	PayerName        string
-	PayerAddress     string
-	Reason           string
-	Amount           int64
-	Method           string
-	SettlementNumber string
-	CollectorName    string
-	// Voided marks a voucher that no longer counts; VoidReason says why.
-	Voided     bool
-	VoidReason string
-}
+	"github.com/viettechno/vietgara-backend/internal/document/printmodel"
+)
 
-// PaymentVoucherPDF renders a payment voucher (phiếu thu) in the 01-TT
+// paymentVoucherTemplate renders a payment voucher (phiếu thu) in the 01-TT
 // layout of Circular 200/2014/TT-BTC: the garage's legal header, the payer,
 // the reason, the amount in figures and in words, and signature blocks.
-func PaymentVoucherPDF(data VoucherPDFData) ([]byte, error) {
-	pdf := newPDF()
+func paymentVoucherTemplate(data printmodel.PaymentVoucher, o Options) ([]byte, error) {
+	lay := layoutFor(o.Paper)
+	pdf := newPDF(lay, copyLabel(o, "BẢN SAO"))
 
-	writeLetterhead(pdf, data.Garage)
+	writeLetterhead(pdf, lay, data.Garage)
 	pdf.Ln(2)
 
 	pdf.SetFont(fontFamily, "", 8)
@@ -50,44 +37,47 @@ func PaymentVoucherPDF(data VoucherPDFData) ([]byte, error) {
 
 	pdf.Ln(4)
 
-	writeField(pdf, "Họ và tên người nộp tiền", data.PayerName)
-	writeField(pdf, "Địa chỉ", data.PayerAddress)
-	writeField(pdf, "Lý do nộp", data.Reason)
-	writeField(pdf, "Số tiền", formatVND(data.Amount))
-	writeField(pdf, "Viết bằng chữ", AmountInWords(data.Amount))
-	writeField(pdf, "Hình thức", data.Method)
-	writeField(pdf, "Kèm theo", "Quyết toán "+data.SettlementNumber)
+	writeField(pdf, lay, "Họ và tên người nộp tiền", data.PayerName)
+	writeField(pdf, lay, "Địa chỉ", data.PayerAddress)
+	writeField(pdf, lay, "Lý do nộp", data.Reason)
+	writeField(pdf, lay, "Số tiền", formatVND(data.Amount))
+	writeField(pdf, lay, "Viết bằng chữ", AmountInWords(data.Amount))
+	writeField(pdf, lay, "Hình thức", data.Method)
+	writeField(pdf, lay, "Kèm theo", "Quyết toán "+data.SettlementNumber)
 
-	writeSignatures(pdf, data.CollectorName)
+	writeSignatures(pdf, lay, data.CollectorName)
 
 	return finish(pdf)
 }
 
 // writeField prints one "label: value" line of the voucher, wrapping a long
 // value.
-func writeField(pdf *fpdf.Fpdf, label, value string) {
+func writeField(pdf *fpdf.Fpdf, lay layout, label, value string) {
 	pdf.SetFont(fontFamily, "B", 10)
-	pdf.CellFormat(50, 6, label+":", "", 0, "L", false, 0, "")
+	pdf.CellFormat(lay.fieldLabel, 6, label+":", "", 0, "L", false, 0, "")
 	pdf.SetFont(fontFamily, "", 10)
 	pdf.MultiCell(0, 6, value, "", "L", false)
 }
 
+// voucherRoles are the signature blocks of the 01-TT voucher, left to right.
+var voucherRoles = [...]string{"Giám đốc", "Kế toán trưởng", "Người nộp tiền", "Người lập phiếu", "Thủ quỹ"}
+
 // writeSignatures prints the 01-TT signature blocks; the collector's name
 // is printed under "Thủ quỹ".
-func writeSignatures(pdf *fpdf.Fpdf, collector string) {
+func writeSignatures(pdf *fpdf.Fpdf, lay layout, collector string) {
 	pdf.Ln(8)
 
-	roles := [...]string{"Giám đốc", "Kế toán trưởng", "Người nộp tiền", "Người lập phiếu", "Thủ quỹ"}
-	width := 174.0 / float64(len(roles))
+	roles := voucherRoles
+	width := lay.content / float64(len(roles))
 
-	pdf.SetFont(fontFamily, "B", 9)
+	pdf.SetFont(fontFamily, "B", lay.signature)
 
 	for _, role := range roles {
 		pdf.CellFormat(width, 5, role, "", 0, "C", false, 0, "")
 	}
 
 	pdf.Ln(-1)
-	pdf.SetFont(fontFamily, "", 8)
+	pdf.SetFont(fontFamily, "", lay.signatureNote)
 
 	for range roles {
 		pdf.CellFormat(width, 5, "(Ký, họ tên)", "", 0, "C", false, 0, "")
@@ -96,7 +86,7 @@ func writeSignatures(pdf *fpdf.Fpdf, collector string) {
 	pdf.Ln(-1)
 	pdf.Ln(18)
 
-	pdf.SetFont(fontFamily, "", 9)
+	pdf.SetFont(fontFamily, "", lay.signature)
 
 	for _, role := range roles {
 		name := ""

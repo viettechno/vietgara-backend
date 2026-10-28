@@ -1,0 +1,20 @@
+{
+  "goods_receipt/A4/v1/copy=false": "619052ba14a153f505683c435f4b450b66fe280b55a9b61a69eea42437387996",
+  "goods_receipt/A4/v1/copy=true": "74585ee23f69093f47d7a287d1b864ef73d03bd5602828d6c9b6f6727b53c161",
+  "payment_voucher/A4/v1/copy=false": "7c45c805e33f37db376e8a0e3ed65be026afc1a85cdaf35c6ca59ae1aaa97a46",
+  "payment_voucher/A4/v1/copy=true": "0387b350319da2d1499bec1666bb57b214f0fb2f97a38cb811529da7bec04072",
+  "payment_voucher/A5/v1/copy=false": "7dfcaf95b39ce92bc1704e629f7df65238f5cfae8483c52072cd5b1d44c82e76",
+  "payment_voucher/A5/v1/copy=true": "afcafb4fd2d2deb703cc0de936dfb4acdfc524d83737d86912bd04876ecc967b",
+  "quote/A4/v1/copy=false": "ff79390bb55e22bc04aa1a01ec2904d559128144aa008f4862e2805d95d0447b",
+  "quote/A4/v1/copy=true": "c10f418d8bd71cfec9a769a4e484166da90742715657e0f89c1591f893fd4f4b",
+  "quote/A5/v1/copy=false": "9aad9450a94ce19f634ec7b611788d7ff0e2ab79a593fe6278d198b0627fe6c7",
+  "quote/A5/v1/copy=true": "5fd50231089b378cd80a1a8489bedd23e7759ccb91b177015bf9a0650b5200f3",
+  "repair_order/A4/v1/copy=false": "c1ece355ee667e4f810e01137cca1db94fbb211e2e60231c704be8ffa8185e21",
+  "repair_order/A4/v1/copy=true": "4195b64e0cc251c7fedda09bc7109775b8c5be86bd02c36c0befd0b5471c4b5e",
+  "settlement/A4/v1/copy=false": "79257960c9e57abc6da990eff7d0511a12e011da5a70988b1cd58d9c28166f9c",
+  "settlement/A4/v1/copy=true": "9a45580f46b943fb0e92814c978cafdf00aa8abf35092b448eea632a1aa8dcff",
+  "settlement/A5/v1/copy=false": "3d225a1d10f9679467f48cd857b8f579e06707d3eeff820f064668060ae7c55e",
+  "settlement/A5/v1/copy=true": "2ce962196aedc778540af44757a01a46b3717040b7ee85acf720fff9db8b6fb5",
+  "stock_issue/A4/v1/copy=false": "6e05717b7c717ab1081c59408340c158a2877447c70e21473b440d63dd744e61",
+  "stock_issue/A4/v1/copy=true": "00f7471a98b9120d1c9661dfcd781784da94595ead951c10c9bb035e1bc14612"
+}

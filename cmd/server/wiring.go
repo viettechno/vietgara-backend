@@ -18,6 +18,7 @@ import (
 	customerDomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
 	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
+	"github.com/viettechno/vietgara-backend/internal/document/printmodel"
 	"github.com/viettechno/vietgara-backend/internal/document/render"
 	documentUsecase "github.com/viettechno/vietgara-backend/internal/document/usecase"
 	fileDomain "github.com/viettechno/vietgara-backend/internal/file/domain"
@@ -651,13 +652,13 @@ func (q documentQuotes) Get(ctx context.Context, garageID, quoteID string) (docu
 		return documentUsecase.QuoteInfo{}, err
 	}
 
-	lines := make([]render.DocumentLine, 0, len(quote.Lines))
+	lines := make([]printmodel.DocumentLine, 0, len(quote.Lines))
 	for _, line := range quote.Lines {
 		if line.NonBillable { // a hidden consumable is not printed (FR-CAT-08)
 			continue
 		}
 
-		lines = append(lines, render.DocumentLine{
+		lines = append(lines, printmodel.DocumentLine{
 			Description: line.Description, Quantity: documentQuantity(line.Quantity, line.EnteredQuantity, line.UnitAbbreviation),
 			UnitPrice: line.UnitPrice, LineTotal: line.LineTotal,
 		})
@@ -697,13 +698,13 @@ func (r documentRepairOrders) Get(ctx context.Context, garageID, repairOrderID s
 		return documentUsecase.RepairOrderInfo{}, err
 	}
 
-	lines := make([]render.DocumentLine, 0, len(ro.Lines))
+	lines := make([]printmodel.DocumentLine, 0, len(ro.Lines))
 	for _, line := range ro.Lines {
 		if line.NonBillable { // a hidden consumable is not printed (FR-CAT-08)
 			continue
 		}
 
-		lines = append(lines, render.DocumentLine{
+		lines = append(lines, printmodel.DocumentLine{
 			Description: line.Description, Quantity: documentQuantity(line.Quantity, line.EnteredQuantity, line.UnitAbbreviation),
 			UnitPrice: line.UnitPrice, LineTotal: line.LineTotal,
 		})
@@ -728,7 +729,7 @@ func (s documentSettlements) Get(ctx context.Context, garageID, settlementID str
 		return documentUsecase.SettlementInfo{}, err
 	}
 
-	payments := make([]render.PaymentRow, 0, len(settlement.Payments))
+	payments := make([]printmodel.PaymentRow, 0, len(settlement.Payments))
 	vouchers := make([]documentUsecase.VoucherInfo, 0, len(settlement.Payments))
 
 	for _, p := range settlement.Payments {
@@ -743,7 +744,7 @@ func (s documentSettlements) Get(ctx context.Context, garageID, settlementID str
 			continue
 		}
 
-		payments = append(payments, render.PaymentRow{
+		payments = append(payments, printmodel.PaymentRow{
 			Date: p.CreatedAt.Format("2006-01-02"), Method: string(p.Method), Amount: p.Amount,
 		})
 	}
@@ -849,7 +850,7 @@ func (d documentInventory) GoodsReceipt(ctx context.Context, garageID, receiptID
 			unit = l.UnitAbbreviation
 		}
 
-		info.Lines = append(info.Lines, render.GoodsReceiptRow{
+		info.Lines = append(info.Lines, printmodel.GoodsReceiptRow{
 			SKU: l.PartSKU, Name: l.PartName, Quantity: l.EnteredQuantity, Unit: unit, Supplier: l.SupplierName,
 			UnitCost: l.UnitCost, Amount: l.Amount(),
 		})
@@ -878,7 +879,7 @@ func (d documentInventory) StockIssue(ctx context.Context, garageID, repairOrder
 			unit = l.UnitAbbreviation
 		}
 
-		info.Lines = append(info.Lines, render.StockIssueRow{SKU: l.PartSKU, Name: l.PartName, Quantity: l.EnteredQuantity, Unit: unit})
+		info.Lines = append(info.Lines, printmodel.StockIssueRow{SKU: l.PartSKU, Name: l.PartName, Quantity: l.EnteredQuantity, Unit: unit})
 	}
 
 	return info, nil

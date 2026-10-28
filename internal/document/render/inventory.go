@@ -5,6 +5,8 @@ import (
 	"fmt"
 
 	"github.com/xuri/excelize/v2"
+
+	"github.com/viettechno/vietgara-backend/internal/document/printmodel"
 )
 
 // Column headings the inventory documents share with the stock movement
@@ -17,40 +19,11 @@ const (
 	labelTotal      = "Total"
 )
 
-// GoodsReceiptRow is one line of a goods receipt document.
-type GoodsReceiptRow struct {
-	SKU      string
-	Name     string
-	Quantity string
-	// Unit is the unit Quantity is typed in.
-	Unit     string
-	Supplier string
-	// UnitCost and Amount are VND; they are left out of the document when
-	// ShowCost is false.
-	UnitCost int64
-	Amount   int64
-}
-
-// GoodsReceiptPDFData is everything a goods receipt's PDF needs (FR-INV-06).
-type GoodsReceiptPDFData struct {
-	Garage             GarageHeader
-	Number             string
-	Status             string
-	Date               string
-	DeliveryNoteNumber string
-	Notes              string
-	Lines              []GoodsReceiptRow
-	// ShowCost prints the cost columns and the total; a caller without
-	// inventory.cost.read gets quantities only (FR-INV-08).
-	ShowCost    bool
-	TotalAmount int64
-}
-
-// GoodsReceiptPDF renders a goods receipt as a PDF using the garage's
-// standard layout.
-func GoodsReceiptPDF(data GoodsReceiptPDFData) ([]byte, error) {
-	pdf := newPDF()
-	writeHeader(pdf, data.Garage, "GOODS RECEIPT", data.Number)
+// goodsReceiptTemplate renders a goods receipt (FR-INV-06).
+func goodsReceiptTemplate(data printmodel.GoodsReceipt, o Options) ([]byte, error) {
+	lay := layoutFor(o.Paper)
+	pdf := newPDF(lay, copyLabel(o, "COPY"))
+	writeHeader(pdf, lay, data.Garage, "GOODS RECEIPT", data.Number)
 
 	writeKeyValue(pdf, "Date", data.Date)
 	writeKeyValue(pdf, "Status", data.Status)
@@ -63,7 +36,7 @@ func GoodsReceiptPDF(data GoodsReceiptPDFData) ([]byte, error) {
 		writeKeyValue(pdf, "Notes", data.Notes)
 	}
 
-	widths := [6]float64{24, 52, 22, 30, 24, 22}
+	widths := lay.goods
 	headers := [6]string{headingSKU, headingPart, "Qty", "Supplier", "Unit cost", "Amount"}
 	count := len(widths)
 
@@ -107,30 +80,12 @@ func GoodsReceiptPDF(data GoodsReceiptPDFData) ([]byte, error) {
 	return finish(pdf)
 }
 
-// StockIssueRow is one line of a stock issue document.
-type StockIssueRow struct {
-	SKU      string
-	Name     string
-	Quantity string
-	Unit     string
-}
-
-// StockIssuePDFData is everything a stock issue's PDF needs (FR-INV-20).
-type StockIssuePDFData struct {
-	Garage            GarageHeader
-	Number            string
-	Status            string
-	RepairOrderNumber string
-	PostedAt          string
-	PostedBy          string
-	Lines             []StockIssueRow
-}
-
-// StockIssuePDF renders a stock issue (phiếu xuất kho) as a PDF. It prints
+// stockIssueTemplate renders a stock issue (phiếu xuất kho). It prints
 // quantities only: no cost is on the document.
-func StockIssuePDF(data StockIssuePDFData) ([]byte, error) {
-	pdf := newPDF()
-	writeHeader(pdf, data.Garage, "STOCK ISSUE", data.Number)
+func stockIssueTemplate(data printmodel.StockIssue, o Options) ([]byte, error) {
+	lay := layoutFor(o.Paper)
+	pdf := newPDF(lay, copyLabel(o, "COPY"))
+	writeHeader(pdf, lay, data.Garage, "STOCK ISSUE", data.Number)
 
 	writeKeyValue(pdf, "Repair order", data.RepairOrderNumber)
 	writeKeyValue(pdf, "Status", data.Status)
@@ -143,7 +98,7 @@ func StockIssuePDF(data StockIssuePDFData) ([]byte, error) {
 		writeKeyValue(pdf, "Posted by", data.PostedBy)
 	}
 
-	widths := [3]float64{35, 100, 40}
+	widths := lay.stock
 	headers := [3]string{headingSKU, headingPart, headingQuantity}
 
 	pdf.Ln(2)

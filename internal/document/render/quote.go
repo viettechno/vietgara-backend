@@ -1,29 +1,19 @@
 package render
 
-// QuotePDFData is everything a quote's PDF needs (FR-DOC-01).
-type QuotePDFData struct {
-	Garage       GarageHeader
-	BillTo       BillTo
-	Number       string
-	Status       string
-	CustomerName string
-	VehiclePlate string
-	Notes        string
-	Lines        []DocumentLine
-	TotalAmount  int64
-}
+import "github.com/viettechno/vietgara-backend/internal/document/printmodel"
 
-// QuotePDF renders a quote as a PDF using the garage's standard layout.
-func QuotePDF(data QuotePDFData) ([]byte, error) {
-	pdf := newPDF()
-	writeHeader(pdf, data.Garage, "QUOTE", data.Number)
+// quoteTemplate renders a quote (FR-DOC-01).
+func quoteTemplate(data printmodel.Quote, o Options) ([]byte, error) {
+	lay := layoutFor(o.Paper)
+	pdf := newPDF(lay, copyLabel(o, "COPY"))
+	writeHeader(pdf, lay, data.Garage, "QUOTE", data.Number)
 
 	writeBillTo(pdf, data.BillTo)
 	writeKeyValue(pdf, "Customer", data.CustomerName)
 	writeKeyValue(pdf, "Vehicle", data.VehiclePlate)
 	writeKeyValue(pdf, "Status", data.Status)
 
-	writeLineTable(pdf, data.Lines, data.TotalAmount)
+	writeLineTable(pdf, lay, data.Lines, data.TotalAmount)
 
 	if data.Notes != "" {
 		pdf.Ln(4)

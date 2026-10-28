@@ -13,6 +13,7 @@ import (
 	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 	customerportalv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customerportal/v1"
+	documentv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/document/v1"
 	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
 	quotev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/quote/v1"
@@ -698,6 +699,25 @@ func (c *Client) DownloadReceiptPDF(ctx context.Context, garageID, settlementID 
 func (c *Client) DownloadVoucherPDF(ctx context.Context, garageID, settlementID, paymentID string) (string, []byte, error) {
 	return c.DownloadRaw(ctx, http.MethodGet,
 		garagePath(garageID)+"/settlements/"+url.PathEscape(settlementID)+"/payments/"+url.PathEscape(paymentID)+"/voucher-pdf")
+}
+
+// GetPrintSettings returns the garage's print setting of every document type.
+func (c *Client) GetPrintSettings(ctx context.Context, garageID string) (*documentv1.GetPrintSettingsResponse, error) {
+	return call[documentv1.GetPrintSettingsResponse](ctx, c, http.MethodGet, garagePath(garageID)+"/print-settings", nil)
+}
+
+// UpdatePrintSetting sets the paper size and the copy mark of one document
+// type.
+func (c *Client) UpdatePrintSetting(
+	ctx context.Context, garageID string, documentType documentv1.DocumentType, paper documentv1.PaperSize, copyMark bool,
+) (*documentv1.PrintSetting, error) {
+	return call[documentv1.PrintSetting](ctx, c, http.MethodPut, garagePath(garageID)+"/print-settings/"+documentType.String(),
+		&documentv1.UpdatePrintSettingRequest{PaperSize: paper, CopyMark: copyMark})
+}
+
+// PrintQuotePDF prints a quote: it answers the PDF and logs the print.
+func (c *Client) PrintQuotePDF(ctx context.Context, garageID, quoteID string) (string, []byte, error) {
+	return c.DownloadRaw(ctx, http.MethodPost, garagePath(garageID)+"/quotes/"+url.PathEscape(quoteID)+"/pdf:print")
 }
 
 // DownloadStockMovementsExcel downloads the stock-movement report as an

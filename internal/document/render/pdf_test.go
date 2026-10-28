@@ -11,8 +11,19 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/viettechno/vietgara-backend/internal/document/printmodel"
 	"github.com/viettechno/vietgara-backend/internal/document/render"
 )
+
+// a4 prints m with the newest A4 template of its document type.
+func a4(m printmodel.Model) ([]byte, error) {
+	tpl, ok := render.Latest(m.Type(), printmodel.A4)
+	if !ok {
+		return nil, render.ErrModelMismatch
+	}
+
+	return tpl.Render(m, false)
+}
 
 func logoPNG(t *testing.T) []byte {
 	t.Helper()
@@ -40,10 +51,10 @@ func logoJPEG(t *testing.T) []byte {
 	return buf.Bytes()
 }
 
-func quote(header render.GarageHeader) render.QuotePDFData {
-	return render.QuotePDFData{
+func quote(header printmodel.GarageHeader) printmodel.Quote {
+	return printmodel.Quote{
 		Garage: header, Number: "BG-1", Status: "draft", CustomerName: "An", VehiclePlate: "51F-123.45",
-		Lines: []render.DocumentLine{{Description: "Oil", Quantity: "1", UnitPrice: 100, LineTotal: 100}}, TotalAmount: 100,
+		Lines: []printmodel.DocumentLine{{Description: "Oil", Quantity: "1", UnitPrice: 100, LineTotal: 100}}, TotalAmount: 100,
 	}
 }
 
@@ -53,12 +64,12 @@ func quote(header render.GarageHeader) render.QuotePDFData {
 func TestLetterhead(t *testing.T) {
 	t.Parallel()
 
-	full := render.GarageHeader{
+	full := printmodel.GarageHeader{
 		Name: "Cong ty TNHH Gara An Phat", Address: "12 Nguyen Hue, Q1", Phone: "0281234567", TaxCode: "0301234567",
 		Representative: "Nguyen Van An", Bank: "Vietcombank - 0011 2233 - An Phat",
 	}
 
-	withoutLogo, err := render.QuotePDF(quote(full))
+	withoutLogo, err := a4(quote(full))
 	require.NoError(t, err)
 	require.Equal(t, "%PDF", string(withoutLogo[:4]))
 
@@ -72,7 +83,7 @@ func TestLetterhead(t *testing.T) {
 		header := full
 		header.Logo = logo
 
-		pdf, err := render.QuotePDF(quote(header))
+		pdf, err := a4(quote(header))
 		require.NoError(t, err, name)
 		assert.Equal(t, "%PDF", string(pdf[:4]), name)
 	}
@@ -80,11 +91,11 @@ func TestLetterhead(t *testing.T) {
 	header := full
 	header.Logo = logoPNG(t)
 
-	withLogo, err := render.QuotePDF(quote(header))
+	withLogo, err := a4(quote(header))
 	require.NoError(t, err)
 	assert.Greater(t, len(withLogo), len(withoutLogo), "the logo is embedded")
 
-	minimal, err := render.QuotePDF(quote(render.GarageHeader{Name: "Gara"}))
+	minimal, err := a4(quote(printmodel.GarageHeader{Name: "Gara"}))
 	require.NoError(t, err)
 	assert.Less(t, len(minimal), len(withoutLogo), "a header without a legal profile is shorter")
 }
@@ -94,27 +105,27 @@ func TestLetterhead(t *testing.T) {
 func TestBillTo(t *testing.T) {
 	t.Parallel()
 
-	billed := quote(render.GarageHeader{Name: "Gara"})
-	billed.BillTo = render.BillTo{Name: "Cong ty Van Tai A", TaxID: "0301234567", Address: "12 Le Loi"}
+	billed := quote(printmodel.GarageHeader{Name: "Gara"})
+	billed.BillTo = printmodel.BillTo{Name: "Cong ty Van Tai A", TaxID: "0301234567", Address: "12 Le Loi"}
 
-	withParty, err := render.QuotePDF(billed)
+	withParty, err := a4(billed)
 	require.NoError(t, err)
 
-	retail, err := render.QuotePDF(quote(render.GarageHeader{Name: "Gara"}))
+	retail, err := a4(quote(printmodel.GarageHeader{Name: "Gara"}))
 	require.NoError(t, err)
 
 	assert.NotEqual(t, len(withParty), len(retail), "the billed document carries the party's lines")
-	assert.True(t, render.BillTo{}.IsZero())
+	assert.True(t, printmodel.BillTo{}.IsZero())
 
-	for name, render := range map[string]func() ([]byte, error){
+	for name, renderFn := range map[string]func() ([]byte, error){
 		"repair order": func() ([]byte, error) {
-			return render.RepairOrderPDF(render.RepairOrderPDFData{BillTo: billed.BillTo, Number: "LSC-1"})
+			return a4(printmodel.RepairOrder{BillTo: billed.BillTo, Number: "LSC-1"})
 		},
 		"receipt": func() ([]byte, error) {
-			return render.SettlementReceiptPDF(render.SettlementReceiptData{BillTo: billed.BillTo, Number: "QT-1"})
+			return a4(printmodel.Settlement{BillTo: billed.BillTo, Number: "QT-1"})
 		},
 	} {
-		pdf, err := render()
+		pdf, err := renderFn()
 		require.NoError(t, err, name)
 		assert.Equal(t, "%PDF", string(pdf[:4]), name)
 	}

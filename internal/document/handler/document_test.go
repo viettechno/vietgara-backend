@@ -14,6 +14,7 @@ import (
 	reportingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/reporting/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/document/handler"
+	"github.com/viettechno/vietgara-backend/internal/document/printmodel"
 	"github.com/viettechno/vietgara-backend/internal/document/render"
 	"github.com/viettechno/vietgara-backend/internal/document/usecase"
 	"github.com/viettechno/vietgara-backend/internal/mocks"
@@ -41,6 +42,7 @@ type env struct {
 	revenue        *mocks.MockDocumentRevenueReader
 	garages        *mocks.MockDocumentGarageReader
 	inventory      *mocks.MockDocumentInventoryReader
+	prints         *fakePrints
 }
 
 func newEnv(t *testing.T) *env {
@@ -50,10 +52,10 @@ func newEnv(t *testing.T) *env {
 		quotes: mocks.NewMockDocumentQuoteReader(t), repairOrders: mocks.NewMockDocumentRepairOrderReader(t),
 		settlements: mocks.NewMockDocumentSettlementReader(t), stockMovements: mocks.NewMockDocumentStockMovementReader(t),
 		revenue: mocks.NewMockDocumentRevenueReader(t), garages: mocks.NewMockDocumentGarageReader(t),
-		inventory: mocks.NewMockDocumentInventoryReader(t),
+		inventory: mocks.NewMockDocumentInventoryReader(t), prints: &fakePrints{},
 	}
 
-	uc := usecase.NewDocumentUseCase(e.quotes, e.repairOrders, e.settlements, e.stockMovements, e.revenue, e.garages, e.inventory)
+	uc := usecase.NewDocumentUseCase(e.quotes, e.repairOrders, e.settlements, e.stockMovements, e.revenue, e.garages, e.inventory, e.prints)
 	e.srv = handler.NewServer(uc)
 
 	return e
@@ -67,7 +69,7 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 11)
+	assert.Len(t, p, 19)
 	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportGoodsReceiptPdf_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportStockIssuePdf_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportStockCountExcel_FullMethodName].Garage.Permission)
@@ -86,7 +88,7 @@ func TestExportQuotePdf(t *testing.T) {
 		e.garages.EXPECT().Get(anyArg, garageID).Return(defaultGarage(), nil).Once()
 		e.quotes.EXPECT().Get(anyArg, garageID, quoteID).Return(usecase.QuoteInfo{
 			Number: "QT-0001", CustomerName: "An Nguyen", TotalAmount: 250_000,
-			Lines: []render.DocumentLine{{Description: "Oil change", Quantity: "1", UnitPrice: 250_000, LineTotal: 250_000}},
+			Lines: []printmodel.DocumentLine{{Description: "Oil change", Quantity: "1", UnitPrice: 250_000, LineTotal: 250_000}},
 		}, nil).Once()
 
 		resp, err := e.srv.ExportQuotePdf(t.Context(), &documentv1.ExportQuotePdfRequest{GarageId: garageID, QuoteId: quoteID})
@@ -119,7 +121,7 @@ func TestExportRepairOrderPdf(t *testing.T) {
 		e.garages.EXPECT().Get(anyArg, garageID).Return(defaultGarage(), nil).Once()
 		e.repairOrders.EXPECT().Get(anyArg, garageID, repairOrderID).Return(usecase.RepairOrderInfo{
 			Number: "LSC-0001", CustomerName: "An Nguyen", TotalAmount: 250_000,
-			Lines: []render.DocumentLine{{Description: "Oil change", Quantity: "1", UnitPrice: 250_000, LineTotal: 250_000}},
+			Lines: []printmodel.DocumentLine{{Description: "Oil change", Quantity: "1", UnitPrice: 250_000, LineTotal: 250_000}},
 		}, nil).Once()
 
 		resp, err := e.srv.ExportRepairOrderPdf(t.Context(), &documentv1.ExportRepairOrderPdfRequest{
@@ -152,7 +154,7 @@ func TestExportRepairOrderPdf(t *testing.T) {
 
 		e.repairOrders.EXPECT().Get(anyArg, garageID, repairOrderID).Return(usecase.RepairOrderInfo{
 			Number: "LSC-0001", CustomerName: "An Nguyen", TotalAmount: 250_000,
-			Lines:  []render.DocumentLine{{Description: "Oil change", Quantity: "1", UnitPrice: 250_000, LineTotal: 250_000}},
+			Lines:  []printmodel.DocumentLine{{Description: "Oil change", Quantity: "1", UnitPrice: 250_000, LineTotal: 250_000}},
 			Issuer: issuer.Issuer{},
 		}, nil).Once()
 

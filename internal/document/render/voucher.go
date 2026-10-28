@@ -59,22 +59,25 @@ func writeField(pdf *fpdf.Fpdf, lay layout, label, value string) {
 	pdf.MultiCell(0, 6, value, "", "L", false)
 }
 
+// voucherRoles are the signature blocks of the 01-TT voucher, left to right.
+var voucherRoles = [...]string{"Giám đốc", "Kế toán trưởng", "Người nộp tiền", "Người lập phiếu", "Thủ quỹ"}
+
 // writeSignatures prints the 01-TT signature blocks; the collector's name
 // is printed under "Thủ quỹ".
 func writeSignatures(pdf *fpdf.Fpdf, lay layout, collector string) {
 	pdf.Ln(8)
 
-	roles := [...]string{"Giám đốc", "Kế toán trưởng", "Người nộp tiền", "Người lập phiếu", "Thủ quỹ"}
+	roles := voucherRoles
 	width := lay.content / float64(len(roles))
 
-	pdf.SetFont(fontFamily, "B", 9)
+	pdf.SetFont(fontFamily, "B", lay.signature)
 
 	for _, role := range roles {
 		pdf.CellFormat(width, 5, role, "", 0, "C", false, 0, "")
 	}
 
 	pdf.Ln(-1)
-	pdf.SetFont(fontFamily, "", 8)
+	pdf.SetFont(fontFamily, "", lay.signatureNote)
 
 	for range roles {
 		pdf.CellFormat(width, 5, "(Ký, họ tên)", "", 0, "C", false, 0, "")
@@ -83,7 +86,7 @@ func writeSignatures(pdf *fpdf.Fpdf, lay layout, collector string) {
 	pdf.Ln(-1)
 	pdf.Ln(18)
 
-	pdf.SetFont(fontFamily, "", 9)
+	pdf.SetFont(fontFamily, "", lay.signature)
 
 	for _, role := range roles {
 		name := ""

@@ -65,10 +65,7 @@ func (uc *DocumentUseCase) PrintSettings(ctx context.Context, garageID string) (
 	infos := make([]PrintSettingInfo, 0, len(printmodel.Types()))
 
 	for _, t := range printmodel.Types() {
-		setting, ok := chosen[t]
-		if !ok {
-			setting = DefaultPrintSetting
-		}
+		setting := effective(chosen, t)
 
 		infos = append(infos, PrintSettingInfo{Type: t, Paper: setting.Paper, CopyMark: setting.CopyMark, Available: render.Papers(t)})
 	}
@@ -96,6 +93,21 @@ func (uc *DocumentUseCase) UpdatePrintSetting(
 	return PrintSettingInfo{Type: t, Paper: paper, CopyMark: copyMark, Available: render.Papers(t)}, nil
 }
 
+// effective is the setting a document type prints with: the garage's choice,
+// or the default when it has none or when its size has no template any more.
+func effective(chosen map[printmodel.DocumentType]PrintSetting, t printmodel.DocumentType) PrintSetting {
+	setting, ok := chosen[t]
+	if !ok {
+		return DefaultPrintSetting
+	}
+
+	if _, offered := render.Latest(t, setting.Paper); !offered {
+		setting.Paper = DefaultPrintSetting.Paper
+	}
+
+	return setting
+}
+
 // pdf renders model m of document documentID the way the garage prints it
 // (FR-DOC-04): on the paper size it chose, with the template version of the
 // document's first print, so a reprint matches it. When printed is set the
@@ -109,14 +121,7 @@ func (uc *DocumentUseCase) pdf(ctx context.Context, garageID, documentID string,
 		return nil, apperror.Internal("read print settings", err)
 	}
 
-	setting, ok := chosen[t]
-	if !ok {
-		setting = DefaultPrintSetting
-	}
-
-	if _, offered := render.Latest(t, setting.Paper); !offered {
-		setting.Paper = printmodel.A4
-	}
+	setting := effective(chosen, t)
 
 	state, err := uc.Prints.State(ctx, garageID, t, documentID, setting.Paper)
 	if err != nil {

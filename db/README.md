@@ -21,9 +21,9 @@ first real tenant on, every change is a new forward-only migration.
 
 | Migrations | Creates |
 | --- | --- |
-| `enable_pg_trgm_extension`, `create_app_role` | Trigram search; the `vietgara_app` role (not a superuser, no `BYPASSRLS`) and the default privileges that grant it every later table and sequence. Append-only tables (`audit_log`, `notification_log`, `support_access_events`) revoke `UPDATE` and `DELETE` |
+| `enable_pg_trgm_extension`, `create_app_role` | Trigram search; the `vietgara_app` role (not a superuser, no `BYPASSRLS`) and the default privileges that grant it every later table and sequence. Append-only tables (`audit_log`, `notification_log`, `support_access_events`, `print_log`) revoke `UPDATE` and `DELETE` |
 | `create_rls_context_functions`, `create_row_audit_functions` | `app_current_garage_id()` and `app_current_user_id()`, read by every policy; the row-audit trigger functions that fill `created_by` and `updated_by` (NFR-MT-07) |
-| `create_<table>_table` | One file per table, in module order: identity, tenant, license, platform, customer, supplier, quote, repair order, catalogue, inventory, billing, notification, file, MFA, platform staff, support access. `db/audit_columns_test.go` fails when a table has neither the audit columns nor an allowlist entry |
+| `create_<table>_table` | One file per table, in module order: identity, tenant, license, platform, customer, supplier, quote, repair order, catalogue, inventory, billing, notification, file, MFA, platform staff, support access, document print. `db/audit_columns_test.go` fails when a table has neither the audit columns nor an allowlist entry |
 | `create_<type>_enum` | An enum used by more than one table |
 | `create_<name>_function` | `SECURITY DEFINER` lookups and helpers that need their tables first: `owner_usage()`, `find_customers_by_email()`, `find_quote_by_public_token()`, `file_object_key()`, `purge_idempotency_keys()` |
 

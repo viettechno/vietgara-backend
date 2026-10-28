@@ -75,9 +75,19 @@ func (s *PostgresPrintStore) SaveSetting(ctx context.Context, garageID string, t
 func (s *PostgresPrintStore) State(
 	ctx context.Context, garageID string, t printmodel.DocumentType, documentID string, paper printmodel.Paper,
 ) (usecase.PrintState, error) {
+	q := platformdb.QuerierFromContext(ctx, s.pool)
+
+	// Two prints of one document at once (a double click) must not both read
+	// "never printed": the lock holds the second until the first commits its
+	// log row, so that one is the reprint.
+	if _, err := q.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || $2 || ':' || $3, 0))`,
+		garageID, string(t), documentID); err != nil {
+		return usecase.PrintState{}, fmt.Errorf("lock print state: %w", err)
+	}
+
 	var state usecase.PrintState
 
-	err := platformdb.QuerierFromContext(ctx, s.pool).QueryRow(ctx, `
+	err := q.QueryRow(ctx, `
 		SELECT COALESCE((SELECT template_version FROM print_log
 		                 WHERE garage_id = $1 AND document_type = $2 AND document_id = $3 AND paper_size = $4
 		                 ORDER BY created_at, id LIMIT 1), 0),
@@ -90,14 +100,16 @@ func (s *PostgresPrintStore) State(
 	return state, nil
 }
 
-// Record adds one print to the log. The user and the time come from the
-// audit trigger.
+// Record adds one print to the log. The user comes from the audit trigger.
+// The time is the clock, not the start of the transaction, so that the log
+// keeps the order the prints were made in: the earliest row pins the template
+// version of a document's reprints.
 func (s *PostgresPrintStore) Record(
 	ctx context.Context, garageID string, t printmodel.DocumentType, documentID string, paper printmodel.Paper, version int, copyMark bool,
 ) error {
 	_, err := platformdb.QuerierFromContext(ctx, s.pool).Exec(ctx, `
-		INSERT INTO print_log (garage_id, document_type, document_id, paper_size, template_version, copy)
-		VALUES ($1, $2, $3, $4, $5, $6)`,
+		INSERT INTO print_log (garage_id, document_type, document_id, paper_size, template_version, copy, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, clock_timestamp())`,
 		garageID, string(t), documentID, string(paper), version, copyMark)
 	if err != nil {
 		return fmt.Errorf("log print: %w", err)

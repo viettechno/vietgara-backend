@@ -190,3 +190,22 @@ func TestPrintSettingsRPCs(t *testing.T) {
 		assert.Empty(t, e.prints.settings)
 	})
 }
+
+func TestEveryDocumentTypeIsMappedToProto(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t)
+
+	resp, err := e.srv.GetPrintSettings(t.Context(), &documentv1.GetPrintSettingsRequest{GarageId: garageID})
+	require.NoError(t, err)
+	require.Len(t, resp.GetSettings(), len(printmodel.Types()))
+
+	seen := map[documentv1.DocumentType]bool{}
+
+	for _, setting := range resp.GetSettings() {
+		assert.NotEqual(t, documentv1.DocumentType_DOCUMENT_TYPE_UNSPECIFIED, setting.GetDocumentType())
+		assert.False(t, seen[setting.GetDocumentType()], "each type once")
+
+		seen[setting.GetDocumentType()] = true
+	}
+}

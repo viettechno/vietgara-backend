@@ -54,6 +54,18 @@ func TestPrintSettings(t *testing.T) {
 		assert.True(t, infos[0].CopyMark)
 	})
 
+	t.Run("a size that has no template any more is reported as the A4 that prints", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Prints.settings = map[printmodel.DocumentType]usecase.PrintSetting{printmodel.TypeRepairOrder: {Paper: printmodel.A5, CopyMark: true}}
+
+		infos, err := uc.PrintSettings(t.Context(), garageID)
+		require.NoError(t, err)
+		assert.Equal(t, printmodel.A4, infos[1].Paper)
+		assert.True(t, infos[1].CopyMark)
+	})
+
 	t.Run("store failure", func(t *testing.T) {
 		t.Parallel()
 

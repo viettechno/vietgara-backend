@@ -67,9 +67,12 @@ func TestState(t *testing.T) {
 	store := repository.NewPostgresPrintStore(nil)
 
 	tx := dbtest.New(t).
+		ExpectExec("pg_advisory_xact_lock", dbtest.Tag(1), nil).
 		ExpectQueryRow("FROM print_log", dbtest.Row(1, 3)).
 		WithArgs(func(args []any) { assert.Equal(t, []any{garageID, "quote", documentID, "A4"}, args) }).
-		ExpectQueryRow("FROM print_log", dbtest.ErrRow(errBoom))
+		ExpectExec("pg_advisory_xact_lock", dbtest.Tag(1), nil).
+		ExpectQueryRow("FROM print_log", dbtest.ErrRow(errBoom)).
+		ExpectExec("pg_advisory_xact_lock", dbtest.Tag(0), errBoom)
 	ctx := tx.Context(t.Context())
 
 	state, err := store.State(ctx, garageID, printmodel.TypeQuote, documentID, printmodel.A4)
@@ -78,6 +81,9 @@ func TestState(t *testing.T) {
 
 	_, err = store.State(ctx, garageID, printmodel.TypeQuote, documentID, printmodel.A4)
 	require.ErrorIs(t, err, errBoom)
+
+	_, err = store.State(ctx, garageID, printmodel.TypeQuote, documentID, printmodel.A4)
+	require.ErrorIs(t, err, errBoom, "the lock failed")
 }
 
 func TestRecord(t *testing.T) {

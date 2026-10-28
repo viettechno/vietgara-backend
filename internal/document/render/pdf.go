@@ -35,6 +35,9 @@ type layout struct {
 	content float64
 	// fieldLabel is the label width of a voucher field.
 	fieldLabel float64
+	// signature is the size of the role headings of the voucher's signature
+	// blocks and of the line under them.
+	signature, signatureNote float64
 	// lines are the column widths of the line table: description, quantity,
 	// unit price, line total.
 	lines [4]float64
@@ -50,7 +53,7 @@ type layout struct {
 func layoutFor(paper printmodel.Paper) layout {
 	if paper == printmodel.A5 {
 		return layout{
-			paper: paper, margin: 10, content: 128, fieldLabel: 42,
+			paper: paper, margin: 10, content: 128, fieldLabel: 54, signature: 7.5, signatureNote: 7,
 			lines:    [4]float64{58, 16, 27, 27},
 			payments: [3]float64{30, 38, 60},
 			goods:    [6]float64{16, 34, 14, 22, 20, 22},
@@ -59,7 +62,7 @@ func layoutFor(paper printmodel.Paper) layout {
 	}
 
 	return layout{
-		paper: printmodel.A4, margin: 18, content: 174, fieldLabel: 50,
+		paper: printmodel.A4, margin: 18, content: 174, fieldLabel: 50, signature: 9, signatureNote: 8,
 		lines:    [4]float64{90, 25, 35, 35},
 		payments: [3]float64{50, 60, 75},
 		goods:    [6]float64{24, 52, 22, 30, 24, 22},

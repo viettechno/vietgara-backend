@@ -15,11 +15,18 @@ var errTestUsersSMTPHostRequired = errors.New("TEST_USERS_SMTP_HOST is required 
 // e-mail goes to the SMTP server at TEST_USERS_SMTP_HOST (a Mailpit the
 // suite reads OTPs from) instead of the configured provider. It returns the
 // zero domain and mailer unchanged when the domain is not set, the normal
-// case.
+// case. Outside a developer machine or staging (testusers.Allowed on
+// APP_ENV) the setting stops the start: test users route e-mail to a test
+// inbox and are purged, which production must never do, even with a
+// staging .env copied by mistake.
 func testUsersFromEnv(mailer mail.Sender, from mail.From) (testusers.Domain, mail.Sender, error) {
 	raw := envOr("TEST_USERS_EMAIL_DOMAIN", "")
 	if raw == "" {
 		return testusers.Domain{}, mailer, nil
+	}
+
+	if err := testusers.Allowed(envOr("APP_ENV", "")); err != nil {
+		return testusers.Domain{}, nil, err
 	}
 
 	domain, err := testusers.Parse(raw)

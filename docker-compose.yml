@@ -86,6 +86,17 @@ services:
     networks:
       - vietgara-network
 
+  # The backend runs as uid 10001. A volume created before keeps root's
+  # ownership: this hands over whatever is not 10001's yet, then exits.
+  vietgara-uploads-owner:
+    image: alpine:3.22
+    container_name: vietgara-uploads-owner
+    command: ["sh", "-c", "find /app/data/uploads \\( ! -user 10001 -o ! -group 10001 \\) -exec chown -h 10001:10001 {} +"]
+    volumes:
+      - vietgara-uploads:/app/data/uploads
+    networks:
+      - vietgara-network
+
   vietgara-backend:
     build:
       context: .
@@ -99,6 +110,8 @@ services:
         condition: service_healthy
       vietgara-kafka:
         condition: service_healthy
+      vietgara-uploads-owner:
+        condition: service_completed_successfully
       vietgara-mailpit:
         condition: service_started
     environment:

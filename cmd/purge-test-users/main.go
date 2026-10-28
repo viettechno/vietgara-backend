@@ -189,6 +189,11 @@ func confirmedDomain(lookupEnv func(string) (string, bool), confirmation string)
 		return testusers.Domain{}, errTestUsersEmailDomainRequired
 	}
 
+	appEnv, _ := lookupEnv("APP_ENV")
+	if err := testusers.Allowed(appEnv); err != nil {
+		return testusers.Domain{}, err
+	}
+
 	domain, err := testusers.Parse(rawDomain)
 	if err != nil {
 		return testusers.Domain{}, fmt.Errorf("invalid TEST_USERS_EMAIL_DOMAIN: %w", err)

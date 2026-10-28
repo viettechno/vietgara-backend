@@ -14,8 +14,28 @@ import (
 
 var reservedTLDs = []string{".test", ".example", ".invalid", ".localhost"}
 
-// ErrDomain is returned for a domain outside the reserved TLDs.
-var ErrDomain = errors.New("test user domain must be under .test, .example, .invalid or .localhost")
+var (
+	// ErrDomain is returned for a domain outside the reserved TLDs.
+	ErrDomain = errors.New("test user domain must be under .test, .example, .invalid or .localhost")
+	// ErrEnvironment is returned by Allowed outside a developer machine or a
+	// shared test deployment.
+	ErrEnvironment = errors.New("test users are allowed only when APP_ENV is empty, local or staging")
+)
+
+// Allowed reports whether test users may be enabled where APP_ENV is
+// appEnv: on a developer machine (empty, "local") or a shared test
+// deployment ("staging"). Test users get their e-mail in a test inbox and
+// are deleted, which production must never do, so every other value fails:
+// "production", and also a value Allowed does not know ("prod", a typo).
+// Every entry point that enables test users calls it.
+func Allowed(appEnv string) error {
+	switch strings.ToLower(strings.TrimSpace(appEnv)) {
+	case "", "local", "staging":
+		return nil
+	default:
+		return fmt.Errorf("%w (APP_ENV=%q)", ErrEnvironment, appEnv)
+	}
+}
 
 // Domain is a validated test user e-mail domain; the zero value owns no
 // address.

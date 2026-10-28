@@ -23,6 +23,7 @@ func TestConfirmedDomain(t *testing.T) {
 	tests := []struct {
 		name         string
 		configured   string
+		appEnv       string
 		confirmation string
 		want         string
 		wantErr      bool
@@ -55,6 +56,20 @@ func TestConfirmedDomain(t *testing.T) {
 			wantErr:      true,
 		},
 		{
+			name:         "production refuses to purge",
+			configured:   "blackbox.vietgara.test",
+			appEnv:       "production",
+			confirmation: "blackbox.vietgara.test",
+			wantErr:      true,
+		},
+		{
+			name:         "staging may purge",
+			configured:   "blackbox.vietgara.test",
+			appEnv:       "staging",
+			confirmation: "blackbox.vietgara.test",
+			want:         "blackbox.vietgara.test",
+		},
+		{
 			name:         "non-canonical confirmation is rejected",
 			configured:   "BLACKBOX.VIETGARA.TEST",
 			confirmation: "BLACKBOX.VIETGARA.TEST",
@@ -69,6 +84,10 @@ func TestConfirmedDomain(t *testing.T) {
 			env := map[string]string{}
 			if tt.configured != "" {
 				env["TEST_USERS_EMAIL_DOMAIN"] = tt.configured
+			}
+
+			if tt.appEnv != "" {
+				env["APP_ENV"] = tt.appEnv
 			}
 
 			got, err := confirmedDomain(func(key string) (string, bool) {

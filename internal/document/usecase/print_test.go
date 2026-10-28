@@ -214,6 +214,29 @@ func TestPrintUsesTheChosenPaper(t *testing.T) {
 	assert.Contains(t, string(pdf), "/MediaBox [0 0 595.28 841.89]", "A4")
 }
 
+// A reprint is judged on any paper size, the pinned template version on the
+// paper being printed on.
+func TestChangingThePaperIsAReprintWithItsOwnFirstVersion(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+	expectQuote(d)
+	d.Prints.settings = map[printmodel.DocumentType]usecase.PrintSetting{printmodel.TypeQuote: {Paper: printmodel.A4, CopyMark: true}}
+
+	_, err := uc.QuotePDF(t.Context(), garageID, quoteID, true)
+	require.NoError(t, err)
+
+	d.Prints.settings[printmodel.TypeQuote] = usecase.PrintSetting{Paper: printmodel.A5, CopyMark: true}
+
+	_, err = uc.QuotePDF(t.Context(), garageID, quoteID, true)
+	require.NoError(t, err)
+
+	require.Len(t, d.Prints.log, 2)
+	assert.True(t, d.Prints.log[1].Copy, "the document was printed before, on another paper")
+	assert.Equal(t, printmodel.A5, d.Prints.log[1].Paper)
+	assert.Equal(t, 1, d.Prints.log[1].Version, "no A5 print to pin: the newest A5 template")
+}
+
 func TestReprintKeepsTheFirstPrintsVersion(t *testing.T) {
 	t.Parallel()
 
@@ -250,6 +273,7 @@ func TestPrintStoreFailures(t *testing.T) {
 		"settings": func(f *fakePrints) { f.err = errBoom },
 		"state":    func(f *fakePrints) { f.stateErr = errBoom },
 		"log":      func(f *fakePrints) { f.recordErr = errBoom },
+		"lock":     func(f *fakePrints) { f.lockErr = errBoom },
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

@@ -41,6 +41,12 @@ type PrintStore interface {
 	// absent.
 	Settings(ctx context.Context, garageID string) (map[printmodel.DocumentType]PrintSetting, error)
 	SaveSetting(ctx context.Context, garageID string, t printmodel.DocumentType, s PrintSetting) error
+	// Lock holds off the other prints of the document until the transaction
+	// ends, so that the State read and the Record write that follow are one
+	// step: two prints at once give one first print and one reprint. It needs
+	// the default READ COMMITTED isolation, under which the second print sees
+	// the first one's committed row when its lock is granted.
+	Lock(ctx context.Context, garageID string, t printmodel.DocumentType, documentID string) error
 	State(ctx context.Context, garageID string, t printmodel.DocumentType, documentID string, paper printmodel.Paper) (PrintState, error)
 	// Record adds one row to the print log.
 	Record(ctx context.Context, garageID string, t printmodel.DocumentType, documentID string, paper printmodel.Paper, version int, copyMark bool) error
@@ -122,6 +128,12 @@ func (uc *DocumentUseCase) pdf(ctx context.Context, garageID, documentID string,
 	}
 
 	setting := effective(chosen, t)
+
+	if printed {
+		if err := uc.Prints.Lock(ctx, garageID, t, documentID); err != nil {
+			return nil, apperror.Internal("lock print", err)
+		}
+	}
 
 	state, err := uc.Prints.State(ctx, garageID, t, documentID, setting.Paper)
 	if err != nil {

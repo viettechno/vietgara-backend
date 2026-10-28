@@ -469,11 +469,6 @@ packages:
           filename: "document_usecase_inventory_document_reader.go"
           dir: "./internal/mocks"
           structname: "MockDocumentInventoryReader"
-      PrintStore:
-        config:
-          filename: "document_usecase_print_store.go"
-          dir: "./internal/mocks"
-          structname: "MockDocumentPrintStore"
   github.com/viettechno/vietgara-backend/internal/reporting/usecase:
     interfaces:
       SettlementReader:

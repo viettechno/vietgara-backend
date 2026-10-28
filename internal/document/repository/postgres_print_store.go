@@ -70,24 +70,28 @@ func (s *PostgresPrintStore) SaveSetting(ctx context.Context, garageID string, t
 	return nil
 }
 
+// Lock takes a transaction-scoped advisory lock on the document, so that two
+// prints of it at once (a double click) cannot both read "never printed": the
+// second waits until the first commits its log row, and is the reprint. It
+// relies on READ COMMITTED, the default, to see that row.
+func (s *PostgresPrintStore) Lock(ctx context.Context, garageID string, t printmodel.DocumentType, documentID string) error {
+	_, err := platformdb.QuerierFromContext(ctx, s.pool).Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || $2 || ':' || $3, 0))`, garageID, string(t), documentID)
+	if err != nil {
+		return fmt.Errorf("lock print: %w", err)
+	}
+
+	return nil
+}
+
 // State reads what the print log says about a document: the template
 // version of its first print on paper, and how many times it was printed.
 func (s *PostgresPrintStore) State(
 	ctx context.Context, garageID string, t printmodel.DocumentType, documentID string, paper printmodel.Paper,
 ) (usecase.PrintState, error) {
-	q := platformdb.QuerierFromContext(ctx, s.pool)
-
-	// Two prints of one document at once (a double click) must not both read
-	// "never printed": the lock holds the second until the first commits its
-	// log row, so that one is the reprint.
-	if _, err := q.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1 || ':' || $2 || ':' || $3, 0))`,
-		garageID, string(t), documentID); err != nil {
-		return usecase.PrintState{}, fmt.Errorf("lock print state: %w", err)
-	}
-
 	var state usecase.PrintState
 
-	err := q.QueryRow(ctx, `
+	err := platformdb.QuerierFromContext(ctx, s.pool).QueryRow(ctx, `
 		SELECT COALESCE((SELECT template_version FROM print_log
 		                 WHERE garage_id = $1 AND document_type = $2 AND document_id = $3 AND paper_size = $4
 		                 ORDER BY created_at, id LIMIT 1), 0),

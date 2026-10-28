@@ -23,7 +23,7 @@ type fakePrints struct {
 	log      []printRecord
 	err      error
 	// stateErr and recordErr fail only State and Record.
-	stateErr, recordErr error
+	stateErr, recordErr, lockErr error
 }
 
 func (f *fakePrints) Settings(context.Context, string) (map[printmodel.DocumentType]usecase.PrintSetting, error) {
@@ -42,6 +42,10 @@ func (f *fakePrints) SaveSetting(_ context.Context, _ string, t printmodel.Docum
 	f.settings[t] = s
 
 	return nil
+}
+
+func (f *fakePrints) Lock(context.Context, string, printmodel.DocumentType, string) error {
+	return f.lockErr
 }
 
 func (f *fakePrints) State(

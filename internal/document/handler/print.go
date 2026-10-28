@@ -124,7 +124,7 @@ var paperFromProto = map[documentv1.PaperSize]printmodel.Paper{
 
 func toProtoSetting(info usecase.PrintSettingInfo) *documentv1.PrintSetting {
 	setting := &documentv1.PrintSetting{
-		DocumentType: documentTypeToProto(info.Type), PaperSize: paperToProto(info.Paper), CopyMark: info.CopyMark,
+		DocumentType: documentTypeToProto[info.Type], PaperSize: paperToProto(info.Paper), CopyMark: info.CopyMark,
 	}
 
 	for _, available := range info.Available {
@@ -134,15 +134,15 @@ func toProtoSetting(info usecase.PrintSettingInfo) *documentv1.PrintSetting {
 	return setting
 }
 
-func documentTypeToProto(t printmodel.DocumentType) documentv1.DocumentType {
-	for proto, known := range documentTypeFromProto {
-		if known == t {
-			return proto
-		}
+// documentTypeToProto is documentTypeFromProto the other way round, built once.
+var documentTypeToProto = func() map[printmodel.DocumentType]documentv1.DocumentType {
+	out := make(map[printmodel.DocumentType]documentv1.DocumentType, len(documentTypeFromProto))
+	for proto, t := range documentTypeFromProto {
+		out[t] = proto
 	}
 
-	return documentv1.DocumentType_DOCUMENT_TYPE_UNSPECIFIED
-}
+	return out
+}()
 
 func paperToProto(p printmodel.Paper) documentv1.PaperSize {
 	if p == printmodel.A5 {

@@ -45,12 +45,12 @@ flowchart LR
 
 - Migrations run as the schema owner. `FORCE ROW LEVEL SECURITY` also binds
   the owner, so any future data migration on a tenant table needs a role that
-  bypasses RLS (the local superuser does; in a managed database use a migration user
-  with `BYPASSRLS`).
+  bypasses RLS (the PostgreSQL superuser does, locally and in the database container
+  of the staging and production VMs).
 - The backend connects as `APP_DB_USER`. When the variable is set, the server
   creates that login `IN ROLE vietgara_app` on startup if it is missing
-  (`db.EnsureAppLogin`). In staging and production, create it once instead and
-  keep its password in Secret Manager.
+  (`db.EnsureAppLogin`). Staging and production set it this way too; the password is
+  in the VM's `.env` (`vietgara-infra`), readable by its owner only.
 
 ## Row-Level Security
 

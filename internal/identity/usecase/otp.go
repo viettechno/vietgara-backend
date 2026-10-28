@@ -48,7 +48,7 @@ func (uc *IdentityUseCase) sendOTPFor(
 	}
 
 	code := domain.NewOTPCode()
-	otp := domain.NewOTP(key, code, now)
+	otp := domain.NewOTP(uc.otpSecret, key, code, now)
 
 	data := map[string]any{"Name": user.FullName, "Code": code, "Minutes": int(domain.OTPTTL.Minutes())}
 	maps.Copy(data, extra)
@@ -92,7 +92,7 @@ func (uc *IdentityUseCase) checkOTP(ctx context.Context, purpose domain.OTPPurpo
 		return otpError(domain.ErrOTPTooManyAttempts)
 	}
 
-	if !otp.Matches(key, code) {
+	if !otp.Matches(uc.otpSecret, key, code) {
 		attempts, err := uc.otps.IncrementAttempts(ctx, key)
 		if err != nil {
 			return apperror.Internal("count otp attempt", err)

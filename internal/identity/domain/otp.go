@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -58,22 +59,25 @@ func NewOTPCode() string {
 	return s
 }
 
-// HashOTP hashes code bound to key, so a stored hash is useless for any
-// other user or purpose.
-func HashOTP(key, code string) string {
-	sum := sha256.Sum256([]byte(key + "|" + code))
+// HashOTP is the HMAC of code, bound to key, under secret. Bound to key, a
+// stored hash is useless for any other user or purpose. A 6-digit code has
+// only a million values, so without the secret a plain hash could be
+// reversed by trying them all (SR-21).
+func HashOTP(secret []byte, key, code string) string {
+	mac := hmac.New(sha256.New, secret)
+	_, _ = mac.Write([]byte("otp|" + key + "|" + code))
 
-	return hex.EncodeToString(sum[:])
+	return hex.EncodeToString(mac.Sum(nil))
 }
 
 // NewOTP issues code at now.
-func NewOTP(key, code string, now time.Time) *OTP {
-	return &OTP{CodeHash: HashOTP(key, code), ExpiresAt: now.Add(OTPTTL), ResendAt: now.Add(OTPResendCooldown)}
+func NewOTP(secret []byte, key, code string, now time.Time) *OTP {
+	return &OTP{CodeHash: HashOTP(secret, key, code), ExpiresAt: now.Add(OTPTTL), ResendAt: now.Add(OTPResendCooldown)}
 }
 
 // Matches compares code in constant time.
-func (o *OTP) Matches(key, code string) bool {
-	return subtle.ConstantTimeCompare([]byte(o.CodeHash), []byte(HashOTP(key, code))) == 1
+func (o *OTP) Matches(secret []byte, key, code string) bool {
+	return subtle.ConstantTimeCompare([]byte(o.CodeHash), []byte(HashOTP(secret, key, code))) == 1
 }
 
 // Expired reports whether the OTP can no longer be used at now.

@@ -225,7 +225,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	app.closers = append(app.closers, func() { _ = shutdownTracing(context.Background()) })
 
 	tx := platformdb.NewTxManager(pool)
-	issuer := auth.NewTokenIssuer(mustSigningKey("JWT_SIGNING_KEY"),
+	signingKey := mustSigningKey("JWT_SIGNING_KEY")
+	issuer := auth.NewTokenIssuer(signingKey,
 		envDuration("JWT_ACCESS_TTL", 20*time.Minute), envDuration("JWT_REFRESH_TTL", 30*24*time.Hour))
 	events := outbox.NewEventPublisher(pool)
 	auditLog := audit.NewLogger(pool)
@@ -292,6 +293,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	identityOpts = append(identityOpts, identityUsecase.WithOTPSecret(signingKey))
 
 	identityUC := identityUsecase.NewIdentityUseCase(users, sessions, sessions, mailer, events, tx, issuer, identityOpts...)
 	if err := identityUC.GrantPlatformAdmins(ctx, envList("PLATFORM_ADMIN_EMAILS")); err != nil {

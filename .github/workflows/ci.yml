@@ -7,6 +7,10 @@ on:
   pull_request:
     branches: [master]
 
+# Read-only by default (SR-21); a job that needs more asks for it itself.
+permissions:
+  contents: read
+
 jobs:
   build-and-test:
     name: Build, vet and unit tests

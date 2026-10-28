@@ -43,6 +43,8 @@ type IdentityUseCase struct {
 	platformAdminEmails map[string]struct{}
 	// platformAccess, when set, audits the sign-ins of platform users.
 	platformAccess PlatformAccessChecker
+	// otpSecret keys the hash of the stored OTPs (WithOTPSecret).
+	otpSecret []byte
 }
 
 // Option customizes an IdentityUseCase.
@@ -51,6 +53,12 @@ type Option func(*IdentityUseCase)
 // WithClock replaces time.Now (tests).
 func WithClock(now func() time.Time) Option {
 	return func(uc *IdentityUseCase) { uc.now = now }
+}
+
+// WithOTPSecret keys the hash of the OTPs kept in the OTP store, so that a
+// copy of the store cannot be used to find the 6-digit codes (SR-21).
+func WithOTPSecret(secret []byte) Option {
+	return func(uc *IdentityUseCase) { uc.otpSecret = secret }
 }
 
 // WithPlatformAdminEmails lets users with one of these e-mails become

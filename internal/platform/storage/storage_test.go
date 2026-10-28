@@ -560,3 +560,28 @@ func TestLocalStoreGet(t *testing.T) {
 	_, err = store.Get(t.Context(), "garages/g1/big.png")
 	require.ErrorIs(t, err, storage.ErrTooLarge)
 }
+
+// TestLocalStoreStaysInItsDirectory covers SR-21: a symbolic link under the
+// store directory must not lead a read or a write outside of it.
+func TestLocalStoreStaysInItsDirectory(t *testing.T) {
+	t.Parallel()
+
+	outside := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(outside, "secret.png"), png, 0o600))
+
+	dir := t.TempDir()
+	store, err := storage.NewLocal(dir, "", nil)
+	require.NoError(t, err)
+	require.NoError(t, os.Symlink(outside, filepath.Join(dir, "link")))
+
+	_, err = store.Get(t.Context(), "link/secret.png")
+	require.Error(t, err)
+
+	rec := httptest.NewRecorder()
+	store.Handler().ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, storage.DefaultLocalBaseURL+"/link/secret.png", http.NoBody))
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+
+	_, err = store.Put(t.Context(), "link/new.png", "image/png", png)
+	require.Error(t, err)
+	assert.NoFileExists(t, filepath.Join(outside, "new.png"))
+}

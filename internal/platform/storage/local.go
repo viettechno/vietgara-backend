@@ -12,6 +12,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -54,13 +55,42 @@ func NewLocal(dir, baseURL string, signingKey []byte) (*LocalStore, error) {
 	return &LocalStore{dir: dir, baseURL: strings.TrimSuffix(baseURL, "/"), signingKey: signingKey, now: time.Now}, nil
 }
 
+// openRoot opens the store directory as an os.Root. Every file operation of
+// the store goes through it, so no key, and no symbolic link under the
+// directory, can lead outside the directory (SR-21).
+func (s *LocalStore) openRoot() (*os.Root, error) {
+	root, err := os.OpenRoot(s.dir)
+	if err != nil {
+		return nil, fmt.Errorf("storage: open root: %w", err)
+	}
+
+	return root, nil
+}
+
+// openFile opens the file name below the store directory. Closing the root
+// does not close the file.
+func (s *LocalStore) openFile(name string) (*os.File, error) {
+	root, err := s.openRoot()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = root.Close() }()
+
+	return root.Open(name)
+}
+
 func (s *LocalStore) write(key string, data []byte) error {
-	full := filepath.Join(s.dir, filepath.FromSlash(key))
-	if err := os.MkdirAll(filepath.Dir(full), 0o750); err != nil {
+	root, err := s.openRoot()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+
+	if err := root.MkdirAll(path.Dir(key), 0o750); err != nil {
 		return fmt.Errorf("storage: create directory: %w", err)
 	}
 
-	if err := os.WriteFile(full, data, 0o600); err != nil {
+	if err := root.WriteFile(key, data, 0o600); err != nil {
 		return fmt.Errorf("storage: write %s: %w", key, err)
 	}
 
@@ -101,7 +131,7 @@ func (s *LocalStore) Get(_ context.Context, key string) ([]byte, error) {
 		return nil, err
 	}
 
-	f, err := os.Open(filepath.Join(s.dir, filepath.FromSlash(key)))
+	f, err := s.openFile(key)
 	if err != nil {
 		return nil, fmt.Errorf("storage: open %s: %w", key, err)
 	}
@@ -117,8 +147,14 @@ func (s *LocalStore) Delete(_ context.Context, key string) error {
 		return err
 	}
 
+	root, err := s.openRoot()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = root.Close() }()
+
 	for _, name := range []string{key, privateRoot + "/" + key} {
-		if err := os.Remove(filepath.Join(s.dir, filepath.FromSlash(name))); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if err := root.Remove(name); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return fmt.Errorf("storage: delete %s: %w", key, err)
 		}
 	}
@@ -165,9 +201,9 @@ func (s *LocalStore) DeletePrefix(ctx context.Context, prefix string) (int64, er
 		return 0, ErrInvalidKey
 	}
 
-	root, err := os.OpenRoot(s.dir)
+	root, err := s.openRoot()
 	if err != nil {
-		return 0, fmt.Errorf("storage: open root: %w", err)
+		return 0, err
 	}
 	defer func() { _ = root.Close() }()
 
@@ -260,7 +296,7 @@ func (s *LocalStore) Handler() http.Handler {
 			return
 		}
 
-		f, err := os.Open(filepath.Join(s.dir, filepath.FromSlash(key))) //nolint:gosec // G703: key passed cleanKey (no "..", relative)
+		f, err := s.openFile(key)
 		if err != nil {
 			http.NotFound(w, r)
 
@@ -300,7 +336,7 @@ func (s *LocalStore) servePrivate(w http.ResponseWriter, r *http.Request, key st
 		return
 	}
 
-	f, err := os.Open(filepath.Join(s.dir, privateRoot, filepath.FromSlash(key))) //nolint:gosec // key passed cleanKey (no "..", relative)
+	f, err := s.openFile(privateRoot + "/" + key)
 	if err != nil {
 		http.NotFound(w, r)
 

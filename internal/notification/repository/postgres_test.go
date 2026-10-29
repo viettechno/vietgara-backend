@@ -31,22 +31,27 @@ func TestPostgresRepository_Create(t *testing.T) {
 			Recipient: "an@example.com", Status: domain.StatusSent,
 		}
 
-		tx := dbtest.New(t).ExpectQueryRow("INSERT INTO notification_log", dbtest.Row(now))
+		// An account e-mail has no garage: nothing is read back.
+		tx := dbtest.New(t).ExpectExec("INSERT INTO notification_log", dbtest.Tag(1), nil).
+			ExpectExec("INSERT INTO notification_log", dbtest.Tag(0), errBoom)
+		ctx := tx.Context(t.Context())
+
+		require.NoError(t, repo.Create(ctx, log))
+		require.ErrorIs(t, repo.Create(ctx, log), errBoom)
+	})
+
+	t.Run("a garage row reads back its timestamp", func(t *testing.T) {
+		t.Parallel()
+
+		repo := repository.NewPostgresRepository(nil)
+		log := &domain.Log{ID: "n-1", Channel: domain.ChannelEmail, Template: "t", Recipient: "a@b.com", Status: domain.StatusSent, GarageID: "g-1"}
+
+		tx := dbtest.New(t).ExpectQueryRow("INSERT INTO notification_log", dbtest.Row(now)).
+			ExpectQueryRow("INSERT INTO notification_log", dbtest.ErrRow(errBoom))
 		ctx := tx.Context(t.Context())
 
 		require.NoError(t, repo.Create(ctx, log))
 		require.Equal(t, now, log.CreatedAt)
-	})
-
-	t.Run("insert failure", func(t *testing.T) {
-		t.Parallel()
-
-		repo := repository.NewPostgresRepository(nil)
-		log := &domain.Log{ID: "n-1", Channel: domain.ChannelEmail, Template: "t", Recipient: "a@b.com", Status: domain.StatusSent}
-
-		tx := dbtest.New(t).ExpectQueryRow("INSERT INTO notification_log", dbtest.ErrRow(errBoom))
-		ctx := tx.Context(t.Context())
-
 		require.ErrorIs(t, repo.Create(ctx, log), errBoom)
 	})
 }

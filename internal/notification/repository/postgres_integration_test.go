@@ -60,6 +60,17 @@ func TestNotificationStoresUnderRowLevelSecurity(t *testing.T) {
 		}))
 	}
 
+	// An account e-mail is written by an event consumer with no garage in its
+	// scope, and no scope can read it back: the insert must not ask for the row.
+	for _, scope := range []platformdb.Scope{{}, platformdb.UserScope(owner)} {
+		require.NoError(t, txm.WithTransaction(ctx, scope, func(ctx context.Context) error {
+			return logs.Create(ctx, &domain.Log{
+				ID: uuid.NewString(), UserID: owner, Channel: domain.ChannelEmail, Template: "plan_payment_submitted",
+				Recipient: "admin@example.com", Status: domain.StatusSent,
+			})
+		}), "scope %+v", scope)
+	}
+
 	in(garageA, func(ctx context.Context) {
 		require.NoError(t, logs.Create(ctx, &domain.Log{
 			ID: uuid.NewString(), Channel: domain.ChannelEmail, Template: "vehicle_ready", Recipient: "an@example.com",

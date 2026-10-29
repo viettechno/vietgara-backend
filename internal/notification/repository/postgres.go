@@ -36,8 +36,7 @@ func (r *PostgresRepository) WithFailureTx(tx usecase.Transactor) *PostgresRepos
 const insertLog = `
 	INSERT INTO notification_log (id, user_id, channel, template, recipient, status, error,
 	                              garage_id, customer_id, type, entity_type, entity_id, event_id, skip_reason)
-	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-	RETURNING created_at`
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
 
 func insertArgs(log *domain.Log) []any {
 	return []any{
@@ -47,11 +46,20 @@ func insertArgs(log *domain.Log) []any {
 	}
 }
 
-// Create inserts log, scanning back its server-generated timestamp.
+// Create inserts log. A row of a garage scans back its server-generated
+// timestamp; an account or licence e-mail has no garage and is not readable in
+// the scope that writes it, so it cannot be read back (RETURNING needs the
+// row to pass the read policy).
 func (r *PostgresRepository) Create(ctx context.Context, log *domain.Log) error {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
-	return q.QueryRow(ctx, insertLog, insertArgs(log)...).Scan(&log.CreatedAt)
+	if log.GarageID == "" {
+		_, err := q.Exec(ctx, insertLog, insertArgs(log)...)
+
+		return err
+	}
+
+	return q.QueryRow(ctx, insertLog+" RETURNING created_at", insertArgs(log)...).Scan(&log.CreatedAt)
 }
 
 // Failed inserts log in a transaction of its own, scoped to the log's garage,

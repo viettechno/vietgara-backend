@@ -38,7 +38,7 @@ func NewPostgresUserRepository(pool *platformdb.Pool) *PostgresUserRepository {
 }
 
 const userColumns = `a.id, COALESCE(a.email, ''), a.phone, a.auth_provider, a.identity_platform_uid, a.full_name,
-	a.full_name_source, a.password_hash, a.status, a.email_verified_at, a.locale,
+	a.full_name_source, a.password_hash, a.status, a.email_verified_at, a.locale, a.google_signin_blocked,
 	EXISTS (SELECT 1 FROM platform_admins pa WHERE pa.user_id = a.id),
 	EXISTS (SELECT 1 FROM user_mfa m WHERE m.user_id = a.id AND m.enabled_at IS NOT NULL), a.created_at, a.updated_at`
 
@@ -50,7 +50,7 @@ func scanUser(row pgx.Row) (*domain.User, error) {
 	)
 
 	err := row.Scan(&user.ID, &user.Email, &user.Phone, &authProvider, &user.GoogleSubject, &user.FullName,
-		&nameSource, &user.PasswordHash, &status, &user.EmailVerifiedAt, &locale, &user.PlatformAdmin, &user.MFAEnabled, &user.CreatedAt, &user.UpdatedAt)
+		&nameSource, &user.PasswordHash, &status, &user.EmailVerifiedAt, &locale, &user.GoogleSigninBlocked, &user.PlatformAdmin, &user.MFAEnabled, &user.CreatedAt, &user.UpdatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrUserNotFound
@@ -145,11 +145,11 @@ func (r *PostgresUserRepository) Update(ctx context.Context, user *domain.User) 
 	err := q.QueryRow(ctx, `
 		UPDATE users
 		SET full_name = $2, full_name_source = $8, phone = $3, locale = $4, password_hash = $5, email_verified_at = $6,
-			identity_platform_uid = $7
+			identity_platform_uid = $7, google_signin_blocked = $9
 		WHERE id = $1
 		RETURNING updated_at`,
 		user.ID, user.FullName, user.Phone, string(user.Locale.OrDefault()), user.PasswordHash, user.EmailVerifiedAt, user.GoogleSubject,
-		string(user.FullNameSource.OrDefault()),
+		string(user.FullNameSource.OrDefault()), user.GoogleSigninBlocked,
 	).Scan(&user.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.ErrUserNotFound

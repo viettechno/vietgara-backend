@@ -51,6 +51,12 @@ type SessionStore interface {
 	ConsumeResetToken(ctx context.Context, token string) (string, error)
 	// SaveMFAChallenge stores the token of a sign-in waiting for the second
 	// factor (FR-IAM-09).
+	// SaveGoogleLinkProof stores the subject of a Google account whose owner
+	// proved it in the web popup (FR-IAM-06).
+	SaveGoogleLinkProof(ctx context.Context, proof, subject string, ttl time.Duration) error
+	// ConsumeGoogleLinkProof returns the subject and deletes the proof, or
+	// domain.ErrLinkProofInvalid.
+	ConsumeGoogleLinkProof(ctx context.Context, proof string) (string, error)
 	SaveMFAChallenge(ctx context.Context, token, userID string, ttl time.Duration) error
 	// MFAChallengeUser returns the user of a live challenge token, or
 	// domain.ErrMFAChallengeInvalid.

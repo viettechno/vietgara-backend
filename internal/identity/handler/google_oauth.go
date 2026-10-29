@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"google.golang.org/protobuf/encoding/protojson"
 
+	"github.com/viettechno/vietgara-backend/internal/identity/usecase"
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
@@ -16,6 +18,11 @@ import (
 const (
 	googleStateCookie = "vietgara_google_oauth_state"
 	popupErrorKey     = "error"
+	// linkStatePrefix marks a popup that links a Google account to the
+	// signed-in user instead of signing in (FR-IAM-06). It is part of the
+	// state, which the cookie and Google both carry, so it cannot be changed
+	// on the way.
+	linkStatePrefix = "link."
 )
 
 // Popup error codes posted to the web admin.
@@ -68,6 +75,10 @@ func (s *Server) googleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	state := auth.NewOpaqueToken()
+	if r.URL.Query().Get("link") == "1" {
+		state = linkStatePrefix + state
+	}
+
 	http.SetCookie(w, &http.Cookie{
 		Name: googleStateCookie, Value: state, Path: "/", MaxAge: 600,
 		HttpOnly: true, SameSite: http.SameSiteLaxMode, Secure: true,
@@ -116,6 +127,12 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.HasPrefix(stateCookie.Value, linkStatePrefix) {
+		s.googleLinkProof(w, r, profile)
+
+		return
+	}
+
 	session, err := s.uc.GoogleLogin(r.Context(), profile)
 	if err != nil {
 		s.writeGooglePopup(w, map[string]any{popupErrorKey: apperror.ReasonOf(err)})
@@ -131,6 +148,21 @@ func (s *Server) googleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.writeGooglePopup(w, map[string]any{"session": json.RawMessage(sessionJSON)})
+}
+
+// googleLinkProof ends a linking popup: it posts a single-use proof of the
+// Google account to the console window that opened the popup, and to no
+// other origin, so a page that is not the console cannot receive it. The
+// console then claims it with CompleteGoogleLink, as the signed-in user.
+func (s *Server) googleLinkProof(w http.ResponseWriter, r *http.Request, profile usecase.GoogleProfile) {
+	proof, err := s.uc.CreateGoogleLinkProof(r.Context(), profile)
+	if err != nil {
+		s.writeGooglePopup(w, map[string]any{popupErrorKey: apperror.ReasonOf(err)})
+
+		return
+	}
+
+	s.writeGooglePopup(w, map[string]any{"linkProof": proof})
 }
 
 // writeGooglePopup posts {type: "vietgara-google-auth", ...payload} to the

@@ -65,11 +65,15 @@ func Policies() middleware.Policies {
 		identityv1.AuthService_VerifyEmail_FullMethodName:              middleware.UnverifiedMethod(),
 		identityv1.UserService_GetMe_FullMethodName:                    middleware.UnverifiedMethod(),
 		identityv1.UserService_UpdateMe_FullMethodName:                 middleware.UnverifiedMethod(),
-		identityv1.AuthService_VerifyMfaChallenge_FullMethodName:       middleware.PublicMethod(),
-		identityv1.MfaService_GetMfaStatus_FullMethodName:              middleware.UserMethod(),
-		identityv1.MfaService_EnrollMfa_FullMethodName:                 middleware.UserMethod(),
-		identityv1.MfaService_ConfirmMfaEnrollment_FullMethodName:      middleware.UserMethod(),
-		identityv1.MfaService_RegenerateRecoveryCodes_FullMethodName:   middleware.UserMethod(),
-		identityv1.MfaService_DisableMfa_FullMethodName:                middleware.UserMethod(),
+
+		identityv1.AuthService_CompleteGoogleLink_FullMethodName:     middleware.UserMethod(),
+		identityv1.AuthService_LinkGoogle_FullMethodName:             middleware.UserMethod(),
+		identityv1.AuthService_UnlinkGoogle_FullMethodName:           middleware.UserMethod(),
+		identityv1.AuthService_VerifyMfaChallenge_FullMethodName:     middleware.PublicMethod(),
+		identityv1.MfaService_GetMfaStatus_FullMethodName:            middleware.UserMethod(),
+		identityv1.MfaService_EnrollMfa_FullMethodName:               middleware.UserMethod(),
+		identityv1.MfaService_ConfirmMfaEnrollment_FullMethodName:    middleware.UserMethod(),
+		identityv1.MfaService_RegenerateRecoveryCodes_FullMethodName: middleware.UserMethod(),
+		identityv1.MfaService_DisableMfa_FullMethodName:              middleware.UserMethod(),
 	}
 }

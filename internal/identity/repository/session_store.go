@@ -27,6 +27,7 @@ func NewRedisStore(client redis.UniversalClient) *RedisStore {
 func refreshKey(token string) string       { return "identity:refresh:" + token }
 func userSessionsKey(userID string) string { return "identity:sessions:" + userID }
 func resetKey(token string) string         { return "identity:reset:" + token }
+func googleLinkKey(proof string) string    { return "identity:google-link:" + proof }
 func otpKey(key string) string             { return "identity:otp:" + key }
 func mfaChallengeKey(token string) string  { return "identity:mfa-challenge:" + token }
 func mfaFailuresKey(userID string) string  { return "identity:mfa-failures:" + userID }
@@ -99,6 +100,21 @@ func (s *RedisStore) ConsumeResetToken(ctx context.Context, token string) (strin
 	}
 
 	return userID, err
+}
+
+// SaveGoogleLinkProof stores the subject of a Google account proved in the popup.
+func (s *RedisStore) SaveGoogleLinkProof(ctx context.Context, proof, subject string, ttl time.Duration) error {
+	return s.client.Set(ctx, googleLinkKey(proof), subject, ttl).Err()
+}
+
+// ConsumeGoogleLinkProof returns and deletes the subject of a proof.
+func (s *RedisStore) ConsumeGoogleLinkProof(ctx context.Context, proof string) (string, error) {
+	subject, err := s.client.GetDel(ctx, googleLinkKey(proof)).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", domain.ErrLinkProofInvalid
+	}
+
+	return subject, err
 }
 
 // SaveMFAChallenge stores the token of a sign-in waiting for the second factor.
@@ -207,12 +223,14 @@ func (s *RedisStore) Delete(ctx context.Context, key string) error {
 // Redis is configured. It does not survive restarts nor work across
 // replicas: local development only.
 type MemoryStore struct {
-	mu       sync.Mutex
-	now      func() time.Time
-	refresh  map[string]entry
-	resets   map[string]entry
-	otps     map[string]*domain.OTP
-	sessions map[string]map[string]bool
+	mu      sync.Mutex
+	now     func() time.Time
+	refresh map[string]entry
+	resets  map[string]entry
+	// googleLinks maps a Google link proof to the proved Google subject.
+	googleLinks map[string]entry
+	otps        map[string]*domain.OTP
+	sessions    map[string]map[string]bool
 	// challenges maps an MFA challenge token to its user.
 	challenges map[string]entry
 	// failures counts wrong second-factor codes per user.
@@ -232,7 +250,7 @@ type entry struct {
 // NewMemoryStore returns an empty MemoryStore.
 func NewMemoryStore() *MemoryStore {
 	return &MemoryStore{
-		now: time.Now, refresh: map[string]entry{}, resets: map[string]entry{},
+		now: time.Now, refresh: map[string]entry{}, resets: map[string]entry{}, googleLinks: map[string]entry{},
 		otps: map[string]*domain.OTP{}, sessions: map[string]map[string]bool{},
 		challenges: map[string]entry{}, failures: map[string]mfaFailures{},
 	}
@@ -324,6 +342,31 @@ func (m *MemoryStore) ConsumeResetToken(_ context.Context, token string) (string
 	}
 
 	return "", domain.ErrResetTokenInvalid
+}
+
+// SaveGoogleLinkProof stores the subject of a Google account proved in the popup.
+func (m *MemoryStore) SaveGoogleLinkProof(_ context.Context, proof, subject string, ttl time.Duration) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.googleLinks[proof] = entry{value: subject, expires: m.now().Add(ttl)}
+
+	return nil
+}
+
+// ConsumeGoogleLinkProof returns and deletes the subject of a proof.
+func (m *MemoryStore) ConsumeGoogleLinkProof(_ context.Context, proof string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	e, ok := m.googleLinks[proof]
+	delete(m.googleLinks, proof)
+
+	if subject, live := m.live(e, ok); live {
+		return subject, nil
+	}
+
+	return "", domain.ErrLinkProofInvalid
 }
 
 // SaveMFAChallenge stores the token of a sign-in waiting for the second factor.

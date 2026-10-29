@@ -28,6 +28,14 @@ var (
 	ErrMFANotAvailable         = errors.New("two-factor authentication needs an e-mail and password sign-in")
 	ErrMFANotConfigured        = errors.New("two-factor authentication is not configured on this server")
 	ErrMFANotFound             = errors.New("no two-factor enrolment")
+
+	ErrPasswordIncorrect   = errors.New("the password is incorrect")
+	ErrNoPassword          = errors.New("this user signs in with Google only: set a password first")
+	ErrGoogleAlreadyLinked = errors.New("this Google account is already linked to a user")
+	ErrGoogleLinkExists    = errors.New("a Google account is already linked: unlink it first")
+	ErrGoogleNotLinked     = errors.New("no Google account is linked")
+	ErrLinkProofInvalid    = errors.New("the Google link has expired, start it again")
+	ErrGoogleSigninBlocked = errors.New("google sign-in is off for this user: link a Google account in the security settings")
 )
 
 // Client-facing reasons of the errors above.
@@ -54,4 +62,12 @@ const (
 	ReasonMFAEnrollmentNotStarted = "MFA_ENROLLMENT_NOT_STARTED"
 	ReasonMFANotAvailable         = "MFA_NOT_AVAILABLE"
 	ReasonMFANotConfigured        = "MFA_NOT_CONFIGURED"
+
+	ReasonPasswordIncorrect   = "PASSWORD_INCORRECT"
+	ReasonNoPassword          = "NO_PASSWORD"
+	ReasonGoogleAlreadyLinked = "GOOGLE_ALREADY_LINKED"
+	ReasonGoogleLinkExists    = "GOOGLE_LINK_EXISTS"
+	ReasonGoogleNotLinked     = "GOOGLE_NOT_LINKED"
+	ReasonLinkProofInvalid    = "LINK_PROOF_INVALID"
+	ReasonGoogleSigninBlocked = "GOOGLE_SIGNIN_BLOCKED"
 )

@@ -97,6 +97,10 @@ type User struct {
 	Status          UserStatus
 	EmailVerifiedAt *time.Time
 	Locale          Locale
+	// GoogleSigninBlocked is true after the user unlinked its Google account:
+	// a Google sign-in is not linked again by e-mail until the user links one
+	// itself (FR-IAM-06).
+	GoogleSigninBlocked bool
 	// PlatformAdmin is loaded from platform_admins.
 	PlatformAdmin bool
 	// MFAEnabled is true when the user confirmed a TOTP second factor.
@@ -104,6 +108,12 @@ type User struct {
 	CreatedAt  time.Time
 	UpdatedAt  time.Time
 }
+
+// GoogleLinked reports whether a Google account is linked (FR-IAM-06).
+func (a *User) GoogleLinked() bool { return a.GoogleSubject != nil }
+
+// HasPassword reports whether the user can sign in with a password.
+func (a *User) HasPassword() bool { return a.PasswordHash != nil }
 
 // EmailVerified reports whether the e-mail OTP was confirmed.
 func (a *User) EmailVerified() bool {

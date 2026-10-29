@@ -212,3 +212,19 @@ func CostPerBaseUnit(unitCost int64, entered, base string) (string, error) {
 
 	return strings.TrimRight(strings.TrimRight(cost.FloatString(4), "0"), "."), nil
 }
+
+// AddQuantities returns a + b for two decimal strings, in a form IsLow and
+// IsZero read. It reports false when either is not a number.
+func AddQuantities(a, b string) (string, bool) {
+	x, ok := new(big.Rat).SetString(a)
+	if !ok {
+		return "", false
+	}
+
+	y, ok := new(big.Rat).SetString(b)
+	if !ok {
+		return "", false
+	}
+
+	return new(big.Rat).Add(x, y).RatString(), true
+}

@@ -25,6 +25,8 @@ type store interface {
 	Put(ctx context.Context, key string, otp *domain.OTP) error
 	IncrementAttempts(ctx context.Context, key string) (int, error)
 	Delete(ctx context.Context, key string) error
+	SaveGoogleLinkProof(ctx context.Context, proof, subject string, ttl time.Duration) error
+	ConsumeGoogleLinkProof(ctx context.Context, proof string) (string, error)
 	SaveMFAChallenge(ctx context.Context, token, userID string, ttl time.Duration) error
 	MFAChallengeUser(ctx context.Context, token string) (string, error)
 	DeleteMFAChallenge(ctx context.Context, token string) error
@@ -74,6 +76,14 @@ func TestSessionStores(t *testing.T) {
 
 			_, err = s.ConsumeResetToken(ctx, "reset")
 			require.ErrorIs(t, err, domain.ErrResetTokenInvalid)
+
+			require.NoError(t, s.SaveGoogleLinkProof(ctx, "proof", "g-sub", time.Minute))
+			subject, err := s.ConsumeGoogleLinkProof(ctx, "proof")
+			require.NoError(t, err)
+			assert.Equal(t, "g-sub", subject)
+
+			_, err = s.ConsumeGoogleLinkProof(ctx, "proof")
+			require.ErrorIs(t, err, domain.ErrLinkProofInvalid, "a proof is used once")
 		})
 	}
 }
@@ -124,6 +134,10 @@ func TestMemoryStoreExpiry(t *testing.T) {
 	_, err := s.RefreshTokenUser(ctx, "r")
 	require.ErrorIs(t, err, domain.ErrRefreshTokenInvalid)
 
+	require.NoError(t, s.SaveGoogleLinkProof(ctx, "p", "g", -time.Second))
+	_, err = s.ConsumeGoogleLinkProof(ctx, "p")
+	require.ErrorIs(t, err, domain.ErrLinkProofInvalid)
+
 	require.NoError(t, s.Put(ctx, "k", &domain.OTP{ExpiresAt: time.Now().Add(-time.Second)}))
 	got, err := s.Get(ctx, "k")
 	require.NoError(t, err)
@@ -145,6 +159,9 @@ func TestRedisStoreErrors(t *testing.T) {
 	require.Error(t, s.RevokeRefreshToken(ctx, "x"))
 	require.Error(t, s.RevokeAllRefreshTokens(ctx, "x"))
 	_, err = s.ConsumeResetToken(ctx, "x")
+	require.Error(t, err)
+	require.Error(t, s.SaveGoogleLinkProof(ctx, "x", "g", time.Minute))
+	_, err = s.ConsumeGoogleLinkProof(ctx, "x")
 	require.Error(t, err)
 	_, err = s.Get(ctx, "x")
 	require.Error(t, err)

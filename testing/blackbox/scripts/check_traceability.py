@@ -61,6 +61,7 @@ MANUAL_ONLY = {
     "E2E-IAM-021": "edits PLATFORM_ADMIN_EMAILS and restarts the backend twice",
     "E2E-INV-032": "cursor and scroll behaviour of the web and phone screens; the camera",
     "E2E-DOC-005": "the print dialog of a browser and a phone, and a real network printer",
+    "E2E-IAM-035": "a real Google account in a web popup and in the apps",
 }
 # Test-harness packages whose calls execute as part of a test run. seed/
 # is deliberately excluded: seeding is setup, not coverage.

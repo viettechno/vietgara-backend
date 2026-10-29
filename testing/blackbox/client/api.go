@@ -53,6 +53,26 @@ func (c *Client) SignInWithGoogleIDToken(ctx context.Context, idToken string) (*
 		&identityv1.SignInWithGoogleIdTokenRequest{IdToken: idToken})
 }
 
+// LinkGoogle links the Google account of an ID token to the signed-in user,
+// who confirms with the password (FR-IAM-06, as the mobile apps do).
+func (c *Client) LinkGoogle(ctx context.Context, idToken, password string) (*identityv1.User, error) {
+	return call[identityv1.User](ctx, c, http.MethodPost, "/api/v1/me/google-link",
+		&identityv1.LinkGoogleRequest{IdToken: idToken, Password: password})
+}
+
+// UnlinkGoogle removes the linked Google account and answers a new session.
+func (c *Client) UnlinkGoogle(ctx context.Context, password string) (*identityv1.Session, error) {
+	return call[identityv1.Session](ctx, c, http.MethodPost, "/api/v1/me/google-link:unlink",
+		&identityv1.UnlinkGoogleRequest{Password: password})
+}
+
+// CompleteGoogleLink links the Google account of a popup proof, as the web
+// consoles do.
+func (c *Client) CompleteGoogleLink(ctx context.Context, linkProof, password string) (*identityv1.User, error) {
+	return call[identityv1.User](ctx, c, http.MethodPost, "/api/v1/me/google-link:complete",
+		&identityv1.CompleteGoogleLinkRequest{LinkProof: linkProof, Password: password})
+}
+
 // Me returns the signed-in user.
 func (c *Client) Me(ctx context.Context) (*identityv1.User, error) {
 	return call[identityv1.User](ctx, c, http.MethodGet, "/api/v1/me", nil)

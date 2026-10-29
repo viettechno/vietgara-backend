@@ -95,6 +95,72 @@ func (_c *MockSessionStore_ClearMFAFailures_Call) RunAndReturn(run func(ctx cont
 	return _c
 }
 
+// ConsumeGoogleLinkProof provides a mock function for the type MockSessionStore
+func (_mock *MockSessionStore) ConsumeGoogleLinkProof(ctx context.Context, proof string) (string, error) {
+	ret := _mock.Called(ctx, proof)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ConsumeGoogleLinkProof")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (string, error)); ok {
+		return returnFunc(ctx, proof)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) string); ok {
+		r0 = returnFunc(ctx, proof)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, proof)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockSessionStore_ConsumeGoogleLinkProof_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ConsumeGoogleLinkProof'
+type MockSessionStore_ConsumeGoogleLinkProof_Call struct {
+	*mock.Call
+}
+
+// ConsumeGoogleLinkProof is a helper method to define mock.On call
+//   - ctx context.Context
+//   - proof string
+func (_e *MockSessionStore_Expecter) ConsumeGoogleLinkProof(ctx any, proof any) *MockSessionStore_ConsumeGoogleLinkProof_Call {
+	return &MockSessionStore_ConsumeGoogleLinkProof_Call{Call: _e.mock.On("ConsumeGoogleLinkProof", ctx, proof)}
+}
+
+func (_c *MockSessionStore_ConsumeGoogleLinkProof_Call) Run(run func(ctx context.Context, proof string)) *MockSessionStore_ConsumeGoogleLinkProof_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSessionStore_ConsumeGoogleLinkProof_Call) Return(s string, err error) *MockSessionStore_ConsumeGoogleLinkProof_Call {
+	_c.Call.Return(s, err)
+	return _c
+}
+
+func (_c *MockSessionStore_ConsumeGoogleLinkProof_Call) RunAndReturn(run func(ctx context.Context, proof string) (string, error)) *MockSessionStore_ConsumeGoogleLinkProof_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ConsumeResetToken provides a mock function for the type MockSessionStore
 func (_mock *MockSessionStore) ConsumeResetToken(ctx context.Context, token string) (string, error) {
 	ret := _mock.Called(ctx, token)
@@ -598,6 +664,75 @@ func (_c *MockSessionStore_RevokeRefreshToken_Call) Return(err error) *MockSessi
 }
 
 func (_c *MockSessionStore_RevokeRefreshToken_Call) RunAndReturn(run func(ctx context.Context, token string) error) *MockSessionStore_RevokeRefreshToken_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SaveGoogleLinkProof provides a mock function for the type MockSessionStore
+func (_mock *MockSessionStore) SaveGoogleLinkProof(ctx context.Context, proof string, subject string, ttl time.Duration) error {
+	ret := _mock.Called(ctx, proof, subject, ttl)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SaveGoogleLinkProof")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, time.Duration) error); ok {
+		r0 = returnFunc(ctx, proof, subject, ttl)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockSessionStore_SaveGoogleLinkProof_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SaveGoogleLinkProof'
+type MockSessionStore_SaveGoogleLinkProof_Call struct {
+	*mock.Call
+}
+
+// SaveGoogleLinkProof is a helper method to define mock.On call
+//   - ctx context.Context
+//   - proof string
+//   - subject string
+//   - ttl time.Duration
+func (_e *MockSessionStore_Expecter) SaveGoogleLinkProof(ctx any, proof any, subject any, ttl any) *MockSessionStore_SaveGoogleLinkProof_Call {
+	return &MockSessionStore_SaveGoogleLinkProof_Call{Call: _e.mock.On("SaveGoogleLinkProof", ctx, proof, subject, ttl)}
+}
+
+func (_c *MockSessionStore_SaveGoogleLinkProof_Call) Run(run func(ctx context.Context, proof string, subject string, ttl time.Duration)) *MockSessionStore_SaveGoogleLinkProof_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 time.Duration
+		if args[3] != nil {
+			arg3 = args[3].(time.Duration)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSessionStore_SaveGoogleLinkProof_Call) Return(err error) *MockSessionStore_SaveGoogleLinkProof_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockSessionStore_SaveGoogleLinkProof_Call) RunAndReturn(run func(ctx context.Context, proof string, subject string, ttl time.Duration) error) *MockSessionStore_SaveGoogleLinkProof_Call {
 	_c.Call.Return(run)
 	return _c
 }

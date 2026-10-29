@@ -20,7 +20,7 @@ var (
 )
 
 func userRow() []any {
-	return []any{"user-1", "owner@example.com", "+84901234567", "google", "g-sub", "Minh", "google", nil, "active", now, "en", true, false, now, now}
+	return []any{"user-1", "owner@example.com", "+84901234567", "google", "g-sub", "Minh", "google", nil, "active", now, "en", false, true, false, now, now}
 }
 
 func TestFinders(t *testing.T) {
@@ -98,6 +98,7 @@ func TestCreateAndUpdate(t *testing.T) {
 		ExpectQueryRow("INSERT INTO users", dbtest.ErrRow(dbtest.UniqueViolation("users_pkey"))).
 		ExpectQueryRow("UPDATE users", dbtest.Row(now)).
 		ExpectQueryRow("UPDATE users", dbtest.ErrRow(pgx.ErrNoRows)).
+		ExpectQueryRow("UPDATE users", dbtest.ErrRow(dbtest.UniqueViolation("users_identity_platform_uid_key"))).
 		ExpectExec("INSERT INTO platform_admins", dbtest.Tag(2), nil).
 		ExpectExec("INSERT INTO platform_admins", dbtest.Tag(0), errBoom)
 	ctx := tx.Context(t.Context())
@@ -110,6 +111,7 @@ func TestCreateAndUpdate(t *testing.T) {
 
 	require.NoError(t, repo.Update(ctx, user))
 	require.ErrorIs(t, repo.Update(ctx, user), domain.ErrUserNotFound)
+	require.ErrorIs(t, repo.Update(ctx, user), domain.ErrGoogleAlreadyLinked)
 
 	n, err := repo.GrantPlatformAdmins(ctx, []string{"a@b.vn", "c@d.vn"})
 	require.NoError(t, err)

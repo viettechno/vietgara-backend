@@ -48,6 +48,8 @@ func userToProto(user *domain.User) *identityv1.User {
 		Locale:        localeToProto(user.Locale),
 		PlatformAdmin: user.PlatformAdmin,
 		MfaEnabled:    user.MFAEnabled,
+		GoogleLinked:  user.GoogleLinked(),
+		HasPassword:   user.HasPassword(),
 		CreatedAt:     converter.TimeToProto(user.CreatedAt),
 		UpdatedAt:     converter.TimeToProto(user.UpdatedAt),
 	}

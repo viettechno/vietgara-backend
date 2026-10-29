@@ -44,14 +44,8 @@ func (uc *IdentityUseCase) GoogleLogin(ctx context.Context, profile GoogleProfil
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		if err := uc.dropUnverifiedCredentials(ctx, user); err != nil {
-			return nil, err
-		}
-
-		if err := uc.syncGoogleUser(ctx, user, profile); err != nil {
-			return nil, err
-		}
+	} else if err := uc.adoptGoogleUser(ctx, user, profile); err != nil {
+		return nil, err
 	}
 
 	if err := uc.markVerified(ctx, user); err != nil {
@@ -59,6 +53,28 @@ func (uc *IdentityUseCase) GoogleLogin(ctx context.Context, profile GoogleProfil
 	}
 
 	return uc.signIn(ctx, user)
+}
+
+// adoptGoogleUser takes an existing user into a Google sign-in: it refuses a
+// user that unlinked Google (an e-mail match does not link it again) or linked
+// another Google account, drops
+// the credentials of an unverified account (SR-25) and links Google.
+func (uc *IdentityUseCase) adoptGoogleUser(ctx context.Context, user *domain.User, profile GoogleProfile) error {
+	if user.GoogleSubject == nil && user.GoogleSigninBlocked {
+		return googleLinkError(domain.ErrGoogleSigninBlocked)
+	}
+
+	// Found by e-mail, not by subject: another Google account than the one
+	// linked (say, a compromised one the user replaced) does not get in.
+	if user.GoogleSubject != nil && *user.GoogleSubject != profile.Subject {
+		return googleLinkError(domain.ErrGoogleSigninBlocked)
+	}
+
+	if err := uc.dropUnverifiedCredentials(ctx, user); err != nil {
+		return err
+	}
+
+	return uc.syncGoogleUser(ctx, user, profile)
 }
 
 func (uc *IdentityUseCase) findGoogleUser(ctx context.Context, subject, email string) (*domain.User, error) {

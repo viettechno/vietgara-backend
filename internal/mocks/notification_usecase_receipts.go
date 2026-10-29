@@ -38,37 +38,31 @@ func (_m *MockNotificationReceipts) EXPECT() *MockNotificationReceipts_Expecter 
 }
 
 // SettlementReceipt provides a mock function for the type MockNotificationReceipts
-func (_mock *MockNotificationReceipts) SettlementReceipt(ctx context.Context, garageID string, settlementID string) (string, []byte, error) {
+func (_mock *MockNotificationReceipts) SettlementReceipt(ctx context.Context, garageID string, settlementID string) ([]byte, error) {
 	ret := _mock.Called(ctx, garageID, settlementID)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SettlementReceipt")
 	}
 
-	var r0 string
-	var r1 []byte
-	var r2 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (string, []byte, error)); ok {
+	var r0 []byte
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) ([]byte, error)); ok {
 		return returnFunc(ctx, garageID, settlementID)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) string); ok {
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) []byte); ok {
 		r0 = returnFunc(ctx, garageID, settlementID)
 	} else {
-		r0 = ret.Get(0).(string)
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) []byte); ok {
-		r1 = returnFunc(ctx, garageID, settlementID)
-	} else {
-		if ret.Get(1) != nil {
-			r1 = ret.Get(1).([]byte)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
 		}
 	}
-	if returnFunc, ok := ret.Get(2).(func(context.Context, string, string) error); ok {
-		r2 = returnFunc(ctx, garageID, settlementID)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, garageID, settlementID)
 	} else {
-		r2 = ret.Error(2)
+		r1 = ret.Error(1)
 	}
-	return r0, r1, r2
+	return r0, r1
 }
 
 // MockNotificationReceipts_SettlementReceipt_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SettlementReceipt'
@@ -107,12 +101,12 @@ func (_c *MockNotificationReceipts_SettlementReceipt_Call) Run(run func(ctx cont
 	return _c
 }
 
-func (_c *MockNotificationReceipts_SettlementReceipt_Call) Return(name string, pdf []byte, err error) *MockNotificationReceipts_SettlementReceipt_Call {
-	_c.Call.Return(name, pdf, err)
+func (_c *MockNotificationReceipts_SettlementReceipt_Call) Return(bytes []byte, err error) *MockNotificationReceipts_SettlementReceipt_Call {
+	_c.Call.Return(bytes, err)
 	return _c
 }
 
-func (_c *MockNotificationReceipts_SettlementReceipt_Call) RunAndReturn(run func(ctx context.Context, garageID string, settlementID string) (string, []byte, error)) *MockNotificationReceipts_SettlementReceipt_Call {
+func (_c *MockNotificationReceipts_SettlementReceipt_Call) RunAndReturn(run func(ctx context.Context, garageID string, settlementID string) ([]byte, error)) *MockNotificationReceipts_SettlementReceipt_Call {
 	_c.Call.Return(run)
 	return _c
 }

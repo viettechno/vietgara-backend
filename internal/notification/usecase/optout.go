@@ -68,3 +68,8 @@ func (uc *NotificationUseCase) OptOut(ctx context.Context, token string) error {
 		return nil
 	})
 }
+
+// OptOutTokenForTest signs a token for tests of the opt-out page.
+func (uc *NotificationUseCase) OptOutTokenForTest(garageID, customerID string) string {
+	return uc.optOutToken(garageID, customerID)
+}

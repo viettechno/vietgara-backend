@@ -1,0 +1,16 @@
+{{define "subject"}}Your vehicle {{.VehiclePlate}} is ready{{end}}
+{{define "text"}}Hello {{.CustomerName}},
+
+Your vehicle {{.VehiclePlate}} is repaired and ready for pick-up at {{.GarageName}}.
+{{if .GaragePhone}}Phone: {{.GaragePhone}}
+{{end}}{{if .GarageAddress}}Address: {{.GarageAddress}}
+{{end}}
+Do not want this kind of e-mail any more? Opt out at:
+{{.OptOutURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.CustomerName}},</p>
+<p>Your vehicle <strong>{{.VehiclePlate}}</strong> is repaired and ready for pick-up at <strong>{{.GarageName}}</strong>.</p>
+{{if .GaragePhone}}<p>Phone: {{.GaragePhone}}</p>{{end}}{{if .GarageAddress}}<p>Address: {{.GarageAddress}}</p>{{end}}
+<p style="color:#666;font-size:12px"><a href="{{.OptOutURL}}">Opt out</a> of this kind of e-mail.</p>
+<p>VietGara</p>{{end}}

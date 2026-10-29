@@ -1,0 +1,13 @@
+{{define "subject"}}{{.GarageName}} đã nhận {{.Amount}} đ cho xe {{.VehiclePlate}}{{end}}
+{{define "text"}}Xin chào {{.CustomerName}},
+
+{{.GarageName}} đã nhận {{.Amount}} đ cho quyết toán {{.Number}} (xe {{.VehiclePlate}}). Số tiền còn lại: {{.Balance}} đ.
+
+Không muốn nhận loại e-mail này nữa? Huỷ nhận tại:
+{{.OptOutURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.CustomerName}},</p>
+<p><strong>{{.GarageName}}</strong> đã nhận <strong>{{.Amount}} đ</strong> cho quyết toán <strong>{{.Number}}</strong> (xe {{.VehiclePlate}}). Số tiền còn lại: <strong>{{.Balance}} đ</strong>.</p>
+<p style="color:#666;font-size:12px"><a href="{{.OptOutURL}}">Huỷ nhận</a> loại e-mail này.</p>
+<p>VietGara</p>{{end}}

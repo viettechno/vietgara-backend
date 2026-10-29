@@ -1,0 +1,12 @@
+{{define "subject"}}Low stock: {{.PartName}}{{end}}
+{{define "text"}}Hello {{.Name}},
+
+Part {{.PartName}}{{if .SKU}} ({{.SKU}}){{end}} at {{.GarageName}} is down to {{.Quantity}}, at or under its reorder threshold of {{.Threshold}}.
+
+Open VietGara: {{.ConsoleURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p>Part <strong>{{.PartName}}</strong>{{if .SKU}} ({{.SKU}}){{end}} at {{.GarageName}} is down to <strong>{{.Quantity}}</strong>, at or under its reorder threshold of <strong>{{.Threshold}}</strong>.</p>
+<p><a href="{{.ConsoleURL}}" style="display:inline-block;padding:10px 18px;background:#2E74B5;color:#fff;border-radius:8px;text-decoration:none">Open VietGara</a></p>
+<p>VietGara</p>{{end}}

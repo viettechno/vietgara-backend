@@ -3,6 +3,7 @@ package mail
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -47,13 +48,22 @@ type mailjetAddress struct {
 	Name  string `json:"Name,omitempty"`
 }
 
+type mailjetAttachment struct {
+	ContentType   string `json:"ContentType"`
+	Filename      string `json:"Filename"`
+	Base64Content string `json:"Base64Content"`
+}
+
 type mailjetMessage struct {
-	From     mailjetAddress   `json:"From"`
-	To       []mailjetAddress `json:"To"`
-	Subject  string           `json:"Subject"`
-	TextPart string           `json:"TextPart,omitempty"`
-	HTMLPart string           `json:"HTMLPart,omitempty"`
-	CustomID string           `json:"CustomID,omitempty"`
+	From        mailjetAddress      `json:"From"`
+	ReplyTo     *mailjetAddress     `json:"ReplyTo,omitempty"`
+	To          []mailjetAddress    `json:"To"`
+	Subject     string              `json:"Subject"`
+	TextPart    string              `json:"TextPart,omitempty"`
+	HTMLPart    string              `json:"HTMLPart,omitempty"`
+	CustomID    string              `json:"CustomID,omitempty"`
+	Headers     map[string]string   `json:"Headers,omitempty"`
+	Attachments []mailjetAttachment `json:"Attachments,omitempty"`
 }
 
 type mailjetRequest struct {
@@ -76,14 +86,36 @@ func (s *MailjetSender) Send(ctx context.Context, msg Message) error {
 		return err
 	}
 
-	body, err := json.Marshal(mailjetRequest{Messages: []mailjetMessage{{
+	out := mailjetMessage{
 		From:     mailjetAddress{Email: s.from.Email, Name: s.from.Name},
 		To:       []mailjetAddress{{Email: msg.ToEmail, Name: msg.ToName}},
 		Subject:  msg.Subject,
 		TextPart: msg.Text,
 		HTMLPart: msg.HTML,
 		CustomID: msg.Tag,
-	}}})
+		Headers:  msg.Headers,
+	}
+
+	if msg.FromName != "" {
+		out.From.Name = msg.FromName
+	}
+
+	if msg.ReplyTo != "" {
+		out.ReplyTo = &mailjetAddress{Email: msg.ReplyTo}
+	}
+
+	for _, a := range msg.Attachments {
+		contentType := a.ContentType
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+
+		out.Attachments = append(out.Attachments, mailjetAttachment{
+			ContentType: contentType, Filename: a.Name, Base64Content: base64.StdEncoding.EncodeToString(a.Data),
+		})
+	}
+
+	body, err := json.Marshal(mailjetRequest{Messages: []mailjetMessage{out}})
 	if err != nil {
 		return fmt.Errorf("mailjet: encode: %w", err)
 	}

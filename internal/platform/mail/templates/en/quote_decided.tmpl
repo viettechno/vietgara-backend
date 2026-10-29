@@ -1,0 +1,12 @@
+{{define "subject"}}Quote {{.Number}} was {{if .Approved}}approved{{else}}rejected{{end}}{{end}}
+{{define "text"}}Hello {{.Name}},
+
+Customer {{.CustomerName}} {{if .Approved}}approved{{else}}rejected{{end}} quote {{.Number}} (vehicle {{.VehiclePlate}}).
+
+Open VietGara: {{.ConsoleURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p>Customer <strong>{{.CustomerName}}</strong> <strong>{{if .Approved}}approved{{else}}rejected{{end}}</strong> quote <strong>{{.Number}}</strong> (vehicle {{.VehiclePlate}}).</p>
+<p><a href="{{.ConsoleURL}}" style="display:inline-block;padding:10px 18px;background:#2E74B5;color:#fff;border-radius:8px;text-decoration:none">Open VietGara</a></p>
+<p>VietGara</p>{{end}}

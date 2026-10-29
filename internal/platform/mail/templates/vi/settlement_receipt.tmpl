@@ -1,0 +1,11 @@
+{{define "subject"}}Biên nhận {{.Number}} cho xe {{.VehiclePlate}}{{end}}
+{{define "text"}}Xin chào {{.CustomerName}},
+
+Cảm ơn bạn. Quyết toán {{.Number}} cho xe {{.VehiclePlate}} tại {{.GarageName}} đã được thanh toán đủ ({{.Total}} đ).
+{{if .Attached}}Biên nhận được đính kèm dưới dạng PDF.{{else}}Biên nhận PDF không đính kèm được; hãy hỏi gara nếu bạn cần.{{end}}
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.CustomerName}},</p>
+<p>Cảm ơn bạn. Quyết toán <strong>{{.Number}}</strong> cho xe <strong>{{.VehiclePlate}}</strong> tại <strong>{{.GarageName}}</strong> đã được thanh toán đủ (<strong>{{.Total}} đ</strong>).</p>
+<p>{{if .Attached}}Biên nhận được đính kèm dưới dạng PDF.{{else}}Biên nhận PDF không đính kèm được; hãy hỏi gara nếu bạn cần.{{end}}</p>
+<p>VietGara</p>{{end}}

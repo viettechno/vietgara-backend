@@ -1,0 +1,13 @@
+{{define "subject"}}{{.GarageName}} received {{.Amount}} VND for {{.VehiclePlate}}{{end}}
+{{define "text"}}Hello {{.CustomerName}},
+
+{{.GarageName}} received {{.Amount}} VND for settlement {{.Number}} (vehicle {{.VehiclePlate}}). Balance left: {{.Balance}} VND.
+
+Do not want this kind of e-mail any more? Opt out at:
+{{.OptOutURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.CustomerName}},</p>
+<p><strong>{{.GarageName}}</strong> received <strong>{{.Amount}} VND</strong> for settlement <strong>{{.Number}}</strong> (vehicle {{.VehiclePlate}}). Balance left: <strong>{{.Balance}} VND</strong>.</p>
+<p style="color:#666;font-size:12px"><a href="{{.OptOutURL}}">Opt out</a> of this kind of e-mail.</p>
+<p>VietGara</p>{{end}}

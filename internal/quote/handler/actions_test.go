@@ -48,7 +48,7 @@ func TestSendQuote(t *testing.T) {
 	e.quotes.EXPECT().FindByID(anyArg, garageID, quoteID).Return(draftQuote(), nil).Once()
 	e.garages.EXPECT().Get(anyArg, garageID).Return(garageInfoWithRepairOrderTemplate(), nil).Once()
 	e.quotes.EXPECT().Save(anyArg, anyArg).Return(nil).Once()
-	e.customers.EXPECT().Email(anyArg, garageID, customerID).Return(nil, nil).Once()
+	e.notifier.EXPECT().QuoteReady(anyArg, anyArg).Return(false).Once()
 
 	resp, err := e.srv.SendQuote(signedIn(t), &quotev1.SendQuoteRequest{GarageId: garageID, QuoteId: quoteID})
 	require.NoError(t, err)

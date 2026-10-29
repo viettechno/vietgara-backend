@@ -209,7 +209,14 @@ func (uc *QuoteUseCase) publishDecisionEvent(ctx context.Context, q *domain.Quot
 		event = EventQuoteApproved
 	}
 
-	return uc.Events.Publish(ctx, event, q.GarageID, "", map[string]any{
+	data := map[string]any{
 		"quote_id": q.ID, keyGarageID: q.GarageID, "customer_id": q.CustomerID, "status": string(q.Status),
-	})
+		"number": q.Number, "customer_name": q.CustomerName, "vehicle_plate": q.VehicleLicensePlate,
+	}
+
+	if q.CreatedBy != nil {
+		data["created_by"] = *q.CreatedBy
+	}
+
+	return uc.Events.Publish(ctx, event, q.GarageID, "", data)
 }

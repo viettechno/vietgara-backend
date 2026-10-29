@@ -1,6 +1,7 @@
 package usecase_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -66,9 +67,10 @@ func TestQuoteUseCase_Send(t *testing.T) {
 			return saved.PublicTokenHash != nil && saved.PublicTokenExpiresAt != nil
 		})).Return(nil).Once()
 
-		email := "customer@vietgara.test"
-		d.Customers.EXPECT().Email(mock.Anything, garageID, customerID).Return(&email, nil).Once()
-		d.Mailer.EXPECT().Send(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Notifier.EXPECT().QuoteReady(mock.Anything, mock.MatchedBy(func(r usecase.QuoteReady) bool {
+			return r.GarageID == garageID && r.QuoteID == quoteID && r.CustomerID == customerID && r.Number == q.Number &&
+				strings.HasPrefix(r.ApproveURL, "https://vietgara.viettechno.com/public/quotes/") && r.Total != ""
+		})).Return(true).Once()
 
 		result, err := uc.Send(t.Context(), garageID, quoteID, actorID)
 		require.NoError(t, err)
@@ -85,26 +87,11 @@ func TestQuoteUseCase_Send(t *testing.T) {
 		d.Quotes.EXPECT().FindByID(mock.Anything, garageID, quoteID).Return(q, nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Quotes.EXPECT().Save(mock.Anything, mock.Anything).Return(nil).Once()
-		d.Customers.EXPECT().Email(mock.Anything, garageID, customerID).Return(nil, nil).Once()
+		d.Notifier.EXPECT().QuoteReady(mock.Anything, mock.Anything).Return(false).Once()
 
 		result, err := uc.Send(t.Context(), garageID, quoteID, actorID)
 		require.NoError(t, err)
 		assert.NotEmpty(t, result.PublicURL)
-		assert.False(t, result.Emailed)
-	})
-
-	t.Run("a failed e-mail lookup does not fail sending", func(t *testing.T) {
-		t.Parallel()
-
-		uc, d := newUseCase(t)
-		q := existingQuote(domain.StatusDraft)
-		d.Quotes.EXPECT().FindByID(mock.Anything, garageID, quoteID).Return(q, nil).Once()
-		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
-		d.Quotes.EXPECT().Save(mock.Anything, mock.Anything).Return(nil).Once()
-		d.Customers.EXPECT().Email(mock.Anything, garageID, customerID).Return(nil, errBoom).Once()
-
-		result, err := uc.Send(t.Context(), garageID, quoteID, actorID)
-		require.NoError(t, err)
 		assert.False(t, result.Emailed)
 	})
 }
@@ -121,9 +108,7 @@ func TestQuoteUseCase_SendFailuresAndIssuer(t *testing.T) {
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Quotes.EXPECT().Save(mock.Anything, mock.Anything).Return(nil).Once()
 
-		email := "customer@vietgara.test"
-		d.Customers.EXPECT().Email(mock.Anything, garageID, customerID).Return(&email, nil).Once()
-		d.Mailer.EXPECT().Send(mock.Anything, mock.Anything).Return(errBoom).Once()
+		d.Notifier.EXPECT().QuoteReady(mock.Anything, mock.Anything).Return(false).Once()
 
 		result, err := uc.Send(t.Context(), garageID, quoteID, actorID)
 		require.NoError(t, err)
@@ -157,7 +142,7 @@ func TestQuoteUseCase_SendFailuresAndIssuer(t *testing.T) {
 		d.Quotes.EXPECT().Save(mock.Anything, mock.MatchedBy(func(saved *domain.Quote) bool {
 			return saved.Issuer.Name == "Cong ty TNHH An Phat" && saved.Issuer.TaxCode == "0301234567"
 		})).Return(nil).Once()
-		d.Customers.EXPECT().Email(mock.Anything, garageID, customerID).Return(nil, nil).Once()
+		d.Notifier.EXPECT().QuoteReady(mock.Anything, mock.Anything).Return(false).Once()
 
 		_, err := uc.Send(t.Context(), garageID, quoteID, actorID)
 		require.NoError(t, err)

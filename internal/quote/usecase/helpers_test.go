@@ -45,12 +45,11 @@ func (passTx) WithTransaction(ctx context.Context, _ platformdb.Scope, fn func(c
 type deps struct {
 	Quotes       *mocks.MockQuoteRepository
 	Vehicles     *mocks.MockVehicleReader
-	Customers    *mocks.MockQuoteCustomerReader
 	Garages      *mocks.MockGarageReader
 	Limits       *mocks.MockTransactionLimiter
 	Sequences    *mocks.MockSequencer
 	RepairOrders *mocks.MockRepairOrderCreator
-	Mailer       *mocks.MockQuoteMailer
+	Notifier     *mocks.MockQuoteNotifier
 	Events       *mocks.MockQuoteEventPublisher
 	Parties      *mocks.MockQuoteBillingPartyResolver
 	Parts        *mocks.MockPartQuantityResolver
@@ -66,9 +65,9 @@ func newUseCase(t *testing.T) (*usecase.QuoteUseCase, *deps) {
 
 	d := &deps{
 		Quotes: mocks.NewMockQuoteRepository(t), Vehicles: mocks.NewMockVehicleReader(t),
-		Customers: mocks.NewMockQuoteCustomerReader(t), Garages: mocks.NewMockGarageReader(t),
-		Limits: mocks.NewMockTransactionLimiter(t), Sequences: mocks.NewMockSequencer(t),
-		RepairOrders: mocks.NewMockRepairOrderCreator(t), Mailer: mocks.NewMockQuoteMailer(t),
+		Garages: mocks.NewMockGarageReader(t),
+		Limits:  mocks.NewMockTransactionLimiter(t), Sequences: mocks.NewMockSequencer(t),
+		RepairOrders: mocks.NewMockRepairOrderCreator(t), Notifier: mocks.NewMockQuoteNotifier(t),
 		Events: mocks.NewMockQuoteEventPublisher(t), Parties: mocks.NewMockQuoteBillingPartyResolver(t),
 		Parts: mocks.NewMockPartQuantityResolver(t), Jobs: mocks.NewMockQuoteJobCatalogue(t),
 	}
@@ -81,8 +80,8 @@ func newUseCase(t *testing.T) (*usecase.QuoteUseCase, *deps) {
 		}).Maybe()
 
 	uc := usecase.NewQuoteUseCase(usecase.Deps{
-		Quotes: d.Quotes, Vehicles: d.Vehicles, Customers: d.Customers, Garages: d.Garages, Limits: d.Limits,
-		Sequences: d.Sequences, RepairOrders: d.RepairOrders, BillingParties: d.Parties, Mailer: d.Mailer, Events: d.Events, Tx: passTx{}, Parts: d.Parts, Jobs: d.Jobs,
+		Quotes: d.Quotes, Vehicles: d.Vehicles, Garages: d.Garages, Limits: d.Limits,
+		Sequences: d.Sequences, RepairOrders: d.RepairOrders, BillingParties: d.Parties, Notifier: d.Notifier, Events: d.Events, Tx: passTx{}, Parts: d.Parts, Jobs: d.Jobs,
 		AppBaseURL: "https://vietgara.viettechno.com/", Now: func() time.Time { return now },
 	})
 

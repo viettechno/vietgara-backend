@@ -5,7 +5,6 @@ import (
 	"time"
 
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
-	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 	"github.com/viettechno/vietgara-backend/internal/quote/domain"
 	"github.com/viettechno/vietgara-backend/pkg/billingparty"
 	"github.com/viettechno/vietgara-backend/pkg/issuer"
@@ -59,16 +58,6 @@ type VehicleReader interface {
 	// when either does not belong to the garage, or the vehicle belongs
 	// to a different customer.
 	Find(ctx context.Context, garageID, customerID, vehicleID string) (customerName, licensePlate string, err error)
-}
-
-// CustomerReader reads a customer's e-mail, used by Send to decide whether
-// the LINK-mode approval link can be e-mailed (per the gara owner's
-// choice, "at least notify the customer of what should be fixed" when an
-// e-mail is on file); implemented by an adapter over the Customer module.
-type CustomerReader interface {
-	// Email returns the customer's e-mail on file, or nil when they have
-	// none.
-	Email(ctx context.Context, garageID, customerID string) (*string, error)
 }
 
 // GarageInfo is the Tenant module's view of a garage that Quote & Pricing
@@ -158,9 +147,27 @@ type JobCatalogue interface {
 	Job(ctx context.Context, garageID, jobID string) (Job, error)
 }
 
-// Mailer delivers e-mails (internal/platform/mail).
-type Mailer interface {
-	Send(ctx context.Context, msg mail.Message) error
+// QuoteReady is a quote that was just sent to its customer.
+type QuoteReady struct {
+	GarageID     string
+	QuoteID      string
+	CustomerID   string
+	Number       string
+	VehiclePlate string
+	// Total is the amount formatted for display.
+	Total string
+	// ApproveURL is the customer's link to approve the quote. The quote keeps
+	// only its hash, so this is the one moment the link exists.
+	ApproveURL string
+}
+
+// Notifier e-mails the customer the link to approve a quote (FR-NOT-05);
+// implemented by an adapter over the Notification module in cmd/server, which
+// applies the garage's settings, the customer's language and opt-out and the
+// delivery log. It reports whether the e-mail went out and never fails the
+// sending of the quote: the advisor can share the link by other means.
+type Notifier interface {
+	QuoteReady(ctx context.Context, quote QuoteReady) bool
 }
 
 // EventPublisher writes domain events to the outbox in the caller's

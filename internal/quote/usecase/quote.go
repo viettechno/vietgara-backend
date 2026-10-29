@@ -17,13 +17,12 @@ import (
 type Deps struct {
 	Quotes         Repository
 	Vehicles       VehicleReader
-	Customers      CustomerReader
 	BillingParties BillingPartyResolver
 	Garages        GarageReader
 	Limits         TransactionLimiter
 	Sequences      Sequencer
 	RepairOrders   RepairOrderCreator
-	Mailer         Mailer
+	Notifier       Notifier
 	Events         EventPublisher
 	Tx             Transactor
 	// Parts converts part-line quantities typed in a packaging unit.

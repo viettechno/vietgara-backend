@@ -2,10 +2,8 @@ package usecase
 
 import (
 	"context"
-	"log/slog"
 	"strings"
 
-	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 	"github.com/viettechno/vietgara-backend/internal/quote/domain"
 	"github.com/viettechno/vietgara-backend/pkg/converter"
 )
@@ -23,7 +21,7 @@ type SendQuoteResult struct {
 
 // Send moves a quote to "sent" (FR-QUO-02). For QUOTE_APPROVAL_MODE_LINK it
 // generates a fresh public approval token, e-mailing it to the customer
-// automatically when they have an e-mail on file -- "at least [notifying]
+// automatically (Notification, when they have an e-mail on file) -- "at least [notifying]
 // customers [of] what happened to their vehicle and what should be
 // fixed", per the gara-owner requirement this module implements. For
 // QUOTE_APPROVAL_MODE_MANUAL no link or e-mail is produced: the garage
@@ -76,39 +74,14 @@ func (uc *QuoteUseCase) Send(ctx context.Context, garageID, quoteID, actorID str
 	return result, nil
 }
 
-// emailApprovalLink e-mails the approval link when the customer has an
-// e-mail on file. A missing e-mail or a delivery failure is not an error:
-// the quote is already sent and the advisor can share PublicURL by other
-// means (this is exactly why LINK mode does not depend on the e-mail
-// succeeding to be usable).
+// emailApprovalLink asks Notification to e-mail the approval link to the
+// customer. A missing e-mail address, a switched-off type or a delivery
+// failure is not an error: the quote is already sent and the advisor can share
+// PublicURL by other means (this is exactly why LINK mode does not depend on
+// the e-mail succeeding to be usable).
 func (uc *QuoteUseCase) emailApprovalLink(ctx context.Context, q *domain.Quote, publicURL string) bool {
-	email, err := uc.Customers.Email(ctx, q.GarageID, q.CustomerID)
-	if err != nil {
-		slog.Warn("quote: reading the customer's e-mail failed", "quote_id", q.ID, "error", err)
-
-		return false
-	}
-
-	if email == nil {
-		return false
-	}
-
-	msg, err := mail.Render(mail.TemplateQuoteReadyForApproval, mail.LocaleVI, *email, q.CustomerName, map[string]any{
-		"CustomerName": q.CustomerName,
-		"Number":       q.Number,
-		"VehiclePlate": q.VehicleLicensePlate,
-		"TotalAmount":  converter.FormatVND(q.TotalAmount),
-		"ApproveURL":   publicURL,
+	return uc.Notifier.QuoteReady(ctx, QuoteReady{
+		GarageID: q.GarageID, QuoteID: q.ID, CustomerID: q.CustomerID, Number: q.Number,
+		VehiclePlate: q.VehicleLicensePlate, Total: converter.FormatVND(q.TotalAmount), ApproveURL: publicURL,
 	})
-	if err == nil {
-		err = uc.Mailer.Send(ctx, msg)
-	}
-
-	if err != nil {
-		slog.Warn("quote: sending the approval e-mail failed", "quote_id", q.ID, "error", err)
-
-		return false
-	}
-
-	return true
 }

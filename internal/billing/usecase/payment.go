@@ -69,7 +69,46 @@ func (uc *SettlementUseCase) RecordPayment(ctx context.Context, req RecordPaymen
 		return nil, err
 	}
 
+	if err := uc.publishPayment(ctx, updated, payment); err != nil {
+		return nil, err
+	}
+
 	return uc.Get(ctx, req.GarageID, req.SettlementID)
+}
+
+// publishPayment tells Notification that a payment was recorded, and that the
+// settlement is paid when this payment settled it (FR-NOT-05). The events
+// carry the figures the e-mails show, and the vehicle the customer is found
+// through; no link and no personal data.
+func (uc *SettlementUseCase) publishPayment(ctx context.Context, s *domain.Settlement, payment *domain.Payment) error {
+	ro, err := uc.RepairOrders.Get(ctx, s.GarageID, s.RepairOrderID)
+	if err != nil {
+		return toAppError("record payment", err)
+	}
+
+	data := map[string]any{
+		"settlement_id": s.ID, "garage_id": s.GarageID, "payment_id": payment.ID, "repair_order_id": s.RepairOrderID,
+		"vehicle_id": ro.VehicleID, "number": s.Number, "customer_name": s.CustomerName, "vehicle_plate": s.VehicleLicensePlate,
+		"amount": payment.Amount, "balance": s.RemainingDue(), "total": s.TotalAmount,
+	}
+
+	if s.CreatedBy != nil {
+		data["created_by"] = *s.CreatedBy
+	}
+
+	if err := uc.Events.Publish(ctx, EventPaymentVoucherIssued, s.GarageID, "", data); err != nil {
+		return toAppError("record payment", err)
+	}
+
+	if s.Status != domain.StatusPaid {
+		return nil
+	}
+
+	if err := uc.Events.Publish(ctx, EventSettlementPaid, s.GarageID, "", data); err != nil {
+		return toAppError("record payment", err)
+	}
+
+	return nil
 }
 
 // VoidPaymentRequest is the input for SettlementUseCase.VoidPayment.

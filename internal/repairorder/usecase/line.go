@@ -54,6 +54,7 @@ func (uc *RepairOrderUseCase) UpdateLine(ctx context.Context, req UpdateLineRequ
 	}
 
 	started := ro.WorkStarted()
+	was := ro.Status
 
 	if err := applyProgress(&ro.Lines[index], req); err != nil {
 		return nil, toAppError(op, err)
@@ -80,6 +81,10 @@ func (uc *RepairOrderUseCase) UpdateLine(ctx context.Context, req UpdateLineRequ
 		if err := uc.publish(ctx, EventRepairOrderLinesChanged, ro); err != nil {
 			return nil, toAppError(op, err)
 		}
+	}
+
+	if err := uc.publishIfCompleted(ctx, was, ro); err != nil {
+		return nil, toAppError(op, err)
 	}
 
 	// The first move out of not started is the order starting; Inventory may
@@ -211,6 +216,8 @@ func (uc *RepairOrderUseCase) DeleteLine(ctx context.Context, garageID, repairOr
 // saveEdited recomputes the totals and status of an order whose lines changed,
 // saves it and, when a part line was involved, publishes the new part lines.
 func (uc *RepairOrderUseCase) saveEdited(ctx context.Context, ro *domain.RepairOrder, actorID, op string, partsChanged bool) (*domain.RepairOrder, error) {
+	was := ro.Status
+
 	ro.Recalculate()
 	ro.DeriveStatus()
 	ro.UpdatedBy = actorRef(actorID)
@@ -223,6 +230,10 @@ func (uc *RepairOrderUseCase) saveEdited(ctx context.Context, ro *domain.RepairO
 		if err := uc.publish(ctx, EventRepairOrderLinesChanged, ro); err != nil {
 			return nil, toAppError(op, err)
 		}
+	}
+
+	if err := uc.publishIfCompleted(ctx, was, ro); err != nil {
+		return nil, toAppError(op, err)
 	}
 
 	return ro, nil

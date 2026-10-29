@@ -38,6 +38,20 @@ func (uc *RepairOrderUseCase) publish(ctx context.Context, eventType string, ro 
 	})
 }
 
+// publishIfCompleted tells the customer's garage that the vehicle is ready:
+// the order just became completed (Release 10.1, FR-NOT-05). It carries the
+// figures the e-mail shows and no personal data.
+func (uc *RepairOrderUseCase) publishIfCompleted(ctx context.Context, was domain.RepairOrderStatus, ro *domain.RepairOrder) error {
+	if was == domain.StatusCompleted || ro.Status != domain.StatusCompleted {
+		return nil
+	}
+
+	return uc.Events.Publish(ctx, EventRepairOrderCompleted, ro.GarageID, "", map[string]any{
+		"repair_order_id": ro.ID, keyGarageID: ro.GarageID, "vehicle_id": ro.VehicleID, "number": ro.Number,
+		"vehicle_plate": ro.VehicleLicensePlate,
+	})
+}
+
 // Close closes the repair order (FR-REP-06): fails FAILED_PRECONDITION
 // unless every line is completed (ReadyToClose). Publishes
 // repair_order.closed in the same transaction; the Inventory module

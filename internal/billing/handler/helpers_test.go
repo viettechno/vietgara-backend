@@ -37,6 +37,17 @@ type env struct {
 	parties      *mocks.MockBillingPartyResolver
 }
 
+// expectPaymentEvents expects the events a recorded payment publishes: the
+// voucher issued, and the settlement paid when it settled the bill.
+func (e *env) expectPaymentEvents(paid bool) {
+	e.repairOrders.EXPECT().Get(anyArg, garageID, mock.Anything).Return(usecase.RepairOrderInfo{VehicleID: "vehicle-1"}, nil).Once()
+	e.events.EXPECT().Publish(anyArg, usecase.EventPaymentVoucherIssued, garageID, "", mock.Anything).Return(nil).Once()
+
+	if paid {
+		e.events.EXPECT().Publish(anyArg, usecase.EventSettlementPaid, garageID, "", mock.Anything).Return(nil).Once()
+	}
+}
+
 func newEnv(t *testing.T) *env {
 	t.Helper()
 

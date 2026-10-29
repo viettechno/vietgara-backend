@@ -108,6 +108,7 @@ func TestRecordSettlementPayment(t *testing.T) {
 	e.settlements.EXPECT().RecordPayment(anyArg, garageID, settlementID, anyArg).
 		Run(func(_ context.Context, _, _ string, p *domain.Payment) { issued = p }).Return(updated, nil).Once()
 	e.settlements.EXPECT().SaveStatus(anyArg, garageID, settlementID, domain.StatusPaid).Return(nil).Once()
+	e.expectPaymentEvents(true)
 
 	final := openSettlement()
 	final.PaidAmount, final.Status = 1_000_000, domain.StatusPaid

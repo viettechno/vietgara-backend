@@ -22,6 +22,14 @@ const (
 // (Event Design Section 4).
 const EventSettlementCreated = "settlement.created"
 
+// Events published when a payment is recorded (Release 10.1): the voucher
+// issued for every payment, and the settlement paid by the payment that
+// brings its balance to zero, once.
+const (
+	EventPaymentVoucherIssued = "payment_voucher.issued"
+	EventSettlementPaid       = "settlement.paid"
+)
+
 // Deps are the dependencies of SettlementUseCase.
 type Deps struct {
 	Settlements    Repository

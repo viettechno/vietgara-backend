@@ -28,6 +28,10 @@ const (
 	// EventRepairOrderCancelled (Release 7.3) tells Inventory to release the
 	// reservation of the order's draft stock issue.
 	EventRepairOrderCancelled = "repair_order.cancelled"
+	// EventRepairOrderCompleted (Release 10.1) is published once every line is
+	// done and the status becomes completed: the vehicle is ready. Notification
+	// tells the customer.
+	EventRepairOrderCompleted = "repair_order.completed"
 	keyGarageID               = "garage_id"
 )
 

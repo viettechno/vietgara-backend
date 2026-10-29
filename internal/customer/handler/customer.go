@@ -22,6 +22,7 @@ func (s *Server) CreateCustomer(ctx context.Context, req *customerv1.CreateCusto
 			Email:               in.Email,
 			Address:             in.Address,
 			PersonalDataConsent: in.GetPersonalDataConsent(),
+			Locale:              in.GetLocale(),
 		})
 		if err != nil {
 			return nil, err
@@ -51,7 +52,7 @@ func (s *Server) UpdateCustomer(ctx context.Context, req *customerv1.UpdateCusto
 		in := req.GetCustomer()
 		update := usecase.UpdateCustomerRequest{GarageID: req.GetGarageId(), CustomerID: req.GetCustomerId(), ActorID: actorID}
 
-		for _, path := range maskPaths(req.GetUpdateMask().GetPaths(), "full_name", "phone", "email", "address", "personal_data_consent") {
+		for _, path := range maskPaths(req.GetUpdateMask().GetPaths(), "full_name", "phone", "email", "address", "personal_data_consent", "locale", "email_opt_out") {
 			switch path {
 			case "full_name":
 				name := in.GetFullName()
@@ -65,6 +66,12 @@ func (s *Server) UpdateCustomer(ctx context.Context, req *customerv1.UpdateCusto
 			case "personal_data_consent":
 				consent := in.GetPersonalDataConsent()
 				update.PersonalDataConsent = &consent
+			case "locale":
+				locale := in.GetLocale()
+				update.Locale = &locale
+			case "email_opt_out":
+				optOut := in.GetEmailOptOut()
+				update.EmailOptOut = &optOut
 			default:
 				return nil, badMask(path)
 			}

@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"strings"
 
 	"github.com/google/uuid"
 
@@ -21,6 +22,8 @@ type CreateCustomerRequest struct {
 	Email               *string
 	Address             *string
 	PersonalDataConsent bool
+	// Locale is the language of the customer's e-mails; empty means vi.
+	Locale string
 }
 
 // UpdateCustomerRequest is the input for CustomerUseCase.Update; nil
@@ -34,6 +37,9 @@ type UpdateCustomerRequest struct {
 	Email               *string
 	Address             *string
 	PersonalDataConsent *bool
+	Locale              *string
+	// EmailOptOut records the customer's choice about non-essential e-mails.
+	EmailOptOut *bool
 }
 
 // ListCustomersRequest is the input for CustomerUseCase.List.
@@ -77,6 +83,7 @@ type customerFields struct {
 	Phone    *string
 	Email    *string
 	Address  *string
+	Locale   *string
 }
 
 func (f customerFields) apply(c *domain.Customer) error {
@@ -97,6 +104,20 @@ func (f customerFields) apply(c *domain.Customer) error {
 		return err
 	}
 
+	if f.Locale != nil {
+		locale := strings.ToLower(strings.TrimSpace(*f.Locale))
+
+		switch locale {
+		case "":
+			locale = domain.LocaleVI
+		case domain.LocaleVI, domain.LocaleEN:
+		default:
+			return domain.ErrInvalidLocale
+		}
+
+		c.Locale = locale
+	}
+
 	return patch(&c.Address, f.Address, text("address", domain.MaxAddressLen))
 }
 
@@ -110,7 +131,9 @@ func (uc *CustomerUseCase) Create(ctx context.Context, req CreateCustomerRequest
 		UpdatedBy: actorRef(req.ActorID),
 	}
 
-	fields := customerFields{FullName: &req.FullName, Phone: req.Phone, Email: req.Email, Address: req.Address}
+	locale := req.Locale
+	fields := customerFields{FullName: &req.FullName, Phone: req.Phone, Email: req.Email, Address: req.Address, Locale: &locale}
+
 	if err := fields.apply(c); err != nil {
 		return nil, toAppError("create customer", err)
 	}
@@ -141,13 +164,17 @@ func (uc *CustomerUseCase) Update(ctx context.Context, req UpdateCustomerRequest
 		return nil, toAppError("update customer", err)
 	}
 
-	fields := customerFields{FullName: req.FullName, Phone: req.Phone, Email: req.Email, Address: req.Address}
+	fields := customerFields{FullName: req.FullName, Phone: req.Phone, Email: req.Email, Address: req.Address, Locale: req.Locale}
 	if err := fields.apply(c); err != nil {
 		return nil, toAppError("update customer", err)
 	}
 
 	if req.PersonalDataConsent != nil {
 		c.RecordConsent(*req.PersonalDataConsent, uc.opts.now().UTC(), req.ActorID)
+	}
+
+	if req.EmailOptOut != nil {
+		c.SetEmailOptOut(*req.EmailOptOut, uc.opts.now().UTC(), req.ActorID)
 	}
 
 	c.UpdatedBy = actorRef(req.ActorID)
@@ -157,6 +184,26 @@ func (uc *CustomerUseCase) Update(ctx context.Context, req UpdateCustomerRequest
 	}
 
 	return c, nil
+}
+
+// OptOutEmail records, in the consent log, that the customer opted out of
+// non-essential e-mails by themselves (the link in an e-mail). It is
+// idempotent.
+func (uc *CustomerUseCase) OptOutEmail(ctx context.Context, garageID, customerID string) error {
+	c, err := uc.customers.FindByID(ctx, garageID, customerID)
+	if err != nil {
+		return toAppError("opt out of e-mail", err)
+	}
+
+	if !c.SetEmailOptOut(true, uc.opts.now().UTC(), "") {
+		return nil
+	}
+
+	if err := uc.customers.Update(ctx, c); err != nil {
+		return toAppError("opt out of e-mail", err)
+	}
+
+	return nil
 }
 
 // List returns one page of the garage's customers matching req.Query.

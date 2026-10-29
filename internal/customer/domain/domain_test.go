@@ -46,6 +46,28 @@ func TestNormalizeLicensePlate(t *testing.T) {
 	}
 }
 
+func TestEmailOptOut(t *testing.T) {
+	t.Parallel()
+
+	at := time.Date(2026, 10, 29, 10, 0, 0, 0, time.UTC)
+	c := &domain.Customer{ConsentLog: []domain.ConsentRecord{{Granted: true, RecordedAt: at.Add(-time.Hour)}}}
+
+	assert.True(t, c.SetEmailOptOut(true, at, "user-1"))
+	assert.False(t, c.SetEmailOptOut(true, at.Add(time.Minute), "user-1"), "a second opt-out changes nothing")
+	require.NotNil(t, c.EmailOptOutAt)
+	assert.Equal(t, at, *c.EmailOptOutAt)
+	assert.Len(t, c.ConsentLog, 2)
+
+	assert.True(t, c.LatestConsent().Granted, "the e-mail entry is not the personal-data consent")
+
+	assert.True(t, c.SetEmailOptOut(false, at.Add(time.Hour), "user-1"))
+	assert.Nil(t, c.EmailOptOutAt)
+	assert.Equal(t, domain.ConsentRecord{Purpose: domain.PurposeEmail, Granted: true, RecordedAt: at.Add(time.Hour), RecordedBy: "user-1"}, c.ConsentLog[2])
+	assert.False(t, c.SetEmailOptOut(false, at, ""), "already opted in")
+
+	assert.Nil(t, (&domain.Customer{ConsentLog: []domain.ConsentRecord{{Purpose: domain.PurposeEmail}}}).LatestConsent())
+}
+
 func TestValidateYear(t *testing.T) {
 	t.Parallel()
 

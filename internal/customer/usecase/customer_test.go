@@ -169,8 +169,28 @@ func TestCustomerUseCase_Update(t *testing.T) {
 				assert.Equal(t, domain.ConsentRecord{Granted: false, RecordedAt: fixedNow, RecordedBy: actorID}, c.ConsentLog[1])
 			},
 		},
+		{
+			name: "sets the e-mail language",
+			req:  usecase.UpdateCustomerRequest{Locale: new(" EN "), ActorID: actorID},
+			check: func(t *testing.T, c *domain.Customer) {
+				t.Helper()
+				assert.Equal(t, "en", c.Locale)
+			},
+		},
+		{
+			name: "records that the customer opted out of e-mails, apart from the personal-data consent",
+			req:  usecase.UpdateCustomerRequest{EmailOptOut: new(true), ActorID: actorID},
+			check: func(t *testing.T, c *domain.Customer) {
+				t.Helper()
+				require.NotNil(t, c.EmailOptOutAt)
+				require.Len(t, c.ConsentLog, 2)
+				assert.Equal(t, domain.ConsentRecord{Purpose: domain.PurposeEmail, Granted: false, RecordedAt: fixedNow, RecordedBy: actorID}, c.ConsentLog[1])
+				assert.True(t, c.LatestConsent().Granted, "the personal-data consent is untouched")
+			},
+		},
 		{name: "unknown customer", findErr: domain.ErrCustomerNotFound, wantCode: apperror.CodeNotFound},
 		{name: "invalid field", req: usecase.UpdateCustomerRequest{FullName: new("")}, wantCode: apperror.CodeInvalidArgument},
+		{name: "invalid locale", req: usecase.UpdateCustomerRequest{Locale: new("fr")}, wantCode: apperror.CodeInvalidArgument},
 		{name: "taken phone", req: usecase.UpdateCustomerRequest{Phone: new("0987654321")}, updateErr: domain.ErrPhoneTaken, wantCode: apperror.CodeAlreadyExists},
 	}
 
@@ -338,6 +358,51 @@ func TestCustomerUseCase_DeleteInUseCheckFailures(t *testing.T) {
 
 	_, err = uc.Delete(t.Context(), req)
 	assertAppError(t, err, apperror.CodeInternal)
+}
+
+func TestCustomerUseCase_OptOutEmail(t *testing.T) {
+	t.Parallel()
+
+	t.Run("opts out once", func(t *testing.T) {
+		t.Parallel()
+
+		customers := mocks.NewMockCustomerRepository(t)
+		uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t), nil, clock())
+
+		customers.EXPECT().FindByID(mock.Anything, garageID, customerID).Return(existingCustomer(), nil).Once()
+		customers.EXPECT().Update(mock.Anything, mock.MatchedBy(func(c *domain.Customer) bool {
+			return c.EmailOptOutAt != nil && len(c.ConsentLog) == 2 && c.ConsentLog[1].RecordedBy == ""
+		})).Return(nil).Once()
+
+		require.NoError(t, uc.OptOutEmail(t.Context(), garageID, customerID))
+	})
+
+	t.Run("does nothing when already opted out", func(t *testing.T) {
+		t.Parallel()
+
+		customers := mocks.NewMockCustomerRepository(t)
+		uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t), nil, clock())
+
+		customer := existingCustomer()
+		customer.SetEmailOptOut(true, fixedNow.Add(-time.Minute), "")
+		customers.EXPECT().FindByID(mock.Anything, garageID, customerID).Return(customer, nil).Once()
+
+		require.NoError(t, uc.OptOutEmail(t.Context(), garageID, customerID))
+	})
+
+	t.Run("failures", func(t *testing.T) {
+		t.Parallel()
+
+		customers := mocks.NewMockCustomerRepository(t)
+		uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t), nil, clock())
+
+		customers.EXPECT().FindByID(mock.Anything, garageID, "missing").Return(nil, domain.ErrCustomerNotFound).Once()
+		customers.EXPECT().FindByID(mock.Anything, garageID, customerID).Return(existingCustomer(), nil).Once()
+		customers.EXPECT().Update(mock.Anything, mock.Anything).Return(errBoom).Once()
+
+		assertAppError(t, uc.OptOutEmail(t.Context(), garageID, "missing"), apperror.CodeNotFound)
+		assertAppError(t, uc.OptOutEmail(t.Context(), garageID, customerID), apperror.CodeInternal)
+	})
 }
 
 func TestCustomerUseCase_Activate(t *testing.T) {

@@ -14,6 +14,7 @@ import (
 const (
 	customerColumns = `c.id, c.garage_id, c.full_name, c.phone, c.email, c.address, c.consent_log, c.is_active,
 		c.created_by, c.updated_by, c.created_at, c.updated_at,
+		c.locale, c.email_opt_out_at,
 		(SELECT count(*) FROM vehicles v WHERE v.customer_id = c.id AND v.deleted_at IS NULL)::int,
 		(SELECT l.status::text FROM customer_user_links l WHERE l.customer_id = c.id
 			ORDER BY (l.status IN ('requested', 'linked')) DESC, l.created_at DESC LIMIT 1)`
@@ -55,7 +56,7 @@ func scanCustomer(row pgx.Row) (*domain.Customer, error) {
 	)
 
 	err := row.Scan(&c.ID, &c.GarageID, &c.FullName, &c.Phone, &c.Email, &c.Address, &consent, &c.IsActive,
-		&c.CreatedBy, &c.UpdatedBy, &c.CreatedAt, &c.UpdatedAt, &c.VehicleCount, &linkStatus)
+		&c.CreatedBy, &c.UpdatedBy, &c.CreatedAt, &c.UpdatedAt, &c.Locale, &c.EmailOptOutAt, &c.VehicleCount, &linkStatus)
 	if err != nil {
 		return nil, err
 	}
@@ -91,10 +92,10 @@ func (r *PostgresCustomerRepository) Create(ctx context.Context, c *domain.Custo
 
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 	row := q.QueryRow(ctx, `
-		INSERT INTO customers (id, garage_id, full_name, phone, email, address, consent_log, created_by, updated_by)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		INSERT INTO customers (id, garage_id, full_name, phone, email, address, consent_log, created_by, updated_by, locale)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		RETURNING created_at, updated_at`,
-		c.ID, c.GarageID, c.FullName, c.Phone, c.Email, c.Address, consent, c.CreatedBy, c.UpdatedBy,
+		c.ID, c.GarageID, c.FullName, c.Phone, c.Email, c.Address, consent, c.CreatedBy, c.UpdatedBy, c.Locale,
 	)
 
 	return scanWrite(row, domain.ErrCustomerNotFound, customerUniqueIndexes, nil, &c.CreatedAt, &c.UpdatedAt)
@@ -153,10 +154,11 @@ func (r *PostgresCustomerRepository) Update(ctx context.Context, c *domain.Custo
 
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 	row := q.QueryRow(ctx, `
-		UPDATE customers SET full_name = $3, phone = $4, email = $5, address = $6, consent_log = $7, updated_by = $8
+		UPDATE customers SET full_name = $3, phone = $4, email = $5, address = $6, consent_log = $7, updated_by = $8,
+			locale = $9, email_opt_out_at = $10
 		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL
 		RETURNING updated_at`,
-		c.GarageID, c.ID, c.FullName, c.Phone, c.Email, c.Address, consent, c.UpdatedBy,
+		c.GarageID, c.ID, c.FullName, c.Phone, c.Email, c.Address, consent, c.UpdatedBy, c.Locale, c.EmailOptOutAt,
 	)
 
 	return scanWrite(row, domain.ErrCustomerNotFound, customerUniqueIndexes, nil, &c.UpdatedAt)

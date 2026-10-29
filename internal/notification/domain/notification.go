@@ -19,6 +19,23 @@ type Status string
 const (
 	StatusSent   Status = "sent"
 	StatusFailed Status = "failed"
+	// StatusSkipped records an e-mail that was not sent, with a SkipReason.
+	StatusSkipped Status = "skipped"
+)
+
+// SkipReason says why an e-mail was not sent.
+type SkipReason string
+
+// Valid SkipReason values.
+const (
+	// SkipDisabled: the garage switched the type off.
+	SkipDisabled SkipReason = "disabled"
+	// SkipOptedOut: the customer opted out of non-essential e-mails.
+	SkipOptedOut SkipReason = "opted_out"
+	// SkipSuppressed: the address bounced for good or complained.
+	SkipSuppressed SkipReason = "suppressed"
+	// SkipNoEmail: the customer has no e-mail address.
+	SkipNoEmail SkipReason = "no_email"
 )
 
 // Log is one append-only record of a notification actually sent, for
@@ -35,4 +52,16 @@ type Log struct {
 	Status    Status
 	Error     string
 	CreatedAt time.Time
+
+	// The fields below are set for the e-mails of a garage (Release 10.1);
+	// the account and licence e-mails leave them empty.
+	GarageID   string
+	CustomerID string
+	Type       Type
+	// EntityType and EntityID name what the e-mail is about, say "quote" and
+	// the quote's id.
+	EntityType string
+	EntityID   string
+	EventID    string
+	SkipReason SkipReason
 }

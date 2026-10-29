@@ -196,12 +196,12 @@ func TestMailjetSender(t *testing.T) {
 			assert.Equal(t, "<https://x/opt-out>", headers["List-Unsubscribe"])
 
 			attachments, _ := msg["Attachments"].([]any)
-			require.Len(t, attachments, 1)
-
-			attachment, _ := attachments[0].(map[string]any)
-			assert.Equal(t, "bien-nhan.pdf", attachment["Filename"])
-			assert.Equal(t, "application/pdf", attachment["ContentType"])
-			assert.Equal(t, "JVBERi0xLjQgdGVzdA==", attachment["Base64Content"])
+			if assert.Len(t, attachments, 1) {
+				attachment, _ := attachments[0].(map[string]any)
+				assert.Equal(t, "bien-nhan.pdf", attachment["Filename"])
+				assert.Equal(t, "application/pdf", attachment["ContentType"])
+				assert.Equal(t, "JVBERi0xLjQgdGVzdA==", attachment["Base64Content"])
+			}
 
 			_, _ = w.Write([]byte(`{"Messages":[{"Status":"success"}]}`))
 		}))

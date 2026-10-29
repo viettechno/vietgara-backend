@@ -1,5 +1,7 @@
 package domain
 
+import "slices"
+
 // Type is one e-mail a garage can switch off (FR-NOT-05, FR-INV-04).
 type Type string
 
@@ -30,24 +32,15 @@ const (
 )
 
 // Valid reports whether t is a known type.
-func (t Type) Valid() bool {
-	for _, known := range AllTypes {
-		if t == known {
-			return true
-		}
-	}
-
-	return false
-}
+func (t Type) Valid() bool { return slices.Contains(AllTypes, t) }
 
 // Audience is who receives the type.
 func (t Type) Audience() Audience {
-	switch t {
-	case TypeQuoteReady, TypeVehicleReady, TypePaymentReceived, TypeSettlementReceipt:
+	if slices.Contains([]Type{TypeQuoteReady, TypeVehicleReady, TypePaymentReceived, TypeSettlementReceipt}, t) {
 		return AudienceCustomer
-	default:
-		return AudienceStaff
 	}
+
+	return AudienceStaff
 }
 
 // Essential e-mails carry what the customer needs to act (the approval

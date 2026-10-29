@@ -86,36 +86,7 @@ func (s *MailjetSender) Send(ctx context.Context, msg Message) error {
 		return err
 	}
 
-	out := mailjetMessage{
-		From:     mailjetAddress{Email: s.from.Email, Name: s.from.Name},
-		To:       []mailjetAddress{{Email: msg.ToEmail, Name: msg.ToName}},
-		Subject:  msg.Subject,
-		TextPart: msg.Text,
-		HTMLPart: msg.HTML,
-		CustomID: msg.Tag,
-		Headers:  msg.Headers,
-	}
-
-	if msg.FromName != "" {
-		out.From.Name = msg.FromName
-	}
-
-	if msg.ReplyTo != "" {
-		out.ReplyTo = &mailjetAddress{Email: msg.ReplyTo}
-	}
-
-	for _, a := range msg.Attachments {
-		contentType := a.ContentType
-		if contentType == "" {
-			contentType = "application/octet-stream"
-		}
-
-		out.Attachments = append(out.Attachments, mailjetAttachment{
-			ContentType: contentType, Filename: a.Name, Base64Content: base64.StdEncoding.EncodeToString(a.Data),
-		})
-	}
-
-	body, err := json.Marshal(mailjetRequest{Messages: []mailjetMessage{out}})
+	body, err := json.Marshal(mailjetRequest{Messages: []mailjetMessage{s.build(msg)}})
 	if err != nil {
 		return fmt.Errorf("mailjet: encode: %w", err)
 	}
@@ -156,4 +127,39 @@ func (s *MailjetSender) Send(ctx context.Context, msg Message) error {
 	}
 
 	return nil
+}
+
+// build maps msg onto the Send API's message: the sender name and the
+// reply address of the message, the extra headers and the attachments.
+func (s *MailjetSender) build(msg Message) mailjetMessage {
+	out := mailjetMessage{
+		From:     mailjetAddress{Email: s.from.Email, Name: s.from.Name},
+		To:       []mailjetAddress{{Email: msg.ToEmail, Name: msg.ToName}},
+		Subject:  msg.Subject,
+		TextPart: msg.Text,
+		HTMLPart: msg.HTML,
+		CustomID: msg.Tag,
+		Headers:  msg.Headers,
+	}
+
+	if msg.FromName != "" {
+		out.From.Name = msg.FromName
+	}
+
+	if msg.ReplyTo != "" {
+		out.ReplyTo = &mailjetAddress{Email: msg.ReplyTo}
+	}
+
+	for _, a := range msg.Attachments {
+		contentType := a.ContentType
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+
+		out.Attachments = append(out.Attachments, mailjetAttachment{
+			ContentType: contentType, Filename: a.Name, Base64Content: base64.StdEncoding.EncodeToString(a.Data),
+		})
+	}
+
+	return out
 }

@@ -83,19 +83,27 @@ func (uc *RepairOrderUseCase) UpdateLine(ctx context.Context, req UpdateLineRequ
 		}
 	}
 
-	if err := uc.publishIfCompleted(ctx, was, ro); err != nil {
+	if err := uc.announceProgress(ctx, started, was, ro); err != nil {
 		return nil, toAppError(op, err)
 	}
 
-	// The first move out of not started is the order starting; Inventory may
-	// post its stock issue then (FR-INV-20).
-	if !started && ro.WorkStarted() {
-		if err := uc.publish(ctx, EventRepairOrderStarted, ro); err != nil {
-			return nil, toAppError(op, err)
-		}
+	return ro, nil
+}
+
+// announceProgress publishes what a change of progress means to the other
+// modules: the order completed (the vehicle is ready) and the order starting,
+// which is the first move out of not started; Inventory may post its stock
+// issue then (FR-INV-20).
+func (uc *RepairOrderUseCase) announceProgress(ctx context.Context, started bool, was domain.RepairOrderStatus, ro *domain.RepairOrder) error {
+	if err := uc.publishIfCompleted(ctx, was, ro); err != nil {
+		return err
 	}
 
-	return ro, nil
+	if !started && ro.WorkStarted() {
+		return uc.publish(ctx, EventRepairOrderStarted, ro)
+	}
+
+	return nil
 }
 
 // applyProgress applies the status and the assignment of a request to a line.

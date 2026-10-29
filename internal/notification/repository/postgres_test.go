@@ -64,8 +64,8 @@ func TestPostgresRepository_CreateKeepsTheGarageFields(t *testing.T) {
 	tx := dbtest.New(t).ExpectQueryRow("INSERT INTO notification_log", dbtest.Row(now)).WithArgs(func(args []any) {
 		require.Len(t, args, 14)
 		require.Equal(t, "skipped", args[5])
-		require.Equal(t, "g-1", *(args[7].(*string)))        //nolint:forcetypeassert // nullableString
-		require.Equal(t, "opted_out", *(args[13].(*string))) //nolint:forcetypeassert // nullableString
+		require.Equal(t, "g-1", derefString(t, args[7]))
+		require.Equal(t, "opted_out", derefString(t, args[13]))
 		require.Nil(t, args[1], "no user")
 	})
 
@@ -74,7 +74,7 @@ func TestPostgresRepository_CreateKeepsTheGarageFields(t *testing.T) {
 
 type fakeTransactor struct {
 	garage string
-	ctx    context.Context //nolint:containedctx // the context the transactor runs the function with
+	ctx    context.Context
 }
 
 func (f *fakeTransactor) InGarage(_ context.Context, garageID string, fn func(ctx context.Context) error) error {
@@ -133,4 +133,25 @@ func TestPostgresRepository_List(t *testing.T) {
 		_, _, err = repo.List(ctx, "g-1", usecase.LogFilter{}, 1, 20)
 		require.ErrorIs(t, err, errBoom)
 	}
+}
+
+// derefString reads the string a nullable argument points to.
+func derefString(t *testing.T, arg any) string {
+	t.Helper()
+
+	p, ok := arg.(*string)
+	require.True(t, ok, "a *string argument")
+	require.NotNil(t, p)
+
+	return *p
+}
+
+// bytesOf reads a []byte argument.
+func bytesOf(t *testing.T, arg any) []byte {
+	t.Helper()
+
+	b, ok := arg.([]byte)
+	require.True(t, ok, "a []byte argument")
+
+	return b
 }

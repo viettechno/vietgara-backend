@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"maps"
 	"strings"
 
 	"github.com/google/uuid"
@@ -93,10 +94,7 @@ func (uc *NotificationUseCase) toStaff(
 	for _, user := range staff {
 		personal := n
 		personal.data = map[string]any{"Name": user.FullName}
-
-		for k, v := range n.data {
-			personal.data[k] = v
-		}
+		maps.Copy(personal.data, n.data)
 
 		to := recipient{userID: user.ID, name: user.FullName, email: user.Email, locale: user.Locale}
 		if _, err := uc.deliver(ctx, settings, garage, personal, to, nil); err != nil {
@@ -201,7 +199,7 @@ func (uc *NotificationUseCase) quoteReady(ctx context.Context, req QuoteReadyReq
 		typ: domain.TypeQuoteReady, garageID: req.GarageID, entityType: "quote", entityID: req.QuoteID,
 		template: mail.TemplateQuoteReadyForApproval,
 		data: map[string]any{
-			"Number": req.Number, "VehiclePlate": req.VehiclePlate, "TotalAmount": req.Total, "ApproveURL": req.ApproveURL,
+			keyNumber: req.Number, keyVehiclePlate: req.VehiclePlate, "TotalAmount": req.Total, "ApproveURL": req.ApproveURL,
 		},
 	})
 }

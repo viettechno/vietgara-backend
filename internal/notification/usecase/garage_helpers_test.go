@@ -96,6 +96,6 @@ func (d *garageDeps) logged() *[]domain.Log {
 	return &rows
 }
 
-func event(garage, eventType string, data string) outbox.Event {
+func event(garage, eventType, data string) outbox.Event {
 	return outbox.Event{ID: "event-1", Type: eventType, GarageID: garage, Data: []byte(data)}
 }

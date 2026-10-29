@@ -57,8 +57,8 @@ func TestPostgresSettings_Save(t *testing.T) {
 		ExpectExec("INSERT INTO garage_notification_settings", dbtest.Tag(1), nil).
 		WithArgs(func(args []any) {
 			assert.Equal(t, "g-1", args[0])
-			assert.Equal(t, "Gara", *(args[1].(*string))) //nolint:forcetypeassert // nullableString
-			assert.JSONEq(t, `{"vehicle_ready":false}`, string(args[2].([]byte)))
+			assert.Equal(t, "Gara", derefString(t, args[1]))
+			assert.JSONEq(t, `{"vehicle_ready":false}`, string(bytesOf(t, args[2])))
 		}).
 		ExpectExec("INSERT INTO garage_notification_settings", dbtest.Tag(0), errBoom)
 	ctx := tx.Context(t.Context())

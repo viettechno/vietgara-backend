@@ -67,6 +67,7 @@ func buildMIME(from From, msg Message) []byte {
 	var b bytes.Buffer
 
 	header := func(k, v string) { fmt.Fprintf(&b, "%s: %s\r\n", k, v) }
+
 	fromName := from.Name
 	if msg.FromName != "" {
 		fromName = msg.FromName
@@ -82,6 +83,7 @@ func buildMIME(from From, msg Message) []byte {
 	for _, name := range sortedKeys(msg.Headers) {
 		header(name, msg.Headers[name])
 	}
+
 	header("Subject", mime.QEncoding.Encode("utf-8", msg.Subject))
 	header("Date", time.Now().UTC().Format(time.RFC1123Z))
 	header("MIME-Version", "1.0")

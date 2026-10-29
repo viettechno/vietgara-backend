@@ -67,7 +67,7 @@ func TestPostgresRepository_Balances(t *testing.T) {
 	})
 }
 
-func TestPostgresRepository_RecordTransaction(t *testing.T) {
+func TestPostgresRepository_RecordTransaction(t *testing.T) { //nolint:funlen // one subtest per movement
 	t.Parallel()
 
 	newTx := func() *domain.StockTransaction {
@@ -151,7 +151,7 @@ func TestPostgresRepository_RecordTransaction(t *testing.T) {
 			require.Equal(t, repository.EventStockLow, eventType)
 			require.Equal(t, garageID, garage)
 
-			published = append(published, payload.(map[string]any)) //nolint:forcetypeassert // the repository publishes a map
+			published = append(published, asMap(t, payload))
 
 			return nil
 		})
@@ -335,4 +335,14 @@ type publisherFunc func(ctx context.Context, eventType, garageID, userID string,
 
 func (f publisherFunc) Publish(ctx context.Context, eventType, garageID, userID string, payload any) error {
 	return f(ctx, eventType, garageID, userID, payload)
+}
+
+// asMap reads the payload the repository publishes.
+func asMap(t *testing.T, payload any) map[string]any {
+	t.Helper()
+
+	m, ok := payload.(map[string]any)
+	require.True(t, ok, "a map payload")
+
+	return m
 }

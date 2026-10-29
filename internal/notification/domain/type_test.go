@@ -21,8 +21,10 @@ func TestType(t *testing.T) {
 	assert.False(t, domain.Type("other").Valid())
 
 	customer := []domain.Type{domain.TypeQuoteReady, domain.TypeVehicleReady, domain.TypePaymentReceived, domain.TypeSettlementReceipt}
+
 	for _, typ := range domain.AllTypes {
 		want := domain.AudienceStaff
+
 		for _, c := range customer {
 			if typ == c {
 				want = domain.AudienceCustomer

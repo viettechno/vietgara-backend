@@ -34,7 +34,7 @@ var reasonToProto = map[domain.SkipReason]notificationv1.NotificationSkipReason{
 	domain.SkipNoEmail:    notificationv1.NotificationSkipReason_NOTIFICATION_SKIP_REASON_NO_EMAIL,
 }
 
-func invert[K comparable, V comparable](m map[K]V) map[V]K {
+func invert[K, V comparable](m map[K]V) map[V]K {
 	out := make(map[V]K, len(m))
 	for k, v := range m {
 		out[v] = k

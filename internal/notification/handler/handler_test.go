@@ -94,7 +94,7 @@ func TestGetNotificationSettings(t *testing.T) {
 	require.Len(t, resp.GetTypes(), 7)
 
 	for _, setting := range resp.GetTypes() {
-		switch setting.GetType() {
+		switch setting.GetType() { //nolint:exhaustive // only three of the seven are checked
 		case notificationv1.NotificationType_NOTIFICATION_TYPE_VEHICLE_READY:
 			assert.False(t, setting.GetEnabled())
 			assert.Equal(t, notificationv1.NotificationAudience_NOTIFICATION_AUDIENCE_CUSTOMER, setting.GetAudience())

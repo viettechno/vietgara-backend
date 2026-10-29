@@ -24,6 +24,7 @@ const (
 	MailjetWebhookPath = "/api/v1/webhooks/mailjet/{secret}"
 
 	maxWebhookBytes = 1 << 20
+	errorKey        = "error"
 )
 
 // RegisterHTTPRoutes adds the opt-out page and, when webhookSecret is set, the
@@ -77,7 +78,7 @@ func (s *Server) optOut(w http.ResponseWriter, r *http.Request, token string) {
 		}
 
 		slog.ErrorContext(r.Context(), "notification: opting out failed", "error", err)
-		httpapi.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
+		httpapi.WriteJSON(w, http.StatusInternalServerError, map[string]string{errorKey: "internal"})
 
 		return
 	}
@@ -115,7 +116,7 @@ func (s *Server) mailjetWebhook(w http.ResponseWriter, r *http.Request, given, w
 
 	raw, err := io.ReadAll(io.LimitReader(r.Body, maxWebhookBytes))
 	if err != nil {
-		httpapi.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "unreadable body"})
+		httpapi.WriteJSON(w, http.StatusBadRequest, map[string]string{errorKey: "unreadable body"})
 
 		return
 	}
@@ -128,7 +129,7 @@ func (s *Server) mailjetWebhook(w http.ResponseWriter, r *http.Request, given, w
 
 		if err := s.uc.Suppress(r.Context(), e.Email, reason); err != nil {
 			slog.ErrorContext(r.Context(), "notification: suppressing an address failed", "error", err)
-			httpapi.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal"})
+			httpapi.WriteJSON(w, http.StatusInternalServerError, map[string]string{errorKey: "internal"})
 
 			return
 		}

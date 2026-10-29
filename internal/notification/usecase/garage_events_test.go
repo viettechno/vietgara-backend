@@ -256,7 +256,7 @@ func TestHandlePaymentReceived(t *testing.T) {
 	})
 }
 
-func TestHandleSettlementPaid(t *testing.T) {
+func TestHandleSettlementPaid(t *testing.T) { //nolint:funlen // one subtest per case
 	t.Parallel()
 
 	payload := `{"settlement_id":"` + settlementID + `","vehicle_id":"` + vehicleID + `","number":"ST-1","customer_name":"An","vehicle_plate":"51A-111.11","total":800000,"created_by":"` + creatorID + `"}`

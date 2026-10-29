@@ -4,6 +4,7 @@ package domain
 
 import (
 	"fmt"
+	"slices"
 	"time"
 	"unicode/utf8"
 )
@@ -72,7 +73,7 @@ type Customer struct {
 // LatestConsent returns the most recent consent decision, or nil when none
 // was ever recorded.
 func (c *Customer) LatestConsent() *ConsentRecord {
-	for i := len(c.ConsentLog) - 1; i >= 0; i-- {
+	for i := range slices.Backward(c.ConsentLog) {
 		if c.ConsentLog[i].Purpose == "" {
 			return &c.ConsentLog[i]
 		}

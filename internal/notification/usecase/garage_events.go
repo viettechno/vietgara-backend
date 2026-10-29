@@ -11,6 +11,12 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/converter"
 )
 
+// Template variables shared by several e-mails.
+const (
+	keyNumber       = "Number"
+	keyVehiclePlate = "VehiclePlate"
+)
+
 // permissionInventoryWrite is held by the staff who reorder parts.
 const permissionInventoryWrite = "inventory.write"
 
@@ -45,7 +51,7 @@ func (uc *NotificationUseCase) HandleQuoteDecided(ctx context.Context, event out
 			typ: domain.TypeQuoteDecided, garageID: event.GarageID, entityType: "quote", entityID: p.QuoteID, eventID: event.ID,
 			template: mail.TemplateQuoteDecided,
 			data: map[string]any{
-				"Number": p.Number, "CustomerName": p.CustomerName, "VehiclePlate": p.VehiclePlate,
+				keyNumber: p.Number, "CustomerName": p.CustomerName, keyVehiclePlate: p.VehiclePlate,
 				"Approved": event.Type == "quote.approved",
 			},
 		})
@@ -80,7 +86,7 @@ func (uc *NotificationUseCase) HandleVehicleReady(ctx context.Context, event out
 
 		_, err = uc.toCustomer(ctx, settings, garage, customer, note{
 			typ: domain.TypeVehicleReady, garageID: event.GarageID, entityType: "repair_order", entityID: p.RepairOrderID,
-			eventID: event.ID, template: mail.TemplateVehicleReady, data: map[string]any{"VehiclePlate": p.VehiclePlate},
+			eventID: event.ID, template: mail.TemplateVehicleReady, data: map[string]any{keyVehiclePlate: p.VehiclePlate},
 		})
 
 		return err
@@ -124,7 +130,7 @@ func (uc *NotificationUseCase) HandlePaymentReceived(ctx context.Context, event 
 			typ: domain.TypePaymentReceived, garageID: event.GarageID, entityType: "settlement", entityID: p.SettlementID,
 			eventID: event.ID, template: mail.TemplatePaymentReceived,
 			data: map[string]any{
-				"VehiclePlate": p.VehiclePlate, "Number": p.Number,
+				keyVehiclePlate: p.VehiclePlate, keyNumber: p.Number,
 				"Amount": converter.FormatVND(p.Amount), "Balance": converter.FormatVND(p.Balance),
 			},
 		})
@@ -158,7 +164,7 @@ func (uc *NotificationUseCase) HandleSettlementPaid(ctx context.Context, event o
 			typ: domain.TypeSettlementReceipt, garageID: event.GarageID, entityType: "settlement", entityID: p.SettlementID,
 			eventID: event.ID, template: mail.TemplateSettlementReceipt, attach: attachment,
 			data: map[string]any{
-				"VehiclePlate": p.VehiclePlate, "Number": p.Number, "Total": converter.FormatVND(p.Total), "Attached": attached,
+				keyVehiclePlate: p.VehiclePlate, keyNumber: p.Number, "Total": converter.FormatVND(p.Total), "Attached": attached,
 			},
 		}); err != nil {
 			return err
@@ -173,7 +179,7 @@ func (uc *NotificationUseCase) HandleSettlementPaid(ctx context.Context, event o
 			typ: domain.TypeSettlementPaid, garageID: event.GarageID, customerID: customer.ID, entityType: "settlement",
 			entityID: p.SettlementID, eventID: event.ID, template: mail.TemplateSettlementPaid,
 			data: map[string]any{
-				"Number": p.Number, "CustomerName": p.CustomerName, "VehiclePlate": p.VehiclePlate, "Total": converter.FormatVND(p.Total),
+				keyNumber: p.Number, "CustomerName": p.CustomerName, keyVehiclePlate: p.VehiclePlate, "Total": converter.FormatVND(p.Total),
 			},
 		})
 	})

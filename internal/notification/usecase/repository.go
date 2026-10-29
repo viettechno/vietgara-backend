@@ -130,7 +130,7 @@ type StaffReader interface {
 // Receipts renders the receipt PDF of a paid settlement; implemented over
 // the Document module.
 type Receipts interface {
-	SettlementReceipt(ctx context.Context, garageID, settlementID string) (name string, pdf []byte, err error)
+	SettlementReceipt(ctx context.Context, garageID, settlementID string) ([]byte, error)
 }
 
 // Transactor runs fn in a transaction scoped to a garage.

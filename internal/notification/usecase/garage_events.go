@@ -152,7 +152,7 @@ func (uc *NotificationUseCase) HandleSettlementPaid(ctx context.Context, event o
 			return err
 		}
 
-		attachment, attached := uc.receipt(ctx, event.GarageID, p.SettlementID)
+		attachment, attached := uc.receipt(ctx, event.GarageID, p.SettlementID, p.Number)
 
 		if _, err := uc.toCustomer(ctx, settings, garage, customer, note{
 			typ: domain.TypeSettlementReceipt, garageID: event.GarageID, entityType: "settlement", entityID: p.SettlementID,
@@ -181,8 +181,8 @@ func (uc *NotificationUseCase) HandleSettlementPaid(ctx context.Context, event o
 
 // receipt renders the receipt PDF to attach. The e-mail goes without it when
 // it cannot be made or is too big: the customer still learns the bill is paid.
-func (uc *NotificationUseCase) receipt(ctx context.Context, garageID, settlementID string) ([]mail.Attachment, bool) {
-	name, pdf, err := uc.Receipts.SettlementReceipt(ctx, garageID, settlementID)
+func (uc *NotificationUseCase) receipt(ctx context.Context, garageID, settlementID, number string) ([]mail.Attachment, bool) {
+	pdf, err := uc.Receipts.SettlementReceipt(ctx, garageID, settlementID)
 	if err != nil {
 		slog.Warn("notification: rendering the receipt failed, sending without it", "settlement_id", settlementID, "error", err)
 
@@ -195,7 +195,7 @@ func (uc *NotificationUseCase) receipt(ctx context.Context, garageID, settlement
 		return nil, false
 	}
 
-	return []mail.Attachment{{Name: name, ContentType: "application/pdf", Data: pdf}}, true
+	return []mail.Attachment{{Name: "receipt-" + number + ".pdf", ContentType: "application/pdf", Data: pdf}}, true
 }
 
 type stockLowPayload struct {

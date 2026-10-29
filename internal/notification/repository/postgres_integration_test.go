@@ -27,7 +27,7 @@ func (g garageTx) InGarage(ctx context.Context, garageID string, fn func(ctx con
 // staff query as the RLS-bound application role: a garage sees its own rows and
 // never another's, a failed attempt survives the rollback of the attempt, and the
 // account e-mails stay out of the garage's log.
-func TestNotificationStoresUnderRowLevelSecurity(t *testing.T) {
+func TestNotificationStoresUnderRowLevelSecurity(t *testing.T) { //nolint:funlen // one walk-through of the stores against a shared, seeded database
 	pg := pgtest.StartMigrated(t)
 	ctx := t.Context()
 	pool := pg.AppPool(t)

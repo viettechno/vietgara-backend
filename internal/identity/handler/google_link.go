@@ -33,7 +33,8 @@ func (s *Server) LinkGoogle(ctx context.Context, req *identityv1.LinkGoogleReque
 
 	claims, err := s.googleID.Verify(ctx, req.GetIdToken())
 	if err != nil {
-		return nil, apperror.ToGRPCError(apperror.Wrap(apperror.CodeUnauthenticated,
+		// Not a 401: the caller is signed in, and a client takes a 401 for an expired session.
+		return nil, apperror.ToGRPCError(apperror.Wrap(apperror.CodeInvalidArgument,
 			"the Google sign-in could not be verified", err).WithReason(ReasonGoogleTokenInvalid))
 	}
 

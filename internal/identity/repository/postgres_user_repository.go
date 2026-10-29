@@ -211,6 +211,8 @@ func mapUniqueViolation(err error) error {
 		return domain.ErrEmailAlreadyExists
 	case strings.Contains(pgErr.ConstraintName, "phone"):
 		return domain.ErrPhoneAlreadyExists
+	case strings.Contains(pgErr.ConstraintName, "identity_platform_uid"):
+		return domain.ErrGoogleAlreadyLinked
 	default:
 		return err
 	}

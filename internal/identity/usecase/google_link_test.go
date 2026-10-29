@@ -249,6 +249,26 @@ func TestUnlinkGoogle(t *testing.T) {
 		assert.Equal(t, owner.User.ID, signedIn.User.ID)
 	})
 
+	t.Run("another Google account with the same e-mail does not sign in after a relink", func(t *testing.T) {
+		t.Parallel()
+
+		e := newEnv(t)
+		owner := e.verifiedOwner(t)
+		compromised := usecase.GoogleProfile{Subject: "g-1", Email: "owner@example.com", EmailVerified: true, FullName: "Minh"}
+
+		_, err := e.uc.LinkGoogle(t.Context(), owner.User.ID, ownerPassword, compromised)
+		require.NoError(t, err)
+
+		_, err = e.uc.UnlinkGoogle(t.Context(), owner.User.ID, ownerPassword)
+		require.NoError(t, err)
+
+		_, err = e.uc.LinkGoogle(t.Context(), owner.User.ID, ownerPassword, googleProfile("g-2"))
+		require.NoError(t, err)
+
+		_, err = e.uc.GoogleLogin(t.Context(), compromised)
+		requireReason(t, err, domain.ReasonGoogleSigninBlocked)
+	})
+
 	t.Run("refuses without a link, with a wrong password, and for a user with no password", func(t *testing.T) {
 		t.Parallel()
 

@@ -95,7 +95,7 @@ func TestLinkGoogleNeedsAVerifiableToken(t *testing.T) {
 		reason   string
 	}{
 		"not configured": {nil, codes.FailedPrecondition, "GOOGLE_NOT_CONFIGURED"},
-		"rejected token": {&fakeVerifier{configured: true, err: errBadGoogleSignature}, codes.Unauthenticated, handler.ReasonGoogleTokenInvalid},
+		"rejected token": {&fakeVerifier{configured: true, err: errBadGoogleSignature}, codes.InvalidArgument, handler.ReasonGoogleTokenInvalid},
 	}
 
 	for name, tc := range cases {

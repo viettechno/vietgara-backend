@@ -60,7 +60,8 @@ func (uc *IdentityUseCase) LinkGoogleWithProof(ctx context.Context, userID, pass
 // (mobile apps).
 func (uc *IdentityUseCase) LinkGoogle(ctx context.Context, userID, password string, profile GoogleProfile) (*domain.User, error) {
 	if profile.Subject == "" || !profile.EmailVerified {
-		return nil, apperror.New(apperror.CodeUnauthenticated, "Google did not provide a verified e-mail address").
+		// Not a 401: the caller is signed in, and a client takes a 401 for an expired session.
+		return nil, apperror.New(apperror.CodeInvalidArgument, "Google did not provide a verified e-mail address").
 			WithReason(domain.ReasonInvalidCredentials)
 	}
 
@@ -86,6 +87,12 @@ func (uc *IdentityUseCase) UnlinkGoogle(ctx context.Context, userID, password st
 		return nil, googleLinkError(domain.ErrGoogleNotLinked)
 	}
 
+	// The sessions go first: once the link is gone a retry is refused, so a
+	// failure after the update must not leave a session of the old account.
+	if err := uc.sessions.RevokeAllRefreshTokens(ctx, user.ID); err != nil {
+		return nil, apperror.Internal("revoke sessions", err)
+	}
+
 	user.GoogleSubject = nil
 	user.GoogleSigninBlocked = true
 
@@ -95,10 +102,6 @@ func (uc *IdentityUseCase) UnlinkGoogle(ctx context.Context, userID, password st
 
 	if err := uc.recordGoogleLink(ctx, user.ID, "user.google_unlinked", false); err != nil {
 		return nil, apperror.Internal("audit google unlink", err)
-	}
-
-	if err := uc.sessions.RevokeAllRefreshTokens(ctx, user.ID); err != nil {
-		return nil, apperror.Internal("revoke sessions", err)
 	}
 
 	return uc.issueSession(ctx, user)
@@ -126,6 +129,10 @@ func (uc *IdentityUseCase) linkGoogle(ctx context.Context, user *domain.User, su
 	user.GoogleSigninBlocked = false
 
 	if err := uc.users.Update(ctx, user); err != nil {
+		if errors.Is(err, domain.ErrGoogleAlreadyLinked) {
+			return nil, googleLinkError(err) // linked to someone else since the check above
+		}
+
 		return nil, apperror.Internal("link google", err)
 	}
 

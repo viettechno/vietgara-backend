@@ -65,10 +65,19 @@ ALTER TABLE ONLY public.notification_log FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE public.notification_log ENABLE ROW LEVEL SECURITY;
 
--- A garage reads its own rows; rows without a garage (account and licence
--- e-mails) are written by anyone and read by no scope.
+-- A garage reads its own rows. The account and licence e-mails have no garage;
+-- they are read, in a garage's scope, for the garage's owner and active staff
+-- only (support diagnostics, Release 8.2), and by no other scope. Anyone may
+-- write either kind.
 CREATE POLICY notification_log_rls_policy ON public.notification_log
-    USING (((garage_id IS NOT NULL) AND (garage_id = public.app_current_garage_id())))
+    USING (
+        ((garage_id IS NOT NULL) AND (garage_id = public.app_current_garage_id()))
+        OR ((garage_id IS NULL) AND (public.app_current_garage_id() IS NOT NULL) AND (user_id IN (
+            SELECT g.user_id FROM public.garages g WHERE g.id = public.app_current_garage_id()
+            UNION
+            SELECT s.user_id FROM public.garage_staff s WHERE s.garage_id = public.app_current_garage_id() AND s.status = 'active'
+        )))
+    )
     WITH CHECK (((garage_id IS NULL) OR (garage_id = public.app_current_garage_id())));
 
-COMMENT ON POLICY notification_log_rls_policy ON public.notification_log IS 'A garage reads its own sends; rows without a garage are written by any scope and read by none.';
+COMMENT ON POLICY notification_log_rls_policy ON public.notification_log IS 'A garage reads its own sends, and the account e-mails of its owner and active staff; any scope may write.';

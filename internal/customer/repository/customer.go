@@ -93,7 +93,7 @@ func (r *PostgresCustomerRepository) Create(ctx context.Context, c *domain.Custo
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 	row := q.QueryRow(ctx, `
 		INSERT INTO customers (id, garage_id, full_name, phone, email, address, consent_log, created_by, updated_by, locale)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE(NULLIF($10, ''), 'vi'))
 		RETURNING created_at, updated_at`,
 		c.ID, c.GarageID, c.FullName, c.Phone, c.Email, c.Address, consent, c.CreatedBy, c.UpdatedBy, c.Locale,
 	)
@@ -155,7 +155,7 @@ func (r *PostgresCustomerRepository) Update(ctx context.Context, c *domain.Custo
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 	row := q.QueryRow(ctx, `
 		UPDATE customers SET full_name = $3, phone = $4, email = $5, address = $6, consent_log = $7, updated_by = $8,
-			locale = $9, email_opt_out_at = $10
+			locale = COALESCE(NULLIF($9, ''), 'vi'), email_opt_out_at = $10
 		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL
 		RETURNING updated_at`,
 		c.GarageID, c.ID, c.FullName, c.Phone, c.Email, c.Address, consent, c.UpdatedBy, c.Locale, c.EmailOptOutAt,

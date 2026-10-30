@@ -143,6 +143,8 @@ services:
       TEST_USERS_SMTP_HOST: vietgara-mailpit
       TEST_USERS_SMTP_PORT: 1025
       MAILPIT_API_URL: http://vietgara-mailpit:8025
+      # The provider's webhook credential (E2E-NOT-004).
+      MAILJET_WEBHOOK_SECRET: ${BLACKBOX_MAILJET_WEBHOOK_SECRET:-blackbox-webhook-secret}
 
   vietgara-api-gateway:
     image: kong:3.9

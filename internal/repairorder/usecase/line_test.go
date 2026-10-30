@@ -21,7 +21,11 @@ func TestRepairOrderUseCase_UpdateLine(t *testing.T) {
 		ro := openRepairOrder()
 		d.RepairOrders.EXPECT().FindByID(mock.Anything, garageID, repairOrderID).Return(ro, nil).Once()
 		d.RepairOrders.EXPECT().Save(mock.Anything, mock.Anything).Return(nil).Once()
-		d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderStarted, garageID, "", mock.Anything).Return(nil).Once()
+		started := d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderStarted, garageID, "", mock.Anything).Return(nil).Once()
+		// In the order it happened: the order started, then it completed.
+		d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderCompleted, garageID, "", mock.MatchedBy(func(p map[string]any) bool {
+			return p["repair_order_id"] == repairOrderID && p["vehicle_id"] != nil && p["number"] != nil
+		})).NotBefore(started).Return(nil).Once()
 
 		status := domain.LineCompleted
 		ids := []string{actorID}
@@ -151,4 +155,23 @@ func TestRepairOrderUseCase_UpdateLine_StartedEvent(t *testing.T) {
 
 		require.NoError(t, update(uc, domain.LineNotStarted))
 	})
+}
+
+func TestRepairOrderUseCase_UpdateLineCompletedOnce(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+	ro := openRepairOrder()
+	ro.Status = domain.StatusCompleted
+	ro.Lines[0].Status = domain.LineCompleted
+	d.RepairOrders.EXPECT().FindByID(mock.Anything, garageID, repairOrderID).Return(ro, nil).Once()
+	d.RepairOrders.EXPECT().Save(mock.Anything, mock.Anything).Return(nil).Once()
+
+	ids := []string{actorID}
+
+	// The order was already completed, so changing an assignment announces nothing.
+	_, err := uc.UpdateLine(t.Context(), usecase.UpdateLineRequest{
+		GarageID: garageID, RepairOrderID: repairOrderID, LineID: "line-1", ActorID: actorID, AssignedTechnicianIDs: &ids,
+	})
+	require.NoError(t, err)
 }

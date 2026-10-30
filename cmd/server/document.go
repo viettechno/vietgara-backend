@@ -21,6 +21,7 @@ import (
 // print settings and the print log of a garage (Release 10.0).
 type documentModule struct {
 	server *documentHandler.Server
+	uc     *documentUsecase.DocumentUseCase
 }
 
 func buildDocument(
@@ -39,5 +40,5 @@ func buildDocument(
 		documentInventory{uc: inventory}, documentRepository.NewPostgresPrintStore(pool),
 	)
 
-	return &documentModule{server: documentHandler.NewServer(uc)}
+	return &documentModule{server: documentHandler.NewServer(uc), uc: uc}
 }

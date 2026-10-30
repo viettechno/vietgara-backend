@@ -26,8 +26,57 @@ func NewMailpit(baseURL string) *Mailpit {
 
 // Message is a received e-mail.
 type Message struct {
+	ID      string `json:"ID"`
 	Subject string `json:"Subject"`
 	Text    string `json:"Text"`
+	From    struct {
+		Name    string `json:"Name"`
+		Address string `json:"Address"`
+	} `json:"From"`
+	ReplyTo []struct {
+		Address string `json:"Address"`
+	} `json:"ReplyTo"`
+	Attachments []struct {
+		FileName    string `json:"FileName"`
+		ContentType string `json:"ContentType"`
+		Size        int    `json:"Size"`
+	} `json:"Attachments"`
+}
+
+// Header returns the values of the header name of message m.
+func (m *Mailpit) Header(ctx context.Context, message *Message, name string) ([]string, error) {
+	var headers map[string][]string
+
+	if err := m.getJSON(ctx, "/api/v1/message/"+url.PathEscape(message.ID)+"/headers", &headers); err != nil {
+		return nil, err
+	}
+
+	return headers[name], nil
+}
+
+// Count returns how many e-mails match the subject fragment among those to
+// address; it is how a scenario proves that an e-mail was sent once, or not
+// at all.
+func (m *Mailpit) Count(ctx context.Context, address, subject string) (int, error) {
+	var found struct {
+		Messages []struct {
+			Subject string `json:"Subject"`
+		} `json:"messages"`
+	}
+
+	if err := m.getJSON(ctx, "/api/v1/search?limit=200&query="+url.QueryEscape("to:"+address), &found); err != nil {
+		return 0, err
+	}
+
+	count := 0
+
+	for _, msg := range found.Messages {
+		if strings.Contains(msg.Subject, subject) {
+			count++
+		}
+	}
+
+	return count, nil
 }
 
 var otpPattern = regexp.MustCompile(`\b(\d{6})\b`)

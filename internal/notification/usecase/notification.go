@@ -21,11 +21,26 @@ const (
 	keyPlanCode = "PlanCode"
 )
 
-// Deps are the dependencies of NotificationUseCase.
+// Deps are the dependencies of NotificationUseCase. The fields after Log
+// serve the e-mails of a garage (FR-NOT-05); the account and licence e-mails
+// need only the first three.
 type Deps struct {
 	Mailer Mailer
 	Users  UserReader
 	Log    Repository
+
+	Settings     SettingsRepository
+	Suppressions Suppressions
+	Customers    CustomerReader
+	Garages      GarageReader
+	Staff        StaffReader
+	Receipts     Receipts
+	Tx           Transactor
+	// OptOutKey signs the opt-out links of customer e-mails.
+	OptOutKey []byte
+	// BaseURL is the public URL of the deployment: the console and the API
+	// share its origin.
+	BaseURL string
 }
 
 // NotificationUseCase implements the Notification module's event

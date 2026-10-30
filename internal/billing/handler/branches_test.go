@@ -135,6 +135,7 @@ func TestRecordSettlementPaymentMethods(t *testing.T) {
 			updated.PaidAmount = 1_000_000
 			e.settlements.EXPECT().RecordPayment(anyArg, garageID, settlementID, anyArg).Return(updated, nil).Once()
 			e.settlements.EXPECT().SaveStatus(anyArg, garageID, settlementID, domain.StatusPaid).Return(nil).Once()
+			e.expectPaymentEvents(true)
 
 			final := openSettlement()
 			final.PaidAmount, final.Status = 1_000_000, domain.StatusPaid

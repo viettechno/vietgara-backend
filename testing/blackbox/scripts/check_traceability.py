@@ -42,6 +42,7 @@ DOC_FILES = [
     "09_Catalogue.md",
     "10_Platform_Staff.md",
     "11_Documents.md",
+    "12_Notifications.md",
 ]
 DOC_BASE = "docs/05-Testing/E2E_Scenarios"
 RAW_BASE = "https://raw.githubusercontent.com/viettechno/vietgara-docs/{ref}/" + DOC_BASE
@@ -62,6 +63,7 @@ MANUAL_ONLY = {
     "E2E-INV-032": "cursor and scroll behaviour of the web and phone screens; the camera",
     "E2E-DOC-005": "the print dialog of a browser and a phone, and a real network printer",
     "E2E-IAM-035": "a real Google account in a web popup and in the apps",
+    "E2E-NOT-007": "a real mailbox: the provider, the attachment and the mail client's unsubscribe control",
 }
 # Test-harness packages whose calls execute as part of a test run. seed/
 # is deliberately excluded: seeding is setup, not coverage.

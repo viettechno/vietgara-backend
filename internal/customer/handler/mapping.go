@@ -22,8 +22,14 @@ func customerToProto(c *domain.Customer) *customerv1.Customer {
 		VehicleCount: toInt32(c.VehicleCount),
 		IsActive:     c.IsActive,
 		LinkStatus:   LinkStatusToProto(c.LinkStatus),
+		Locale:       c.Locale,
+		EmailOptOut:  c.EmailOptOutAt != nil,
 		CreatedAt:    converter.TimeToProto(c.CreatedAt),
 		UpdatedAt:    converter.TimeToProto(c.UpdatedAt),
+	}
+
+	if c.EmailOptOutAt != nil {
+		out.EmailOptOutAt = converter.TimeToProto(*c.EmailOptOutAt)
 	}
 
 	if consent := c.LatestConsent(); consent != nil {

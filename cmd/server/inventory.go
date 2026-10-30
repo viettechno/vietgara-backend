@@ -24,7 +24,7 @@ func buildInventory(
 	pool *platformdb.Pool, events *outbox.EventPublisher, parts inventoryUsecase.PartCatalogue,
 	garages inventoryUsecase.Garages, directory inventoryUsecase.Directory, auditLog *audit.Logger,
 ) *inventoryModule {
-	repo := inventoryRepository.NewPostgresRepository(pool)
+	repo := inventoryRepository.NewPostgresRepository(pool).WithEvents(events)
 	uc := inventoryUsecase.NewInventoryUseCase(inventoryUsecase.Dependencies{
 		Repo: repo, Parts: parts, Events: events, Garages: garages, Directory: directory,
 		Sequences: numbering.NewSequencer(pool), Audit: auditLog,

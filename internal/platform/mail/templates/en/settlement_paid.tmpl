@@ -1,0 +1,12 @@
+{{define "subject"}}Settlement {{.Number}} is paid in full{{end}}
+{{define "text"}}Hello {{.Name}},
+
+Settlement {{.Number}} of {{.CustomerName}} (vehicle {{.VehiclePlate}}) is paid in full: {{.Total}} VND.
+
+Open VietGara: {{.ConsoleURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.Name}},</p>
+<p>Settlement <strong>{{.Number}}</strong> of {{.CustomerName}} (vehicle {{.VehiclePlate}}) is paid in full: <strong>{{.Total}} VND</strong>.</p>
+<p><a href="{{.ConsoleURL}}" style="display:inline-block;padding:10px 18px;background:#2E74B5;color:#fff;border-radius:8px;text-decoration:none">Open VietGara</a></p>
+<p>VietGara</p>{{end}}

@@ -43,6 +43,7 @@ import (
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
+	notificationv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/notification/v1"
 	platformv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/platform/v1"
 	quotev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/quote/v1"
 	repairorderv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/repairorder/v1"
@@ -368,7 +369,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		repairOrderIssueState)
 
 	// Quote & Pricing (Release 1.2)
-	quote := buildQuote(pool, tx, events, mailer, garages, license.entitlements, customerRepo, vehicleRepo, repairOrder.uc,
+	quoteNotifications := &quoteNotifier{}
+	quote := buildQuote(pool, tx, events, quoteNotifications, garages, license.entitlements, customerRepo, vehicleRepo, repairOrder.uc,
 		quoteBillingParties{profiles: taxProfileUC}, quantities, quoteJobs{jobs: catalogue.uc})
 
 	// Inventory (Release 7.0): stock on hand, goods receipts with average
@@ -394,10 +396,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		vehicleRepo, customerRepo, vehicleHistory{quotes: quote.quotes, repairOrders: repairOrder.uc}, usage,
 		customerUsecase.WithAuditor(auditLog),
 	)
-	customerSrv := customerHandler.NewServer(
-		customerUsecase.NewCustomerUseCase(customerRepo, vehicleRepo, usage),
-		vehicleUC,
-	)
+	customerUC := customerUsecase.NewCustomerUseCase(customerRepo, vehicleRepo, usage)
+	customerSrv := customerHandler.NewServer(customerUC, vehicleUC)
 
 	customerLinks := buildCustomerLinks(pool, customerRepo, identityUC, garages, auditLog)
 	customerLinkSrv := customerHandler.NewLinkServer(customerLinks)
@@ -422,7 +422,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// Notification (Release 1.5): the e-mail channel only (FR-NOT-04) --
 	// registration confirmation and license renewal reminders. No RPCs of
 	// its own; every e-mail is triggered by an event consumer (wireEvents).
-	notification := buildNotification(pool, mailer, users)
+	notification := buildNotification(pool, tx, mailer, users, customerRepo, vehicleRepo, customerUC, garages, document.uc, signingKey)
+	quoteNotifications.uc = notification.uc
 
 	// Mobile BFFs (Phase 2): the Technician App's work list (Release 2.2)
 	// and the Customer App's vehicles and history (Release 2.4).
@@ -499,11 +500,12 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	billingv1.RegisterSettlementServiceServer(app.grpcServer, billing.server)
 	documentv1.RegisterDocumentServiceServer(app.grpcServer, document.server)
 	reportingv1.RegisterReportingServiceServer(app.grpcServer, reporting.server)
+	notificationv1.RegisterNotificationServiceServer(app.grpcServer, notification.server)
 	technicianv1.RegisterTechnicianServiceServer(app.grpcServer, technicianSrv)
 	customerportalv1.RegisterCustomerPortalServiceServer(app.grpcServer, customerPortalSrv)
 	reflection.Register(app.grpcServer)
 
-	mux, err := buildGateway(ctx, app, pool, identitySrv, files)
+	mux, err := buildGateway(ctx, app, pool, identitySrv, notification, files)
 	if err != nil {
 		return nil, err
 	}
@@ -578,11 +580,13 @@ func apiPolicies() middleware.Policies {
 		customerHandler.LinkPolicies(), customerHandler.TaxProfilePolicies(),
 		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
 		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(), fileHandler.Policies(), catalogueHandler.Policies(), catalogueHandler.JobPolicies(),
-		technicianHandler.Policies(), customerportalHandler.Policies(), dataimportHandler.Policies(),
+		technicianHandler.Policies(), customerportalHandler.Policies(), dataimportHandler.Policies(), notificationHandler.Policies(),
 	)
 }
 
-func buildGateway(ctx context.Context, app *application, pool *platformdb.Pool, identitySrv *identityHandler.Server, files storage.Store) (*runtime.ServeMux, error) {
+func buildGateway(
+	ctx context.Context, app *application, pool *platformdb.Pool, identitySrv *identityHandler.Server, notification *notificationModule, files storage.Store,
+) (*runtime.ServeMux, error) {
 	listener := bufconn.Listen(1 << 20)
 
 	go func() {
@@ -619,7 +623,7 @@ func buildGateway(ctx context.Context, app *application, pool *platformdb.Pool, 
 		repairorderv1.RegisterRepairOrderServiceHandler, inventoryv1.RegisterInventoryServiceHandler,
 		inventoryv1.RegisterImportServiceHandler,
 		billingv1.RegisterSettlementServiceHandler, documentv1.RegisterDocumentServiceHandler,
-		reportingv1.RegisterReportingServiceHandler,
+		reportingv1.RegisterReportingServiceHandler, notificationv1.RegisterNotificationServiceHandler,
 		technicianv1.RegisterTechnicianServiceHandler, customerportalv1.RegisterCustomerPortalServiceHandler,
 	} {
 		if err := register(ctx, mux, conn); err != nil {
@@ -628,6 +632,10 @@ func buildGateway(ctx context.Context, app *application, pool *platformdb.Pool, 
 	}
 
 	if err := identitySrv.RegisterHTTPRoutes(mux); err != nil {
+		return nil, err
+	}
+
+	if err := notification.server.RegisterHTTPRoutes(mux, notification.webhookSecret); err != nil {
 		return nil, err
 	}
 

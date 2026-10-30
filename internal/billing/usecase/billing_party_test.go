@@ -210,6 +210,7 @@ func TestSettlementUseCase_RecordPayment_PayerDefaultsToTheBillingParty(t *testi
 		Run(func(_ context.Context, _, _ string, p *domain.Payment) { issued = p }).Return(updated, nil).Once()
 	d.Settlements.EXPECT().SaveStatus(mock.Anything, garageID, settlementID, domain.StatusPartiallyPaid).Return(nil).Once()
 	expectAudit(d)
+	expectPaymentEvents(d, false)
 	d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(updated, nil).Once()
 
 	_, err := uc.RecordPayment(t.Context(), usecase.RecordPaymentRequest{

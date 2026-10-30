@@ -25,7 +25,27 @@ type Message struct {
 	// Tag identifies the template (e.g. "email_verification") for the
 	// provider's analytics.
 	Tag string
+	// FromName replaces the display name of the sender for this message
+	// (say, a garage's name); the address is always the platform's.
+	FromName string
+	// ReplyTo is where a reply goes, when it is not the sender.
+	ReplyTo string
+	// Headers are extra headers, such as List-Unsubscribe (RFC 8058).
+	Headers map[string]string
+	// Attachments are files sent with the message.
+	Attachments []Attachment
 }
+
+// Attachment is a file sent with a message.
+type Attachment struct {
+	Name        string
+	ContentType string
+	Data        []byte
+}
+
+// MaxAttachmentBytes is the most a message carries in attachments; a bigger
+// one is left out by the caller.
+const MaxAttachmentBytes = 5 << 20
 
 // Sender delivers a message.
 type Sender interface {

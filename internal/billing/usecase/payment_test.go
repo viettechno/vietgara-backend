@@ -29,6 +29,7 @@ func TestSettlementUseCase_RecordPayment_Success(t *testing.T) {
 		d.Settlements.EXPECT().RecordPayment(mock.Anything, garageID, settlementID, mock.Anything).Return(updated, nil).Once()
 		d.Settlements.EXPECT().SaveStatus(mock.Anything, garageID, settlementID, domain.StatusPartiallyPaid).Return(nil).Once()
 		entry := expectAudit(d)
+		voucher := expectPaymentEvents(d, false)
 
 		final := openSettlement()
 		final.PaidAmount, final.Status = 300_000, domain.StatusPartiallyPaid
@@ -55,6 +56,10 @@ func TestSettlementUseCase_RecordPayment_Success(t *testing.T) {
 			"payer_name": "An Nguyen",
 		}, after["payment"])
 		require.Equal(t, domain.StatusPartiallyPaid, s.Status)
+		require.Equal(t, int64(300_000), (*voucher)["amount"])
+		require.Equal(t, int64(700_000), (*voucher)["balance"])
+		require.Equal(t, "vehicle-1", (*voucher)["vehicle_id"])
+		require.NotContains(t, *voucher, "created_by", "no creator is known")
 	})
 
 	t.Run("fully paid", func(t *testing.T) {
@@ -69,6 +74,7 @@ func TestSettlementUseCase_RecordPayment_Success(t *testing.T) {
 		d.Settlements.EXPECT().RecordPayment(mock.Anything, garageID, settlementID, mock.Anything).Return(updated, nil).Once()
 		d.Settlements.EXPECT().SaveStatus(mock.Anything, garageID, settlementID, domain.StatusPaid).Return(nil).Once()
 		expectAudit(d)
+		expectPaymentEvents(d, true)
 
 		final := openSettlement()
 		final.PaidAmount, final.Status = 1_000_000, domain.StatusPaid
@@ -207,6 +213,7 @@ func TestSettlementUseCase_RecordPayment_Voucher(t *testing.T) {
 			Return(func() *domain.Settlement { s := openSettlement(); s.PaidAmount = 100_000; return s }(), nil).Once()
 		d.Settlements.EXPECT().SaveStatus(mock.Anything, garageID, settlementID, domain.StatusPartiallyPaid).Return(nil).Once()
 		expectAudit(d)
+		expectPaymentEvents(d, false)
 		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
 
 		_, err := uc.RecordPayment(t.Context(), usecase.RecordPaymentRequest{
@@ -237,6 +244,7 @@ func TestSettlementUseCase_RecordPayment_Voucher(t *testing.T) {
 			Return(func() *domain.Settlement { s := openSettlement(); s.PaidAmount = 100_000; return s }(), nil).Once()
 		d.Settlements.EXPECT().SaveStatus(mock.Anything, garageID, settlementID, domain.StatusPartiallyPaid).Return(nil).Once()
 		expectAudit(d)
+		expectPaymentEvents(d, false)
 		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
 
 		_, err := uc.RecordPayment(t.Context(), usecase.RecordPaymentRequest{

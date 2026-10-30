@@ -145,6 +145,8 @@ local defaults.
 | `MAIL_PROVIDER`, `MAIL_FROM_ADDRESS`, `MAIL_FROM_NAME` | E-mail provider and sender. See [E-mail](#e-mail) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD` | SMTP provider (Mailpit) |
 | `MAILJET_API_KEY`, `MAILJET_SECRET_KEY` | Mailjet provider |
+| `EMAIL_OPT_OUT_KEY` | Secret (16+ characters) that signs the opt-out links of customer e-mails, which must keep working as long as the e-mails are kept. Without it the key derives from `JWT_SIGNING_KEY`, and rotating that key breaks the links already sent |
+| `MAILJET_WEBHOOK_SECRET` | Credential in the path of the provider's event webhook (`POST /api/v1/webhooks/mailjet/{secret}`): hard bounces and spam complaints stop further e-mail to the address. The route is off while it is not set. See [E-mail](#e-mail) |
 | `STORAGE_BACKEND`, `STORAGE_LOCAL_DIR`, `STORAGE_PUBLIC_BASE_URL`, `STORAGE_GCS_BUCKET`, `STORAGE_GCS_PRIVATE_BUCKET`, `STORAGE_SIGNING_KEY` | Uploaded files. See [File storage](#file-storage) |
 
 **Test users (staging only)**
@@ -223,6 +225,26 @@ How failures are handled:
 - Invitation e-mails are sent after the invitation is committed. If sending
   fails, the error is logged and the invitation still appears on the
   invitee's Invitations page.
+
+### E-mails of a garage (Release 10.1)
+
+At each hand-off the Notification module e-mails the customer (quote ready,
+vehicle ready, payment received, settlement receipt with its PDF) and the
+staff (quote decided, settlement paid, low stock), in the recipient's language
+and under the garage's name. A garage switches each type off and sets its
+sender name in `GET/PUT /api/v1/garages/{id}/notification-settings`, and reads
+what was sent, skipped or failed in `notification-log`.
+
+- A customer can opt out of the non-essential e-mails through the signed link
+  in each of them (`/api/v1/public/email-opt-out/{token}`, also the
+  `List-Unsubscribe` one-click header). The quote's approval link and the
+  receipt are always sent.
+- An address that bounced for good or complained is suppressed
+  across garages. Mailjet's event webhook fills the list; set
+  `MAILJET_WEBHOOK_SECRET` and point the webhook at
+  `/api/v1/webhooks/mailjet/<secret>`.
+- A failed send is logged apart and the event is redelivered by the outbox
+  relay, up to its attempt limit.
 
 ### Test users
 

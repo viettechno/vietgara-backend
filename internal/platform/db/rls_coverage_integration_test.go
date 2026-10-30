@@ -100,7 +100,7 @@ var noRLS = map[string]string{ //nolint:gosec // G101 matches the table name cre
 	"plan_payment_requests":        "keyed by the owner's user_id, like subscriptions",
 	"outbox_events":                "system: written in the business transaction, read by the relay across garages; no API reads it",
 	"processed_events":             "system: consumer de-duplication keys, no business data",
-	"notification_log":             "system: written by the notifier, read by no API yet (support diagnostics follow in Release 8.2, behind a scope check)",
+	"email_suppressions":           "system: addresses that bounced, across garages; written by the provider webhook, read by the notifier",
 	"schema_migrations":            "migration bookkeeping; the application role has no grant",
 }
 

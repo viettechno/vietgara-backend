@@ -342,11 +342,12 @@ func (r *Postgres) ListOutbox(ctx context.Context, garageID, status string, page
 	return events, total, rows.Err()
 }
 
-// ListNotifications returns the notification log of the garage's owner and
-// active staff, newest first. The caller is scoped to the garage.
+// ListNotifications returns the account and licence e-mails of the garage's
+// owner and active staff, newest first. The e-mails a garage sends (which have
+// a garage) are its own log, not this view. The caller is scoped to the garage.
 func (r *Postgres) ListNotifications(ctx context.Context, garageID string, page domain.Page) ([]*domain.Notification, int, error) {
 	q := r.q(ctx)
-	filter := ` FROM notification_log n WHERE n.user_id IN (
+	filter := ` FROM notification_log n WHERE n.garage_id IS NULL AND n.user_id IN (
 			SELECT user_id FROM garages WHERE id = $1
 			UNION SELECT user_id FROM garage_staff WHERE garage_id = $1 AND status = 'active')`
 

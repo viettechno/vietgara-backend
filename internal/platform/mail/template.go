@@ -28,6 +28,12 @@ const (
 	TemplateSupportGrantRequested    = "support_grant_requested"
 	TemplateSupportGrantOpened       = "support_grant_opened"
 	TemplateSupportGrantAnswered     = "support_grant_answered"
+	TemplateVehicleReady             = "vehicle_ready"
+	TemplatePaymentReceived          = "payment_received"
+	TemplateSettlementReceipt        = "settlement_receipt"
+	TemplateQuoteDecided             = "quote_decided"
+	TemplateSettlementPaid           = "settlement_paid"
+	TemplateLowStock                 = "low_stock"
 )
 
 // Supported locales; Vietnamese is the default.

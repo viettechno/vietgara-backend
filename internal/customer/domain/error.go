@@ -13,6 +13,7 @@ var (
 	ErrVehicleNotFound  = errors.New("vehicle not found")
 
 	ErrFullNameRequired     = errors.New("full name is required")
+	ErrInvalidLocale        = errors.New("locale must be vi or en")
 	ErrLicensePlateRequired = errors.New("license plate is required")
 	ErrCustomerRequired     = errors.New("customer is required")
 

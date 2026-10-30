@@ -1,0 +1,12 @@
+{{define "subject"}}Quyết toán {{.Number}} đã thanh toán đủ{{end}}
+{{define "text"}}Xin chào {{.Name}},
+
+Quyết toán {{.Number}} của {{.CustomerName}} (xe {{.VehiclePlate}}) đã được thanh toán đủ: {{.Total}} đ.
+
+Mở VietGara: {{.ConsoleURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.Name}},</p>
+<p>Quyết toán <strong>{{.Number}}</strong> của {{.CustomerName}} (xe {{.VehiclePlate}}) đã được thanh toán đủ: <strong>{{.Total}} đ</strong>.</p>
+<p><a href="{{.ConsoleURL}}" style="display:inline-block;padding:10px 18px;background:#2E74B5;color:#fff;border-radius:8px;text-decoration:none">Mở VietGara</a></p>
+<p>VietGara</p>{{end}}

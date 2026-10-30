@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"mime"
 	"mime/quotedprintable"
 	"net"
+	"net/mail"
 	"net/smtp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -65,8 +68,23 @@ func buildMIME(from From, msg Message) []byte {
 	var b bytes.Buffer
 
 	header := func(k, v string) { fmt.Fprintf(&b, "%s: %s\r\n", k, v) }
-	header("From", address(from.Name, from.Email))
+
+	fromName := from.Name
+	if msg.FromName != "" {
+		fromName = msg.FromName
+	}
+
+	header("From", address(fromName, from.Email))
 	header("To", address(msg.ToName, msg.ToEmail))
+
+	if msg.ReplyTo != "" {
+		header("Reply-To", "<"+msg.ReplyTo+">")
+	}
+
+	for _, name := range sortedKeys(msg.Headers) {
+		header(name, msg.Headers[name])
+	}
+
 	header("Subject", mime.QEncoding.Encode("utf-8", msg.Subject))
 	header("Date", time.Now().UTC().Format(time.RFC1123Z))
 	header("MIME-Version", "1.0")
@@ -75,15 +93,24 @@ func buildMIME(from From, msg Message) []byte {
 		header("X-Vietgara-Tag", msg.Tag)
 	}
 
-	header("Content-Type", `multipart/alternative; boundary="`+boundary+`"`)
-	b.WriteString("\r\n")
+	alternative := boundary
+	if len(msg.Attachments) > 0 {
+		alternative = boundary + "-alt"
+
+		header("Content-Type", `multipart/mixed; boundary="`+boundary+`"`)
+		b.WriteString("\r\n")
+		fmt.Fprintf(&b, "--%s\r\nContent-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", boundary, alternative)
+	} else {
+		header("Content-Type", `multipart/alternative; boundary="`+boundary+`"`)
+		b.WriteString("\r\n")
+	}
 
 	part := func(contentType, body string) {
 		if body == "" {
 			return
 		}
 
-		fmt.Fprintf(&b, "--%s\r\nContent-Type: %s; charset=UTF-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n", boundary, contentType)
+		fmt.Fprintf(&b, "--%s\r\nContent-Type: %s; charset=UTF-8\r\nContent-Transfer-Encoding: quoted-printable\r\n\r\n", alternative, contentType)
 
 		qp := quotedprintable.NewWriter(&b)
 		_, _ = qp.Write([]byte(body))
@@ -93,9 +120,48 @@ func buildMIME(from From, msg Message) []byte {
 	}
 	part("text/plain", msg.Text)
 	part("text/html", msg.HTML)
-	fmt.Fprintf(&b, "--%s--\r\n", boundary)
+	fmt.Fprintf(&b, "--%s--\r\n", alternative)
+
+	for _, a := range msg.Attachments {
+		writeAttachment(&b, boundary, a)
+	}
+
+	if len(msg.Attachments) > 0 {
+		fmt.Fprintf(&b, "--%s--\r\n", boundary)
+	}
 
 	return b.Bytes()
+}
+
+func writeAttachment(b *bytes.Buffer, boundary string, a Attachment) {
+	contentType := a.ContentType
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	name := mime.QEncoding.Encode("utf-8", a.Name)
+	fmt.Fprintf(b, "--%s\r\nContent-Type: %s; name=%q\r\nContent-Transfer-Encoding: base64\r\n", boundary, contentType, name)
+	fmt.Fprintf(b, "Content-Disposition: attachment; filename=%q\r\n\r\n", name)
+
+	encoded := base64.StdEncoding.EncodeToString(a.Data)
+	for len(encoded) > 76 {
+		b.WriteString(encoded[:76] + "\r\n")
+
+		encoded = encoded[76:]
+	}
+
+	b.WriteString(encoded + "\r\n")
+}
+
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	return keys
 }
 
 func address(name, email string) string {
@@ -103,5 +169,7 @@ func address(name, email string) string {
 		return "<" + email + ">"
 	}
 
-	return mime.QEncoding.Encode("utf-8", name) + " <" + email + ">"
+	// net/mail quotes a name with commas, quotes or angle brackets and encodes
+	// a non-ASCII one, which a garage's free-text name needs.
+	return (&mail.Address{Name: name, Address: email}).String()
 }

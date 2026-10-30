@@ -31,12 +31,11 @@ type env struct {
 	srv       *handler.Server
 	quotes    *mocks.MockQuoteRepository
 	vehicles  *mocks.MockVehicleReader
-	customers *mocks.MockQuoteCustomerReader
 	garages   *mocks.MockGarageReader
 	limits    *mocks.MockTransactionLimiter
 	sequences *mocks.MockSequencer
 	repairs   *mocks.MockRepairOrderCreator
-	mailer    *mocks.MockQuoteMailer
+	notifier  *mocks.MockQuoteNotifier
 	events    *mocks.MockQuoteEventPublisher
 	parties   *mocks.MockQuoteBillingPartyResolver
 	jobs      *mocks.MockQuoteJobCatalogue
@@ -47,9 +46,9 @@ func newEnv(t *testing.T) *env {
 
 	e := &env{
 		quotes: mocks.NewMockQuoteRepository(t), vehicles: mocks.NewMockVehicleReader(t),
-		customers: mocks.NewMockQuoteCustomerReader(t), garages: mocks.NewMockGarageReader(t),
-		limits: mocks.NewMockTransactionLimiter(t), sequences: mocks.NewMockSequencer(t),
-		repairs: mocks.NewMockRepairOrderCreator(t), mailer: mocks.NewMockQuoteMailer(t),
+		garages: mocks.NewMockGarageReader(t),
+		limits:  mocks.NewMockTransactionLimiter(t), sequences: mocks.NewMockSequencer(t),
+		repairs: mocks.NewMockRepairOrderCreator(t), notifier: mocks.NewMockQuoteNotifier(t),
 		events: mocks.NewMockQuoteEventPublisher(t), parties: mocks.NewMockQuoteBillingPartyResolver(t),
 		jobs: mocks.NewMockQuoteJobCatalogue(t),
 	}
@@ -57,8 +56,8 @@ func newEnv(t *testing.T) *env {
 		Return(billingparty.Party{}, nil).Maybe()
 
 	uc := usecase.NewQuoteUseCase(usecase.Deps{
-		Quotes: e.quotes, Vehicles: e.vehicles, Customers: e.customers, Garages: e.garages, Limits: e.limits,
-		Sequences: e.sequences, RepairOrders: e.repairs, BillingParties: e.parties, Mailer: e.mailer, Events: e.events, Tx: passTx{}, Jobs: e.jobs,
+		Quotes: e.quotes, Vehicles: e.vehicles, Garages: e.garages, Limits: e.limits,
+		Sequences: e.sequences, RepairOrders: e.repairs, BillingParties: e.parties, Notifier: e.notifier, Events: e.events, Tx: passTx{}, Jobs: e.jobs,
 		AppBaseURL: "https://vietgara.viettechno.com",
 	})
 	e.srv = handler.NewServer(uc)

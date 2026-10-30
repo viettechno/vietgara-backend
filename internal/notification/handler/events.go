@@ -23,4 +23,12 @@ func Subscribe(bus outbox.Subscriber, processor *outbox.Processor, uc *usecase.N
 	bus.Subscribe("subscription.payment_approved", processor.Wrap(ConsumerName, uc.HandlePaymentApproved))
 	bus.Subscribe("subscription.payment_rejected", processor.Wrap(ConsumerName, uc.HandlePaymentRejected))
 	bus.Subscribe("subscription.payment_review_reminder", processor.Wrap(ConsumerName, uc.HandlePaymentReviewReminder))
+
+	// The e-mails of a garage (Release 10.1, FR-NOT-05, FR-INV-04).
+	bus.Subscribe("quote.approved", processor.Wrap(ConsumerName, uc.HandleQuoteDecided))
+	bus.Subscribe("quote.rejected", processor.Wrap(ConsumerName, uc.HandleQuoteDecided))
+	bus.Subscribe("repair_order.completed", processor.Wrap(ConsumerName, uc.HandleVehicleReady))
+	bus.Subscribe("payment_voucher.issued", processor.Wrap(ConsumerName, uc.HandlePaymentReceived))
+	bus.Subscribe("settlement.paid", processor.Wrap(ConsumerName, uc.HandleSettlementPaid))
+	bus.Subscribe("stock.low", processor.Wrap(ConsumerName, uc.HandleStockLow))
 }

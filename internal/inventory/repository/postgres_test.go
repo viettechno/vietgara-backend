@@ -1,10 +1,12 @@
 package repository_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 
 	"github.com/viettechno/vietgara-backend/internal/inventory/domain"
@@ -65,7 +67,7 @@ func TestPostgresRepository_Balances(t *testing.T) {
 	})
 }
 
-func TestPostgresRepository_RecordTransaction(t *testing.T) {
+func TestPostgresRepository_RecordTransaction(t *testing.T) { //nolint:funlen // one subtest per movement
 	t.Parallel()
 
 	newTx := func() *domain.StockTransaction {
@@ -138,6 +140,95 @@ func TestPostgresRepository_RecordTransaction(t *testing.T) {
 
 		require.NoError(t, repo.RecordTransaction(ctx, out))
 		require.Equal(t, "5000", *out.UnitCost, "the line's own cost is kept")
+	})
+
+	t.Run("an issue that crosses the reorder threshold publishes stock.low once", func(t *testing.T) {
+		t.Parallel()
+
+		var published []map[string]any
+
+		events := publisherFunc(func(_ context.Context, eventType, garage, _ string, payload any) error {
+			require.Equal(t, repository.EventStockLow, eventType)
+			require.Equal(t, garageID, garage)
+
+			published = append(published, asMap(t, payload))
+
+			return nil
+		})
+		repo := repository.NewPostgresRepository(nil).WithEvents(events)
+		tx := dbtest.New(t).
+			// 10 on hand, threshold 4: issue 5 (5 left) crosses nothing, issue 2 (3 left) crosses, issue 1 (2 left) is already under.
+			ExpectQueryRow("quantity_on_hand - ", dbtest.Row("5", "100")).
+			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.Row(now)).
+			ExpectQueryRow("FROM parts", dbtest.Row("Lọc dầu", "LD-01", "4")).
+			ExpectQueryRow("quantity_on_hand - ", dbtest.Row("3", "100")).
+			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.Row(now)).
+			ExpectQueryRow("FROM parts", dbtest.Row("Lọc dầu", "LD-01", "4")).
+			ExpectQueryRow("quantity_on_hand - ", dbtest.Row("2", "100")).
+			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.Row(now)).
+			ExpectQueryRow("FROM parts", dbtest.Row("Lọc dầu", "LD-01", "4"))
+		ctx := tx.Context(t.Context())
+
+		for _, quantity := range []string{"5", "2", "1"} {
+			out := newTx()
+			out.Type, out.RefType, out.UnitCost, out.Quantity = domain.TransactionOut, domain.RefStockIssue, nil, quantity
+
+			require.NoError(t, repo.RecordTransaction(ctx, out))
+		}
+
+		require.Len(t, published, 1)
+		require.Equal(t, map[string]any{"part_id": partID, "part_name": "Lọc dầu", "sku": "LD-01", "quantity": "3", "threshold": "4"}, published[0])
+	})
+
+	t.Run("no threshold, a receipt and a missing part publish nothing", func(t *testing.T) {
+		t.Parallel()
+
+		events := publisherFunc(func(context.Context, string, string, string, any) error {
+			t.Error("nothing should be published")
+
+			return nil
+		})
+		repo := repository.NewPostgresRepository(nil).WithEvents(events)
+		tx := dbtest.New(t).
+			ExpectQueryRow("quantity_on_hand - ", dbtest.Row("0", "100")).
+			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.Row(now)).
+			ExpectQueryRow("FROM parts", dbtest.Row("Lọc dầu", "", "0")).
+			ExpectQueryRow("quantity_on_hand - ", dbtest.Row("0", "100")).
+			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.Row(now)).
+			ExpectQueryRow("FROM parts", dbtest.ErrRow(pgx.ErrNoRows)).
+			ExpectQueryRow("average_cost = CASE", dbtest.Row("96", "5000")).
+			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.Row(now))
+		ctx := tx.Context(t.Context())
+
+		for range 2 {
+			out := newTx()
+			out.Type, out.RefType, out.UnitCost = domain.TransactionOut, domain.RefStockIssue, nil
+
+			require.NoError(t, repo.RecordTransaction(ctx, out))
+		}
+
+		require.NoError(t, repo.RecordTransaction(ctx, newTx()))
+	})
+
+	t.Run("a failing threshold read or publish fails the movement", func(t *testing.T) {
+		t.Parallel()
+
+		repo := repository.NewPostgresRepository(nil).WithEvents(publisherFunc(func(context.Context, string, string, string, any) error { return errBoom }))
+		tx := dbtest.New(t).
+			ExpectQueryRow("quantity_on_hand - ", dbtest.Row("3", "100")).
+			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.Row(now)).
+			ExpectQueryRow("FROM parts", dbtest.ErrRow(errBoom)).
+			ExpectQueryRow("quantity_on_hand - ", dbtest.Row("3", "100")).
+			ExpectQueryRow("INSERT INTO stock_transactions", dbtest.Row(now)).
+			ExpectQueryRow("FROM parts", dbtest.Row("Lọc dầu", "", "4"))
+		ctx := tx.Context(t.Context())
+
+		for range 2 {
+			out := newTx()
+			out.Type, out.RefType, out.UnitCost, out.Quantity = domain.TransactionOut, domain.RefStockIssue, nil, "2"
+
+			require.ErrorIs(t, repo.RecordTransaction(ctx, out), errBoom)
+		}
 	})
 
 	t.Run("balance update failure", func(t *testing.T) {
@@ -237,4 +328,21 @@ func TestPostgresRepository_MovementsReference(t *testing.T) {
 
 	_, err = repo.MovementsReference(ctx, garageID, "", "unit-1")
 	require.ErrorIs(t, err, errBoom)
+}
+
+// publisherFunc adapts a function to repository.EventPublisher.
+type publisherFunc func(ctx context.Context, eventType, garageID, userID string, payload any) error
+
+func (f publisherFunc) Publish(ctx context.Context, eventType, garageID, userID string, payload any) error {
+	return f(ctx, eventType, garageID, userID, payload)
+}
+
+// asMap reads the payload the repository publishes.
+func asMap(t *testing.T, payload any) map[string]any {
+	t.Helper()
+
+	m, ok := payload.(map[string]any)
+	require.True(t, ok, "a map payload")
+
+	return m
 }

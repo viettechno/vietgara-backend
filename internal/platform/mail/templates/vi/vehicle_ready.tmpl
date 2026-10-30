@@ -1,0 +1,16 @@
+{{define "subject"}}Xe {{.VehiclePlate}} của bạn đã sẵn sàng{{end}}
+{{define "text"}}Xin chào {{.CustomerName}},
+
+Xe {{.VehiclePlate}} của bạn đã sửa xong và sẵn sàng để nhận tại {{.GarageName}}.
+{{if .GaragePhone}}Điện thoại: {{.GaragePhone}}
+{{end}}{{if .GarageAddress}}Địa chỉ: {{.GarageAddress}}
+{{end}}
+Không muốn nhận loại e-mail này nữa? Huỷ nhận tại:
+{{.OptOutURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.CustomerName}},</p>
+<p>Xe <strong>{{.VehiclePlate}}</strong> của bạn đã sửa xong và sẵn sàng để nhận tại <strong>{{.GarageName}}</strong>.</p>
+{{if .GaragePhone}}<p>Điện thoại: {{.GaragePhone}}</p>{{end}}{{if .GarageAddress}}<p>Địa chỉ: {{.GarageAddress}}</p>{{end}}
+<p style="color:#666;font-size:12px"><a href="{{.OptOutURL}}">Huỷ nhận</a> loại e-mail này.</p>
+<p>VietGara</p>{{end}}

@@ -147,8 +147,7 @@ func (g garageOwners) GarageOwner(ctx context.Context, garageID string) (string,
 
 // quoteCustomers gives the Quote module a read-only view of Customer &
 // Vehicle data: the names shown on a quote, cross-checked so a vehicle
-// must belong to the customer given alongside it, and the customer's
-// e-mail (SendQuote's LINK-mode notification).
+// must belong to the customer given alongside it.
 type quoteCustomers struct {
 	customers *customerRepository.PostgresCustomerRepository
 	vehicles  *customerRepository.PostgresVehicleRepository
@@ -169,19 +168,6 @@ func (q quoteCustomers) Find(ctx context.Context, garageID, customerID, vehicleI
 	}
 
 	return vehicle.CustomerName, vehicle.LicensePlate, nil
-}
-
-func (q quoteCustomers) Email(ctx context.Context, garageID, customerID string) (*string, error) {
-	customer, err := q.customers.FindByID(ctx, garageID, customerID)
-	if err != nil {
-		if errors.Is(err, customerDomain.ErrCustomerNotFound) {
-			return nil, nil //nolint:nilnil // an unknown customer has no e-mail to notify; Find already validated the id
-		}
-
-		return nil, err
-	}
-
-	return customer.Email, nil
 }
 
 // quoteGarages lets the Quote module read a garage's numbering and

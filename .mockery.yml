@@ -246,11 +246,6 @@ packages:
         config:
           filename: "quote_usecase_vehicle_reader.go"
           dir: "./internal/mocks"
-      CustomerReader:
-        config:
-          filename: "quote_usecase_customer_reader.go"
-          dir: "./internal/mocks"
-          structname: "MockQuoteCustomerReader"
       GarageReader:
         config:
           filename: "quote_usecase_garage_reader.go"
@@ -272,11 +267,11 @@ packages:
           filename: "quote_usecase_billing_party_resolver.go"
           dir: "./internal/mocks"
           structname: "MockQuoteBillingPartyResolver"
-      Mailer:
+      Notifier:
         config:
-          filename: "quote_usecase_mailer.go"
+          filename: "quote_usecase_notifier.go"
           dir: "./internal/mocks"
-          structname: "MockQuoteMailer"
+          structname: "MockQuoteNotifier"
       EventPublisher:
         config:
           filename: "quote_usecase_event_publisher.go"
@@ -498,6 +493,41 @@ packages:
           filename: "notification_usecase_repository.go"
           dir: "./internal/mocks"
           structname: "MockNotificationRepository"
+      SettingsRepository:
+        config:
+          filename: "notification_usecase_settings_repository.go"
+          dir: "./internal/mocks"
+          structname: "MockNotificationSettings"
+      Suppressions:
+        config:
+          filename: "notification_usecase_suppressions.go"
+          dir: "./internal/mocks"
+          structname: "MockNotificationSuppressions"
+      CustomerReader:
+        config:
+          filename: "notification_usecase_customer_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockNotificationCustomerReader"
+      GarageReader:
+        config:
+          filename: "notification_usecase_garage_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockNotificationGarageReader"
+      StaffReader:
+        config:
+          filename: "notification_usecase_staff_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockNotificationStaffReader"
+      Receipts:
+        config:
+          filename: "notification_usecase_receipts.go"
+          dir: "./internal/mocks"
+          structname: "MockNotificationReceipts"
+      Transactor:
+        config:
+          filename: "notification_usecase_transactor.go"
+          dir: "./internal/mocks"
+          structname: "MockNotificationTransactor"
   github.com/viettechno/vietgara-backend/internal/dataimport/usecase:
     interfaces:
       Catalogue:

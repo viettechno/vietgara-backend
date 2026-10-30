@@ -1,0 +1,11 @@
+{{define "subject"}}Receipt {{.Number}} for {{.VehiclePlate}}{{end}}
+{{define "text"}}Hello {{.CustomerName}},
+
+Thank you. Settlement {{.Number}} for vehicle {{.VehiclePlate}} at {{.GarageName}} is paid in full ({{.Total}} VND).
+{{if .Attached}}The receipt is attached as a PDF.{{else}}The PDF receipt could not be attached; ask the garage if you need it.{{end}}
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.CustomerName}},</p>
+<p>Thank you. Settlement <strong>{{.Number}}</strong> for vehicle <strong>{{.VehiclePlate}}</strong> at <strong>{{.GarageName}}</strong> is paid in full (<strong>{{.Total}} VND</strong>).</p>
+<p>{{if .Attached}}The receipt is attached as a PDF.{{else}}The PDF receipt could not be attached; ask the garage if you need it.{{end}}</p>
+<p>VietGara</p>{{end}}

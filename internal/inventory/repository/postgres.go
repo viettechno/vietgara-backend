@@ -7,6 +7,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"strings"
 
 	"github.com/jackc/pgx/v5"
@@ -19,10 +20,28 @@ import (
 // forUpdateClause locks the selected row until the transaction ends.
 const forUpdateClause = " FOR UPDATE"
 
+// EventPublisher writes an event to the outbox in the caller's transaction.
+type EventPublisher interface {
+	Publish(ctx context.Context, eventType, garageID, userID string, payload any) error
+}
+
+// EventStockLow is published when a movement takes a part from above its
+// reorder threshold to at or below it (FR-INV-04): once per crossing, since
+// the quantities before and after the movement decide it.
+const EventStockLow = "stock.low"
+
 // PostgresRepository implements usecase.Repository over the shared pgx
 // pool.
 type PostgresRepository struct {
-	pool *platformdb.Pool
+	pool   *platformdb.Pool
+	events EventPublisher
+}
+
+// WithEvents makes the repository publish stock.low.
+func (r *PostgresRepository) WithEvents(events EventPublisher) *PostgresRepository {
+	r.events = events
+
+	return r
 }
 
 // NewPostgresRepository returns an inventory repository backed by pool.
@@ -174,7 +193,7 @@ func (r *PostgresRepository) RecordTransaction(ctx context.Context, transaction 
 
 	transaction.QuantityAfter = quantity
 
-	return q.QueryRow(ctx, `
+	if err := q.QueryRow(ctx, `
 		INSERT INTO stock_transactions (id, garage_id, part_id, type, quantity, unit_cost, unit_id, entered_quantity,
 		                                ref_type, ref_id, supplier_id, quantity_after, average_cost_after, created_by, reason)
 		VALUES ($1, $2, $3, $4, $5::numeric, $6::numeric, $7, $8::numeric, $9, $10, $11, $12::numeric, $13::numeric, $14, $15)
@@ -182,7 +201,43 @@ func (r *PostgresRepository) RecordTransaction(ctx context.Context, transaction 
 		transaction.ID, transaction.GarageID, transaction.PartID, string(transaction.Type), transaction.Quantity,
 		transaction.UnitCost, transaction.UnitID, transaction.EnteredQuantity, string(transaction.RefType),
 		transaction.RefID, transaction.SupplierID, quantity, average, transaction.CreatedBy, transaction.Reason,
-	).Scan(&transaction.CreatedAt)
+	).Scan(&transaction.CreatedAt); err != nil {
+		return err
+	}
+
+	return r.publishIfLow(ctx, transaction, quantity)
+}
+
+// publishIfLow tells Notification that an issue took the part to or under its
+// reorder threshold. A part with no threshold (zero) never alerts, and a
+// movement that left the part under the threshold it was already under
+// alerts nobody.
+func (r *PostgresRepository) publishIfLow(ctx context.Context, t *domain.StockTransaction, after string) error {
+	if r.events == nil || t.Type != domain.TransactionOut {
+		return nil
+	}
+
+	var name, sku, threshold string
+
+	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
+		SELECT name, COALESCE(sku, ''), trim_scale(reorder_threshold)::text FROM parts WHERE garage_id = $1 AND id = $2`,
+		t.GarageID, t.PartID).Scan(&name, &sku, &threshold)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	before, ok := domain.AddQuantities(after, t.Quantity)
+	if !ok || domain.IsZero(threshold) || !domain.IsLow(after, threshold) || domain.IsLow(before, threshold) {
+		return nil
+	}
+
+	return r.events.Publish(ctx, EventStockLow, t.GarageID, "", map[string]any{
+		"part_id": t.PartID, "part_name": name, "sku": sku, "quantity": after, "threshold": threshold,
+	})
 }
 
 // transactionColumns and transactionJoins select a movement with the number of

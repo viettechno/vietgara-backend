@@ -1,0 +1,12 @@
+{{define "subject"}}Báo giá {{.Number}} đã {{if .Approved}}được duyệt{{else}}bị từ chối{{end}}{{end}}
+{{define "text"}}Xin chào {{.Name}},
+
+Khách hàng {{.CustomerName}} đã {{if .Approved}}duyệt{{else}}từ chối{{end}} báo giá {{.Number}} (xe {{.VehiclePlate}}).
+
+Mở VietGara: {{.ConsoleURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.Name}},</p>
+<p>Khách hàng <strong>{{.CustomerName}}</strong> đã <strong>{{if .Approved}}duyệt{{else}}từ chối{{end}}</strong> báo giá <strong>{{.Number}}</strong> (xe {{.VehiclePlate}}).</p>
+<p><a href="{{.ConsoleURL}}" style="display:inline-block;padding:10px 18px;background:#2E74B5;color:#fff;border-radius:8px;text-decoration:none">Mở VietGara</a></p>
+<p>VietGara</p>{{end}}

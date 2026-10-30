@@ -162,7 +162,7 @@ var (
 	conflictErrors     = []error{domain.ErrPhoneTaken, domain.ErrLicensePlateTaken, domain.ErrAlreadyLinked}
 	preconditionErrors = []error{domain.ErrNoMatchingUser, domain.ErrNoPendingRequest, domain.ErrLinkNotOpen}
 	invalidErrors      = []error{
-		domain.ErrFullNameRequired, domain.ErrLicensePlateRequired, domain.ErrCustomerRequired,
+		domain.ErrFullNameRequired, domain.ErrInvalidLocale, domain.ErrLicensePlateRequired, domain.ErrCustomerRequired,
 		phone.ErrInvalid, email.ErrInvalid, domain.ErrInvalidLicensePlate, domain.ErrInvalidYear,
 		domain.ErrFieldTooLong, domain.ErrInvalidIdentityField, domain.ErrCorrectionReasonRequired,
 		domain.ErrOwnerChangeOnUpdate, domain.ErrOwnerNotChanged, domain.ErrLegalNameRequired, domain.ErrInvalidTaxProfile,

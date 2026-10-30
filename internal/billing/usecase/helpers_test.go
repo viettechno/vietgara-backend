@@ -102,6 +102,24 @@ func expectVoucher(d *deps) {
 	d.Collectors.EXPECT().FullName(mock.Anything, mock.Anything).Return("Le Thu Ngan", nil).Once()
 }
 
+// expectPaymentEvents expects what recording a payment publishes: the voucher
+// issued, and the settlement paid when the payment settled it. It returns the
+// payload of the first event.
+func expectPaymentEvents(d *deps, paid bool) *map[string]any {
+	var voucher map[string]any
+
+	d.RepairOrders.EXPECT().Get(mock.Anything, garageID, repairOrderID).
+		Return(usecase.RepairOrderInfo{VehicleID: "vehicle-1"}, nil).Once()
+	d.Events.EXPECT().Publish(mock.Anything, usecase.EventPaymentVoucherIssued, garageID, "", mock.Anything).
+		Run(func(_ context.Context, _, _, _ string, data any) { voucher, _ = data.(map[string]any) }).Return(nil).Once()
+
+	if paid {
+		d.Events.EXPECT().Publish(mock.Anything, usecase.EventSettlementPaid, garageID, "", mock.Anything).Return(nil).Once()
+	}
+
+	return &voucher
+}
+
 func closedRepairOrder() usecase.RepairOrderInfo {
 	return usecase.RepairOrderInfo{
 		CustomerName: "An Nguyen", VehicleLicensePlate: "51F-123.45", TotalAmount: 1_000_000, Closed: true,

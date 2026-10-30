@@ -110,7 +110,7 @@ func TestSMTPSender(t *testing.T) {
 		require.NoError(t, sender.Send(t.Context(), msg))
 
 		raw := string(gotMsg)
-		assert.Contains(t, raw, "From: Gara Anh Minh <no-reply@vietgara.viettechno.com>")
+		assert.Contains(t, raw, `From: "Gara Anh Minh" <no-reply@vietgara.viettechno.com>`)
 		assert.Contains(t, raw, "Reply-To: <gara@example.com>")
 		assert.Contains(t, raw, "List-Unsubscribe: <https://x/opt-out>")
 		assert.Contains(t, raw, "List-Unsubscribe-Post: List-Unsubscribe=One-Click")
@@ -119,6 +119,28 @@ func TestSMTPSender(t *testing.T) {
 		assert.Contains(t, raw, `Content-Disposition: attachment; filename="bien-nhan.pdf"`)
 		assert.Contains(t, raw, "JVBERi0xLjQgdGVzdA==", "the attachment is base64")
 		assert.Equal(t, 1, strings.Count(raw, "Content-Type: application/pdf"))
+	})
+
+	t.Run("quotes a sender name with commas, quotes and angle brackets", func(t *testing.T) {
+		t.Parallel()
+
+		sender := mail.NewSMTPSender("mailpit", 1025, "", "", from)
+
+		var gotMsg []byte
+
+		sender.SetSMTPSendFunc(func(_ string, _ smtp.Auth, _ string, _ []string, msg []byte) error {
+			gotMsg = msg
+
+			return nil
+		})
+
+		msg := validMessage()
+		msg.FromName = `Auto "Pro", Q1 <x@y.test>`
+		require.NoError(t, sender.Send(t.Context(), msg))
+
+		raw := string(gotMsg)
+		assert.Contains(t, raw, `From: "Auto \"Pro\", Q1 <x@y.test>" <no-reply@vietgara.viettechno.com>`)
+		assert.Equal(t, 1, strings.Count(raw, "From: "), "a single From header")
 	})
 
 	t.Run("uses plain auth and reports failures", func(t *testing.T) {

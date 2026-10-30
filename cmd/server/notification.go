@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"errors"
+	"log/slog"
 
 	customerDomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
@@ -73,6 +74,8 @@ func buildNotification(
 func optOutKey(signingKey []byte) []byte {
 	if key := envOr("EMAIL_OPT_OUT_KEY", ""); len(key) >= minSigningKeyLen {
 		return []byte(key)
+	} else if key != "" {
+		slog.Warn("EMAIL_OPT_OUT_KEY is too short and is ignored: opt-out links follow JWT_SIGNING_KEY", "min_length", minSigningKeyLen)
 	}
 
 	return deriveKey(signingKey, "vietgara/email-opt-out/v1")

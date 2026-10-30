@@ -13,8 +13,9 @@ import (
 // names a customer that is gone.
 var ErrInvalidOptOutToken = errors.New("invalid opt-out link")
 
-// optOutPath is where the opt-out page of a customer e-mail lives.
-const optOutPath = "/api/v1/public/email-opt-out/"
+// OptOutPath is where the opt-out page of a customer e-mail lives; the token
+// follows it.
+const OptOutPath = "/api/v1/public/email-opt-out/"
 
 // optOutToken signs the opt-out link of one customer of one garage. It does
 // not expire: an old e-mail must still work.
@@ -31,7 +32,7 @@ func (uc *NotificationUseCase) optOutSignature(garageID, customerID string) stri
 
 // optOutURL is the absolute link in a customer e-mail.
 func (uc *NotificationUseCase) optOutURL(garageID, customerID string) string {
-	return strings.TrimSuffix(uc.BaseURL, "/") + optOutPath + uc.optOutToken(garageID, customerID)
+	return strings.TrimSuffix(uc.BaseURL, "/") + OptOutPath + uc.optOutToken(garageID, customerID)
 }
 
 // VerifyOptOutToken reports the garage and customer a token was signed for.
@@ -73,3 +74,6 @@ func (uc *NotificationUseCase) OptOut(ctx context.Context, token string) error {
 func (uc *NotificationUseCase) OptOutTokenForTest(garageID, customerID string) string {
 	return uc.optOutToken(garageID, customerID)
 }
+
+// FailureReasonForTest is a test helper for failureReason.
+func FailureReasonForTest(err error) string { return failureReason(err) }

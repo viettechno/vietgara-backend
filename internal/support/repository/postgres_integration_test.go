@@ -278,6 +278,13 @@ func TestDiagnosticQueries(t *testing.T) {
 		e.owner, e.stranger)
 	require.NoError(t, err)
 
+	// An e-mail the garage itself sends (it has a garage) belongs to the garage's own log.
+	_, err = e.pg.Admin.ExecContext(ctx, `
+		INSERT INTO notification_log (user_id, garage_id, channel, template, recipient, status, type)
+		VALUES ($1, $2, 'email', 'settlement_paid', 'owner@x.test', 'sent', 'settlement_paid')`,
+		e.owner, e.garage)
+	require.NoError(t, err)
+
 	e.as(t, e.staff, e.garage, func(ctx context.Context) {
 		events, total, err := e.repo.ListOutbox(ctx, e.garage, "", domain.Page{Page: 1, PageSize: 10})
 		require.NoError(t, err)

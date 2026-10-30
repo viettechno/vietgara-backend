@@ -18,7 +18,7 @@ import (
 // Paths of the plain HTTP routes, which need no sign-in.
 const (
 	// OptOutPath is the page of the link in a customer e-mail.
-	OptOutPath = "/api/v1/public/email-opt-out/{token}"
+	OptOutPath = usecase.OptOutPath + "{token}"
 	// MailjetWebhookPath receives the provider's delivery events; the secret
 	// in it is the credential.
 	MailjetWebhookPath = "/api/v1/webhooks/mailjet/{secret}"
@@ -65,7 +65,7 @@ func (s *Server) optOutPage(w http.ResponseWriter, token string) {
 <form method="post" action="`+html.EscapeString(optOutAction(token))+`"><button type="submit">Hủy nhận / Unsubscribe</button></form>`)
 }
 
-func optOutAction(token string) string { return "/api/v1/public/email-opt-out/" + token }
+func optOutAction(token string) string { return usecase.OptOutPath + token }
 
 // optOut opts the customer out (the page's button, and the mail client's
 // one-click request).

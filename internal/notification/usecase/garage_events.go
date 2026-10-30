@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"strings"
 
@@ -160,29 +161,31 @@ func (uc *NotificationUseCase) HandleSettlementPaid(ctx context.Context, event o
 			return err
 		}
 
-		if _, err := uc.toCustomer(ctx, settings, garage, customer, note{
+		_, customerErr := uc.toCustomer(ctx, settings, garage, customer, note{
 			typ: domain.TypeSettlementReceipt, garageID: event.GarageID, entityType: "settlement", entityID: p.SettlementID,
 			eventID: event.ID, template: mail.TemplateSettlementReceipt, once: true,
 			attachments: func() ([]mail.Attachment, bool) { return uc.receipt(ctx, event.GarageID, p.SettlementID, p.Number) },
 			data: map[string]any{
 				keyVehiclePlate: p.VehiclePlate, keyNumber: p.Number, "Total": converter.FormatVND(p.Total),
 			},
-		}); err != nil {
-			return err
-		}
+		})
 
 		staff, err := uc.Staff.Recipients(ctx, event.GarageID, creators(p.CreatedBy), "")
 		if err != nil {
 			return err
 		}
 
-		return uc.toStaff(ctx, settings, garage, staff, note{
+		// The staff are told even when the customer's address fails; the event is
+		// delivered again for whichever failed, and what went out is not sent twice.
+		staffErr := uc.toStaff(ctx, settings, garage, staff, note{
 			once: true, typ: domain.TypeSettlementPaid, garageID: event.GarageID, customerID: customer.ID, entityType: "settlement",
 			entityID: p.SettlementID, eventID: event.ID, template: mail.TemplateSettlementPaid,
 			data: map[string]any{
 				keyNumber: p.Number, "CustomerName": p.CustomerName, keyVehiclePlate: p.VehiclePlate, "Total": converter.FormatVND(p.Total),
 			},
 		})
+
+		return errors.Join(customerErr, staffErr)
 	})
 }
 

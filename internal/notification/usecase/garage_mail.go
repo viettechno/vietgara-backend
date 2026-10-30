@@ -161,7 +161,7 @@ func (uc *NotificationUseCase) deliver(
 	msg.ReplyTo, msg.Headers, msg.Attachments = garage.Email, headers, files
 
 	if err := uc.Mailer.Send(ctx, msg); err != nil {
-		if logErr := uc.Log.Failed(ctx, uc.logOf(n, to.userID, to.email, domain.StatusFailed, "", err.Error())); logErr != nil {
+		if logErr := uc.Log.Failed(ctx, uc.logOf(n, to.userID, to.email, domain.StatusFailed, "", failureReason(err))); logErr != nil {
 			slog.Warn("notification: logging a failed send failed", "type", n.typ, "error", logErr)
 		}
 
@@ -256,4 +256,24 @@ func (uc *NotificationUseCase) quoteReady(ctx context.Context, req QuoteReadyReq
 // garage the event concerns no longer exists.
 func isGone(err error) bool {
 	return errors.Is(err, ErrCustomerNotFound) || errors.Is(err, ErrGarageNotFound)
+}
+
+// maxFailureReason is how much of an error the garage sees in its log.
+const maxFailureReason = 200
+
+// failureReason is what a garage may read of a failed send: the start of the
+// error, without the body of the provider's answer (which can carry account
+// details) and cut short.
+func failureReason(err error) string {
+	reason := err.Error()
+	if i := strings.IndexAny(reason, "{["); i > 0 {
+		reason = reason[:i]
+	}
+
+	reason = strings.Join(strings.Fields(reason), " ")
+	if len(reason) > maxFailureReason {
+		reason = reason[:maxFailureReason]
+	}
+
+	return strings.TrimRight(reason, " :")
 }

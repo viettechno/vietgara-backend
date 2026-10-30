@@ -95,15 +95,14 @@ func (uc *RepairOrderUseCase) UpdateLine(ctx context.Context, req UpdateLineRequ
 // which is the first move out of not started; Inventory may post its stock
 // issue then (FR-INV-20).
 func (uc *RepairOrderUseCase) announceProgress(ctx context.Context, started bool, was domain.RepairOrderStatus, ro *domain.RepairOrder) error {
-	if err := uc.publishIfCompleted(ctx, was, ro); err != nil {
-		return err
-	}
-
+	// In the order it happened: it started, then it completed.
 	if !started && ro.WorkStarted() {
-		return uc.publish(ctx, EventRepairOrderStarted, ro)
+		if err := uc.publish(ctx, EventRepairOrderStarted, ro); err != nil {
+			return err
+		}
 	}
 
-	return nil
+	return uc.publishIfCompleted(ctx, was, ro)
 }
 
 // applyProgress applies the status and the assignment of a request to a line.

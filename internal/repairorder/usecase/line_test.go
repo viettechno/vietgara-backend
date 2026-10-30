@@ -21,10 +21,11 @@ func TestRepairOrderUseCase_UpdateLine(t *testing.T) {
 		ro := openRepairOrder()
 		d.RepairOrders.EXPECT().FindByID(mock.Anything, garageID, repairOrderID).Return(ro, nil).Once()
 		d.RepairOrders.EXPECT().Save(mock.Anything, mock.Anything).Return(nil).Once()
+		started := d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderStarted, garageID, "", mock.Anything).Return(nil).Once()
+		// In the order it happened: the order started, then it completed.
 		d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderCompleted, garageID, "", mock.MatchedBy(func(p map[string]any) bool {
 			return p["repair_order_id"] == repairOrderID && p["vehicle_id"] != nil && p["number"] != nil
-		})).Return(nil).Once()
-		d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderStarted, garageID, "", mock.Anything).Return(nil).Once()
+		})).NotBefore(started).Return(nil).Once()
 
 		status := domain.LineCompleted
 		ids := []string{actorID}

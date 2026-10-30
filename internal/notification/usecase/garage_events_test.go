@@ -1,6 +1,7 @@
 package usecase_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -355,6 +356,7 @@ func TestHandleSettlementPaid(t *testing.T) { //nolint:funlen // one subtest per
 		uc, d := newGarageUseCase(t)
 		d.garageReads(domain.Settings{})
 		d.Customers.EXPECT().ByVehicle(mock.Anything, garageID, vehicleID).Return(customerAn(), nil).Once()
+		d.Staff.EXPECT().Recipients(mock.Anything, garageID, []string{creatorID}, "").Return(nil, nil).Once()
 		d.notSuppressed("customer.an@example.com")
 		d.Receipts.EXPECT().SettlementReceipt(mock.Anything, garageID, settlementID).Return([]byte("%PDF"), nil).Once()
 		d.Mailer.EXPECT().Send(mock.Anything, mock.Anything).Return(errBoom).Once()
@@ -377,6 +379,7 @@ func TestHandleSettlementPaid(t *testing.T) { //nolint:funlen // one subtest per
 		uc, d := newGarageUseCase(t)
 		d.garageReads(domain.Settings{})
 		d.Customers.EXPECT().ByVehicle(mock.Anything, garageID, vehicleID).Return(customerAn(), nil).Once()
+		d.Staff.EXPECT().Recipients(mock.Anything, garageID, []string{creatorID}, "").Return(nil, nil).Once()
 		d.notSuppressed("customer.an@example.com")
 		d.Receipts.EXPECT().SettlementReceipt(mock.Anything, garageID, settlementID).Return([]byte("%PDF"), nil).Once()
 		d.Mailer.EXPECT().Send(mock.Anything, mock.Anything).Return(errBoom).Once()
@@ -391,6 +394,7 @@ func TestHandleSettlementPaid(t *testing.T) { //nolint:funlen // one subtest per
 		uc, d := newGarageUseCase(t)
 		d.garageReads(domain.Settings{})
 		d.Customers.EXPECT().ByVehicle(mock.Anything, garageID, vehicleID).Return(customerAn(), nil).Once()
+		d.Staff.EXPECT().Recipients(mock.Anything, garageID, []string{creatorID}, "").Return(nil, nil).Once()
 		d.Suppressions.EXPECT().Suppressed(mock.Anything, "customer.an@example.com").Return(false, errBoom).Once()
 
 		require.ErrorIs(t, uc.HandleSettlementPaid(t.Context(), event(garageID, "settlement.paid", payload)), errBoom)
@@ -658,4 +662,61 @@ func TestTheReceiptIsNotRenderedWhenItWillNotBeSent(t *testing.T) {
 	// No Receipts expectation: a call would fail the test.
 	payload := `{"settlement_id":"` + settlementID + `","vehicle_id":"` + vehicleID + `","number":"ST-1","total":1}`
 	require.NoError(t, uc.HandleSettlementPaid(t.Context(), event(garageID, "settlement.paid", payload)))
+}
+
+func TestACustomerFailureDoesNotBlockTheStaff(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newGarageUseCase(t)
+	d.garageReads(domain.Settings{})
+	d.Customers.EXPECT().ByVehicle(mock.Anything, garageID, vehicleID).Return(customerAn(), nil).Once()
+	d.Staff.EXPECT().Recipients(mock.Anything, garageID, []string{creatorID}, "").Return([]usecase.UserInfo{staffLan()}, nil).Once()
+	d.notSuppressed("customer.an@example.com")
+	d.notSuppressed("lan@example.com")
+	d.Receipts.EXPECT().SettlementReceipt(mock.Anything, garageID, settlementID).Return([]byte("%PDF"), nil).Once()
+
+	var sentTo []string
+
+	d.Mailer.EXPECT().Send(mock.Anything, mock.Anything).RunAndReturn(func(_ mockContext, m mail.Message) error {
+		if m.ToEmail == "customer.an@example.com" {
+			return errBoom
+		}
+
+		sentTo = append(sentTo, m.ToEmail)
+
+		return nil
+	}).Twice()
+	d.Log.EXPECT().Failed(mock.Anything, mock.Anything).Return(nil).Once()
+	d.logged()
+
+	payload := `{"settlement_id":"` + settlementID + `","vehicle_id":"` + vehicleID + `","number":"ST-1","total":1,"created_by":"` + creatorID + `"}`
+
+	require.ErrorIs(t, uc.HandleSettlementPaid(t.Context(), event(garageID, "settlement.paid", payload)), errBoom)
+	assert.Equal(t, []string{"lan@example.com"}, sentTo, "the staff were told")
+}
+
+func TestAGarageSeesAShortReasonNotTheProvidersAnswer(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newGarageUseCase(t)
+	d.garageReads(domain.Settings{})
+	d.Customers.EXPECT().Get(mock.Anything, garageID, customerID).Return(customerAn(), nil).Once()
+	d.notSuppressed("customer.an@example.com")
+
+	providerAnswer := fmt.Errorf(`mailjet: status 401: {"ErrorMessage":"API key abc123 of account 99 is blocked","Domain":"%s"}`, strings.Repeat("x", 500)) //nolint:err113 // a provider answer, built for the test
+	d.Mailer.EXPECT().Send(mock.Anything, mock.Anything).Return(providerAnswer).Once()
+
+	var failed *domain.Log
+
+	d.Log.EXPECT().Failed(mock.Anything, mock.Anything).Run(func(_ mockContext, l *domain.Log) { failed = l }).Return(nil).Once()
+
+	assert.False(t, uc.QuoteReady(t.Context(), usecase.QuoteReadyRequest{
+		GarageID: garageID, QuoteID: quoteID, CustomerID: customerID, Number: "BG-1", VehiclePlate: "51A", Total: "1", ApproveURL: "https://x",
+	}))
+	require.NotNil(t, failed)
+	assert.Equal(t, "mailjet: status 401", failed.Error)
+	assert.NotContains(t, failed.Error, "abc123")
+
+	long := fmt.Errorf("%s", strings.Repeat("a", 500)) //nolint:err113 // a long error, built for the test
+	assert.Len(t, usecase.FailureReasonForTest(long), 200)
 }

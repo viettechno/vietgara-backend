@@ -10,6 +10,7 @@ import (
 	"mime"
 	"mime/quotedprintable"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"sort"
 	"strconv"
@@ -168,5 +169,7 @@ func address(name, email string) string {
 		return "<" + email + ">"
 	}
 
-	return mime.QEncoding.Encode("utf-8", name) + " <" + email + ">"
+	// net/mail quotes a name with commas, quotes or angle brackets and encodes
+	// a non-ASCII one, which a garage's free-text name needs.
+	return (&mail.Address{Name: name, Address: email}).String()
 }

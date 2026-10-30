@@ -58,12 +58,24 @@ func buildNotification(
 		},
 		Garages: notificationGarages{garages: garages}, Staff: notificationRepository.NewPostgresStaff(pool),
 		Receipts: notificationReceipts{documents: documents}, Tx: transactor,
-		OptOutKey: deriveKey(signingKey, "vietgara/email-opt-out/v1"), BaseURL: appBaseURL(),
+		OptOutKey: optOutKey(signingKey), BaseURL: appBaseURL(),
 	})
 
 	return &notificationModule{
 		uc: uc, server: notificationHandler.NewServer(uc), webhookSecret: envOr("MAILJET_WEBHOOK_SECRET", ""),
 	}
+}
+
+// optOutKey signs the links of customer e-mails, which must keep working for as
+// long as the e-mails are kept, so it is its own secret (EMAIL_OPT_OUT_KEY) and
+// not tied to the rotation of the JWT signing key. Without one it derives from
+// the signing key, which is fine until that key is rotated.
+func optOutKey(signingKey []byte) []byte {
+	if key := envOr("EMAIL_OPT_OUT_KEY", ""); len(key) >= minSigningKeyLen {
+		return []byte(key)
+	}
+
+	return deriveKey(signingKey, "vietgara/email-opt-out/v1")
 }
 
 // deriveKey gives each purpose its own key from the signing key.

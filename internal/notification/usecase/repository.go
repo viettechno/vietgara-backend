@@ -53,8 +53,26 @@ type Repository interface {
 	// attempt's own transaction rolls back with the failure, and the log
 	// must show it.
 	Failed(ctx context.Context, log *domain.Log) error
+	// Sent records a sent e-mail in a transaction of its own, so that it
+	// survives the rollback of the event's transaction and a redelivery does
+	// not send it again.
+	Sent(ctx context.Context, log *domain.Log) error
+	// AlreadySent reports whether the e-mail of key was sent.
+	AlreadySent(ctx context.Context, key SentKey) (bool, error)
 	// List returns a garage's rows, newest first, and how many match.
 	List(ctx context.Context, garageID string, filter LogFilter, page, pageSize int) ([]domain.Log, int, error)
+}
+
+// SentKey identifies an e-mail that may already have gone out: to the
+// recipient, for this event or, when PerEntity, for this document at all.
+type SentKey struct {
+	GarageID   string
+	Type       domain.Type
+	Recipient  string
+	EventID    string
+	PerEntity  bool
+	EntityType string
+	EntityID   string
 }
 
 // LogFilter narrows ListNotificationLog; empty fields match everything.

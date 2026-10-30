@@ -101,6 +101,43 @@ func TestPostgresRepository_Failed(t *testing.T) {
 	require.Equal(t, now, log.CreatedAt)
 }
 
+func TestPostgresRepository_SentIsWrittenApart(t *testing.T) {
+	t.Parallel()
+
+	tx := dbtest.New(t).ExpectQueryRow("INSERT INTO notification_log", dbtest.Row(now))
+	transactor := &fakeTransactor{ctx: tx.Context(t.Context())}
+	repo := repository.NewPostgresRepository(nil).WithFailureTx(transactor)
+
+	log := &domain.Log{ID: "n-1", Channel: domain.ChannelEmail, Template: "t", Recipient: "a@b.com", Status: domain.StatusSent, GarageID: "g-1"}
+	require.NoError(t, repo.Sent(t.Context(), log))
+	require.Equal(t, "g-1", transactor.garage)
+}
+
+func TestPostgresRepository_AlreadySent(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+	key := usecase.SentKey{
+		GarageID: "g-1", Type: domain.TypeVehicleReady, Recipient: "an@example.com", EventID: "e-1",
+		PerEntity: true, EntityType: "repair_order", EntityID: "ro-1",
+	}
+
+	tx := dbtest.New(t).
+		ExpectQueryRow("FROM notification_log", dbtest.Row(true)).
+		WithArgs(func(args []any) {
+			require.Equal(t, []any{"g-1", "vehicle_ready", "an@example.com", "e-1", true, "repair_order", "ro-1"}, args)
+		}).
+		ExpectQueryRow("FROM notification_log", dbtest.ErrRow(errBoom))
+	ctx := tx.Context(t.Context())
+
+	found, err := repo.AlreadySent(ctx, key)
+	require.NoError(t, err)
+	require.True(t, found)
+
+	_, err = repo.AlreadySent(ctx, key)
+	require.ErrorIs(t, err, errBoom)
+}
+
 func TestPostgresRepository_List(t *testing.T) {
 	t.Parallel()
 

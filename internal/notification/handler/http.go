@@ -105,8 +105,9 @@ type mailjetEvent struct {
 	HardBounce bool   `json:"hard_bounce"`
 }
 
-// mailjetWebhook suppresses the addresses of hard bounces, blocked and spam
-// events; other events are ignored. A wrong secret answers 404.
+// mailjetWebhook suppresses the addresses of hard bounces and spam complaints;
+// other events are ignored: a block is often the sender's, or temporary, and
+// must not silence a customer for good. A wrong secret answers 404.
 func (s *Server) mailjetWebhook(w http.ResponseWriter, r *http.Request, given, want string) {
 	if subtle.ConstantTimeCompare([]byte(given), []byte(want)) != 1 {
 		notFound(w)
@@ -157,8 +158,6 @@ func suppressionReason(e mailjetEvent) string {
 	switch {
 	case e.Event == "bounce" && e.HardBounce:
 		return "bounce"
-	case e.Event == "blocked":
-		return "blocked"
 	case e.Event == "spam":
 		return "spam"
 	default:

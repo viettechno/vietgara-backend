@@ -23,7 +23,12 @@ type note struct {
 	eventID    string
 	template   string
 	data       map[string]any
-	attach     []mail.Attachment
+	// attachments is read only once the e-mail is certain to be sent; it
+	// answers the files and whether they could be made.
+	attachments func() ([]mail.Attachment, bool)
+	// once: one e-mail per document, however many times its event fires (an
+	// order that completes, is reopened and completes again).
+	once bool
 }
 
 // recipient is who a note goes to.
@@ -91,22 +96,27 @@ func (uc *NotificationUseCase) toStaff(
 		return uc.skip(ctx, n, "", domain.SkipDisabled)
 	}
 
+	var first error
+
 	for _, user := range staff {
 		personal := n
 		personal.data = map[string]any{"Name": user.FullName}
 		maps.Copy(personal.data, n.data)
 
 		to := recipient{userID: user.ID, name: user.FullName, email: user.Email, locale: user.Locale}
-		if _, err := uc.deliver(ctx, settings, garage, personal, to, nil); err != nil {
-			return err
+		if _, err := uc.deliver(ctx, settings, garage, personal, to, nil); err != nil && first == nil {
+			// The others still get theirs; the event is delivered again, and
+			// those already sent are not sent twice.
+			first = err
 		}
 	}
 
-	return nil
+	return first
 }
 
 // deliver renders and sends one e-mail and logs it. A failure is logged in a
-// transaction of its own and returned, so the event is delivered again.
+// transaction of its own and returned, so the event is delivered again; what
+// was already sent is found in the log and not sent twice.
 func (uc *NotificationUseCase) deliver(
 	ctx context.Context, settings domain.Settings, garage GarageInfo, n note, to recipient, headers map[string]string,
 ) (bool, error) {
@@ -119,6 +129,25 @@ func (uc *NotificationUseCase) deliver(
 		return false, uc.skip(ctx, n, to.email, domain.SkipSuppressed)
 	}
 
+	if n.eventID != "" {
+		done, err := uc.Log.AlreadySent(ctx, SentKey{
+			GarageID: n.garageID, Type: n.typ, Recipient: to.email, EventID: n.eventID,
+			PerEntity: n.once, EntityType: n.entityType, EntityID: n.entityID,
+		})
+		if err != nil || done {
+			return false, err
+		}
+	}
+
+	var files []mail.Attachment
+
+	if n.attachments != nil {
+		var attached bool
+
+		files, attached = n.attachments()
+		n.data["Attached"] = attached
+	}
+
 	msg, err := mail.Render(n.template, to.locale, to.email, to.name, n.data)
 	if err != nil {
 		return false, err
@@ -129,7 +158,7 @@ func (uc *NotificationUseCase) deliver(
 		msg.FromName = garage.Name
 	}
 
-	msg.ReplyTo, msg.Headers, msg.Attachments = garage.Email, headers, n.attach
+	msg.ReplyTo, msg.Headers, msg.Attachments = garage.Email, headers, files
 
 	if err := uc.Mailer.Send(ctx, msg); err != nil {
 		if logErr := uc.Log.Failed(ctx, uc.logOf(n, to.userID, to.email, domain.StatusFailed, "", err.Error())); logErr != nil {
@@ -139,7 +168,26 @@ func (uc *NotificationUseCase) deliver(
 		return false, err
 	}
 
-	return true, uc.Log.Create(ctx, uc.logOf(n, to.userID, to.email, domain.StatusSent, "", ""))
+	// The e-mail went out: a log row that cannot be written must not turn
+	// that into a failure, which would send it again.
+	if err := uc.recordSent(ctx, n, to); err != nil {
+		slog.Warn("notification: logging a sent e-mail failed", "type", n.typ, "entity_id", n.entityID, "error", err)
+	}
+
+	return true, nil
+}
+
+// recordSent logs a sent e-mail. An event's e-mail is written apart from the
+// event's transaction, so that a later failure of the event does not roll it
+// back and a redelivery finds it.
+func (uc *NotificationUseCase) recordSent(ctx context.Context, n note, to recipient) error {
+	row := uc.logOf(n, to.userID, to.email, domain.StatusSent, "", "")
+
+	if n.eventID != "" {
+		return uc.Log.Sent(ctx, row)
+	}
+
+	return uc.Log.Create(ctx, row)
 }
 
 // skip logs an e-mail that was not sent and why.

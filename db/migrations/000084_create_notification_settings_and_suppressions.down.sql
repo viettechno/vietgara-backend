@@ -3,6 +3,7 @@ DROP POLICY IF EXISTS notification_log_rls_policy ON public.notification_log;
 ALTER TABLE public.notification_log NO FORCE ROW LEVEL SECURITY;
 ALTER TABLE public.notification_log DISABLE ROW LEVEL SECURITY;
 
+DROP INDEX IF EXISTS public.idx_notification_log_sent;
 DROP INDEX IF EXISTS public.idx_notification_log_garage;
 
 ALTER TABLE public.notification_log

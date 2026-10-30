@@ -72,6 +72,29 @@ func (r *PostgresRepository) Failed(ctx context.Context, log *domain.Log) error 
 	})
 }
 
+// Sent inserts a sent e-mail in a transaction of its own, scoped to its garage.
+func (r *PostgresRepository) Sent(ctx context.Context, log *domain.Log) error {
+	return r.Failed(ctx, log)
+}
+
+// AlreadySent reports whether a sent row of the key exists: for the event, or
+// for the document when the key says one e-mail per document.
+func (r *PostgresRepository) AlreadySent(ctx context.Context, key usecase.SentKey) (bool, error) {
+	var found bool
+
+	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM notification_log
+			WHERE garage_id = $1 AND status = 'sent' AND type = $2 AND recipient = $3
+			  AND (event_id = NULLIF($4, '')::uuid OR ($5::bool AND entity_type = $6 AND entity_id = NULLIF($7, '')::uuid)))`,
+		key.GarageID, string(key.Type), key.Recipient, key.EventID, key.PerEntity, key.EntityType, key.EntityID).Scan(&found)
+	if err != nil {
+		return false, fmt.Errorf("read sent notifications: %w", err)
+	}
+
+	return found, nil
+}
+
 // List returns a garage's rows, newest first, and how many match filter.
 func (r *PostgresRepository) List(
 	ctx context.Context, garageID string, filter usecase.LogFilter, page, pageSize int,

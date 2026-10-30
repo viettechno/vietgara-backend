@@ -61,6 +61,10 @@ ALTER TABLE ONLY public.notification_log
 
 CREATE INDEX idx_notification_log_garage ON public.notification_log USING btree (garage_id, created_at DESC) WHERE (garage_id IS NOT NULL);
 
+-- Has this e-mail already gone out (a redelivered event, a document that
+-- completes twice)?
+CREATE INDEX idx_notification_log_sent ON public.notification_log USING btree (garage_id, type, recipient) WHERE ((status = 'sent'::public.notification_status) AND (garage_id IS NOT NULL));
+
 ALTER TABLE ONLY public.notification_log FORCE ROW LEVEL SECURITY;
 
 ALTER TABLE public.notification_log ENABLE ROW LEVEL SECURITY;

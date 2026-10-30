@@ -39,6 +39,72 @@ func (_m *MockNotificationRepository) EXPECT() *MockNotificationRepository_Expec
 	return &MockNotificationRepository_Expecter{mock: &_m.Mock}
 }
 
+// AlreadySent provides a mock function for the type MockNotificationRepository
+func (_mock *MockNotificationRepository) AlreadySent(ctx context.Context, key usecase.SentKey) (bool, error) {
+	ret := _mock.Called(ctx, key)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AlreadySent")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, usecase.SentKey) (bool, error)); ok {
+		return returnFunc(ctx, key)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, usecase.SentKey) bool); ok {
+		r0 = returnFunc(ctx, key)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, usecase.SentKey) error); ok {
+		r1 = returnFunc(ctx, key)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockNotificationRepository_AlreadySent_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AlreadySent'
+type MockNotificationRepository_AlreadySent_Call struct {
+	*mock.Call
+}
+
+// AlreadySent is a helper method to define mock.On call
+//   - ctx context.Context
+//   - key usecase.SentKey
+func (_e *MockNotificationRepository_Expecter) AlreadySent(ctx any, key any) *MockNotificationRepository_AlreadySent_Call {
+	return &MockNotificationRepository_AlreadySent_Call{Call: _e.mock.On("AlreadySent", ctx, key)}
+}
+
+func (_c *MockNotificationRepository_AlreadySent_Call) Run(run func(ctx context.Context, key usecase.SentKey)) *MockNotificationRepository_AlreadySent_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 usecase.SentKey
+		if args[1] != nil {
+			arg1 = args[1].(usecase.SentKey)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockNotificationRepository_AlreadySent_Call) Return(b bool, err error) *MockNotificationRepository_AlreadySent_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockNotificationRepository_AlreadySent_Call) RunAndReturn(run func(ctx context.Context, key usecase.SentKey) (bool, error)) *MockNotificationRepository_AlreadySent_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Create provides a mock function for the type MockNotificationRepository
 func (_mock *MockNotificationRepository) Create(ctx context.Context, log *domain.Log) error {
 	ret := _mock.Called(ctx, log)
@@ -241,6 +307,63 @@ func (_c *MockNotificationRepository_List_Call) Return(logs []domain.Log, n int,
 }
 
 func (_c *MockNotificationRepository_List_Call) RunAndReturn(run func(ctx context.Context, garageID string, filter usecase.LogFilter, page int, pageSize int) ([]domain.Log, int, error)) *MockNotificationRepository_List_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Sent provides a mock function for the type MockNotificationRepository
+func (_mock *MockNotificationRepository) Sent(ctx context.Context, log *domain.Log) error {
+	ret := _mock.Called(ctx, log)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Sent")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.Log) error); ok {
+		r0 = returnFunc(ctx, log)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockNotificationRepository_Sent_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Sent'
+type MockNotificationRepository_Sent_Call struct {
+	*mock.Call
+}
+
+// Sent is a helper method to define mock.On call
+//   - ctx context.Context
+//   - log *domain.Log
+func (_e *MockNotificationRepository_Expecter) Sent(ctx any, log any) *MockNotificationRepository_Sent_Call {
+	return &MockNotificationRepository_Sent_Call{Call: _e.mock.On("Sent", ctx, log)}
+}
+
+func (_c *MockNotificationRepository_Sent_Call) Run(run func(ctx context.Context, log *domain.Log)) *MockNotificationRepository_Sent_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.Log
+		if args[1] != nil {
+			arg1 = args[1].(*domain.Log)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockNotificationRepository_Sent_Call) Return(err error) *MockNotificationRepository_Sent_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockNotificationRepository_Sent_Call) RunAndReturn(run func(ctx context.Context, log *domain.Log) error) *MockNotificationRepository_Sent_Call {
 	_c.Call.Return(run)
 	return _c
 }

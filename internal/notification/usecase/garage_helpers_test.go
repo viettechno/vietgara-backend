@@ -52,6 +52,9 @@ func newGarageUseCase(t *testing.T) (*usecase.NotificationUseCase, *garageDeps) 
 		Staff: mocks.NewMockNotificationStaffReader(t), Receipts: mocks.NewMockNotificationReceipts(t), Tx: mocks.NewMockNotificationTransactor(t),
 	}
 
+	// Nothing has been sent yet unless a test says so.
+	d.Log.EXPECT().AlreadySent(mock.Anything, mock.Anything).Return(false, nil).Maybe()
+
 	uc := usecase.NewNotificationUseCase(usecase.Deps{
 		Mailer: d.Mailer, Users: d.Users, Log: d.Log, Settings: d.Settings, Suppressions: d.Suppressions, Customers: d.Customers,
 		Garages: d.Garages, Staff: d.Staff, Receipts: d.Receipts, Tx: d.Tx, OptOutKey: []byte("test-key"), BaseURL: "https://app.example.com/",
@@ -90,12 +93,23 @@ func (d *garageDeps) sentMessage() *mail.Message {
 func (d *garageDeps) logged() *[]domain.Log {
 	var rows []domain.Log
 
-	d.Log.EXPECT().Create(mock.Anything, mock.Anything).
-		Run(func(_ mockContext, l *domain.Log) { rows = append(rows, *l) }).Return(nil).Maybe()
+	record := func(_ mockContext, l *domain.Log) { rows = append(rows, *l) }
+
+	d.Log.EXPECT().Create(mock.Anything, mock.Anything).Run(record).Return(nil).Maybe()
+	d.Log.EXPECT().Sent(mock.Anything, mock.Anything).Run(record).Return(nil).Maybe()
 
 	return &rows
 }
 
 func event(garage, eventType, data string) outbox.Event {
 	return outbox.Event{ID: "event-1", Type: eventType, GarageID: garage, Data: []byte(data)}
+}
+
+// rebuild makes the use case again over d's mocks, for a test that replaced
+// one of them.
+func rebuild(d *garageDeps) *usecase.NotificationUseCase {
+	return usecase.NewNotificationUseCase(usecase.Deps{
+		Mailer: d.Mailer, Users: d.Users, Log: d.Log, Settings: d.Settings, Suppressions: d.Suppressions, Customers: d.Customers,
+		Garages: d.Garages, Staff: d.Staff, Receipts: d.Receipts, Tx: d.Tx, OptOutKey: []byte("test-key"), BaseURL: "https://app.example.com/",
+	})
 }

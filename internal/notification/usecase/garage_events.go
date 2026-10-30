@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"strings"
 
 	"github.com/viettechno/vietgara-backend/internal/notification/domain"
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
 	"github.com/viettechno/vietgara-backend/pkg/converter"
@@ -18,7 +20,7 @@ const (
 )
 
 // permissionInventoryWrite is held by the staff who reorder parts.
-const permissionInventoryWrite = "inventory.write"
+var permissionInventoryWrite = string(access.InventoryWrite)
 
 type quoteDecidedPayload struct {
 	QuoteID      string `json:"quote_id"`
@@ -48,7 +50,7 @@ func (uc *NotificationUseCase) HandleQuoteDecided(ctx context.Context, event out
 		}
 
 		return uc.toStaff(ctx, settings, garage, staff, note{
-			typ: domain.TypeQuoteDecided, garageID: event.GarageID, entityType: "quote", entityID: p.QuoteID, eventID: event.ID,
+			once: true, typ: domain.TypeQuoteDecided, garageID: event.GarageID, entityType: "quote", entityID: p.QuoteID, eventID: event.ID,
 			template: mail.TemplateQuoteDecided,
 			data: map[string]any{
 				keyNumber: p.Number, "CustomerName": p.CustomerName, keyVehiclePlate: p.VehiclePlate,
@@ -85,7 +87,7 @@ func (uc *NotificationUseCase) HandleVehicleReady(ctx context.Context, event out
 		}
 
 		_, err = uc.toCustomer(ctx, settings, garage, customer, note{
-			typ: domain.TypeVehicleReady, garageID: event.GarageID, entityType: "repair_order", entityID: p.RepairOrderID,
+			once: true, typ: domain.TypeVehicleReady, garageID: event.GarageID, entityType: "repair_order", entityID: p.RepairOrderID,
 			eventID: event.ID, template: mail.TemplateVehicleReady, data: map[string]any{keyVehiclePlate: p.VehiclePlate},
 		})
 
@@ -158,13 +160,12 @@ func (uc *NotificationUseCase) HandleSettlementPaid(ctx context.Context, event o
 			return err
 		}
 
-		attachment, attached := uc.receipt(ctx, event.GarageID, p.SettlementID, p.Number)
-
 		if _, err := uc.toCustomer(ctx, settings, garage, customer, note{
 			typ: domain.TypeSettlementReceipt, garageID: event.GarageID, entityType: "settlement", entityID: p.SettlementID,
-			eventID: event.ID, template: mail.TemplateSettlementReceipt, attach: attachment,
+			eventID: event.ID, template: mail.TemplateSettlementReceipt, once: true,
+			attachments: func() ([]mail.Attachment, bool) { return uc.receipt(ctx, event.GarageID, p.SettlementID, p.Number) },
 			data: map[string]any{
-				keyVehiclePlate: p.VehiclePlate, keyNumber: p.Number, "Total": converter.FormatVND(p.Total), "Attached": attached,
+				keyVehiclePlate: p.VehiclePlate, keyNumber: p.Number, "Total": converter.FormatVND(p.Total),
 			},
 		}); err != nil {
 			return err
@@ -176,7 +177,7 @@ func (uc *NotificationUseCase) HandleSettlementPaid(ctx context.Context, event o
 		}
 
 		return uc.toStaff(ctx, settings, garage, staff, note{
-			typ: domain.TypeSettlementPaid, garageID: event.GarageID, customerID: customer.ID, entityType: "settlement",
+			once: true, typ: domain.TypeSettlementPaid, garageID: event.GarageID, customerID: customer.ID, entityType: "settlement",
 			entityID: p.SettlementID, eventID: event.ID, template: mail.TemplateSettlementPaid,
 			data: map[string]any{
 				keyNumber: p.Number, "CustomerName": p.CustomerName, keyVehiclePlate: p.VehiclePlate, "Total": converter.FormatVND(p.Total),
@@ -201,7 +202,7 @@ func (uc *NotificationUseCase) receipt(ctx context.Context, garageID, settlement
 		return nil, false
 	}
 
-	return []mail.Attachment{{Name: "receipt-" + number + ".pdf", ContentType: "application/pdf", Data: pdf}}, true
+	return []mail.Attachment{{Name: "receipt-" + safeFileName(number) + ".pdf", ContentType: "application/pdf", Data: pdf}}, true
 }
 
 type stockLowPayload struct {
@@ -258,4 +259,17 @@ func creators(userID string) []string {
 	}
 
 	return []string{userID}
+}
+
+// safeFileName keeps the characters a file name can hold anywhere: a number
+// made from a garage's template may carry slashes and spaces.
+func safeFileName(s string) string {
+	return strings.Map(func(r rune) rune {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '.', r == '_', r == '-':
+			return r
+		default:
+			return '-'
+		}
+	}, s)
 }

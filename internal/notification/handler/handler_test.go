@@ -225,7 +225,6 @@ func TestMailjetWebhook(t *testing.T) {
 	mux := e.mux(t, "s3cret")
 
 	e.suppressions.EXPECT().Suppress(mock.Anything, "bounced@example.com", "bounce").Return(nil).Once()
-	e.suppressions.EXPECT().Suppress(mock.Anything, "blocked@example.com", "blocked").Return(nil).Once()
 	e.suppressions.EXPECT().Suppress(mock.Anything, "spam@example.com", "spam").Return(nil).Once()
 	e.suppressions.EXPECT().Suppress(mock.Anything, "single@example.com", "bounce").Return(nil).Once()
 

@@ -108,6 +108,58 @@ func TestNotificationStoresUnderRowLevelSecurity(t *testing.T) { //nolint:funlen
 		assert.Empty(t, rows)
 	})
 
+	// A sent e-mail is written apart too, and found again by its event or its document.
+	eventID, orderID := uuid.NewString(), uuid.NewString()
+	sentKey := usecase.SentKey{
+		GarageID: garageA, Type: domain.TypeVehicleReady, Recipient: "an@example.com", EventID: eventID,
+		PerEntity: true, EntityType: "repair_order", EntityID: orderID,
+	}
+
+	err = txm.WithTransaction(ctx, platformdb.GarageScope(garageA), func(ctx context.Context) error {
+		require.NoError(t, logs.Sent(ctx, &domain.Log{
+			ID: uuid.NewString(), Channel: domain.ChannelEmail, Template: "vehicle_ready", Recipient: "an@example.com", Status: domain.StatusSent,
+			GarageID: garageA, Type: domain.TypeVehicleReady, EntityType: "repair_order", EntityID: orderID, EventID: eventID,
+		}))
+
+		return errBoom // the event's transaction rolls back
+	})
+	require.ErrorIs(t, err, errBoom)
+
+	in(garageA, func(ctx context.Context) {
+		found, err := logs.AlreadySent(ctx, sentKey)
+		require.NoError(t, err)
+		assert.True(t, found, "the same event")
+
+		again := sentKey
+		again.EventID = uuid.NewString()
+
+		found, err = logs.AlreadySent(ctx, again)
+		require.NoError(t, err)
+		assert.True(t, found, "another event of the same document, when one e-mail per document is wanted")
+
+		again.PerEntity = false
+
+		found, err = logs.AlreadySent(ctx, again)
+		require.NoError(t, err)
+		assert.False(t, found, "another event, when each event has its own e-mail")
+
+		other := sentKey
+		other.Recipient = "binh@example.com"
+
+		found, err = logs.AlreadySent(ctx, other)
+		require.NoError(t, err)
+		assert.False(t, found, "another recipient")
+	})
+
+	in(garageB, func(ctx context.Context) {
+		other := sentKey
+		other.GarageID = garageB
+
+		found, err := logs.AlreadySent(ctx, other)
+		require.NoError(t, err)
+		assert.False(t, found)
+	})
+
 	// A failed attempt is written apart from the transaction that fails.
 	failure := errBoom
 	err = txm.WithTransaction(ctx, platformdb.GarageScope(garageA), func(ctx context.Context) error {

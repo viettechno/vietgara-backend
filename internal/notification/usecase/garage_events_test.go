@@ -391,7 +391,6 @@ func TestHandleSettlementPaid(t *testing.T) { //nolint:funlen // one subtest per
 		uc, d := newGarageUseCase(t)
 		d.garageReads(domain.Settings{})
 		d.Customers.EXPECT().ByVehicle(mock.Anything, garageID, vehicleID).Return(customerAn(), nil).Once()
-		d.Receipts.EXPECT().SettlementReceipt(mock.Anything, garageID, settlementID).Return([]byte("%PDF"), nil).Once()
 		d.Suppressions.EXPECT().Suppressed(mock.Anything, "customer.an@example.com").Return(false, errBoom).Once()
 
 		require.ErrorIs(t, uc.HandleSettlementPaid(t.Context(), event(garageID, "settlement.paid", payload)), errBoom)
@@ -494,3 +493,169 @@ func TestQuoteReady(t *testing.T) {
 }
 
 var _ = mocks.NewMockNotificationMailer
+
+func TestEventsAreNotSentTwice(t *testing.T) {
+	t.Parallel()
+
+	payload := `{"repair_order_id":"ro-1","vehicle_id":"` + vehicleID + `","number":"RO-1","vehicle_plate":"51A-111.11"}`
+
+	t.Run("a redelivered event finds its e-mail in the log", func(t *testing.T) {
+		t.Parallel()
+
+		_, d := newGarageUseCase(t)
+		d.Log = mocks.NewMockNotificationRepository(t)
+		uc := rebuild(d)
+		d.garageReads(domain.Settings{})
+		d.Customers.EXPECT().ByVehicle(mock.Anything, garageID, vehicleID).Return(customerAn(), nil).Once()
+		d.notSuppressed("customer.an@example.com")
+
+		var key usecase.SentKey
+
+		d.Log.EXPECT().AlreadySent(mock.Anything, mock.Anything).
+			Run(func(_ mockContext, k usecase.SentKey) { key = k }).Return(true, nil).Once()
+
+		require.NoError(t, uc.HandleVehicleReady(t.Context(), event(garageID, "repair_order.completed", payload)))
+		assert.Equal(t, usecase.SentKey{
+			GarageID: garageID, Type: domain.TypeVehicleReady, Recipient: "customer.an@example.com", EventID: "event-1",
+			PerEntity: true, EntityType: "repair_order", EntityID: "ro-1",
+		}, key, "a vehicle is ready once per order, however often it completes")
+	})
+
+	t.Run("a payment is per event, not per settlement", func(t *testing.T) {
+		t.Parallel()
+
+		_, d := newGarageUseCase(t)
+		d.Log = mocks.NewMockNotificationRepository(t)
+		uc := rebuild(d)
+		d.garageReads(domain.Settings{})
+		d.Customers.EXPECT().ByVehicle(mock.Anything, garageID, vehicleID).Return(customerAn(), nil).Once()
+		d.notSuppressed("customer.an@example.com")
+
+		var key usecase.SentKey
+
+		d.Log.EXPECT().AlreadySent(mock.Anything, mock.Anything).
+			Run(func(_ mockContext, k usecase.SentKey) { key = k }).Return(true, nil).Once()
+
+		partial := `{"settlement_id":"` + settlementID + `","vehicle_id":"` + vehicleID + `","amount":1,"balance":2}`
+		require.NoError(t, uc.HandlePaymentReceived(t.Context(), event(garageID, "payment_voucher.issued", partial)))
+		assert.False(t, key.PerEntity)
+	})
+
+	t.Run("a failed lookup of the log is returned", func(t *testing.T) {
+		t.Parallel()
+
+		_, d := newGarageUseCase(t)
+		d.Log = mocks.NewMockNotificationRepository(t)
+		uc := rebuild(d)
+		d.garageReads(domain.Settings{})
+		d.Customers.EXPECT().ByVehicle(mock.Anything, garageID, vehicleID).Return(customerAn(), nil).Once()
+		d.notSuppressed("customer.an@example.com")
+		d.Log.EXPECT().AlreadySent(mock.Anything, mock.Anything).Return(false, errBoom).Once()
+
+		require.ErrorIs(t, uc.HandleVehicleReady(t.Context(), event(garageID, "repair_order.completed", payload)), errBoom)
+	})
+
+	t.Run("an e-mail of an event is logged apart from the event's transaction", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newGarageUseCase(t)
+		d.garageReads(domain.Settings{})
+		d.Customers.EXPECT().ByVehicle(mock.Anything, garageID, vehicleID).Return(customerAn(), nil).Once()
+		d.notSuppressed("customer.an@example.com")
+		d.sentMessage()
+
+		var detached, inTransaction int
+
+		d.Log.EXPECT().Sent(mock.Anything, mock.Anything).Run(func(mockContext, *domain.Log) { detached++ }).Return(nil).Once()
+		d.Log.EXPECT().Create(mock.Anything, mock.Anything).Run(func(mockContext, *domain.Log) { inTransaction++ }).Return(nil).Maybe()
+
+		require.NoError(t, uc.HandleVehicleReady(t.Context(), event(garageID, "repair_order.completed", payload)))
+		assert.Equal(t, 1, detached)
+		assert.Zero(t, inTransaction)
+	})
+}
+
+func TestOneFailingRecipientDoesNotBlockTheOthers(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newGarageUseCase(t)
+	d.garageReads(domain.Settings{})
+	d.Staff.EXPECT().Recipients(mock.Anything, garageID, []string(nil), "inventory.write").
+		Return([]usecase.UserInfo{
+			{ID: "u1", Email: "bad@example.com", FullName: "Bad", Locale: "en"},
+			{ID: "u2", Email: "good@example.com", FullName: "Good", Locale: "en"},
+		}, nil).Once()
+	d.notSuppressed("bad@example.com")
+	d.notSuppressed("good@example.com")
+
+	var sentTo []string
+
+	d.Mailer.EXPECT().Send(mock.Anything, mock.Anything).RunAndReturn(func(_ mockContext, m mail.Message) error {
+		if m.ToEmail == "bad@example.com" {
+			return errBoom
+		}
+
+		sentTo = append(sentTo, m.ToEmail)
+
+		return nil
+	}).Twice()
+	d.Log.EXPECT().Failed(mock.Anything, mock.Anything).Return(nil).Once()
+	d.logged()
+
+	payload := `{"part_id":"part-1","part_name":"Lọc dầu","quantity":"3","threshold":"4"}`
+
+	require.ErrorIs(t, uc.HandleStockLow(t.Context(), event(garageID, "stock.low", payload)), errBoom, "the event is delivered again")
+	assert.Equal(t, []string{"good@example.com"}, sentTo, "the other recipient got theirs")
+}
+
+func TestAnEmailThatWentOutIsNotUndoneByALogFailure(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newGarageUseCase(t)
+	d.garageReads(domain.Settings{})
+	d.Customers.EXPECT().Get(mock.Anything, garageID, customerID).Return(customerAn(), nil).Once()
+	d.notSuppressed("customer.an@example.com")
+	d.sentMessage()
+	d.Log.EXPECT().Create(mock.Anything, mock.Anything).Return(errBoom).Once()
+
+	assert.True(t, uc.QuoteReady(t.Context(), usecase.QuoteReadyRequest{
+		GarageID: garageID, QuoteID: quoteID, CustomerID: customerID, Number: "BG-1", VehiclePlate: "51A", Total: "1", ApproveURL: "https://x",
+	}), "the customer has the link, so the advisor is told so")
+}
+
+func TestReceiptNameIsSafe(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newGarageUseCase(t)
+	d.garageReads(domain.Settings{})
+	d.Customers.EXPECT().ByVehicle(mock.Anything, garageID, vehicleID).Return(customerAn(), nil).Once()
+	d.Staff.EXPECT().Recipients(mock.Anything, garageID, []string(nil), "").Return(nil, nil).Once()
+	d.notSuppressed("customer.an@example.com")
+	d.Receipts.EXPECT().SettlementReceipt(mock.Anything, garageID, settlementID).Return([]byte("%PDF"), nil).Once()
+
+	msg := d.sentMessage()
+	d.logged()
+
+	payload := `{"settlement_id":"` + settlementID + `","vehicle_id":"` + vehicleID + `","number":"QT/2026 0001","total":1}`
+	require.NoError(t, uc.HandleSettlementPaid(t.Context(), event(garageID, "settlement.paid", payload)))
+	require.Len(t, msg.Attachments, 1)
+	assert.Equal(t, "receipt-QT-2026-0001.pdf", msg.Attachments[0].Name)
+}
+
+func TestTheReceiptIsNotRenderedWhenItWillNotBeSent(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newGarageUseCase(t)
+	d.garageReads(domain.Settings{Off: map[domain.Type]bool{domain.TypeSettlementReceipt: true, domain.TypeSettlementPaid: true}})
+
+	noEmail := customerAn()
+	noEmail.Email = ""
+
+	d.Customers.EXPECT().ByVehicle(mock.Anything, garageID, vehicleID).Return(noEmail, nil).Once()
+	d.Staff.EXPECT().Recipients(mock.Anything, garageID, []string(nil), "").Return(nil, nil).Once()
+	d.logged()
+
+	// No Receipts expectation: a call would fail the test.
+	payload := `{"settlement_id":"` + settlementID + `","vehicle_id":"` + vehicleID + `","number":"ST-1","total":1}`
+	require.NoError(t, uc.HandleSettlementPaid(t.Context(), event(garageID, "settlement.paid", payload)))
+}

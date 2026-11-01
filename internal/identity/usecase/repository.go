@@ -43,6 +43,10 @@ type SessionStore interface {
 	// RefreshTokenUser returns domain.ErrRefreshTokenInvalid for unknown
 	// or revoked tokens.
 	RefreshTokenUser(ctx context.Context, token string) (string, error)
+	// ConsumeRefreshToken returns the user of token and deletes it in one
+	// step, so of several callers presenting the same token exactly one
+	// gets it; the others get domain.ErrRefreshTokenInvalid.
+	ConsumeRefreshToken(ctx context.Context, token string) (string, error)
 	RevokeRefreshToken(ctx context.Context, token string) error
 	RevokeAllRefreshTokens(ctx context.Context, userID string) error
 	SaveResetToken(ctx context.Context, token, userID string, ttl time.Duration) error

@@ -318,13 +318,21 @@ func (r *PostgresRepository) RecordPayment(
 		return nil, err
 	}
 
+	// The use case checked the amount against what was due when it read the
+	// settlement; two payments recorded at the same moment both pass that
+	// check. The running total therefore refuses to pass the settlement's
+	// total itself, and the whole request (the voucher too) is rolled back.
 	s, err := scanSettlement(q.QueryRow(ctx, `
 		UPDATE settlements SET paid_amount = paid_amount + $3
-		WHERE garage_id = $1 AND id = $2
+		WHERE garage_id = $1 AND id = $2 AND paid_amount + $3 <= total_amount
 		RETURNING `+settlementColumns,
 		garageID, settlementID, payment.Amount,
 	))
 	if err != nil {
+		if errors.Is(err, domain.ErrSettlementNotFound) {
+			return nil, domain.ErrInvalidPaymentAmount
+		}
+
 		return nil, err
 	}
 

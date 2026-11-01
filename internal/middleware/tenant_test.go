@@ -111,6 +111,9 @@ func TestGarage_Authorization(t *testing.T) {
 		{name: "locked subscription", req: garageReq{id: garageID}, access: member, mode: middleware.LicenseLocked, wantCode: codes.FailedPrecondition, wantReason: middleware.ReasonSubscriptionSuspended},
 		{name: "read-only blocks writes", req: garageReq{id: garageID}, access: member, mode: middleware.LicenseReadOnly, wantCode: codes.PermissionDenied, wantReason: middleware.ReasonSubscriptionReadOnly},
 		{name: "read-only allows reads", req: garageReq{id: garageID}, access: member, mode: middleware.LicenseReadOnly, method: methodGarageRO},
+		{name: "read-only allows exporting a file", req: garageReq{id: garageID}, access: member, mode: middleware.LicenseReadOnly, method: methodExport},
+		{name: "read-only blocks printing, which writes the print log", req: garageReq{id: garageID}, access: member, mode: middleware.LicenseReadOnly, method: methodPrint, wantCode: codes.PermissionDenied, wantReason: middleware.ReasonSubscriptionReadOnly},
+		{name: "locked subscription blocks exporting", req: garageReq{id: garageID}, access: member, mode: middleware.LicenseLocked, method: methodExport, wantCode: codes.FailedPrecondition, wantReason: middleware.ReasonSubscriptionSuspended},
 		{name: "license failure lets through", req: garageReq{id: garageID}, access: member, modeErr: errMiddlewareCacheDown},
 		{name: "license skipped", req: garageReq{id: garageID}, access: member, mode: middleware.LicenseLocked, policy: func() *middleware.Policy {
 			p := rule

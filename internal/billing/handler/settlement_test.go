@@ -220,3 +220,27 @@ func TestUpdateSettlement(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, codes.FailedPrecondition, status.Code(err))
 }
+
+// A PATCH without ?updateMask, as the owner web sends it, gets a mask derived
+// from the body by the gateway: for the billing party the nested path.
+func TestUpdateSettlementWithTheMaskTheGatewayDerives(t *testing.T) {
+	t.Parallel()
+
+	party := billingparty.Party{TaxProfileID: "tp-1", Kind: "company", LegalName: "Cong ty A", TaxID: "0301234567", Address: "12 Le Loi"}
+
+	e := newEnv(t)
+	e.parties.ExpectedCalls = nil
+	e.parties.EXPECT().Resolve(anyArg, garageID, "vehicle-1", new("tp-1")).Return(party, nil).Once()
+	e.settlements.EXPECT().FindByID(anyArg, garageID, settlementID).Return(openSettlement(), nil).Once()
+	e.repairOrders.EXPECT().Get(anyArg, garageID, repairOrderID).Return(usecase.RepairOrderInfo{VehicleID: "vehicle-1"}, nil).Once()
+	e.settlements.EXPECT().SaveBilling(anyArg, anyArg).Return(nil).Once()
+
+	resp, err := e.srv.UpdateSettlement(signedIn(t), &billingv1.UpdateSettlementRequest{
+		GarageId: garageID, SettlementId: settlementID,
+		Settlement: &billingv1.Settlement{BillingParty: &commonv1.BillingParty{TaxProfileId: "tp-1"}, InvoiceRequested: true},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"invoice_requested", "billing_party.tax_profile_id"}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Cong ty A", resp.GetSettlement().GetBillingParty().GetLegalName())
+	assert.True(t, resp.GetSettlement().GetInvoiceRequested())
+}

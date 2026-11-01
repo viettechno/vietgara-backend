@@ -100,7 +100,7 @@ func (s *Server) UpdateQuote(ctx context.Context, req *quotev1.UpdateQuoteReques
 			case "lines":
 				lines := linesFromProto(in.GetLines())
 				update.Lines = &lines
-			case "billing_party":
+			case "billing_party", "billing_party.tax_profile_id":
 				update.BillingTaxProfileID = new(in.GetBillingParty().GetTaxProfileId())
 			default:
 				return nil, badMask(path)

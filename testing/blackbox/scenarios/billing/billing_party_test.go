@@ -3,6 +3,7 @@
 package billing_test
 
 import (
+	"fmt"
 	"net/http"
 	"testing"
 
@@ -163,4 +164,32 @@ func TestVoidEdgeCases(t *testing.T) {
 
 	require.NotNil(t, live)
 	assert.NotEqual(t, first.GetVoucherNumber(), live.GetVoucherNumber(), "a voided number is never reused")
+}
+
+// Scenario: E2E-BIL-011: a client that sends no update mask, as the owner web
+// does, changes the billing party and the invoice flag all the same: the
+// gateway derives the mask from the body (billing_party.tax_profile_id).
+func TestBillingPartyUpdateWithoutAnUpdateMask(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	business := fixture.NewBusiness(t, "bil-nomask")
+	api := business.Owner.API
+
+	profile, err := api.CreateTaxProfile(ctx, business.GarageID, business.CustomerID,
+		company("QA Company Complete", new("0312345678"), new("1 Nguyen Hue, Quan 1")))
+	require.NoError(t, err)
+
+	settlement := business.Settlement(t)
+
+	body := fmt.Sprintf(`{"invoiceRequested":true,"billingParty":{"taxProfileId":%q}}`, profile.GetId())
+
+	probe, err := api.Probe(ctx, http.MethodPatch, "/api/v1/garages/"+business.GarageID+"/settlements/"+settlement.GetId(), []byte(body))
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, probe.Status, "%s", probe.Body)
+
+	got, err := api.GetSettlement(ctx, business.GarageID, settlement.GetId())
+	require.NoError(t, err)
+	assert.True(t, got.GetInvoiceRequested())
+	assert.Equal(t, "QA Company Complete", got.GetBillingParty().GetLegalName())
 }

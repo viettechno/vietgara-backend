@@ -397,3 +397,49 @@ func TestHiddenConsumableFollowsItsJob(t *testing.T) {
 		assert.EqualValues(t, 70_000, order.GetTotalAmount())
 	})
 }
+
+// Scenario: E2E-QUO-016: a hidden consumable is on neither the quote's PDF nor
+// the repair order's, while the billable lines and the customer's name,
+// diacritics included, are.
+func TestHiddenConsumableIsNotPrinted(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	k := setup(t, "quote-hidden-pdf")
+	api, garageID := k.owner.API, k.garageID
+	c := k.catalogue(t)
+	job := newJob(t, k, "Thay dầu", 200_000, suggest(c.oil, "4"), suggest(c.filter, "1", hidden))
+
+	quote, err := api.CreateQuote(ctx, garageID, &quotev1.Quote{
+		CustomerId: k.customer.GetId(), VehicleId: k.vehicle.GetId(),
+		ApprovalMode: commonv1.QuoteApprovalMode_QUOTE_APPROVAL_MODE_MANUAL, Lines: []*quotev1.QuoteLine{quoteLabor("Kiểm tra tổng quát", 100_000)},
+	})
+	require.NoError(t, err)
+
+	quote, err = api.AddQuoteJob(ctx, garageID, quote.GetId(), job.GetId())
+	require.NoError(t, err)
+
+	_, pdf, err := api.DownloadQuotePDF(ctx, garageID, quote.GetId())
+	require.NoError(t, err)
+
+	text := fixture.PDFText(t, pdf)
+	assert.Contains(t, text, "Kiểm tra tổng quát", "a billable line, with its diacritics")
+	assert.Contains(t, text, c.oil.GetName(), "a billable part")
+	assert.NotContains(t, text, c.filter.GetName(), "the hidden consumable is not printed on the quote")
+
+	_, err = api.SendQuote(ctx, garageID, quote.GetId())
+	require.NoError(t, err)
+
+	_, err = api.RecordQuoteDecision(ctx, garageID, quote.GetId(), billableDecisions(quote, func(*quotev1.QuoteLine) bool { return true })...)
+	require.NoError(t, err)
+
+	converted, err := api.ConvertQuote(ctx, garageID, quote.GetId())
+	require.NoError(t, err)
+
+	_, orderPDF, err := api.DownloadRepairOrderPDF(ctx, garageID, converted.GetRepairOrderId())
+	require.NoError(t, err)
+
+	orderText := fixture.PDFText(t, orderPDF)
+	assert.Contains(t, orderText, "Kiểm tra tổng quát")
+	assert.NotContains(t, orderText, c.filter.GetName(), "nor on the repair order")
+}

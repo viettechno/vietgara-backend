@@ -422,3 +422,106 @@ func TestCustomerUseCase_Activate(t *testing.T) {
 	_, err = uc.Activate(t.Context(), garageID, "missing", actorID)
 	assertAppError(t, err, apperror.CodeNotFound)
 }
+
+func TestCustomerUseCase_Lookup(t *testing.T) {
+	t.Parallel()
+
+	phone, email := "+84911000001", "an@vietgara.test"
+	an := &domain.Customer{ID: "c-an", GarageID: garageID, FullName: "An", Phone: &phone, Email: &email}
+	other := &domain.Customer{ID: "c-other", GarageID: garageID, FullName: "Other", Phone: new("+84911000011")}
+
+	newUC := func(t *testing.T, users usecase.UserDirectory) (*usecase.CustomerUseCase, *mocks.MockCustomerRepository) {
+		t.Helper()
+
+		customers := mocks.NewMockCustomerRepository(t)
+
+		return usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t), nil, usecase.WithUserDirectory(users)), customers
+	}
+
+	t.Run("a phone in any form finds only the exact number", func(t *testing.T) {
+		t.Parallel()
+
+		for _, written := range []string{"0911000001", "+84911000001", "0911 000 001", "84911000001"} {
+			uc, customers := newUC(t, directory{})
+			// The search is a substring match: the neighbour comes back too and is dropped.
+			customers.EXPECT().List(mock.Anything, garageID, usecase.ListFilter{Query: "+84911000001", Limit: 20}).
+				Return([]*domain.Customer{an, other}, 2, nil).Once()
+
+			found, err := uc.Lookup(t.Context(), garageID, written, "")
+			require.NoError(t, err, written)
+			require.Len(t, found.Customers, 1, written)
+			assert.Equal(t, "c-an", found.Customers[0].ID)
+			assert.False(t, found.UserExists, "no e-mail asked, so no user is looked for")
+		}
+	})
+
+	t.Run("an e-mail matches whatever its case and says whether a user owns it", func(t *testing.T) {
+		t.Parallel()
+
+		uc, customers := newUC(t, directory{byEmail: map[string]string{"an@vietgara.test": "user-1"}})
+		customers.EXPECT().List(mock.Anything, garageID, usecase.ListFilter{Query: "an@vietgara.test", Limit: 20}).
+			Return([]*domain.Customer{an}, 1, nil).Once()
+
+		found, err := uc.Lookup(t.Context(), garageID, "", " An@Vietgara.TEST ")
+		require.NoError(t, err)
+		require.Len(t, found.Customers, 1)
+		assert.True(t, found.UserExists)
+	})
+
+	t.Run("a profile found by both is listed once", func(t *testing.T) {
+		t.Parallel()
+
+		uc, customers := newUC(t, directory{})
+		customers.EXPECT().List(mock.Anything, garageID, mock.Anything).Return([]*domain.Customer{an}, 1, nil).Twice()
+
+		found, err := uc.Lookup(t.Context(), garageID, "0911000001", "an@vietgara.test")
+		require.NoError(t, err)
+		assert.Len(t, found.Customers, 1)
+		assert.False(t, found.UserExists)
+	})
+
+	t.Run("an e-mail nobody uses finds nothing and no user", func(t *testing.T) {
+		t.Parallel()
+
+		uc, customers := newUC(t, directory{})
+		customers.EXPECT().List(mock.Anything, garageID, mock.Anything).Return(nil, 0, nil).Once()
+
+		found, err := uc.Lookup(t.Context(), garageID, "", "nobody@vietgara.test")
+		require.NoError(t, err)
+		assert.Empty(t, found.Customers)
+		assert.False(t, found.UserExists)
+	})
+
+	t.Run("without a directory no user is reported", func(t *testing.T) {
+		t.Parallel()
+
+		customers := mocks.NewMockCustomerRepository(t)
+		uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t), nil)
+		customers.EXPECT().List(mock.Anything, garageID, mock.Anything).Return(nil, 0, nil).Once()
+
+		found, err := uc.Lookup(t.Context(), garageID, "", "an@vietgara.test")
+		require.NoError(t, err)
+		assert.False(t, found.UserExists)
+	})
+
+	t.Run("a contact is required and must be valid", func(t *testing.T) {
+		t.Parallel()
+
+		uc, _ := newUC(t, directory{})
+
+		for _, contact := range [][2]string{{"", ""}, {"  ", " "}, {"abc", ""}, {"", "not-an-email"}} {
+			_, err := uc.Lookup(t.Context(), garageID, contact[0], contact[1])
+			assertAppError(t, err, apperror.CodeInvalidArgument)
+		}
+	})
+
+	t.Run("storage failures are internal errors", func(t *testing.T) {
+		t.Parallel()
+
+		uc, customers := newUC(t, directory{})
+		customers.EXPECT().List(mock.Anything, garageID, mock.Anything).Return(nil, 0, errBoom).Once()
+
+		_, err := uc.Lookup(t.Context(), garageID, "0911000001", "")
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+}

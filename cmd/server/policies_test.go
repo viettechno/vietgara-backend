@@ -34,9 +34,7 @@ var publicMethods = []string{
 // yet. They have no policy on purpose, so the gateway of the application
 // answers NO_POLICY (403) instead of reaching the unimplemented handler. Give
 // the method a policy when you implement it, and remove it from here.
-var notImplemented = map[string]string{
-	"/vietgara.customer.v1.CustomerService/LookupCustomers": "FR-CUS-06, with the customer app's quote preparation",
-}
+var notImplemented = map[string]string{}
 
 // TestEveryRPCDeclaresItsAuthorization is the automated part of the
 // authorization review (Security Architecture 3): every method of every

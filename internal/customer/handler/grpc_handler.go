@@ -38,6 +38,7 @@ func Policies() middleware.Policies {
 	return middleware.Policies{
 		customerv1.CustomerService_ListCustomers_FullMethodName:    middleware.GarageMethod(read),
 		customerv1.CustomerService_GetCustomer_FullMethodName:      middleware.GarageMethod(read),
+		customerv1.CustomerService_LookupCustomers_FullMethodName:  middleware.GarageMethod(read),
 		customerv1.CustomerService_CreateCustomer_FullMethodName:   middleware.GarageMethod(write),
 		customerv1.CustomerService_UpdateCustomer_FullMethodName:   middleware.GarageMethod(write),
 		customerv1.CustomerService_DeleteCustomer_FullMethodName:   middleware.GarageMethod(write),

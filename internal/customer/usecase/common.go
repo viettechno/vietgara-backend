@@ -62,6 +62,15 @@ type Option func(*options)
 type options struct {
 	now   func() time.Time
 	audit LinkAuditor
+	users UserDirectory
+}
+
+// WithUserDirectory lets CustomerUseCase.Lookup tell whether a VietGara user
+// owns a verified e-mail (FR-CUS-06). Without it no user is ever reported.
+func WithUserDirectory(users UserDirectory) Option {
+	return func(o *options) {
+		o.users = users
+	}
 }
 
 // WithAuditor records corrections and owner changes in the audit log

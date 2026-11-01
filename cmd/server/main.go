@@ -396,7 +396,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		vehicleRepo, customerRepo, vehicleHistory{quotes: quote.quotes, repairOrders: repairOrder.uc}, usage,
 		customerUsecase.WithAuditor(auditLog),
 	)
-	customerUC := customerUsecase.NewCustomerUseCase(customerRepo, vehicleRepo, usage)
+	customerUC := customerUsecase.NewCustomerUseCase(customerRepo, vehicleRepo, usage,
+		customerUsecase.WithUserDirectory(linkUsers{identity: identityUC}))
 	customerSrv := customerHandler.NewServer(customerUC, vehicleUC)
 
 	customerLinks := buildCustomerLinks(pool, customerRepo, identityUC, garages, auditLog)

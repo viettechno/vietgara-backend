@@ -26,7 +26,6 @@ func TestOutsidersCannotReachAnotherGarage(t *testing.T) {
 	outsider := fixture.NewBusiness(t, "iso-out")
 
 	garageOps := 0
-	declaredButNotServed := "GET /api/v1/garages/{garageId}/customers/lookup"
 
 	for _, op := range operations(t) {
 		if !op.garageScoped() {
@@ -39,19 +38,6 @@ func TestOutsidersCannotReachAnotherGarage(t *testing.T) {
 			t.Parallel()
 
 			target := op.url(home.GarageID)
-
-			if op.String() == declaredButNotServed {
-				// The contract declares it (FR-CUS-06, Backlog G-23) but no
-				// handler or policy serves it yet: every caller, the owner included,
-				// is refused with NO_POLICY. When it is implemented this
-				// branch fails and must go.
-				own, err := home.Owner.API.Probe(ctx, op.Method, target, nil)
-				require.NoError(t, err)
-				assert.Equal(t, http.StatusForbidden, own.Status)
-				assert.Contains(t, string(own.Body), "NO_POLICY", "the endpoint is served now: remove this exception")
-
-				return
-			}
 
 			probe, err := outsider.Owner.API.Probe(ctx, op.Method, target, op.body())
 			require.NoError(t, err)

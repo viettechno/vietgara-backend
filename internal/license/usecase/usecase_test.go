@@ -58,6 +58,39 @@ func TestTrialStart(t *testing.T) {
 	assert.Equal(t, domain.StatusTrial, sub.Status)
 }
 
+// The day boundary of the daily limit (E2E-QUO-012, E2E-BIL-010). A day is a
+// day in Vietnam (UTC+7), not in UTC: the count restarts at 17:00 UTC and keeps
+// going across midnight UTC.
+func TestDailyLimitFollowsTheVietnameseDay(t *testing.T) {
+	t.Parallel()
+
+	e := licensetest.NewEnv()
+	ctx := t.Context()
+
+	consume := func(at time.Time) error {
+		e.Now = at
+
+		return e.Entitlements.ConsumeTransaction(ctx, "owner")
+	}
+
+	// The trial allows two a day. 23:59:59 on 1 Nov in Vietnam is still that day.
+	lastSecond := time.Date(2026, 11, 1, 16, 59, 59, 0, time.UTC)
+	require.NoError(t, consume(lastSecond))
+	require.NoError(t, consume(lastSecond))
+	requireReason(t, consume(lastSecond), domain.ReasonPlanLimitReached)
+
+	// One second later it is 2 Nov in Vietnam: a new day, a new count.
+	midnight := lastSecond.Add(time.Second)
+	require.NoError(t, consume(midnight))
+
+	// Midnight UTC is 07:00 on 2 Nov in Vietnam: the same day as the line above, so the count goes on.
+	require.NoError(t, consume(time.Date(2026, 11, 2, 0, 0, 0, 0, time.UTC)))
+	requireReason(t, consume(time.Date(2026, 11, 2, 0, 0, 1, 0, time.UTC)), domain.ReasonPlanLimitReached)
+
+	// The next Vietnamese midnight is 17:00 UTC on 2 Nov.
+	require.NoError(t, consume(time.Date(2026, 11, 2, 17, 0, 0, 0, time.UTC)))
+}
+
 func TestSubscriptionFailures(t *testing.T) {
 	t.Parallel()
 

@@ -15,6 +15,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
+	"github.com/viettechno/vietgara-backend/testing/blackbox/timeshift"
 )
 
 const (
@@ -25,6 +26,7 @@ const (
 	statusActive  = supportv1.SupportGrantStatus_SUPPORT_GRANT_STATUS_ACTIVE
 	statusPending = supportv1.SupportGrantStatus_SUPPORT_GRANT_STATUS_PENDING
 	statusRevoked = supportv1.SupportGrantStatus_SUPPORT_GRANT_STATUS_REVOKED
+	statusExpired = supportv1.SupportGrantStatus_SUPPORT_GRANT_STATUS_EXPIRED
 )
 
 // supportCase is an owner with a garage and a customer, and an admin staff
@@ -337,4 +339,55 @@ func TestSupportDiagnosticViews(t *testing.T) {
 	for _, entry := range log[:len(log)-1] {
 		assert.Equal(t, "ListSupportNotifications", entry.GetMethod())
 	}
+}
+
+// Scenario: E2E-PLT-011: a grant ends by itself. An approved one stops
+// giving access when its time is up, and a request the owner never answers
+// expires after a week and no longer blocks a new one. Both read the stored
+// dates, so the dates are moved in the database (stubbed target only).
+func TestSupportGrantsEndByThemselves(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	c := newSupportCase(t, "plt011")
+	gid := c.garage.GetId()
+
+	// An approved grant whose time is up.
+	grant, err := c.staff.API.RequestSupportGrant(ctx, gid, "ticket 11", 1)
+	require.NoError(t, err)
+
+	_, err = c.owner.API.ApproveSupportGrant(ctx, gid, grant.GetId())
+	require.NoError(t, err)
+
+	_, err = c.staff.API.GetCustomer(ctx, gid, c.customer.GetId())
+	require.NoError(t, err)
+
+	timeshift.ExpireGrant(t, c.staff.Email)
+
+	_, err = c.staff.API.GetCustomer(ctx, gid, c.customer.GetId())
+	fixture.RequireAPIError(t, err, http.StatusForbidden, "GARAGE_ACCESS_DENIED")
+
+	grants, err := c.owner.API.ListGarageSupportGrants(ctx, gid)
+	require.NoError(t, err)
+	require.Len(t, grants, 1)
+	assert.Equal(t, statusExpired, grants[0].GetStatus())
+
+	// A request nobody answered for a week.
+	stale, err := c.staff.API.RequestSupportGrant(ctx, gid, "ticket 11 again", 1)
+	require.NoError(t, err)
+
+	timeshift.AgeRequest(t, c.staff.Email)
+
+	_, err = c.owner.API.ApproveSupportGrant(ctx, gid, stale.GetId())
+	fixture.RequireAPIError(t, err, http.StatusConflict, "GRANT_NOT_PENDING")
+
+	grants, err = c.owner.API.ListGarageSupportGrants(ctx, gid)
+	require.NoError(t, err)
+	require.Len(t, grants, 2)
+	assert.Equal(t, statusExpired, grants[0].GetStatus())
+	assert.Equal(t, statusExpired, grants[1].GetStatus())
+
+	// Neither blocks a new request.
+	_, err = c.staff.API.RequestSupportGrant(ctx, gid, "ticket 11 third", 1)
+	require.NoError(t, err)
 }

@@ -1,5 +1,5 @@
 // Package timeshift moves stored dates so that time-dependent rules can be
-// checked without waiting days: the SQL helpers H1 to H4 of the E2E
+// checked without waiting days: the SQL helpers H1 to H6 of the E2E
 // scenarios' README (section 3.4). They are setup only; every expected
 // result is still read through the public API or the test inbox. They need
 // direct database access, so they run on the stubbed target and skip
@@ -53,6 +53,26 @@ func ExpireInvitation(tb testing.TB, inviteeEmail string) {
 
 	exec(tb, `UPDATE staff_invitations SET expires_at = now() - interval '1 minute'
 		WHERE status = 'pending' AND user_id = (SELECT id FROM users WHERE email = $1)`, inviteeEmail)
+}
+
+// ExpireGrant is H5: the staff member's approved support grant ran out one
+// minute ago.
+func ExpireGrant(tb testing.TB, staffEmail string) {
+	tb.Helper()
+
+	exec(tb, `UPDATE support_access_grants SET expires_at = now() - interval '1 minute'
+		WHERE approved_at IS NOT NULL AND revoked_at IS NULL
+		AND staff_user_id = (SELECT id FROM users WHERE email = $1)`, staffEmail)
+}
+
+// AgeRequest is H6: the staff member's support request has waited eight
+// days for the owner, a day longer than a request lives.
+func AgeRequest(tb testing.TB, staffEmail string) {
+	tb.Helper()
+
+	exec(tb, `UPDATE support_access_grants SET requested_at = now() - interval '8 days'
+		WHERE approved_at IS NULL AND revoked_at IS NULL
+		AND staff_user_id = (SELECT id FROM users WHERE email = $1)`, staffEmail)
 }
 
 func exec(tb testing.TB, sql, arg string) {

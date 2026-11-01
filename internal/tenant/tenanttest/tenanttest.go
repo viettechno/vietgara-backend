@@ -132,6 +132,9 @@ func (s *Store) GarageAccess(_ context.Context, garageID, userID string) (*acces
 	}, nil
 }
 
+// LockOwnerUsage is a no-op: the store is guarded by its own mutex.
+func (s *Store) LockOwnerUsage(context.Context, string) error { return s.err("usage lock") }
+
 func (s *Store) OwnerUsage(_ context.Context, owner string) (int, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

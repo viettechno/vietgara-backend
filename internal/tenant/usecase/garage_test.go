@@ -82,6 +82,13 @@ func TestCreateGarageValidation(t *testing.T) {
 	requireReason(t, err, apperror.ReasonInternal)
 
 	delete(e.Store.Fail, "usage")
+
+	// A garage is never created when the owner's usage cannot be locked.
+	e.Store.Fail["usage lock"] = errBoom
+	_, err = e.UC.CreateGarage(ctx, owner, usecase.GarageFields{Name: new("G")})
+	requireReason(t, err, apperror.ReasonInternal)
+
+	delete(e.Store.Fail, "usage lock")
 	e.Store.Fail["garage.create"] = errBoom
 	_, err = e.UC.CreateGarage(ctx, owner, usecase.GarageFields{Name: new("G")})
 	requireReason(t, err, apperror.ReasonInternal)

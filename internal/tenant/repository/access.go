@@ -71,6 +71,14 @@ func (r *PostgresAccessReader) GarageAccess(ctx context.Context, garageID, userI
 	return result, nil
 }
 
+// LockOwnerUsage takes a transaction-scoped advisory lock keyed by the owner.
+func (r *PostgresAccessReader) LockOwnerUsage(ctx context.Context, ownerUserID string) error {
+	_, err := platformdb.QuerierFromContext(ctx, r.pool).Exec(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended('plan-usage:' || $1::text, 0))`, ownerUserID)
+
+	return err
+}
+
 // OwnerUsage counts the owner's active garages and staff (distinct
 // non-owner members and live pending invitees) across all their garages,
 // through the owner_usage() function (it sees past the caller's RLS scope).

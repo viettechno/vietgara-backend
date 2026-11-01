@@ -37,6 +37,63 @@ func (_m *MockUsageReader) EXPECT() *MockUsageReader_Expecter {
 	return &MockUsageReader_Expecter{mock: &_m.Mock}
 }
 
+// LockOwnerUsage provides a mock function for the type MockUsageReader
+func (_mock *MockUsageReader) LockOwnerUsage(ctx context.Context, ownerUserID string) error {
+	ret := _mock.Called(ctx, ownerUserID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for LockOwnerUsage")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = returnFunc(ctx, ownerUserID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockUsageReader_LockOwnerUsage_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LockOwnerUsage'
+type MockUsageReader_LockOwnerUsage_Call struct {
+	*mock.Call
+}
+
+// LockOwnerUsage is a helper method to define mock.On call
+//   - ctx context.Context
+//   - ownerUserID string
+func (_e *MockUsageReader_Expecter) LockOwnerUsage(ctx any, ownerUserID any) *MockUsageReader_LockOwnerUsage_Call {
+	return &MockUsageReader_LockOwnerUsage_Call{Call: _e.mock.On("LockOwnerUsage", ctx, ownerUserID)}
+}
+
+func (_c *MockUsageReader_LockOwnerUsage_Call) Run(run func(ctx context.Context, ownerUserID string)) *MockUsageReader_LockOwnerUsage_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockUsageReader_LockOwnerUsage_Call) Return(err error) *MockUsageReader_LockOwnerUsage_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockUsageReader_LockOwnerUsage_Call) RunAndReturn(run func(ctx context.Context, ownerUserID string) error) *MockUsageReader_LockOwnerUsage_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // OwnerUsage provides a mock function for the type MockUsageReader
 func (_mock *MockUsageReader) OwnerUsage(ctx context.Context, ownerUserID string) (int, int, error) {
 	ret := _mock.Called(ctx, ownerUserID)

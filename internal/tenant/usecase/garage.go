@@ -115,11 +115,12 @@ func (uc *TenantUseCase) CreateGarage(ctx context.Context, ownerID string, field
 		return nil, err
 	}
 
-	if err := uc.checkUsage(ctx, ownerID, LimitGarages); err != nil {
-		return nil, err
-	}
-
 	err := uc.Tx.WithTransaction(ctx, platformdb.UserScope(ownerID).Garage(g.ID), func(ctx context.Context) error {
+		// Inside the transaction that inserts the garage (see checkUsage).
+		if err := uc.checkUsage(ctx, ownerID, LimitGarages); err != nil {
+			return err
+		}
+
 		if err := uc.EnsureDefaultRoles(ctx, ownerID, uc.userLocale(ctx, ownerID)); err != nil {
 			return err
 		}
@@ -272,6 +273,13 @@ func (uc *TenantUseCase) setLogo(ctx context.Context, garageID string, key *stri
 
 // checkUsage enforces limit for ownerID against the current usage.
 func (uc *TenantUseCase) checkUsage(ctx context.Context, ownerID string, limit Limit) error {
+	// The lock lasts until the transaction ends, so the caller's insert
+	// must be in the same transaction as this check: a second request then
+	// waits here and counts what the first one added.
+	if err := uc.Usage.LockOwnerUsage(ctx, ownerID); err != nil {
+		return toAppError("lock plan usage", err)
+	}
+
 	garages, staff, err := uc.Usage.OwnerUsage(ctx, ownerID)
 	if err != nil {
 		return toAppError("read plan usage", err)

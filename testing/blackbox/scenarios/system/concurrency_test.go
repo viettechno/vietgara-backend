@@ -197,7 +197,6 @@ func TestRacesHaveOneWinner(t *testing.T) { //nolint:funlen // independent subte
 
 	t.Run("a trial owner gets one garage however many are asked for at once", func(t *testing.T) {
 		t.Parallel()
-		t.Skip("known defect, Backlog G-24: the garage limit is checked and then used without a lock, so parallel requests all pass")
 
 		owner := fixture.NewVerifiedOwner(t, "race-garage")
 
@@ -213,7 +212,6 @@ func TestRacesHaveOneWinner(t *testing.T) { //nolint:funlen // independent subte
 
 	t.Run("staff invitations stop at the plan's staff limit", func(t *testing.T) {
 		t.Parallel()
-		t.Skip("known defect, Backlog G-24: the staff limit is checked and then used without a lock, so parallel invitations can exceed it")
 
 		ctx := t.Context()
 		business := fixture.NewBusiness(t, "race-staff")

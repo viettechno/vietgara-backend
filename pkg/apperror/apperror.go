@@ -14,7 +14,9 @@ package apperror
 import (
 	"errors"
 	"fmt"
+	"slices"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -217,12 +219,12 @@ func ToGRPCError(err error) error {
 			return err
 		}
 
-		return &internalError{cause: err}
+		return unexpected(err)
 	}
 
 	code, known := grpcCodes[appErr.Code]
 	if !known || code == codes.Internal {
-		return &internalError{cause: err}
+		return unexpected(err)
 	}
 
 	st := status.New(code, appErr.Message)
@@ -243,6 +245,49 @@ func ToGRPCError(err error) error {
 	}
 
 	return withDetails.Err()
+}
+
+// unexpected is the answer to an error nothing handled. One kind is the
+// client's doing, not the server's: the database refused a value it cannot
+// store: text that is not a UUID in a path or an empty id in a body, a NUL
+// character, a number out of range, a text too long. That is a bad request,
+// not a 500 that pages the on-call channel. Only those SQLSTATEs count: the
+// rest of class 22 (division by zero, a datetime overflow in our own query)
+// is a server fault and stays internal.
+func unexpected(err error) error {
+	if rejectsValue(err) {
+		return ToGRPCError(New(CodeInvalidArgument, "a value in the request is not valid").WithReason(ReasonValidation))
+	}
+
+	return &internalError{cause: err}
+}
+
+// rejectsValue reports whether any error in the tree of err is a database
+// data exception. A joined error can also carry the "transaction is aborted"
+// follow-up of the failed statement, so the whole tree is searched, not just
+// the first PgError.
+func rejectsValue(err error) bool {
+	if pgErr, ok := err.(*pgconn.PgError); ok { //nolint:errorlint // each node of the tree is looked at by hand
+		return slices.Contains(rejectedValueStates, pgErr.Code)
+	}
+
+	switch wrapped := err.(type) { //nolint:errorlint // same: walking the tree
+	case interface{ Unwrap() []error }:
+		return slices.ContainsFunc(wrapped.Unwrap(), rejectsValue)
+	case interface{ Unwrap() error }:
+		return wrapped.Unwrap() != nil && rejectsValue(wrapped.Unwrap())
+	default:
+		return false
+	}
+}
+
+// rejectedValueStates are the SQLSTATEs of a value the database cannot store.
+var rejectedValueStates = []string{
+	"22P02", // invalid text representation (not a UUID, not a number)
+	"22021", // invalid byte sequence (a NUL character)
+	"22P05", // untranslatable character
+	"22003", // numeric value out of range
+	"22001", // string data right truncation (too long)
 }
 
 // internalError is the gRPC error of an unexpected failure. Clients receive

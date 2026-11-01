@@ -1,9 +1,11 @@
 package apperror_test
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
@@ -86,6 +88,13 @@ func TestToGRPCError(t *testing.T) {
 		{name: "internal hides details", err: apperror.Wrap(apperror.CodeInternal, "secret", errApperrorPostgres), wantCode: codes.Internal, wantMsg: "internal error"},
 		{name: "unknown code", err: apperror.New(apperror.Code("WEIRD"), "x"), wantCode: codes.Internal, wantMsg: "internal error"},
 		{name: "plain error", err: errApperrorRaw, wantCode: codes.Internal, wantMsg: "internal error"},
+		{name: "a value the database cannot store is a bad request", err: apperror.Internal("load", fmt.Errorf("scan: %w", &pgconn.PgError{Code: "22P02", Message: "invalid input syntax for type uuid"})), wantCode: codes.InvalidArgument, wantMsg: "a value in the request is not valid", wantReason: "VALIDATION_ERROR"},
+		{name: "a NUL character is a bad request too", err: &pgconn.PgError{Code: "22021"}, wantCode: codes.InvalidArgument, wantMsg: "a value in the request is not valid", wantReason: "VALIDATION_ERROR"},
+		{name: "a joined error with the aborted-transaction follow-up is still a bad request", err: apperror.Internal("get", errors.Join(&pgconn.PgError{Code: "22P02"}, &pgconn.PgError{Code: "25P02"})), wantCode: codes.InvalidArgument, wantMsg: "a value in the request is not valid", wantReason: "VALIDATION_ERROR"},
+		{name: "a server-side data exception stays internal", err: apperror.Internal("sum", &pgconn.PgError{Code: "22012", Message: "division by zero"}), wantCode: codes.Internal, wantMsg: "internal error"},
+		{name: "a number out of range is a bad request", err: &pgconn.PgError{Code: "22003"}, wantCode: codes.InvalidArgument, wantMsg: "a value in the request is not valid", wantReason: "VALIDATION_ERROR"},
+		{name: "other database errors stay internal", err: apperror.Internal("load", &pgconn.PgError{Code: "40001"}), wantCode: codes.Internal, wantMsg: "internal error"},
+		{name: "a handled error wrapping one keeps its own answer", err: apperror.Wrap(apperror.CodeNotFound, "gone", &pgconn.PgError{Code: "22P02"}), wantCode: codes.NotFound, wantMsg: "gone", wantReason: "NOT_FOUND"},
 		{name: "status passes through", err: status.Error(codes.Unavailable, "later"), wantCode: codes.Unavailable, wantMsg: "later"},
 	}
 

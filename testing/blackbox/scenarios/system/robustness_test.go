@@ -112,93 +112,15 @@ func serverErrors(t *testing.T, caller *session, garageID, junk string, withBodi
 // escaped path segment.
 var junkIDs = []string{"00000000-0000-0000-0000-000000000000", "not-a-uuid", "0", strings.Repeat("a", 300), "%2e%2e"}
 
-// knownServerErrors are the operations that answer 5xx to junk input, all
-// for one cause: a value the database rejects (text that is not a UUID, as
-// an id in the path or an empty id in the body, or a NUL character in a
-// name) reaches it, and nothing turns that into "not found" or a validation
-// error. Backlog G-26; the fix is a single translation of those database
-// errors. The test fails when the list
-// changes, so a new offender is noticed and a fixed one is crossed out.
-var knownServerErrors = []string{
-	"DELETE /api/v1/admin/platform-groups/{groupId}",
-	"DELETE /api/v1/admin/platform-groups/{groupId}/members/{userId}",
-	"DELETE /api/v1/admin/platform-roles/{roleId}",
-	"DELETE /api/v1/garages/{garageId}/quotes/{quoteId}",
-	"DELETE /api/v1/garages/{garageId}/repair-orders/{repairOrderId}/lines/{lineId}",
-	"DELETE /api/v1/garages/{garageId}/staff-groups/{groupId}",
-	"DELETE /api/v1/garages/{garageId}/staff/{staffId}",
-	"DELETE /api/v1/garages/{garageId}/stock-counts/{stockCountId}/lines/{lineId}",
-	"DELETE /api/v1/roles/{roleId}",
-	"GET /api/v1/admin/platform-groups/{groupId}",
-	"GET /api/v1/admin/platform-roles/{roleId}",
-	"GET /api/v1/admin/support-grants/{grantId}/notifications",
-	"GET /api/v1/admin/support-grants/{grantId}/outbox-events",
-	"GET /api/v1/garages/{garageId}/goods-receipts/{goodsReceiptId}",
-	"GET /api/v1/garages/{garageId}/goods-receipts/{goodsReceiptId}/pdf",
-	"GET /api/v1/garages/{garageId}/quotes/{quoteId}",
-	"GET /api/v1/garages/{garageId}/quotes/{quoteId}/pdf",
-	"GET /api/v1/garages/{garageId}/repair-orders/{repairOrderId}",
-	"GET /api/v1/garages/{garageId}/repair-orders/{repairOrderId}/part-returns",
-	"GET /api/v1/garages/{garageId}/repair-orders/{repairOrderId}/pdf",
-	"GET /api/v1/garages/{garageId}/repair-orders/{repairOrderId}/stock-issue",
-	"GET /api/v1/garages/{garageId}/repair-orders/{repairOrderId}/stock-issue/pdf",
-	"GET /api/v1/garages/{garageId}/settlements/{settlementId}",
-	"GET /api/v1/garages/{garageId}/settlements/{settlementId}/payments/{paymentId}/voucher-pdf",
-	"GET /api/v1/garages/{garageId}/settlements/{settlementId}/receipt-pdf",
-	"GET /api/v1/garages/{garageId}/stock-counts/{stockCountId}",
-	"GET /api/v1/garages/{garageId}/stock-counts/{stockCountId}/excel",
-	"GET /api/v1/garages/{garageId}/supplier-returns/{supplierReturnId}",
-	"GET /api/v1/garages/{garageId}/write-offs/{writeOffId}",
-	"GET /api/v1/roles/{roleId}",
-	"PATCH /api/v1/garages/{garageId}/stock-counts/{stockCountId}/lines/{lineId}",
-	"POST /api/v1/admin/platform-invitations",
-	"POST /api/v1/admin/platform-invitations/{invitationId}/revoke",
-	"POST /api/v1/admin/platform-roles",
-	"POST /api/v1/admin/subscriptions/{subscriptionId}/extensions",
-	"POST /api/v1/admin/support-grants/{grantId}:end",
-	"POST /api/v1/garages",
-	"POST /api/v1/garages/{garageId}/customers",
-	"POST /api/v1/garages/{garageId}/goods-receipts/{goodsReceiptId}/pdf:print",
-	"POST /api/v1/garages/{garageId}/goods-receipts/{goodsReceiptId}:cancel",
-	"POST /api/v1/garages/{garageId}/goods-receipts/{goodsReceiptId}:complete",
-	"POST /api/v1/garages/{garageId}/invitations",
-	"POST /api/v1/garages/{garageId}/jobs",
-	"POST /api/v1/garages/{garageId}/part-categories",
-	"POST /api/v1/garages/{garageId}/quotes/{quoteId}/conversion",
-	"POST /api/v1/garages/{garageId}/quotes/{quoteId}/decision",
-	"POST /api/v1/garages/{garageId}/quotes/{quoteId}/lines:fromJob",
-	"POST /api/v1/garages/{garageId}/quotes/{quoteId}/pdf:print",
-	"POST /api/v1/garages/{garageId}/quotes/{quoteId}/sending",
-	"POST /api/v1/garages/{garageId}/repair-orders/{repairOrderId}/cancellation",
-	"POST /api/v1/garages/{garageId}/repair-orders/{repairOrderId}/closing",
-	"POST /api/v1/garages/{garageId}/repair-orders/{repairOrderId}/lines",
-	"POST /api/v1/garages/{garageId}/repair-orders/{repairOrderId}/pdf:print",
-	"POST /api/v1/garages/{garageId}/repair-orders/{repairOrderId}/stock-issue/pdf:print",
-	"POST /api/v1/garages/{garageId}/settlements/{settlementId}/payments/{paymentId}/voucher-pdf:print",
-	"POST /api/v1/garages/{garageId}/settlements/{settlementId}/receipt-pdf:print",
-	"POST /api/v1/garages/{garageId}/stock-counts",
-	"POST /api/v1/garages/{garageId}/stock-counts/{stockCountId}/lines",
-	"POST /api/v1/garages/{garageId}/stock-counts/{stockCountId}:cancel",
-	"POST /api/v1/garages/{garageId}/stock-counts/{stockCountId}:complete",
-	"POST /api/v1/garages/{garageId}/stock-issues/{stockIssueId}:post",
-	"POST /api/v1/garages/{garageId}/supplier-returns/{supplierReturnId}:cancel",
-	"POST /api/v1/garages/{garageId}/suppliers",
-	"POST /api/v1/garages/{garageId}/support-grants/{grantId}:approve",
-	"POST /api/v1/garages/{garageId}/support-grants/{grantId}:revoke",
-	"POST /api/v1/garages/{garageId}/write-offs/{writeOffId}:cancel",
-	"POST /api/v1/me/platform-invitations/{invitationId}/accept",
-	"POST /api/v1/me/platform-invitations/{invitationId}/decline",
-	"POST /api/v1/roles",
-}
-
 // TestJunkInputNeverCausesAServerError: whatever a caller sends, the API
 // answers with a client error, not a 5xx (a 5xx pages the on-call channel,
 // NFR-OB-02, and hides the cause from the client). Every operation is tried
 // with junk ids and bodies of the wrong shape, as the owner and as a
-// platform admin; the operations that still answer 5xx are the known ones.
+// platform admin. A value the database cannot store (text that is not a
+// UUID, a NUL character) is a bad request, not a server error.
 //
 // Scenario: E2E-SYS-009: junk ids and bodies are refused with a client
-// error on every operation; the known exceptions are listed (Backlog G-26).
+// error on every operation.
 func TestJunkInputNeverCausesAServerError(t *testing.T) {
 	t.Parallel()
 
@@ -218,7 +140,7 @@ func TestJunkInputNeverCausesAServerError(t *testing.T) {
 
 	sort.Strings(got)
 
-	assert.Equal(t, knownServerErrors, compact(got), "the operations that answer 5xx to junk input")
+	assert.Empty(t, compact(got), "the operations that answer 5xx to junk input")
 }
 
 func compact(in []string) []string {

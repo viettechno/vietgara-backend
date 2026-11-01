@@ -181,6 +181,20 @@ func TestPaymentRepositoryOnPostgres(t *testing.T) {
 		require.Len(t, entries, 1)
 		assert.Equal(t, int64(5000), entries[0].BalanceAfter)
 
+		// The entries of one approval share a created_at: the order they were
+		// written in decides, newest first.
+		same := time.Now().UTC()
+		for _, balance := range []int64{7000, 6000, 1000} {
+			_, execErr := admin.ExecContext(ctx, `INSERT INTO credit_ledger (user_id, kind, amount, balance_after, created_at)
+				VALUES ($1, 'adjustment', 1, $2, $3)`, userID, balance, same)
+			require.NoError(t, execErr)
+		}
+
+		ordered, err := subs.ListCredit(ctx, userID)
+		require.NoError(t, err)
+		require.Len(t, ordered, 4)
+		assert.Equal(t, []int64{1000, 6000, 7000}, []int64{ordered[0].BalanceAfter, ordered[1].BalanceAfter, ordered[2].BalanceAfter}, "newest written first, whatever the ids")
+
 		settings, err := subs.Settings(ctx)
 		require.NoError(t, err)
 

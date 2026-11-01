@@ -285,7 +285,7 @@ func (r *PostgresRepository) AddCreditEntry(ctx context.Context, e *domain.Credi
 func (r *PostgresRepository) ListCredit(ctx context.Context, userID string) ([]*domain.CreditEntry, error) {
 	rows, err := platformdb.QuerierFromContext(ctx, r.pool).Query(ctx, `
 		SELECT id, user_id, kind::text, amount, balance_after, plan_payment_request_id::text, note, created_by::text, created_at
-		FROM credit_ledger WHERE user_id = $1 ORDER BY created_at DESC, id`, userID)
+		FROM credit_ledger WHERE user_id = $1 ORDER BY seq DESC`, userID)
 	if err != nil {
 		return nil, err
 	}

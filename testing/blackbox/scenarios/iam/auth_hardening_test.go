@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 
+	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/env"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
@@ -131,10 +132,17 @@ func TestCredentialRulesAtTheirEdges(t *testing.T) {
 
 	t.Run("passwords are 8 characters to 72 bytes, with no composition rule", func(t *testing.T) {
 		// bcrypt reads 72 bytes only: a longer password must be refused,
-		// not silently truncated (the message says "at least 8 characters"
-		// for it too, Backlog G-25).
-		for _, password := range []string{"", "Ab1#xyz", strings.Repeat("Ab1#", 18) + "x", strings.Repeat("Ab1#", 50)} {
-			fixture.RequireAPIError(t, register(fixture.UniqueEmail(t, "pw"), password), http.StatusUnprocessableEntity, "VALIDATION_ERROR")
+		// not silently truncated, and the message says so.
+		for _, password := range []string{"", "Ab1#xyz"} {
+			err := register(fixture.UniqueEmail(t, "pw"), password)
+			fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "VALIDATION_ERROR")
+			assert.Contains(t, client.AsAPIError(err).Message, "at least 8 characters")
+		}
+
+		for _, password := range []string{strings.Repeat("Ab1#", 18) + "x", strings.Repeat("Ab1#", 50)} {
+			err := register(fixture.UniqueEmail(t, "pw"), password)
+			fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "VALIDATION_ERROR")
+			assert.Contains(t, client.AsAPIError(err).Message, "at most 72 bytes")
 		}
 
 		for name, password := range map[string]string{

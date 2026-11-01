@@ -74,7 +74,8 @@ func TestSearchIgnoresDiacritics(t *testing.T) {
 
 	// The queries differ per kind: without marks, with them, in capitals.
 	queries := map[string][]string{
-		"customer": {"nguyen van anh", "Nguyễn Văn Ánh", "NGUYEN VAN"},
+		// The third is "Nguyễn" typed with combining marks, as a Mac keyboard can.
+		"customer": {"nguyen van anh", "Nguyễn Văn Ánh", "NGUYEN VAN", "Nguye\u0302\u0303n"},
 		"vehicle":  {"the thao dac biet", "Thể thao Đặc biệt", "THE THAO"},
 		"supplier": {"dai phat", "Đại Phát", "PHU TUNG"},
 		"part":     {"dau nhot", "Dầu nhớt", "TONG HOP"},

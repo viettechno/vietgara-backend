@@ -1,6 +1,7 @@
 package usecase_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -43,10 +44,12 @@ func TestRegisterValidation(t *testing.T) {
 		name   string
 		req    usecase.RegisterRequest
 		reason string
+		issue  string
 	}{
 		{name: "bad email", req: usecase.RegisterRequest{Email: "x", Password: "secret123", FullName: "A"}, reason: apperror.ReasonValidation},
 		{name: "no name", req: usecase.RegisterRequest{Email: "a@b.vn", Password: "secret123"}, reason: apperror.ReasonValidation},
 		{name: "short password", req: usecase.RegisterRequest{Email: "a@b.vn", Password: "short", FullName: "A"}, reason: apperror.ReasonValidation},
+		{name: "password over bcrypt's 72 bytes", req: usecase.RegisterRequest{Email: "a@b.vn", Password: strings.Repeat("a", 73), FullName: "A"}, reason: apperror.ReasonValidation, issue: apperror.IssueTooLong},
 		{name: "bad phone", req: usecase.RegisterRequest{Email: "a@b.vn", Password: "secret123", FullName: "A", Phone: new("12")}, reason: apperror.ReasonValidation},
 		{name: "email taken", req: usecase.RegisterRequest{Email: "OWNER@example.com", Password: "secret123", FullName: "A"}, reason: domain.ReasonEmailTaken},
 	}
@@ -55,6 +58,13 @@ func TestRegisterValidation(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := e.uc.Register(t.Context(), tt.req)
 			requireReason(t, err, tt.reason)
+
+			if tt.issue != "" {
+				appErr, ok := apperror.As(err)
+				require.True(t, ok)
+				require.NotEmpty(t, appErr.Details)
+				assert.Equal(t, tt.issue, appErr.Details[0].Issue)
+			}
 		})
 	}
 

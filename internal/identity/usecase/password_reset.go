@@ -86,8 +86,8 @@ func (uc *IdentityUseCase) VerifyPasswordResetOTP(ctx context.Context, rawEmail,
 // session out. Receiving the OTP proved control of the e-mail, so the
 // address counts as verified.
 func (uc *IdentityUseCase) ResetPassword(ctx context.Context, token, newPassword string) error {
-	if !domain.ValidPassword(newPassword) {
-		return apperror.Validation("newPassword", apperror.IssueTooShort, "password must have at least 8 characters")
+	if err := checkPassword("newPassword", newPassword); err != nil {
+		return err
 	}
 
 	userID, err := uc.sessions.ConsumeResetToken(ctx, token)

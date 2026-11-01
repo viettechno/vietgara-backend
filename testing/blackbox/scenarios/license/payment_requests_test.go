@@ -142,18 +142,17 @@ func TestPaymentRequestAmountAndCredit(t *testing.T) {
 	ledger, err := owner.API.CreditLedger(ctx)
 	require.NoError(t, err)
 	require.NotEmpty(t, ledger)
-	// The entries of one approval share a timestamp, so their order within
-	// it is not part of the contract (Backlog G-25): the balance is what the
-	// entries add up to.
-	var sum int64
+	// Newest first, in the order they were written even when one approval
+	// writes several entries at the same instant: the first entry ends at the
+	// balance, and every balance follows from the one below it.
+	require.NotEmpty(t, ledger)
+	assert.Equal(t, after.GetCreditBalance(), ledger[0].GetBalanceAfter(), "the newest entry ends at the balance")
 
-	for _, entry := range ledger {
-		sum += entry.GetAmount()
-
-		assert.GreaterOrEqual(t, entry.GetBalanceAfter(), int64(0), "the balance never goes below zero")
+	for i := range len(ledger) - 1 {
+		assert.Equal(t, ledger[i+1].GetBalanceAfter()+ledger[i].GetAmount(), ledger[i].GetBalanceAfter(),
+			"entry %d follows from the one written before it", i)
+		assert.GreaterOrEqual(t, ledger[i].GetBalanceAfter(), int64(0), "the balance never goes below zero")
 	}
-
-	assert.Equal(t, after.GetCreditBalance(), sum, "the ledger adds up to the balance")
 
 	// The next payment uses the balance automatically.
 	next, err := owner.API.CreatePlanPaymentRequest(ctx, big.GetId(), licensev1.PlanPaymentKind_PLAN_PAYMENT_KIND_CHANGE)

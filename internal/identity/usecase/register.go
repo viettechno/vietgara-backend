@@ -86,8 +86,8 @@ func newUser(req RegisterRequest) (*domain.User, string, error) {
 		return nil, "", apperror.Validation("fullName", apperror.IssueRequired, "full name is required")
 	}
 
-	if !domain.ValidPassword(req.Password) {
-		return nil, "", apperror.Validation("password", apperror.IssueTooShort, "password must have at least 8 characters")
+	if err := checkPassword("password", req.Password); err != nil {
+		return nil, "", err
 	}
 
 	phone, err := normalizeOptionalPhone(req.Phone)
@@ -172,5 +172,20 @@ func mapCreateError(err error) error {
 		return phoneTaken()
 	default:
 		return apperror.Internal("create user", err)
+	}
+}
+
+// checkPassword says why password does not meet the policy: too short (fewer
+// than MinPasswordLength characters) or too long (more than the 72 bytes
+// bcrypt reads, which it would otherwise cut silently). field names the
+// request field in the error.
+func checkPassword(field, password string) error {
+	switch {
+	case domain.ValidPassword(password):
+		return nil
+	case len(password) > domain.MaxPasswordBytes:
+		return apperror.Validation(field, apperror.IssueTooLong, "password must have at most 72 bytes")
+	default:
+		return apperror.Validation(field, apperror.IssueTooShort, "password must have at least 8 characters")
 	}
 }

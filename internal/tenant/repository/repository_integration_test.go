@@ -291,3 +291,67 @@ func TestRLS_TenantModel(t *testing.T) {
 		require.ErrorContains(t, err, "permission denied")
 	})
 }
+
+// TestLockOwnerUsageSerialisesTheSameOwner: while one transaction holds the
+// owner's plan-usage lock, a second transaction of the same owner waits for
+// it, one of another owner does not, and the lock is gone with the commit.
+// This is what makes "check the limit, then add" safe against requests at
+// the same moment (Backlog G-24).
+func TestLockOwnerUsageSerialisesTheSameOwner(t *testing.T) {
+	env := startPostgres(t)
+	ctx := t.Context()
+	reader := repository.NewPostgresAccessReader(env.appPool)
+	tx := dbpkg.NewTxManager(env.appPool)
+
+	owner := dbpkg.UserScope(env.userID)
+
+	acquired := make(chan struct{})
+	release := make(chan struct{})
+	holderDone := make(chan error, 1)
+
+	go func() {
+		holderDone <- tx.WithTransaction(ctx, owner, func(ctx context.Context) error {
+			if err := reader.LockOwnerUsage(ctx, env.userID); err != nil {
+				return err
+			}
+
+			close(acquired)
+			<-release
+
+			return nil
+		})
+	}()
+
+	<-acquired
+
+	waiterDone := make(chan error, 1)
+
+	go func() {
+		waiterDone <- tx.WithTransaction(ctx, owner, func(ctx context.Context) error {
+			return reader.LockOwnerUsage(ctx, env.userID)
+		})
+	}()
+
+	select {
+	case err := <-waiterDone:
+		t.Fatalf("the second transaction of the same owner did not wait (err=%v)", err)
+	case <-time.After(500 * time.Millisecond):
+	}
+
+	other := dbpkg.UserScope(env.staffID)
+	require.NoError(t, tx.WithTransaction(ctx, other, func(ctx context.Context) error {
+		return reader.LockOwnerUsage(ctx, env.staffID)
+	}), "another owner is not held up")
+
+	close(release)
+	require.NoError(t, <-holderDone)
+
+	select {
+	case err := <-waiterDone:
+		require.NoError(t, err, "the waiter goes on once the holder commits")
+	case <-time.After(5 * time.Second):
+		t.Fatal("the second transaction is still waiting after the commit")
+	}
+
+	assert.NoError(t, reader.LockOwnerUsage(ctx, env.userID), "outside a transaction the lock is a harmless no-op")
+}

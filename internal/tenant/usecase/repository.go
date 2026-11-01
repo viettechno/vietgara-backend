@@ -82,6 +82,11 @@ type InvitationRepository interface {
 // their garages.
 type UsageReader interface {
 	OwnerUsage(ctx context.Context, ownerUserID string) (garages, staff int, err error)
+	// LockOwnerUsage serialises everything that checks and then uses the
+	// owner's plan limits: it holds a lock on the owner until the current
+	// transaction ends, so a second request waits and then counts the first
+	// one's garage or invitation. Without a transaction it does nothing.
+	LockOwnerUsage(ctx context.Context, ownerUserID string) error
 }
 
 // Limit names a plan limit (License Management).

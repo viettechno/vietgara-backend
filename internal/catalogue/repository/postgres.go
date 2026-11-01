@@ -39,7 +39,7 @@ const (
 	// lists deactivated parts, and $6 is an exact barcode ("" disables it).
 	partSearch = partFrom + `
 		WHERE i.garage_id = $1 AND i.deleted_at IS NULL AND ($5::bool OR i.is_active)
-		AND ($2::text = '' OR i.sku ILIKE $2 OR i.name ILIKE $2 OR i.brand ILIKE $2
+		AND ($2::text = '' OR i.sku ILIKE $2 OR unaccent(i.name) ILIKE unaccent($2) OR unaccent(i.brand) ILIKE unaccent($2)
 			OR EXISTS (SELECT 1 FROM part_barcodes b
 			           WHERE b.garage_id = i.garage_id AND b.part_id = i.id AND lower(b.barcode) = lower($6)))
 		AND (cardinality($3::uuid[]) = 0 OR i.category_id = ANY($3::uuid[]))

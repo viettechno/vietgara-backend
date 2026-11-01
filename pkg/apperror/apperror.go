@@ -15,7 +15,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"strings"
 
 	"github.com/jackc/pgx/v5/pgconn"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
@@ -250,9 +249,11 @@ func ToGRPCError(err error) error {
 
 // unexpected is the answer to an error nothing handled. One kind is the
 // client's doing, not the server's: the database refused a value it cannot
-// store (SQLSTATE class 22, a "data exception"): text that is not a UUID in a
-// path or an empty id in a body, a NUL character, a number out of range.
-// That is a bad request, not a 500 that pages the on-call channel.
+// store: text that is not a UUID in a path or an empty id in a body, a NUL
+// character, a number out of range, a text too long. That is a bad request,
+// not a 500 that pages the on-call channel. Only those SQLSTATEs count: the
+// rest of class 22 (division by zero, a datetime overflow in our own query)
+// is a server fault and stays internal.
 func unexpected(err error) error {
 	if rejectsValue(err) {
 		return ToGRPCError(New(CodeInvalidArgument, "a value in the request is not valid").WithReason(ReasonValidation))
@@ -267,7 +268,7 @@ func unexpected(err error) error {
 // the first PgError.
 func rejectsValue(err error) bool {
 	if pgErr, ok := err.(*pgconn.PgError); ok { //nolint:errorlint // each node of the tree is looked at by hand
-		return strings.HasPrefix(pgErr.Code, dataExceptionClass)
+		return slices.Contains(rejectedValueStates, pgErr.Code)
 	}
 
 	switch wrapped := err.(type) { //nolint:errorlint // same: walking the tree
@@ -280,10 +281,14 @@ func rejectsValue(err error) bool {
 	}
 }
 
-// dataExceptionClass is the SQLSTATE class of values the database cannot
-// store (22P02 invalid text representation, 22021 invalid byte sequence,
-// 22003 numeric value out of range, ...).
-const dataExceptionClass = "22"
+// rejectedValueStates are the SQLSTATEs of a value the database cannot store.
+var rejectedValueStates = []string{
+	"22P02", // invalid text representation (not a UUID, not a number)
+	"22021", // invalid byte sequence (a NUL character)
+	"22P05", // untranslatable character
+	"22003", // numeric value out of range
+	"22001", // string data right truncation (too long)
+}
 
 // internalError is the gRPC error of an unexpected failure. Clients receive
 // an opaque Internal status; the cause stays on the error, where

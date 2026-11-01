@@ -68,9 +68,10 @@ func (s *RedisStore) ConsumeRefreshToken(ctx context.Context, token string) (str
 		return "", err
 	}
 
-	if err := s.client.SRem(ctx, userSessionsKey(userID), token).Err(); err != nil {
-		return "", err
-	}
+	// The per-user index only serves RevokeAllRefreshTokens, which deletes
+	// keys that are already gone without complaint: a failed cleanup must
+	// not lose a token that was handed out.
+	_ = s.client.SRem(ctx, userSessionsKey(userID), token).Err()
 
 	return userID, nil
 }

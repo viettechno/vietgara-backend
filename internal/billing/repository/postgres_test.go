@@ -329,6 +329,24 @@ func TestPostgresRepository_RecordPayment(t *testing.T) {
 		require.ErrorIs(t, err, errBoom)
 	})
 
+	t.Run("a payment that would pass the total is refused", func(t *testing.T) {
+		t.Parallel()
+
+		repo := repository.NewPostgresRepository(nil)
+		payment := &domain.Payment{ID: "p-1", Amount: 300_000, Method: domain.MethodCash}
+
+		// Another payment took the room between the use case's check and
+		// this update: the guarded update matches no row.
+		tx := dbtest.New(t).
+			ExpectQueryRow("INSERT INTO settlement_payments", dbtest.Row(now)).
+			ExpectQueryRow("UPDATE settlements SET paid_amount", dbtest.ErrRow(pgx.ErrNoRows)).
+			WithArgs(func(args []any) { require.Equal(t, int64(300_000), args[2]) })
+		ctx := tx.Context(t.Context())
+
+		_, err := repo.RecordPayment(ctx, garageID, settlementID, payment)
+		require.ErrorIs(t, err, domain.ErrInvalidPaymentAmount)
+	})
+
 	t.Run("running total update failure", func(t *testing.T) {
 		t.Parallel()
 

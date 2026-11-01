@@ -58,8 +58,9 @@ func TestTrialStart(t *testing.T) {
 	assert.Equal(t, domain.StatusTrial, sub.Status)
 }
 
-// The day boundary of the daily limit (E2E-QUO-012, E2E-BIL-010): it counts
-// business days in Vietnam (UTC+7), not UTC days: the count restarts at 17:00 UTC, and it keeps going across midnight UTC.
+// The day boundary of the daily limit (E2E-QUO-012, E2E-BIL-010). A day is a
+// day in Vietnam (UTC+7), not in UTC: the count restarts at 17:00 UTC and keeps
+// going across midnight UTC.
 func TestDailyLimitFollowsTheVietnameseDay(t *testing.T) {
 	t.Parallel()
 

@@ -381,6 +381,12 @@ func TestSupportGrantsEndByThemselves(t *testing.T) {
 	_, err = c.owner.API.ApproveSupportGrant(ctx, gid, stale.GetId())
 	fixture.RequireAPIError(t, err, http.StatusConflict, "GRANT_NOT_PENDING")
 
+	grants, err = c.owner.API.ListGarageSupportGrants(ctx, gid)
+	require.NoError(t, err)
+	require.Len(t, grants, 2)
+	assert.Equal(t, statusExpired, grants[0].GetStatus())
+	assert.Equal(t, statusExpired, grants[1].GetStatus())
+
 	// Neither blocks a new request.
 	_, err = c.staff.API.RequestSupportGrant(ctx, gid, "ticket 11 third", 1)
 	require.NoError(t, err)

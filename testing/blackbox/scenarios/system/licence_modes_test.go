@@ -29,7 +29,6 @@ var exemptFromLicense = map[string]bool{
 	"GET /api/v1/garages/{garageId}/support-grants":                    true,
 	"POST /api/v1/garages/{garageId}/support-grants/{grantId}:approve": true,
 	"POST /api/v1/garages/{garageId}/support-grants/{grantId}:revoke":  true,
-	"GET /api/v1/garages/{garageId}/customers/lookup":                  true, // declared, not served: see TestOutsidersCannotReachAnotherGarage
 }
 
 func isLicenceError(body []byte) bool {
@@ -105,7 +104,7 @@ func TestReadOnlyAndSuspendedModesCoverEveryEndpoint(t *testing.T) {
 
 	t.Run("the exempt operations still answer", func(t *testing.T) {
 		for _, op := range ops {
-			if !exemptFromLicense[op.String()] || op.String() == "GET /api/v1/garages/{garageId}/customers/lookup" {
+			if !exemptFromLicense[op.String()] {
 				continue
 			}
 

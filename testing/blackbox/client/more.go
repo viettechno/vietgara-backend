@@ -194,8 +194,9 @@ func (c *Client) ActivateCustomer(ctx context.Context, garageID, customerID stri
 		&customerv1.ActivateCustomerRequest{GarageId: garageID, CustomerId: customerID})
 }
 
-// LookupCustomers finds a garage's customers by exact phone and/or e-mail.
-func (c *Client) LookupCustomers(ctx context.Context, garageID, phone, email string) ([]*customerv1.Customer, error) {
+// LookupCustomers finds a garage's customers by exact phone and/or e-mail
+// and says whether a VietGara user owns the e-mail.
+func (c *Client) LookupCustomers(ctx context.Context, garageID, phone, email string) (*customerv1.LookupCustomersResponse, error) {
 	query := url.Values{}
 	if phone != "" {
 		query.Set("phone", phone)
@@ -210,9 +211,7 @@ func (c *Client) LookupCustomers(ctx context.Context, garageID, phone, email str
 		path += "?" + encoded
 	}
 
-	resp, err := call[customerv1.LookupCustomersResponse](ctx, c, http.MethodGet, path, nil)
-
-	return resp.GetData(), err
+	return call[customerv1.LookupCustomersResponse](ctx, c, http.MethodGet, path, nil)
 }
 
 // RequestCustomerUserLink asks to link a customer profile with the

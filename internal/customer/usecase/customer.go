@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/viettechno/vietgara-backend/internal/customer/domain"
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
 	"github.com/viettechno/vietgara-backend/pkg/email"
 	"github.com/viettechno/vietgara-backend/pkg/lifecycle"
 	"github.com/viettechno/vietgara-backend/pkg/phone"
@@ -219,6 +220,94 @@ func (uc *CustomerUseCase) List(ctx context.Context, req ListCustomersRequest) (
 	}
 
 	return &Page[*domain.Customer]{Items: items, Total: total, Page: page.Page, PageSize: page.PageSize}, nil
+}
+
+// maxLookupMatches caps the customers a lookup lists: a contact belongs to
+// a handful of profiles at most.
+const maxLookupMatches = 20
+
+// LookupResult is what a lookup found.
+type LookupResult struct {
+	// Customers are the garage's live customers whose phone or e-mail is
+	// exactly the one asked for.
+	Customers []*domain.Customer
+	// UserExists tells whether a VietGara user owns this verified e-mail.
+	// Nothing else about the user is ever returned.
+	UserExists bool
+}
+
+// Lookup finds the garage's customers by an exact phone and/or e-mail while
+// a quote is being prepared, and says whether a user owns the e-mail, so the
+// advisor can offer a link request (FR-CUS-06). The phone matches in its
+// E.164 form, so 0911000001, +84911000001 and "0911 000 001" are one.
+func (uc *CustomerUseCase) Lookup(ctx context.Context, garageID, rawPhone, rawEmail string) (*LookupResult, error) {
+	wantPhone, wantEmail, err := lookupContacts(rawPhone, rawEmail)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &LookupResult{Customers: []*domain.Customer{}}
+	seen := map[string]bool{}
+
+	for _, key := range []string{wantPhone, wantEmail} {
+		if key == "" {
+			continue
+		}
+
+		found, _, err := uc.customers.List(ctx, garageID, ListFilter{Query: key, Limit: maxLookupMatches})
+		if err != nil {
+			return nil, toAppError("look up customers", err)
+		}
+
+		for _, c := range found {
+			if !seen[c.ID] && matchesContact(c, wantPhone, wantEmail) {
+				seen[c.ID] = true
+				result.Customers = append(result.Customers, c)
+			}
+		}
+	}
+
+	if wantEmail != "" && uc.opts.users != nil {
+		_, result.UserExists, err = uc.opts.users.FindVerifiedByEmail(ctx, wantEmail)
+		if err != nil {
+			return nil, toAppError("look up the user", err)
+		}
+	}
+
+	return result, nil
+}
+
+// lookupContacts normalises the phone (E.164) and the e-mail of a lookup;
+// one of them at least must be given.
+func lookupContacts(rawPhone, rawEmail string) (normalizedPhone, normalizedEmail string, err error) {
+	rawPhone, rawEmail = strings.TrimSpace(rawPhone), strings.TrimSpace(rawEmail)
+	if rawPhone == "" && rawEmail == "" {
+		return "", "", apperror.Validation("phone", apperror.IssueRequired, "give a phone number or an e-mail address")
+	}
+
+	if rawPhone != "" {
+		if normalizedPhone, err = phone.Normalize(rawPhone); err != nil {
+			return "", "", toAppError("look up customers", err)
+		}
+	}
+
+	if rawEmail != "" {
+		if normalizedEmail, err = email.Normalize(rawEmail); err != nil {
+			return "", "", toAppError("look up customers", err)
+		}
+	}
+
+	return normalizedPhone, normalizedEmail, nil
+}
+
+// matchesContact reports whether c has exactly the given phone or e-mail
+// (an empty one is not asked for).
+func matchesContact(c *domain.Customer, wantPhone, wantEmail string) bool {
+	if wantPhone != "" && c.Phone != nil && *c.Phone == wantPhone {
+		return true
+	}
+
+	return wantEmail != "" && c.Email != nil && strings.EqualFold(*c.Email, wantEmail)
 }
 
 // Delete follows the delete-or-deactivate rule (FR-CAT-07): a customer that

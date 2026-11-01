@@ -109,6 +109,24 @@ func (s *Server) ListCustomers(ctx context.Context, req *customerv1.ListCustomer
 	})
 }
 
+// LookupCustomers finds the garage's customers by an exact phone or e-mail
+// and says whether a VietGara user owns the e-mail (FR-CUS-06).
+func (s *Server) LookupCustomers(ctx context.Context, req *customerv1.LookupCustomersRequest) (*customerv1.LookupCustomersResponse, error) {
+	return run(ctx, func(string) (*customerv1.LookupCustomersResponse, error) {
+		found, err := s.customers.Lookup(ctx, req.GetGarageId(), req.GetPhone(), req.GetEmail())
+		if err != nil {
+			return nil, err
+		}
+
+		resp := &customerv1.LookupCustomersResponse{Data: make([]*customerv1.Customer, 0, len(found.Customers)), UserExists: found.UserExists}
+		for _, c := range found.Customers {
+			resp.Data = append(resp.Data, customerToProto(c))
+		}
+
+		return resp, nil
+	})
+}
+
 // DeleteCustomer deletes or deactivates a customer (FR-CAT-07) and answers
 // which; with dry_run it only says which.
 //

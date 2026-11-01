@@ -20,9 +20,10 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 15)
+	assert.Len(t, p, 16)
 	assert.Equal(t, access.CustomerWrite, p[customerv1.CustomerService_CreateCustomer_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.CustomerRead, p[customerv1.VehicleService_GetVehicleHistory_FullMethodName].Garage.Permission)
+	assert.Equal(t, access.CustomerRead, p[customerv1.CustomerService_LookupCustomers_FullMethodName].Garage.Permission)
 }
 
 func existingCustomer() *domain.Customer {
@@ -83,6 +84,19 @@ func TestCustomerRPCs(t *testing.T) {
 	e.customers.EXPECT().List(anyArg, garageID, anyArg).Return(nil, 0, assert.AnError).Once()
 	_, err = e.srv.ListCustomers(ctx, &customerv1.ListCustomersRequest{GarageId: garageID})
 	require.Error(t, err)
+
+	// A lookup lists the exact contact; none given is a validation error.
+	stored := existingCustomer()
+	stored.Phone = new("+84901234567")
+
+	e.customers.EXPECT().List(anyArg, garageID, anyArg).Return([]*domain.Customer{stored}, 1, nil).Once()
+	found, err := e.srv.LookupCustomers(ctx, &customerv1.LookupCustomersRequest{GarageId: garageID, Phone: "0901 234 567"})
+	require.NoError(t, err)
+	assert.Len(t, found.GetData(), 1)
+	assert.False(t, found.GetUserExists())
+
+	_, err = e.srv.LookupCustomers(ctx, &customerv1.LookupCustomersRequest{GarageId: garageID})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err))
 
 	// An unused customer is deleted with their vehicles.
 	e.customers.EXPECT().FindByID(anyArg, garageID, "c-1").Return(existingCustomer(), nil).Once()

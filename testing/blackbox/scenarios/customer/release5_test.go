@@ -5,6 +5,7 @@ package customer_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -651,4 +652,64 @@ func TestDeleteOrDeactivate(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, []int{http.StatusForbidden, http.StatusNotFound}, client.AsAPIError(err).Status)
 	})
+}
+
+// Scenario: E2E-CUS-014: the lookup lists the garage's customers with exactly
+// this phone or e-mail, whatever the form, and says whether a user owns the
+// e-mail without saying who; another garage's customers never show.
+func TestLookupCustomers(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	mine := fixture.NewBusiness(t, "cus-lookup")
+	other := fixture.NewBusiness(t, "cus-lookup-other")
+	person := fixture.NewVerifiedOwner(t, "cus-lookup-person")
+
+	phone, neighbour, email := "0911000141", "0911000142", person.Email
+
+	an, err := mine.Owner.API.CreateCustomer(ctx, mine.GarageID, &customerv1.Customer{FullName: "QA Customer Lookup An", Phone: &phone, Email: &email})
+	require.NoError(t, err)
+
+	_, err = mine.Owner.API.CreateCustomer(ctx, mine.GarageID, &customerv1.Customer{FullName: "QA Customer Lookup Neighbour", Phone: &neighbour})
+	require.NoError(t, err)
+
+	_, err = other.Owner.API.CreateCustomer(ctx, other.GarageID, &customerv1.Customer{FullName: "QA Customer Lookup Elsewhere", Phone: &phone})
+	require.NoError(t, err)
+
+	for _, written := range []string{"0911000141", "+84911000141", "0911 000 141", "84911000141"} {
+		found, lookupErr := mine.Owner.API.LookupCustomers(ctx, mine.GarageID, written, "")
+		require.NoError(t, lookupErr, written)
+		require.Len(t, found.GetData(), 1, "%q finds only the exact number, not its neighbour", written)
+		assert.Equal(t, an.GetId(), found.GetData()[0].GetId())
+		assert.False(t, found.GetUserExists(), "no e-mail was asked about")
+	}
+
+	byEmail, err := mine.Owner.API.LookupCustomers(ctx, mine.GarageID, "", strings.ToUpper(person.Email))
+	require.NoError(t, err)
+	require.Len(t, byEmail.GetData(), 1, "an e-mail matches whatever its case")
+	assert.True(t, byEmail.GetUserExists(), "a verified VietGara user owns it")
+
+	both, err := mine.Owner.API.LookupCustomers(ctx, mine.GarageID, phone, email)
+	require.NoError(t, err)
+	assert.Len(t, both.GetData(), 1, "a profile that matches both is listed once")
+
+	nobody, err := mine.Owner.API.LookupCustomers(ctx, mine.GarageID, "", "nobody.owns.this@vietgara.test")
+	require.NoError(t, err)
+	assert.Empty(t, nobody.GetData())
+	assert.False(t, nobody.GetUserExists())
+
+	elsewhere, err := other.Owner.API.LookupCustomers(ctx, other.GarageID, "", person.Email)
+	require.NoError(t, err)
+	assert.Empty(t, elsewhere.GetData(), "the other garage has no customer with this e-mail")
+	assert.True(t, elsewhere.GetUserExists(), "the platform-wide answer is the same for every garage")
+
+	_, err = mine.Owner.API.LookupCustomers(ctx, mine.GarageID, "", "")
+	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "VALIDATION_ERROR")
+
+	technician := mine.AddStaff(t, "Technician")
+	_, err = technician.API.LookupCustomers(ctx, mine.GarageID, phone, "")
+	require.Error(t, err, "customers are not for a technician")
+
+	_, err = other.Owner.API.LookupCustomers(ctx, mine.GarageID, phone, "")
+	require.Error(t, err, "an outsider cannot look into another garage")
 }

@@ -23,7 +23,7 @@ const (
 	vehicleSearch = vehicleFrom + `
 		WHERE v.garage_id = $1 AND v.deleted_at IS NULL AND ($5::bool OR (v.is_active AND c.is_active))
 		AND ($2::uuid IS NULL OR v.customer_id = $2::uuid)
-		AND ($3::text = '' OR v.make ILIKE $3 OR v.model ILIKE $3 OR v.vin ILIKE $3
+		AND ($3::text = '' OR unaccent(v.make) ILIKE unaccent($3) OR unaccent(v.model) ILIKE unaccent($3) OR v.vin ILIKE $3
 			OR ($4::text <> '' AND v.license_plate_key LIKE $4))`
 )
 

@@ -32,8 +32,8 @@ const (
 	// either. $4 also lists deactivated suppliers.
 	supplierSearch = ` FROM suppliers s
 		WHERE s.garage_id = $1 AND s.deleted_at IS NULL AND ($4::bool OR s.is_active)
-		AND ($2::text = '' OR s.name ILIKE $2 OR s.tax_code ILIKE $2
-			OR s.contact_info->>'contact_person' ILIKE $2 OR s.contact_info->>'email' ILIKE $2
+		AND ($2::text = '' OR unaccent(s.name) ILIKE unaccent($2) OR s.tax_code ILIKE $2
+			OR unaccent(s.contact_info->>'contact_person') ILIKE unaccent($2) OR s.contact_info->>'email' ILIKE $2
 			OR ($3::text <> '' AND s.contact_info->>'phone' LIKE $3))`
 )
 

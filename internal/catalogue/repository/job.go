@@ -157,7 +157,7 @@ func (r *PostgresRepository) UpdateJob(ctx context.Context, j *domain.Job, repla
 // ListJobs returns one page of live jobs ordered by category and name.
 func (r *PostgresRepository) ListJobs(ctx context.Context, garageID string, f usecase.JobFilter) ([]*domain.Job, int, error) {
 	const where = ` FROM jobs j WHERE j.garage_id = $1 AND j.deleted_at IS NULL AND ($2::bool OR j.is_active)
-		AND ($3::text = '' OR j.name ILIKE $3 OR j.category ILIKE $3)
+		AND ($3::text = '' OR unaccent(j.name) ILIKE unaccent($3) OR unaccent(j.category) ILIKE unaccent($3))
 		AND ($4::text = '' OR lower(j.category) = lower($4))`
 
 	pattern := containsPattern(f.Query)

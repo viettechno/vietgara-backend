@@ -20,13 +20,13 @@ const (
 			ORDER BY (l.status IN ('requested', 'linked')) DESC, l.created_at DESC LIMIT 1)`
 
 	// customerSearch filters live customers of garage $1. $2 is an ILIKE
-	// pattern over name/email, $3 a compact pattern over the plates of the
+	// pattern over name (ignoring diacritics) and email, $3 a compact pattern over the plates of the
 	// customer's vehicles and $4 the digits to look for in the phone (stored
 	// as E.164, see pkg/phone); "" disables either filter. $5 also lists
 	// deactivated customers.
 	customerSearch = ` FROM customers c
 		WHERE c.garage_id = $1 AND c.deleted_at IS NULL AND ($5::bool OR c.is_active)
-		AND ($2::text = '' OR c.full_name ILIKE $2 OR c.email ILIKE $2
+		AND ($2::text = '' OR unaccent(c.full_name) ILIKE unaccent($2) OR c.email ILIKE $2
 			OR ($4::text <> '' AND c.phone LIKE $4)
 			OR ($3::text <> '' AND EXISTS (
 				SELECT 1 FROM vehicles v

@@ -32,17 +32,6 @@ var exemptFromLicense = map[string]bool{
 	"GET /api/v1/garages/{garageId}/customers/lookup":                  true, // declared, not served: see TestOutsidersCannotReachAnotherGarage
 }
 
-// downloads are the reads that return a file. The read-only rule treats a
-// method as a read only when its name starts with Get, List or Lookup, and
-// these are named Download or Export, so they are refused with
-// SUBSCRIPTION_READ_ONLY although Business Procedures P2 says a past-due
-// owner can "read everything". Backlog G-22 tracks the fix; when it lands
-// this list empties and the subtest below fails until the exception goes.
-func isDownload(o operation) bool {
-	return o.Method == http.MethodGet && (strings.HasSuffix(o.Path, "/pdf") || strings.HasSuffix(o.Path, "-pdf") ||
-		strings.HasSuffix(o.Path, "/excel") || strings.HasSuffix(o.Path, "/template"))
-}
-
 func isLicenceError(body []byte) bool {
 	text := string(body)
 
@@ -56,7 +45,8 @@ func isLicenceError(body []byte) bool {
 // checked on the same garage, one after the other, across the whole API.
 //
 // Scenario: E2E-SYS-003: read-only and suspended modes refuse every write
-// and, once suspended, every read, on every garage-scoped endpoint.
+// (printing included) and, once suspended, every read, on every
+// garage-scoped endpoint; a past-due owner can still download their files.
 func TestReadOnlyAndSuspendedModesCoverEveryEndpoint(t *testing.T) {
 	t.Parallel()
 
@@ -74,8 +64,6 @@ func TestReadOnlyAndSuspendedModesCoverEveryEndpoint(t *testing.T) {
 	waitForEntitlement(t, business, func(readOnly bool) bool { return readOnly })
 
 	t.Run("read-only", func(t *testing.T) {
-		var downloads []string
-
 		for _, op := range ops {
 			if !op.garageScoped() || exemptFromLicense[op.String()] {
 				continue
@@ -84,24 +72,16 @@ func TestReadOnlyAndSuspendedModesCoverEveryEndpoint(t *testing.T) {
 			probe, err := owner.API.Probe(ctx, op.Method, op.url(business.GarageID), op.body())
 			require.NoError(t, err, op.String())
 
-			switch {
-			case op.writes():
+			if op.writes() {
 				assert.Equal(t, http.StatusForbidden, probe.Status, "%s: %s", op, probe.Body)
 				assert.Contains(t, string(probe.Body), "SUBSCRIPTION_READ_ONLY", "%s", op)
-			case isDownload(op):
-				if isLicenceError(probe.Body) {
-					downloads = append(downloads, op.String())
-				}
-			default:
-				assert.False(t, isLicenceError(probe.Body), "a read is refused in read-only mode: %s: %s", op, probe.Body)
-			}
-		}
 
-		// Known gap (G-22): every file download is refused. Delete this
-		// expectation, and assert the downloads are not refused above,
-		// when the rule is fixed.
-		assert.NotEmpty(t, downloads, "downloads are no longer refused in read-only mode: make them reads in the loop above")
-		t.Logf("downloads refused while read-only (G-22): %d", len(downloads))
+				continue
+			}
+
+			// Reads, file downloads included ("read everything", P2).
+			assert.False(t, isLicenceError(probe.Body), "a read is refused in read-only mode: %s: %s", op, probe.Body)
+		}
 	})
 
 	// Suspended: locked.

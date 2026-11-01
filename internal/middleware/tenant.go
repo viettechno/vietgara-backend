@@ -148,7 +148,7 @@ func authorizeGarage(
 	case LicenseLocked:
 		return nil, apperror.New(apperror.CodeFailedPrecondition, msgLicenseLocked).WithReason(ReasonSubscriptionSuspended)
 	case LicenseReadOnly:
-		if !isReadMethod(method) {
+		if !allowedWhenReadOnly(method) {
 			return nil, apperror.New(apperror.CodePermissionDenied, msgLicenseReadOnly).WithReason(ReasonSubscriptionReadOnly)
 		}
 	case LicenseFull:

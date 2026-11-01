@@ -110,3 +110,20 @@ func isReadMethod(fullMethod string) bool {
 
 	return strings.HasPrefix(name, "Get") || strings.HasPrefix(name, "List") || strings.HasPrefix(name, "Lookup")
 }
+
+// isFileReadMethod reports whether an RPC only hands out a file of data the
+// caller can already read: Export* (PDFs and Excel reports) and Download*
+// (import templates). Print* is not one: it writes the print log.
+func isFileReadMethod(fullMethod string) bool {
+	name := path.Base(fullMethod)
+
+	return strings.HasPrefix(name, "Export") || strings.HasPrefix(name, "Download")
+}
+
+// allowedWhenReadOnly reports whether an RPC may run while the owner's
+// subscription is past due: everything that reads, files included ("read
+// everything, create nothing", Business Procedures P2). A support session
+// uses isReadMethod alone, so it still cannot export.
+func allowedWhenReadOnly(fullMethod string) bool {
+	return isReadMethod(fullMethod) || isFileReadMethod(fullMethod)
+}

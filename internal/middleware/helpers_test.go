@@ -20,6 +20,8 @@ const (
 	methodUser     = "/test.v1.Svc/GetUser"
 	methodGarage   = "/test.v1.Svc/UpdateGarage"
 	methodGarageRO = "/test.v1.Svc/ListThings"
+	methodExport   = "/test.v1.Svc/ExportThingPdf"
+	methodPrint    = "/test.v1.Svc/PrintThingPdf"
 	garageID       = "11111111-1111-4111-8111-111111111111"
 )
 

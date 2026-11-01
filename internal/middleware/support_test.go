@@ -91,6 +91,15 @@ func TestGarage_SupportSession(t *testing.T) {
 		assert.Empty(t, support.began)
 	})
 
+	t.Run("a file export is still refused: a support session only reads records", func(t *testing.T) {
+		t.Parallel()
+
+		support := &fakeSupport{grant: grant}
+		_, err := supportPipeline(t, support, access.Requires(access.BillingRead), "/x.v1.Svc/ExportSettlementReceiptPdf")(garageReq{garageID})
+		requireCode(t, err, codes.PermissionDenied, middleware.ReasonSupportReadOnly)
+		assert.Empty(t, support.began)
+	})
+
 	t.Run("owner-only and write permissions are refused", func(t *testing.T) {
 		t.Parallel()
 

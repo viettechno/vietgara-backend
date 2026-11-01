@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"strings"
 
 	billingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/billing/v1"
 
@@ -70,6 +71,13 @@ func (s *Server) UpdateSettlement(
 		}
 
 		for _, path := range paths {
+			// A PATCH without ?updateMask gets one derived from the body by
+			// the gateway, and for the billing party that is the nested path
+			// billing_party.tax_profile_id.
+			if strings.HasPrefix(path, "billing_party.") {
+				path = "billing_party"
+			}
+
 			switch path {
 			case "billing_party":
 				update.BillingTaxProfileID = new(in.GetBillingParty().GetTaxProfileId())

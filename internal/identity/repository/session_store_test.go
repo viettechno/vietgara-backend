@@ -2,6 +2,7 @@ package repository_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 type store interface {
 	SaveRefreshToken(ctx context.Context, token, userID string, ttl time.Duration) error
 	RefreshTokenUser(ctx context.Context, token string) (string, error)
+	ConsumeRefreshToken(ctx context.Context, token string) (string, error)
 	RevokeRefreshToken(ctx context.Context, token string) error
 	RevokeAllRefreshTokens(ctx context.Context, userID string) error
 	SaveResetToken(ctx context.Context, token, userID string, ttl time.Duration) error
@@ -44,6 +46,53 @@ func stores(t *testing.T) map[string]store {
 	t.Cleanup(func() { _ = client.Close() })
 
 	return map[string]store{"redis": repository.NewRedisStore(client), "memory": repository.NewMemoryStore()}
+}
+
+// TestConsumeRefreshTokenIsHandedOutOnce: of many callers presenting one
+// refresh token at the same moment, exactly one gets it, and the token no
+// longer counts as one of the user's sessions.
+func TestConsumeRefreshTokenIsHandedOutOnce(t *testing.T) {
+	t.Parallel()
+
+	for name, s := range stores(t) {
+		t.Run(name, func(t *testing.T) {
+			ctx := t.Context()
+
+			require.NoError(t, s.SaveRefreshToken(ctx, "once", "user", time.Hour))
+
+			var (
+				wg       sync.WaitGroup
+				mu       sync.Mutex
+				accepted int
+			)
+
+			for range 20 {
+				wg.Go(func() {
+					id, err := s.ConsumeRefreshToken(ctx, "once")
+					if err == nil {
+						assert.Equal(t, "user", id)
+
+						mu.Lock()
+						accepted++
+						mu.Unlock()
+
+						return
+					}
+
+					assert.ErrorIs(t, err, domain.ErrRefreshTokenInvalid)
+				})
+			}
+
+			wg.Wait()
+			assert.Equal(t, 1, accepted)
+
+			_, err := s.RefreshTokenUser(ctx, "once")
+			require.ErrorIs(t, err, domain.ErrRefreshTokenInvalid, "it is gone")
+
+			_, err = s.ConsumeRefreshToken(ctx, "never-issued")
+			require.ErrorIs(t, err, domain.ErrRefreshTokenInvalid)
+		})
+	}
 }
 
 func TestSessionStores(t *testing.T) {

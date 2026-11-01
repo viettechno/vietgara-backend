@@ -56,6 +56,25 @@ func (s *RedisStore) RefreshTokenUser(ctx context.Context, token string) (string
 	return userID, err
 }
 
+// ConsumeRefreshToken returns the user of token and deletes it atomically
+// (GETDEL), so a token presented twice at once is handed out once.
+func (s *RedisStore) ConsumeRefreshToken(ctx context.Context, token string) (string, error) {
+	userID, err := s.client.GetDel(ctx, refreshKey(token)).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", domain.ErrRefreshTokenInvalid
+	}
+
+	if err != nil {
+		return "", err
+	}
+
+	if err := s.client.SRem(ctx, userSessionsKey(userID), token).Err(); err != nil {
+		return "", err
+	}
+
+	return userID, nil
+}
+
 // RevokeRefreshToken deletes token.
 func (s *RedisStore) RevokeRefreshToken(ctx context.Context, token string) error {
 	userID, err := s.client.GetDel(ctx, refreshKey(token)).Result()
@@ -290,6 +309,24 @@ func (m *MemoryStore) RefreshTokenUser(_ context.Context, token string) (string,
 	}
 
 	return "", domain.ErrRefreshTokenInvalid
+}
+
+// ConsumeRefreshToken returns the user of token and deletes it.
+func (m *MemoryStore) ConsumeRefreshToken(_ context.Context, token string) (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	e, ok := m.refresh[token]
+	userID, live := m.live(e, ok)
+
+	delete(m.sessions[e.value], token)
+	delete(m.refresh, token)
+
+	if !live {
+		return "", domain.ErrRefreshTokenInvalid
+	}
+
+	return userID, nil
 }
 
 // RevokeRefreshToken deletes token.

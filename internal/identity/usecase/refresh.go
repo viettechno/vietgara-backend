@@ -13,7 +13,9 @@ import (
 // a stolen token has a limited window of reuse. The new access token
 // reflects the user's current verification and admin flags.
 func (uc *IdentityUseCase) Refresh(ctx context.Context, refreshToken string) (*Session, error) {
-	userID, err := uc.sessions.RefreshTokenUser(ctx, refreshToken)
+	// The token is taken, not read and then revoked: two refreshes of one
+	// token at the same moment would otherwise both pass the read.
+	userID, err := uc.sessions.ConsumeRefreshToken(ctx, refreshToken)
 	if err != nil {
 		return nil, refreshError(err)
 	}
@@ -21,10 +23,6 @@ func (uc *IdentityUseCase) Refresh(ctx context.Context, refreshToken string) (*S
 	user, err := uc.findUser(ctx, userID)
 	if err != nil {
 		return nil, err
-	}
-
-	if err := uc.sessions.RevokeRefreshToken(ctx, refreshToken); err != nil {
-		return nil, apperror.Internal("revoke old refresh token", err)
 	}
 
 	return uc.issueSession(ctx, user)

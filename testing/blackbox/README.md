@@ -202,9 +202,11 @@ makes it a gate).
 ```
 env/        target selection and endpoints (BLACKBOX_*)
 client/     REST client (protojson over the proto messages), Mailpit and google-stub clients
-fixture/    actors: Anonymous, Owner (any target), NewVerifiedOwner (needs the test inbox), RequireAPIError
+fixture/    actors: Anonymous, Owner (any target), NewVerifiedOwner (needs the test inbox), NewBusiness (owner, garage, customer, vehicle and the quote-to-settlement flow), RequireAPIError
 stubs/      third-party stubs, one directory each, with their Dockerfile
-scenarios/  one package per area: smoke, iam, tenant, ...
+scenarios/  one package per area: smoke, iam, tenant, ...; `system` holds the cross-cutting rules
+            (E2E-SYS-*: tenant isolation, read-only mode, races, junk input), driven by
+            the OpenAPI document of vietgara-proto so a new route is covered automatically
 compose.yml the stubbed stack
 ```
 

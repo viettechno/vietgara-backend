@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	identityv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/identity/v1"
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
@@ -99,7 +100,7 @@ func SwitchPlanByID(tb testing.TB, owner *Actor, planID, planName string) *licen
 		PayerName:         owner.Session.GetUser().GetFullName(),
 		TransferredAmount: request.GetAmountDue(),
 		PaidAt:            timestamppb.Now(),
-		Evidence:          transferEvidence(),
+		Evidence:          TransferEvidence(),
 	})
 	if err != nil {
 		tb.Fatalf("submit plan payment for %q: %v", planName, err)
@@ -222,8 +223,8 @@ func publicPlanID(ctx context.Context, api *client.Client, planName string) (str
 	return "", fmt.Errorf("%w: %q", errNoPublicPlan, planName)
 }
 
-// transferEvidence returns a valid 1x1 PNG transfer screenshot.
-func transferEvidence() *licensev1.PaymentEvidence {
+// TransferEvidence returns a valid 1x1 PNG transfer screenshot.
+func TransferEvidence() *licensev1.PaymentEvidence {
 	var buf bytes.Buffer
 
 	_ = png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 1, 1)))
@@ -237,7 +238,7 @@ func transferEvidence() *licensev1.PaymentEvidence {
 func LimitedPlan(tb testing.TB, owner *Actor, maxTransactionsPerDay int32) *licensev1.Subscription {
 	tb.Helper()
 
-	code := fmt.Sprintf("qa-limit-%d-%d", maxTransactionsPerDay, seq.Add(1))
+	code := fmt.Sprintf("qa-limit-%d-%d-%d", maxTransactionsPerDay, seq.Add(1), time.Now().UnixNano()%1_000_000)
 
 	created, err := PlatformAdmin(tb).API.CreatePlan(tb.Context(), &licensev1.Plan{
 		Code: code, Name: "QA " + code, Price: 100000, Currency: "VND",

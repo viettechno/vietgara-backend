@@ -8,6 +8,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
@@ -113,6 +114,10 @@ func (r *Postgres) ListRoles(ctx context.Context) ([]*domain.Role, error) {
 
 // FindRole returns one role.
 func (r *Postgres) FindRole(ctx context.Context, id string) (*domain.Role, error) {
+	if uuid.Validate(id) != nil {
+		return nil, domain.ErrRoleNotFound
+	}
+
 	return scanRole(r.q(ctx).QueryRow(ctx, roleSelect+` WHERE r.id = $1 GROUP BY r.id`, id))
 }
 
@@ -224,6 +229,10 @@ func (r *Postgres) ListGroups(ctx context.Context) ([]*domain.Group, error) {
 
 // FindGroup returns one group.
 func (r *Postgres) FindGroup(ctx context.Context, id string) (*domain.Group, error) {
+	if uuid.Validate(id) != nil {
+		return nil, domain.ErrGroupNotFound
+	}
+
 	return scanGroup(r.q(ctx).QueryRow(ctx, groupSelect+` WHERE g.id = $1`, id))
 }
 
@@ -351,6 +360,10 @@ func (r *Postgres) AddMember(ctx context.Context, groupID, userID string) error 
 
 // RemoveMember takes a user out of a group.
 func (r *Postgres) RemoveMember(ctx context.Context, groupID, userID string) error {
+	if uuid.Validate(groupID) != nil || uuid.Validate(userID) != nil {
+		return domain.ErrMemberNotFound
+	}
+
 	tag, err := r.q(ctx).Exec(ctx,
 		`DELETE FROM platform_staff_group_members WHERE group_id = $1 AND user_id = $2`, groupID, userID)
 	if err != nil {
@@ -421,6 +434,10 @@ func (r *Postgres) CreateInvitation(ctx context.Context, inv *domain.Invitation)
 
 // FindInvitation returns one invitation.
 func (r *Postgres) FindInvitation(ctx context.Context, id string) (*domain.Invitation, error) {
+	if uuid.Validate(id) != nil {
+		return nil, domain.ErrInvitationNotFound
+	}
+
 	return scanInvitation(r.q(ctx).QueryRow(ctx, invitationSelect+` WHERE i.id = $1`, id))
 }
 

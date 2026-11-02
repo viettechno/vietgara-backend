@@ -274,6 +274,10 @@ func TestAMalformedIDIsNotFound(t *testing.T) {
 	_, err := repo.FindRole(ctx, "not-a-uuid")
 	require.ErrorIs(t, err, domain.ErrRoleNotFound)
 
+	// uuid.Validate accepts this form, Postgres does not.
+	_, err = repo.FindRole(ctx, "urn:uuid:"+uuid.NewString())
+	require.ErrorIs(t, err, domain.ErrRoleNotFound)
+
 	_, err = repo.FindGroup(ctx, "not-a-uuid")
 	require.ErrorIs(t, err, domain.ErrGroupNotFound)
 

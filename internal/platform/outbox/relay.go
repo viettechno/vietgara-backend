@@ -12,9 +12,12 @@ import (
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 )
 
-// Relay defaults (Event Design Section 2: poll every few seconds).
+// Relay defaults (Event Design Section 2). The interval is part of the event
+// latency of NFR-PF-05: an event must reach its consumer within 2 s of the
+// commit of its outbox row (P95), and the row waits for the next poll, so the
+// poll must be well inside that budget.
 const (
-	DefaultRelayInterval  = 2 * time.Second
+	DefaultRelayInterval  = 1 * time.Second
 	DefaultRelayBatchSize = 100
 	// DefaultMaxAttempts is how often delivery is retried before an event
 	// is parked as 'failed' for manual follow-up (NFR-AV-05).

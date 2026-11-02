@@ -179,6 +179,28 @@ func TestRolesAndGroupsThroughTheAPI(t *testing.T) {
 	requireStatus(t, err, codes.NotFound)
 }
 
+// An update without a mask names every settable field, so a blank role or
+// group is refused by validation and nothing is replaced (backlog G-17).
+func TestAnUpdateWithoutAMaskChangesNothing(t *testing.T) {
+	f := newFixture(t)
+	ctx := f.as(t, "admin")
+
+	role, err := f.srv.CreatePlatformRole(ctx, &platformv1.CreatePlatformRoleRequest{Role: &platformv1.PlatformRole{
+		Name: "Billing desk", Description: "keeps its description",
+		Permissions: []platformv1.PlatformPermission{platformv1.PlatformPermission_PLATFORM_PERMISSION_PLAN_READ},
+	}})
+	require.NoError(t, err)
+
+	_, err = f.srv.UpdatePlatformRole(ctx, &platformv1.UpdatePlatformRoleRequest{RoleId: role.GetRole().GetId(), Role: &platformv1.PlatformRole{}})
+	requireStatus(t, err, codes.InvalidArgument)
+
+	got, err := f.srv.GetPlatformRole(ctx, &platformv1.GetPlatformRoleRequest{RoleId: role.GetRole().GetId()})
+	require.NoError(t, err)
+	assert.Equal(t, "Billing desk", got.GetRole().GetName())
+	assert.Equal(t, "keeps its description", got.GetRole().GetDescription())
+	assert.Len(t, got.GetRole().GetPermissions(), 1)
+}
+
 func TestInvitationFlowThroughTheAPI(t *testing.T) {
 	t.Parallel()
 

@@ -263,3 +263,27 @@ func roundTripInvitations(t *testing.T, pg *pgtest.Postgres, repo *repository.Po
 	require.NoError(t, err)
 	assert.True(t, adminID)
 }
+
+// TestAMalformedIDIsNotFound: an id that is not a UUID in a request is "not
+// found", as a missing one is, and not a database error (backlog G-17).
+func TestAMalformedIDIsNotFound(t *testing.T) {
+	pg := pgtest.StartMigrated(t)
+	repo := repository.NewPostgres(pg.AppPool(t))
+	ctx := t.Context()
+
+	_, err := repo.FindRole(ctx, "not-a-uuid")
+	require.ErrorIs(t, err, domain.ErrRoleNotFound)
+
+	// uuid.Validate accepts this form, Postgres does not.
+	_, err = repo.FindRole(ctx, "urn:uuid:"+uuid.NewString())
+	require.ErrorIs(t, err, domain.ErrRoleNotFound)
+
+	_, err = repo.FindGroup(ctx, "not-a-uuid")
+	require.ErrorIs(t, err, domain.ErrGroupNotFound)
+
+	_, err = repo.FindInvitation(ctx, "not-a-uuid")
+	require.ErrorIs(t, err, domain.ErrInvitationNotFound)
+
+	require.ErrorIs(t, repo.RemoveMember(ctx, uuid.NewString(), "not-a-uuid"), domain.ErrMemberNotFound)
+	require.ErrorIs(t, repo.RemoveMember(ctx, "not-a-uuid", uuid.NewString()), domain.ErrMemberNotFound)
+}

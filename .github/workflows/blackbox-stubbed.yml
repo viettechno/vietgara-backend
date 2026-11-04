@@ -1,0 +1,31 @@
+name: Blackbox tests (stubbed, weekly)
+
+# The blackbox suite on the stubbed stack, every Sunday at 00:07 UTC (07:07 ICT),
+# and on demand. The same job runs on every pull request and every push to
+# master in ci.yml; this run only catches what changes without a commit (base
+# images, GitHub's runners).
+
+on:
+  schedule:
+    - cron: '7 0 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  blackbox-stubbed:
+    name: Blackbox tests (stubbed)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: testing/blackbox/go.mod
+          cache-dependency-path: testing/blackbox/go.sum
+
+      - name: Blackbox tests
+        run: make blackbox-stubbed

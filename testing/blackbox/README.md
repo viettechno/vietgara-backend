@@ -79,16 +79,21 @@ export BLACKBOX_TARGET=staging
 export BLACKBOX_API_URL=https://vietgara-api-staging.viettechno.com
 export BLACKBOX_EMAIL_DOMAIN=blackbox.vietgara.test
 export BLACKBOX_MAILPIT_URL=https://blackbox:<password>@vietgara-mailpit-staging.viettechno.com
-# The platform admin's password (admin@<email domain>, which must exist and
-# be in PLATFORM_ADMIN_EMAILS), named by the dataset's adminPasswordRef:
+# The platform admin's password (admin@<email domain>, which must be in
+# PLATFORM_ADMIN_EMAILS), named by the dataset's adminPasswordRef:
 export ADMIN_PASSWORD=<the ADMIN_PASSWORD secret>
 make blackbox-staging
 ```
 
 Only the stubbed stack has a literal admin password in the dataset (it is
 public, like the dataset). On staging the suite reads the variable that
-`adminPasswordRef` names, never creates the admin, and fails a scenario
-that needs it when the variable is missing or the sign-in fails.
+`adminPasswordRef` names and fails a scenario that needs it when the
+variable is missing. Staging deletes its test users after a day, the admin
+included: when the admin cannot sign in, the suite signs it up and verifies
+it through the test inbox (a user on the test domain, so never a real one)
+and checks that the deployment made it a platform admin. The test packages
+run as separate processes: the one that finds the address taken waits for
+the other to finish.
 
 Or run the **Blackbox tests (staging)** workflow in GitHub Actions, which
 reads the same values from repository secrets (see

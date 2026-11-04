@@ -8,8 +8,14 @@ name: Blackbox tests (staging)
 #   BLACKBOX_STAGING_MAILPIT_URL   https://blackbox:<password>@<MAILPIT_ADDRESS>
 # ADMIN_PASSWORD is the platform admin's (admin@<email domain>), named by
 # the dataset's adminPasswordRef and shared with the staging load test; that
-# user must exist and be in the deployment's PLATFORM_ADMIN_EMAILS.
+# user must be in the deployment's PLATFORM_ADMIN_EMAILS; when it does not
+# exist (staging deletes its test users after a day) the suite signs it up.
+#
+# Every Sunday at 00:17 UTC (07:17 ICT), and on demand. E2E (staging, weekly) in
+# vietgara-e2e runs against the same deployment at 00:37 UTC, after this one.
 on:
+  schedule:
+    - cron: '17 0 * * 0'
   workflow_dispatch:
 
 permissions:

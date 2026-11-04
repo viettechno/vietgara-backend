@@ -89,7 +89,7 @@ func TestInviteByPhone(t *testing.T) {
 	require.NoError(t, err)
 	groups := groupIDs(t, owner.API, garage.GetId())
 
-	phone := "0900000922"
+	phone := fixture.UniquePhone()
 	registered, err := fixture.Anonymous(t).Register(ctx, &identityv1.RegisterRequest{
 		Email: fixture.UniqueEmail(t, "invitee-phone"), Password: fixture.Password,
 		FullName: "Blackbox Phone", Phone: &phone,

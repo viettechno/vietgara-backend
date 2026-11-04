@@ -76,9 +76,9 @@ Some rules depend on time. Two helpers keep them testable:
 ```bash
 # On the staging VM, `make blackbox-env` (vietgara-infra) prints these:
 export BLACKBOX_TARGET=staging
-export BLACKBOX_API_URL=https://vietgara-api-staging.viettechno.com
+export BLACKBOX_API_URL=https://api-staging.vietgara.vn
 export BLACKBOX_EMAIL_DOMAIN=blackbox.vietgara.test
-export BLACKBOX_MAILPIT_URL=https://blackbox:<password>@vietgara-mailpit-staging.viettechno.com
+export BLACKBOX_MAILPIT_URL=https://blackbox:<password>@mailpit-staging.vietgara.vn
 # The platform admin's password (admin@<email domain>, which must be in
 # PLATFORM_ADMIN_EMAILS), named by the dataset's adminPasswordRef:
 export ADMIN_PASSWORD=<the ADMIN_PASSWORD secret>

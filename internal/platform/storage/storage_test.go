@@ -329,13 +329,13 @@ func TestGCSStore(t *testing.T) {
 	_, err = store.DeletePrefix(t.Context(), "garages/g1/")
 	require.ErrorContains(t, err, "list prefix")
 
-	cdn, err := storage.NewGCS(t.Context(), "logos", "https://cdn.vietgara.viettechno.com/")
+	cdn, err := storage.NewGCS(t.Context(), "logos", "https://cdn.vietgara.vn/")
 	require.NoError(t, err)
 
 	fake.fail = false
 	url, err = cdn.Put(t.Context(), "garages/g1/logo.png", "image/png", png)
 	require.NoError(t, err)
-	assert.Equal(t, "https://cdn.vietgara.viettechno.com/garages/g1/logo.png", url)
+	assert.Equal(t, "https://cdn.vietgara.vn/garages/g1/logo.png", url)
 }
 
 func TestLocalStorePrivateObjects(t *testing.T) {

@@ -69,13 +69,13 @@ func TestQuoteUseCase_Send(t *testing.T) {
 
 		d.Notifier.EXPECT().QuoteReady(mock.Anything, mock.MatchedBy(func(r usecase.QuoteReady) bool {
 			return r.GarageID == garageID && r.QuoteID == quoteID && r.CustomerID == customerID && r.Number == q.Number &&
-				strings.HasPrefix(r.ApproveURL, "https://vietgara.viettechno.com/public/quotes/") && r.Total != ""
+				strings.HasPrefix(r.ApproveURL, "https://vietgara.vn/public/quotes/") && r.Total != ""
 		})).Return(true).Once()
 
 		result, err := uc.Send(t.Context(), garageID, quoteID, actorID)
 		require.NoError(t, err)
 		assert.Equal(t, domain.StatusSent, result.Quote.Status)
-		assert.Contains(t, result.PublicURL, "https://vietgara.viettechno.com/public/quotes/")
+		assert.Contains(t, result.PublicURL, "https://vietgara.vn/public/quotes/")
 		assert.True(t, result.Emailed)
 	})
 

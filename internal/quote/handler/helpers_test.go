@@ -58,7 +58,7 @@ func newEnv(t *testing.T) *env {
 	uc := usecase.NewQuoteUseCase(usecase.Deps{
 		Quotes: e.quotes, Vehicles: e.vehicles, Garages: e.garages, Limits: e.limits,
 		Sequences: e.sequences, RepairOrders: e.repairs, BillingParties: e.parties, Notifier: e.notifier, Events: e.events, Tx: passTx{}, Jobs: e.jobs,
-		AppBaseURL: "https://vietgara.viettechno.com",
+		AppBaseURL: "https://vietgara.vn",
 	})
 	e.srv = handler.NewServer(uc)
 

@@ -129,7 +129,7 @@ local defaults.
 | `GOOGLE_MOBILE_CLIENT_IDS` | Google sign-in from the mobile apps (`POST /api/v1/auth/google/id-token`): comma-separated OAuth client IDs the apps' ID tokens are issued to (the Android "web/server" client and the iOS client). Empty disables it |
 | `GOOGLE_AUTH_ENDPOINT`, `GOOGLE_TOKEN_ENDPOINT`, `GOOGLE_USERINFO_URL`, `GOOGLE_CERTS_URL` | Google's OAuth endpoints and the JWKS that mobile ID tokens are verified against. Default to Google's own; override them only to point the backend at a Google stub (the blackbox tests) |
 | `PLATFORM_ADMIN_EMAILS` | Comma-separated e-mails granted platform admin. See [Platform admins](#platform-admins) |
-| `APP_BASE_URL` | Public URL of the deployment, such as `https://vietgara.viettechno.com`. The owner web origin for the Google popup, the Google callback host, and the base of e-mailed links. Defaults to `http://localhost:8000` |
+| `APP_BASE_URL` | Public URL of the deployment, such as `https://vietgara.vn`. The owner web origin for the Google popup, the Google callback host, and the base of e-mailed links. Defaults to `http://localhost:8000` |
 | `ADMIN_APP_BASE_URL` | Public URL of the platform admin web, the base of the platform staff invitation links (`<url>/invitations/<id>`). Defaults to `http://admin.localhost:8000` |
 
 **Cache, licensing and events**
@@ -277,13 +277,16 @@ Never set it in production.
 ### Setting up Mailjet
 
 1. Create a Mailjet user. Under **User settings → Senders & domains**,
-   add the product's sending domain: `vietgara.viettechno.com` in production,
-   `vietgara-staging.viettechno.com` in staging. A subdomain of its own keeps
-   the product's sending reputation and bounces apart from the company's
-   mailboxes on `viettechno.com`.
-2. Publish the SPF and DKIM DNS records that Mailjet shows for the domain.
-   Wait until both are validated: mail from an unvalidated sender is rejected
-   or lands in spam.
+   add the product's sending domain: `vietgara.vn` in production,
+   `staging.vietgara.vn` in staging. Staging has a subdomain of its own, so
+   that test mail is easy to tell apart and its bounces stay out of
+   production's reputation. The company's mailboxes are on `viettechno.com`
+   and are not touched.
+2. Publish the SPF and DKIM DNS records that Mailjet shows for the domain,
+   and a DMARC record (`p=none` at first). Wait until both are validated:
+   mail from an unvalidated sender is rejected or lands in spam. A new domain
+   has no sending reputation, so start with a low volume. If a mailbox is
+   ever created on `vietgara.vn`, merge its MX and SPF records with Mailjet's.
 3. Under **User settings → API key management**, create a key pair. Use a
    separate pair for each environment.
 4. Configure the backend. Keep the secret in Secret Manager, never in the
@@ -291,7 +294,7 @@ Never set it in production.
 
    ```bash
    MAIL_PROVIDER=mailjet
-   MAIL_FROM_ADDRESS=no-reply@vietgara.viettechno.com   # a validated sender
+   MAIL_FROM_ADDRESS=no-reply@vietgara.vn   # a validated sender
    MAIL_FROM_NAME=VietGara
    MAILJET_API_KEY=<api key>
    MAILJET_SECRET_KEY=<secret key>
@@ -299,8 +302,7 @@ Never set it in production.
 
 5. Trigger a verification e-mail, then check delivery under **Statistics →
    Messages** in Mailjet. Staging sends as
-   `no-reply@vietgara-staging.viettechno.com`, so test mail is easy to tell
-   apart.
+   `no-reply@staging.vietgara.vn`.
 
 ## File storage
 

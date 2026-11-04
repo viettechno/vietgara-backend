@@ -15,7 +15,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 )
 
-var from = mail.From{Email: "no-reply@vietgara.viettechno.com", Name: "VietGara"}
+var from = mail.From{Email: "no-reply@vietgara.vn", Name: "VietGara"}
 
 func validMessage() mail.Message {
 	return mail.Message{ToEmail: "owner@example.com", ToName: "Nguyễn Minh", Subject: "Mã xác minh", Text: "Mã: 123456", HTML: "<p>Mã: 123456</p>", Tag: "email_verification"}
@@ -110,7 +110,7 @@ func TestSMTPSender(t *testing.T) {
 		require.NoError(t, sender.Send(t.Context(), msg))
 
 		raw := string(gotMsg)
-		assert.Contains(t, raw, `From: "Gara Anh Minh" <no-reply@vietgara.viettechno.com>`)
+		assert.Contains(t, raw, `From: "Gara Anh Minh" <no-reply@vietgara.vn>`)
 		assert.Contains(t, raw, "Reply-To: <gara@example.com>")
 		assert.Contains(t, raw, "List-Unsubscribe: <https://x/opt-out>")
 		assert.Contains(t, raw, "List-Unsubscribe-Post: List-Unsubscribe=One-Click")
@@ -139,7 +139,7 @@ func TestSMTPSender(t *testing.T) {
 		require.NoError(t, sender.Send(t.Context(), msg))
 
 		raw := string(gotMsg)
-		assert.Contains(t, raw, `From: "Auto \"Pro\", Q1 <x@y.test>" <no-reply@vietgara.viettechno.com>`)
+		assert.Contains(t, raw, `From: "Auto \"Pro\", Q1 <x@y.test>" <no-reply@vietgara.vn>`)
 		assert.Equal(t, 1, strings.Count(raw, "From: "), "a single From header")
 	})
 

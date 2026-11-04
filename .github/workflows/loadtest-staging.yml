@@ -5,7 +5,7 @@ name: Load test (staging)
 # test domain first (idempotent), runs k6 and uploads the results. The values
 # come from repository secrets; on the staging VM, `make blackbox-env`
 # (vietgara-infra) prints the first three:
-#   BLACKBOX_STAGING_API_URL       e.g. https://vietgara-api-staging.viettechno.com
+#   BLACKBOX_STAGING_API_URL       e.g. https://api-staging.vietgara.vn
 #   BLACKBOX_STAGING_EMAIL_DOMAIN  the deployment's TEST_USERS_EMAIL_DOMAIN
 #   BLACKBOX_STAGING_MAILPIT_URL   https://blackbox:<password>@<MAILPIT_ADDRESS>
 #   TEST_PASSWORD, ADMIN_PASSWORD  the dataset's passwordRef secrets

@@ -30,7 +30,7 @@ type Deps struct {
 	// Jobs expands a catalogue job into quote lines (FR-CAT-06).
 	Jobs JobCatalogue
 	// AppBaseURL is the web admin origin the public approval link is
-	// built on, e.g. "https://vietgara.viettechno.com".
+	// built on, e.g. "https://vietgara.vn".
 	AppBaseURL string
 	// Now defaults to time.Now.
 	Now clock

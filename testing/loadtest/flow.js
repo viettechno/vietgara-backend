@@ -178,13 +178,14 @@ function runFlow(owner, g) {
   let customerId;
   let vehicleId;
   if (Math.random() < 0.2) {
-    // Unique within the run (virtual user and iteration) and across runs (the
-    // clock), so two users of one garage never collide. The phone starts with 08
-    // and the seeded customers' with 09.
+    // The phone is random (8 digits after 08; the seeded customers' start with 09): it must not
+    // repeat in the garage across runs, and a garage keeps its customers for as long as its
+    // owner is kept (a run only 100 values wide was refused 409 once in 2,379 flows on staging).
     const stamp = String(Date.now() % 10000).padStart(4, '0');
+    const phone = `08${String(Math.floor(Math.random() * 1e8)).padStart(8, '0')}`;
     const c = step('create customer', call('POST', `${g}/customers`, {
       fullName: `Khach Le ${__VU}-${__ITER}-${stamp}`,
-      phone: `08${String(__VU % 1000).padStart(3, '0')}${String(__ITER % 1000).padStart(3, '0')}${stamp.slice(2)}`,
+      phone,
       personalDataConsent: true,
     }, 'write', 'garages/{id}/customers'));
     if (!c) return false;

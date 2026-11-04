@@ -7,6 +7,7 @@ One directory per run, `<stamp>-<target>`: `run.txt` (date, versions, host), `su
 | [2026-10-27-stubbed](2026-10-27-stubbed/summary.md) | stubbed stack, one Mac (10 cores), relay 1 s | 50 garages, 50 flow + 25 browse users, 10 min | 10 ms | 12 ms | 1.04 s / 25 ms | 0 | Targets met |
 | [2026-10-27-headroom-stubbed](2026-10-27-headroom-stubbed/summary.md) | same | 3x the users, 5 min (about 73 documents and payments a second) | 11 ms | 15 ms | 1.06 s / 63 ms | 0 | Targets met |
 | [2026-10-27-staging](2026-10-27-staging/summary.md) | staging VM in Vietnam, relay 1 s; k6 on a GitHub-hosted runner | 50 garages, 50 flow + 25 browse users, 10 min | 194 ms | 196 ms | 1.08 s / not recorded | 0 | Targets met (P95). Reads P99 369 ms |
+| [2026-11-04-staging](2026-11-04-staging/summary.md) | staging VM in Vietnam, relay 1 s; k6 on a GitHub-hosted runner | 50 garages, 50 flow + 25 browse users, 10 min | 222 ms | 224 ms | 1.16 s / not recorded | 1 of 2,379 | Targets met (P95). One flow failed on a customer phone already in use; reads P99 411 ms |
 
 ## Reading these numbers
 

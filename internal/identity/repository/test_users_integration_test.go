@@ -154,6 +154,39 @@ func TestDeleteTestUsersWaitsForTheOwnerOfTheGarage(t *testing.T) {
 	assert.Equal(t, 1, count(t, pg.Admin, `SELECT count(*) FROM users WHERE id = $1`, invitee), "a real user is kept")
 }
 
+// TestDeleteTestUsersDeletesThePlatformAdminWhoseQRIsInUse: the platform admin uploaded the payment
+// QR, the one settings row refers to that file, and no cascade removes the row. Deleting the
+// admin deletes the file and the row keeps its details and loses the QR (ON DELETE SET NULL).
+func TestDeleteTestUsersDeletesThePlatformAdminWhoseQRIsInUse(t *testing.T) {
+	pg := pgtest.StartMigrated(t)
+	ctx := t.Context()
+	old := time.Now().Add(-48 * time.Hour)
+
+	admin, fileID := uuid.NewString(), uuid.NewString()
+
+	for _, stmt := range []struct {
+		sql  string
+		args []any
+	}{
+		{`INSERT INTO users (id, email, full_name, created_at) VALUES ($1, 'admin@blackbox.vietgara.test', 'x', $2)`, []any{admin, old}},
+		{`INSERT INTO files (id, user_id, kind, entity_type, entity_id, key, content_type, size, sha256) VALUES ($1, $2, 'platform_qr', 'platform', $3, 'qr.png', 'image/png', 1, repeat('a', 64))`, []any{fileID, admin, uuid.NewString()}},
+		{`UPDATE platform_payment_settings SET bank_name = 'ACB', qr_file_id = $1 WHERE id = 1`, []any{fileID}},
+	} {
+		_, err := pg.Admin.ExecContext(ctx, stmt.sql, stmt.args...)
+		require.NoError(t, err, stmt.sql)
+	}
+
+	repo := repository.NewPostgresUserRepository(pg.AppPool(t))
+
+	deleted, err := repo.DeleteTestUsers(ctx, "blackbox.vietgara.test", time.Now().Add(-24*time.Hour))
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, deleted)
+
+	assert.Zero(t, count(t, pg.Admin, `SELECT count(*) FROM users WHERE id = $1`, admin))
+	assert.Zero(t, count(t, pg.Admin, `SELECT count(*) FROM files WHERE id = $1`, fileID))
+	assert.Equal(t, 1, count(t, pg.Admin, `SELECT count(*) FROM platform_payment_settings WHERE id = 1 AND bank_name = 'ACB' AND qr_file_id IS NULL`), "the details stay, the QR is gone")
+}
+
 func count(t *testing.T, db *sql.DB, query string, args ...any) int {
 	t.Helper()
 

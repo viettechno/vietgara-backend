@@ -1,9 +1,7 @@
 package license_test
 
 import (
-	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,12 +20,13 @@ func TestRetiredPlanKeepsSubscribers(t *testing.T) {
 	admin := fixture.PlatformAdmin(t)
 
 	created, err := admin.API.CreatePlan(ctx, &licensev1.Plan{
-		Code: fmt.Sprintf("qa-retire-%d", time.Now().UnixNano()), Name: "QA Retire",
+		Code: fixture.UniquePlanCode("qa-retire"), Name: "QA Retire",
 		Price: 100000, Currency: "VND", BillingCycle: licensev1.BillingCycle_BILLING_CYCLE_MONTHLY,
 		Limits:   &licensev1.PlanLimits{MaxGarages: 1, MaxStaff: 2, MaxTransactionsPerDay: 10},
 		IsPublic: true, IsActive: true,
 	})
 	require.NoError(t, err)
+	fixture.RetirePlanAfterTest(t, admin, created.GetId())
 
 	subscriber := fixture.NewVerifiedOwner(t, "lic-retire-sub")
 	sub := fixture.SwitchPlanByID(t, subscriber, created.GetId(), created.GetName())

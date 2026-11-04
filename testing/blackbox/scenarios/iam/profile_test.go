@@ -23,21 +23,22 @@ func TestEditOwnProfile(t *testing.T) {
 	api := fixture.Anonymous(t)
 
 	owner := fixture.NewVerifiedOwner(t, "profile")
-	phone := "0900000901"
+	phone := fixture.UniquePhone()
+	e164 := "+84" + phone[1:]
 	edited, err := owner.API.UpdateMe(ctx, &identityv1.User{FullName: "Blackbox Edited", Phone: &phone},
 		"full_name", "phone")
 	require.NoError(t, err)
 	assert.Equal(t, "Blackbox Edited", edited.GetFullName())
 	// Phones are stored normalized to E.164.
-	assert.Equal(t, "+84900000901", edited.GetPhone())
+	assert.Equal(t, e164, edited.GetPhone())
 
 	me, err := owner.API.Me(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "Blackbox Edited", me.GetFullName())
-	assert.Equal(t, "+84900000901", me.GetPhone())
+	assert.Equal(t, e164, me.GetPhone())
 
 	// A taken phone belongs to another user: refused.
-	otherPhone := "0900000902"
+	otherPhone := fixture.UniquePhone()
 	_, err = api.Register(ctx, &identityv1.RegisterRequest{
 		Email: fixture.UniqueEmail(t, "profile-other"), Password: fixture.Password,
 		FullName: "Blackbox Other", Phone: &otherPhone,

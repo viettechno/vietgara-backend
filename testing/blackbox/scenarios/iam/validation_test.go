@@ -55,7 +55,7 @@ func TestSignUpValidation(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusConflict, "EMAIL_TAKEN")
 
 	// Taken phone: refused.
-	phone := "0900000907"
+	phone := fixture.UniquePhone()
 	phoneOwner := fixture.UniqueEmail(t, "phone-owner")
 	_, err = api.Register(ctx, &identityv1.RegisterRequest{
 		Email: phoneOwner, Password: fixture.Password, FullName: "Blackbox Phone", Phone: &phone,

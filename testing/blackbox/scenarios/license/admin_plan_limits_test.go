@@ -21,8 +21,9 @@ func TestAdminChangePlanLimits(t *testing.T) {
 	admin := fixture.PlatformAdmin(t)
 
 	// Create a test plan
+	code := fixture.UniquePlanCode("qa-limit-test")
 	plan := &licensev1.Plan{
-		Code:         "qa-limit-test",
+		Code:         code,
 		Name:         "QA Limit Test",
 		Price:        100000,
 		Currency:     "VND",
@@ -37,6 +38,7 @@ func TestAdminChangePlanLimits(t *testing.T) {
 	}
 	createdPlan, err := admin.API.CreatePlan(ctx, plan)
 	require.NoError(t, err)
+	fixture.RetirePlanAfterTest(t, admin, createdPlan.GetId())
 
 	// Create an owner and subscribe to the plan
 	owner := fixture.NewVerifiedOwner(t, "lic-limit-owner")
@@ -45,7 +47,7 @@ func TestAdminChangePlanLimits(t *testing.T) {
 
 	sub := fixture.SwitchPlanByID(t, owner, createdPlan.GetId(), createdPlan.GetName())
 	assert.Equal(t, licensev1.SubscriptionStatus_SUBSCRIPTION_STATUS_ACTIVE, sub.GetStatus())
-	assert.Equal(t, "qa-limit-test", sub.GetPlan().GetCode())
+	assert.Equal(t, code, sub.GetPlan().GetCode())
 	assert.EqualValues(t, 2, sub.GetPlan().GetLimits().GetMaxStaff(), "initial staff limit should be 2")
 
 	// Admin changes max staff from 2 to 3

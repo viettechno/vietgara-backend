@@ -22,15 +22,17 @@ import (
 func newPlan(t *testing.T, price int64, maxGarages, maxStaff int32) *licensev1.Plan {
 	t.Helper()
 
-	code := fmt.Sprintf("qa-pay-%d-%d", price, time.Now().UnixNano()%1_000_000_000)
+	code := fixture.UniquePlanCode(fmt.Sprintf("qa-pay-%d", price))
+	admin := fixture.PlatformAdmin(t)
 
-	plan, err := fixture.PlatformAdmin(t).API.CreatePlan(t.Context(), &licensev1.Plan{
+	plan, err := admin.API.CreatePlan(t.Context(), &licensev1.Plan{
 		Code: code, Name: "QA " + code, Price: price, Currency: "VND",
 		BillingCycle: licensev1.BillingCycle_BILLING_CYCLE_MONTHLY,
 		Limits:       &licensev1.PlanLimits{MaxGarages: maxGarages, MaxStaff: maxStaff, MaxTransactionsPerDay: 100},
 		IsPublic:     true, IsActive: true,
 	})
 	require.NoError(t, err)
+	fixture.RetirePlanAfterTest(t, admin, plan.GetId())
 
 	return plan
 }

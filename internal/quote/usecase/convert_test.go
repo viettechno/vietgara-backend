@@ -137,3 +137,21 @@ func TestQuoteUseCase_Convert(t *testing.T) {
 		assertAppError(t, err, apperror.CodeInternal)
 	})
 }
+
+// A request that runs at the same time and converts the quote first makes this
+// one a conflict (409), not a server error.
+func TestQuoteUseCase_ConvertAnotherRequestConvertedItFirst(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+	d.Quotes.EXPECT().FindByID(mock.Anything, garageID, quoteID).Return(approvedQuote(), nil).Once()
+	d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
+	d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
+	d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
+	d.RepairOrders.EXPECT().
+		Create(mock.Anything, garageID, quoteID, vehicleID, "An Nguyen", "51F-123.45", "LSC-202609-0001", actorID, mock.Anything, mock.Anything).
+		Return("", domain.ErrAlreadyConverted).Once()
+
+	_, err := uc.Convert(t.Context(), garageID, quoteID, actorID)
+	assertAppError(t, err, apperror.CodeFailedPrecondition)
+}

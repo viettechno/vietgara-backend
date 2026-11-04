@@ -1,6 +1,7 @@
 package system_test
 
 import (
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -127,20 +128,29 @@ func TestJunkInputNeverCausesAServerError(t *testing.T) {
 	business := fixture.NewBusiness(t, "junk")
 	admin := fixture.PlatformAdmin(t)
 
-	var got []string
-
-	callers := []*session{newSession(t, business.Owner.Email, fixture.Password), newSession(t, admin.Email, admin.Password)}
-
-	for _, caller := range callers {
-		for index, junk := range junkIDs {
-			// Bodies of the wrong shape go with the first id only.
-			got = append(got, serverErrors(t, caller, business.GarageID, junk, index == 0)...)
-		}
+	callers := map[string][2]string{
+		"owner": {business.Owner.Email, fixture.Password},
+		"admin": {admin.Email, admin.Password},
 	}
 
-	sort.Strings(got)
+	// About 4,000 requests in all: one after the other they take over ten
+	// minutes through a remote staging. Each caller and junk id is its own
+	// parallel subtest with its own session, so no state is shared.
+	for name, credentials := range callers {
+		for index, junk := range junkIDs {
+			t.Run(fmt.Sprintf("%s/junk-%d", name, index), func(t *testing.T) {
+				t.Parallel()
 
-	assert.Empty(t, compact(got), "the operations that answer 5xx to junk input")
+				caller := newSession(t, credentials[0], credentials[1])
+
+				// Bodies of the wrong shape go with the first id only.
+				got := serverErrors(t, caller, business.GarageID, junk, index == 0)
+				sort.Strings(got)
+
+				assert.Empty(t, compact(got), "the operations that answer 5xx to junk input")
+			})
+		}
+	}
 }
 
 func compact(in []string) []string {

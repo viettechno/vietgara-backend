@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -33,12 +34,13 @@ var adminMu sync.Mutex
 
 // PlatformAdmin returns the platform admin actor. On targets with a test
 // inbox it is the shared dataset's admin user, admin@<email domain>, with
-// the password of datasetAdminPassword. The stubbed stack registers and
-// verifies it on first use; any other target must already have it (it is a
-// platform admin only through the deployment's PLATFORM_ADMIN_EMAILS), so a
-// failed sign-in there fails tb instead of registering a user. Targets
-// without an inbox sign in BLACKBOX_ADMIN_EMAIL / BLACKBOX_ADMIN_PASSWORD,
-// skipping tb when they are not configured.
+// the password of datasetAdminPassword. When it cannot sign in (a target that
+// purges its test users, staging, deletes it a day after it was created) the
+// user is signed up and verified through the test inbox; that address is on
+// the test domain, so no real user can be created, and it becomes a platform
+// admin only through the deployment's PLATFORM_ADMIN_EMAILS. Targets without
+// an inbox sign in BLACKBOX_ADMIN_EMAIL / BLACKBOX_ADMIN_PASSWORD, skipping tb
+// when they are not configured.
 func PlatformAdmin(tb testing.TB) *Actor {
 	tb.Helper()
 
@@ -60,12 +62,62 @@ func PlatformAdmin(tb testing.TB) *Actor {
 		return &Actor{Email: email, Password: password, Session: session, API: api.WithToken(session.GetAccessToken())}
 	}
 
-	if cfg.Target != env.Stubbed {
-		tb.Fatalf("sign in platform admin %s on %s (it must exist, be verified and have the dataset's password secret): verified=%t, err=%v",
-			email, cfg.Target, session.GetUser().GetEmailVerified(), err)
+	return signUpAdmin(tb, api, email, password, user.Name)
+}
+
+// signUpAdmin registers and verifies the admin. The test packages run as
+// separate processes, so another one may be doing the same: when the address
+// is taken it waits for that process to finish and signs in.
+func signUpAdmin(tb testing.TB, api *client.Client, email, password, fullName string) *Actor {
+	tb.Helper()
+
+	known := inboxIDs(tb, email)
+
+	registered, err := api.Register(tb.Context(), &identityv1.RegisterRequest{Email: email, Password: password, FullName: fullName})
+	if apiErr := client.AsAPIError(err); apiErr != nil && apiErr.Status == http.StatusConflict {
+		return awaitAdmin(tb, api, email, password)
 	}
 
-	return registerVerifiedUser(tb, api, email, password, user.Name)
+	if err != nil {
+		tb.Fatalf("register platform admin %s: %v", email, err)
+	}
+
+	admin := verifyFromInbox(tb, api, registered, email, password, known)
+	requirePlatformAdmin(tb, admin)
+
+	return admin
+}
+
+// awaitAdmin signs in the admin that another process is registering.
+func awaitAdmin(tb testing.TB, api *client.Client, email, password string) *Actor {
+	tb.Helper()
+
+	ctx, cancel := context.WithTimeout(tb.Context(), time.Minute)
+	defer cancel()
+
+	for {
+		session, err := api.Login(ctx, email, password)
+		if err == nil && session.GetUser().GetEmailVerified() {
+			admin := &Actor{Email: email, Password: password, Session: session, API: api.WithToken(session.GetAccessToken())}
+			requirePlatformAdmin(tb, admin)
+
+			return admin
+		}
+
+		select {
+		case <-ctx.Done():
+			tb.Fatalf("platform admin %s is taken but cannot sign in (is the password secret right? is it verified?): %v", email, err)
+		case <-time.After(time.Second):
+		}
+	}
+}
+
+func requirePlatformAdmin(tb testing.TB, admin *Actor) {
+	tb.Helper()
+
+	if !admin.Session.GetUser().GetPlatformAdmin() {
+		tb.Fatalf("%s is signed up but is not a platform admin: its address must be in the deployment's PLATFORM_ADMIN_EMAILS", admin.Email)
+	}
 }
 
 // SwitchPlan moves owner onto the plan matching planName (code or display
@@ -178,19 +230,35 @@ func datasetAdminPassword(tb testing.TB) string {
 	return ""
 }
 
-func registerVerifiedUser(tb testing.TB, api *client.Client, email, password, fullName string) *Actor {
+// inboxIDs lists the e-mails already in the inbox of address. A fixed address
+// (the admin's) keeps the e-mails of its earlier sign-ups, so the code of
+// this sign-up is the one that is not among them.
+func inboxIDs(tb testing.TB, address string) map[string]bool {
 	tb.Helper()
 
-	registered, err := api.Register(tb.Context(), &identityv1.RegisterRequest{
-		Email: email, Password: password, FullName: fullName,
-	})
+	messages, err := Mailpit(tb).Messages(tb.Context(), address)
 	if err != nil {
-		tb.Fatalf("register %s: %v", email, err)
+		tb.Fatalf("read the inbox of %s: %v", address, err)
 	}
 
-	mail := Mailpit(tb)
+	ids := make(map[string]bool, len(messages))
+	for _, msg := range messages {
+		ids[msg.ID] = true
+	}
 
-	msg, err := mail.WaitForMessage(tb.Context(), email)
+	return ids
+}
+
+// verifyFromInbox verifies the user with the code of the sign-up e-mail: the
+// first e-mail that was not in the inbox before and carries a code.
+func verifyFromInbox(tb testing.TB, api *client.Client, registered *identityv1.Session, email, password string, known map[string]bool) *Actor {
+	tb.Helper()
+
+	msg, err := Mailpit(tb).WaitForMatching(tb.Context(), email, func(m *client.Message) bool {
+		_, otpErr := m.OTP()
+
+		return !known[m.ID] && otpErr == nil
+	})
 	if err != nil {
 		tb.Fatalf("verification e-mail for %s: %v", email, err)
 	}

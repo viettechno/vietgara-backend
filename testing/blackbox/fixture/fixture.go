@@ -85,6 +85,26 @@ func UniqueEmail(tb testing.TB, label string) string {
 	return fmt.Sprintf("bb.%s.%d.%d@%s", strings.ToLower(label), time.Now().UnixNano(), seq.Add(1), env.Get(tb).EmailDomain)
 }
 
+// phoneBase starts every run at another place of the number space (the
+// clock, in microseconds), so a phone of this run is unlikely to be one that
+// an earlier run still holds (a user's phone is unique, and staging keeps its
+// users for a day).
+var phoneBase = int(time.Now().UnixMicro() % 100_000_000)
+
+// UniquePhone returns a Vietnamese mobile number (national form) that no
+// other call of this run returns and, with overwhelming probability, no
+// user of an earlier run holds. Use it for the phone of a user; a
+// customer's phone only has to be unique within its garage.
+func UniquePhone() string {
+	return fmt.Sprintf("09%08d", (phoneBase+int(seq.Add(1)))%100_000_000)
+}
+
+// UniquePlanCode returns a plan code that no earlier run has used. Plans
+// cannot be deleted, so a fixed code would be taken by the next run.
+func UniquePlanCode(prefix string) string {
+	return fmt.Sprintf("%s-%d-%d", prefix, time.Now().UnixNano(), seq.Add(1))
+}
+
 // NewVerifiedOwner registers a fresh user, reads its OTP from the test
 // inbox and verifies it: the state every garage scenario starts from.
 func NewVerifiedOwner(tb testing.TB, label string) *Actor {

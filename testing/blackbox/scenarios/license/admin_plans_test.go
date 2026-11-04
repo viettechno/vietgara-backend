@@ -18,10 +18,11 @@ func TestAdminCreatePlans(t *testing.T) {
 
 	ctx := t.Context()
 	admin := fixture.PlatformAdmin(t)
+	hiddenCode, yearlyCode := fixture.UniquePlanCode("qa-hidden"), fixture.UniquePlanCode("qa-yearly")
 
 	// Create QA Hidden plan
 	hiddenPlan := &licensev1.Plan{
-		Code:         "qa-hidden",
+		Code:         hiddenCode,
 		Name:         "QA Hidden",
 		Price:        50000,
 		Currency:     "VND",
@@ -36,12 +37,13 @@ func TestAdminCreatePlans(t *testing.T) {
 	}
 	createdHidden, err := admin.API.CreatePlan(ctx, hiddenPlan)
 	require.NoError(t, err)
-	assert.Equal(t, "qa-hidden", createdHidden.GetCode())
+	fixture.RetirePlanAfterTest(t, admin, createdHidden.GetId())
+	assert.Equal(t, hiddenCode, createdHidden.GetCode())
 	assert.False(t, createdHidden.GetIsPublic())
 
 	// Create QA Yearly plan
 	yearlyPlan := &licensev1.Plan{
-		Code:         "qa-yearly",
+		Code:         yearlyCode,
 		Name:         "QA Yearly",
 		Price:        5000000,
 		Currency:     "VND",
@@ -56,12 +58,13 @@ func TestAdminCreatePlans(t *testing.T) {
 	}
 	createdYearly, err := admin.API.CreatePlan(ctx, yearlyPlan)
 	require.NoError(t, err)
-	assert.Equal(t, "qa-yearly", createdYearly.GetCode())
+	fixture.RetirePlanAfterTest(t, admin, createdYearly.GetId())
+	assert.Equal(t, yearlyCode, createdYearly.GetCode())
 	assert.True(t, createdYearly.GetIsPublic())
 
 	// Creating a plan whose code is already taken is refused
 	duplicatePlan := &licensev1.Plan{
-		Code:         "qa-yearly",
+		Code:         yearlyCode,
 		Name:         "QA Duplicate",
 		Price:        1,
 		Currency:     "VND",
@@ -85,7 +88,7 @@ func TestAdminCreatePlans(t *testing.T) {
 	var yearlyID string
 
 	for _, p := range allPlans {
-		if p.GetCode() == "qa-yearly" {
+		if p.GetCode() == yearlyCode {
 			yearlyID = p.GetId()
 			break
 		}
@@ -96,7 +99,7 @@ func TestAdminCreatePlans(t *testing.T) {
 	// Trying to rename it leaves the code unchanged
 	updatedYearly, err := admin.API.UpdatePlan(ctx, yearlyID, &licensev1.Plan{Code: "qa-yearly-modified"}, "code")
 	require.NoError(t, err)
-	assert.Equal(t, "qa-yearly", updatedYearly.GetCode(), "plan code must be immutable")
+	assert.Equal(t, yearlyCode, updatedYearly.GetCode(), "plan code must be immutable")
 }
 
 func TestAdminListAllPlans(t *testing.T) {

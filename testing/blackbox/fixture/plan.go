@@ -208,6 +208,22 @@ func registerVerifiedUser(tb testing.TB, api *client.Client, email, password, fu
 	return &Actor{Email: email, Password: password, Session: verified, API: api.WithToken(verified.GetAccessToken())}
 }
 
+// RetirePlanAfterTest takes the plan off sale when the test ends. Plans
+// cannot be deleted, so a long-lived target would otherwise offer one more
+// test plan to its owners after every run. Owners already on the plan keep it.
+func RetirePlanAfterTest(tb testing.TB, admin *Actor, planID string) {
+	tb.Helper()
+
+	tb.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		if _, err := admin.API.UpdatePlan(ctx, planID, &licensev1.Plan{IsActive: false}, "is_active"); err != nil {
+			tb.Errorf("take the test plan off sale: %v", err)
+		}
+	})
+}
+
 func publicPlanID(ctx context.Context, api *client.Client, planName string) (string, error) {
 	plans, err := api.ListPlans(ctx)
 	if err != nil {

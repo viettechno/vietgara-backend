@@ -79,6 +79,81 @@ func TestDeleteTestUsersCascades(t *testing.T) {
 	assert.Equal(t, 1, count(t, pg.Admin, `SELECT count(*) FROM garages WHERE id = $1`, lookalikeGarage))
 }
 
+// TestDeleteTestUsersClearsWhatRestrictsTheCascade: a garage with a unit, a
+// part, the part's packaging unit and a barcode of that packaging (each refers
+// to the one before ON DELETE RESTRICT) could not be deleted with its owner,
+// because the cascade deleted the unit first.
+func TestDeleteTestUsersClearsWhatRestrictsTheCascade(t *testing.T) {
+	pg := pgtest.StartMigrated(t)
+	ctx := t.Context()
+	old := time.Now().Add(-48 * time.Hour)
+
+	userID, garageID, unitID, partID := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
+
+	for _, stmt := range []struct {
+		sql  string
+		args []any
+	}{
+		{`INSERT INTO users (id, email, full_name, created_at) VALUES ($1, 'bb.stock@blackbox.vietgara.test', 'x', $2)`, []any{userID, old}},
+		{`INSERT INTO garages (id, user_id, name) VALUES ($1, $2, 'G')`, []any{garageID, userID}},
+		{`INSERT INTO units (id, garage_id, name, abbreviation) VALUES ($1, $2, 'Box', 'bx')`, []any{unitID, garageID}},
+		{`INSERT INTO parts (id, garage_id, sku, name, base_unit_id) VALUES ($1, $2, 'P1', 'Part', $3)`, []any{partID, garageID, unitID}},
+		{`INSERT INTO part_units (garage_id, part_id, unit_id, factor) VALUES ($1, $2, $3, 2)`, []any{garageID, partID, unitID}},
+		{`INSERT INTO part_barcodes (garage_id, part_id, unit_id, barcode) VALUES ($1, $2, $3, '8930001')`, []any{garageID, partID, unitID}},
+	} {
+		_, err := pg.Admin.ExecContext(ctx, stmt.sql, stmt.args...)
+		require.NoError(t, err, stmt.sql)
+	}
+
+	repo := repository.NewPostgresUserRepository(pg.AppPool(t))
+
+	deleted, err := repo.DeleteTestUsers(ctx, "blackbox.vietgara.test", time.Now().Add(-24*time.Hour))
+	require.NoError(t, err)
+	assert.EqualValues(t, 1, deleted)
+
+	assert.Zero(t, count(t, pg.Admin, `SELECT count(*) FROM users WHERE id = $1`, userID))
+	assert.Zero(t, count(t, pg.Admin, `SELECT count(*) FROM garages WHERE id = $1`, garageID))
+	assert.Zero(t, count(t, pg.Admin, `SELECT count(*) FROM units WHERE garage_id = $1`, garageID))
+	assert.Zero(t, count(t, pg.Admin, `SELECT count(*) FROM parts WHERE garage_id = $1`, garageID))
+}
+
+// TestDeleteTestUsersWaitsForTheOwnerOfTheGarage: a test manager who invited
+// someone into a test owner's garage cannot be deleted before the garage is
+// (staff_invitations.invited_by does not cascade). The manager sorts first, so
+// the first pass fails for the manager and the next one deletes it.
+func TestDeleteTestUsersWaitsForTheOwnerOfTheGarage(t *testing.T) {
+	pg := pgtest.StartMigrated(t)
+	ctx := t.Context()
+	old := time.Now().Add(-48 * time.Hour)
+
+	manager := "00000000-0000-4000-8000-000000000001"
+	owner := "ffffffff-ffff-4fff-8fff-ffffffffffff"
+	invitee, garageID := uuid.NewString(), uuid.NewString()
+
+	for _, stmt := range []struct {
+		sql  string
+		args []any
+	}{
+		{`INSERT INTO users (id, email, full_name, created_at) VALUES ($1, 'bb.manager@blackbox.vietgara.test', 'x', $2)`, []any{manager, old}},
+		{`INSERT INTO users (id, email, full_name, created_at) VALUES ($1, 'bb.owner@blackbox.vietgara.test', 'x', $2)`, []any{owner, old}},
+		{`INSERT INTO users (id, email, full_name, created_at) VALUES ($1, 'keeper@gmail.com', 'x', $2)`, []any{invitee, old}},
+		{`INSERT INTO garages (id, user_id, name) VALUES ($1, $2, 'G')`, []any{garageID, owner}},
+		{`INSERT INTO staff_invitations (garage_id, user_id, invited_by, expires_at) VALUES ($1, $2, $3, now() + interval '7 days')`, []any{garageID, invitee, manager}},
+	} {
+		_, err := pg.Admin.ExecContext(ctx, stmt.sql, stmt.args...)
+		require.NoError(t, err, stmt.sql)
+	}
+
+	repo := repository.NewPostgresUserRepository(pg.AppPool(t))
+
+	deleted, err := repo.DeleteTestUsers(ctx, "blackbox.vietgara.test", time.Now().Add(-24*time.Hour))
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, deleted)
+
+	assert.Zero(t, count(t, pg.Admin, `SELECT count(*) FROM users WHERE id IN ($1, $2)`, manager, owner))
+	assert.Equal(t, 1, count(t, pg.Admin, `SELECT count(*) FROM users WHERE id = $1`, invitee), "a real user is kept")
+}
+
 func count(t *testing.T, db *sql.DB, query string, args ...any) int {
 	t.Helper()
 

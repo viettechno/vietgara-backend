@@ -1,7 +1,9 @@
 package usecase_test
 
 import (
+	"bytes"
 	"context"
+	"log/slog"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -83,4 +85,24 @@ func TestTestUserPurgeJob(t *testing.T) {
 		cancel()
 		<-done
 	})
+}
+
+// A sweep in which one user fails still says how many it deleted. It replaces the
+// default logger, so it does not run in parallel with other tests.
+func TestTestUserPurgeJobLogsWhatItDeletedWhenAUserFails(t *testing.T) {
+	var out bytes.Buffer
+
+	previous := slog.Default()
+
+	slog.SetDefault(slog.New(slog.NewTextHandler(&out, nil)))
+	t.Cleanup(func() { slog.SetDefault(previous) })
+
+	domain, err := testusers.Parse("blackbox.vietgara.test")
+	require.NoError(t, err)
+
+	job := usecase.NewTestUserPurgeJob(&fakeDeleter{deleted: 290, err: errTestPurgeInvitedBy}, domain, time.Hour)
+
+	require.Error(t, job.Run(t.Context()))
+	assert.Contains(t, out.String(), "identity: purged test users")
+	assert.Contains(t, out.String(), "count=290")
 }

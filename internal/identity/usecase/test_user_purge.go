@@ -71,12 +71,14 @@ func (j *TestUserPurgeJob) Run(ctx context.Context) error {
 	}
 
 	deleted, err := j.users.DeleteTestUsers(ctx, j.domain.String(), j.now().Add(-j.retention))
-	if err != nil {
-		return fmt.Errorf("delete test users: %w", err)
-	}
 
+	// Logged even when a user failed: the others were deleted all the same.
 	if deleted > 0 {
 		slog.InfoContext(ctx, "identity: purged test users", "count", deleted, "domain", j.domain.String())
+	}
+
+	if err != nil {
+		return fmt.Errorf("delete test users: %w", err)
 	}
 
 	return nil

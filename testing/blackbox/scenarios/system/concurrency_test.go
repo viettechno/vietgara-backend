@@ -120,6 +120,7 @@ func TestRacesHaveOneWinner(t *testing.T) { //nolint:funlen // independent subte
 		})
 
 		assert.Equal(t, 1, successes(errs), "exactly one conversion wins: %v", errs)
+		assert.Equal(t, attempts-1, failuresWith(errs, http.StatusConflict), "the others are refused with a conflict, not a server error: %v", errs)
 
 		orders, err := business.Owner.API.ListRepairOrders(ctx, business.GarageID)
 		require.NoError(t, err)

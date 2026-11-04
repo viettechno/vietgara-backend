@@ -65,7 +65,7 @@ var (
 		domain.ErrInvalidApprovalMode, domain.ErrFieldTooLong, domain.ErrDecisionMismatch,
 		domain.ErrInvalidNonBillable, domain.ErrInvalidJobRef,
 	}
-	preconditionErrors = []error{domain.ErrNotEditable, domain.ErrNotApproved, domain.ErrLinkModeOnly}
+	preconditionErrors = []error{domain.ErrNotEditable, domain.ErrNotApproved, domain.ErrAlreadyConverted, domain.ErrLinkModeOnly}
 )
 
 // toAppError classifies err into an *apperror.AppError; op names the

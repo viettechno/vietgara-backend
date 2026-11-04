@@ -217,6 +217,9 @@ var (
 	ErrNotEditable = errors.New("the quote can no longer be changed in its current status")
 	// ErrNotApproved is returned by Convert when the quote is not approved.
 	ErrNotApproved = errors.New("only an approved quote can be converted into a repair order")
+	// ErrAlreadyConverted is returned by Convert when a request that ran at the same time
+	// converted the quote first (the repair order's unique quote_id refused this one).
+	ErrAlreadyConverted = errors.New("this quote was already converted into a repair order")
 	// ErrDecisionMismatch is returned when the decisions given do not
 	// cover exactly the quote's current lines.
 	ErrDecisionMismatch = errors.New("a decision is required for every line, and only for existing lines")

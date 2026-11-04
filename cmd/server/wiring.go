@@ -219,6 +219,10 @@ func (r quoteRepairOrders) Create(
 		GarageID: garageID, QuoteID: quoteID, ActorID: actorID, VehicleID: vehicleID, CustomerName: customerName,
 		VehiclePlate: vehiclePlate, Number: number, Lines: roLines, BillingParty: billingParty,
 	})
+	if errors.Is(err, repairorderDomain.ErrAlreadyConverted) {
+		return "", quoteDomain.ErrAlreadyConverted
+	}
+
 	if err != nil {
 		return "", err
 	}

@@ -23,6 +23,8 @@ func TestDeleteTestUsers(t *testing.T) {
 		assert.Equal(t, []any{"blackbox.vietgara.test", now}, args)
 	}).
 		ExpectExec("DELETE FROM users", dbtest.Tag(1), nil).
+		ExpectExec("DELETE FROM users", dbtest.Tag(0), errBoom).
+		// The first pass deleted someone, so the user that failed is tried once more.
 		ExpectExec("DELETE FROM users", dbtest.Tag(0), errBoom)
 
 	deleted, err := repo.DeleteTestUsers(tx.Context(t.Context()), "Blackbox.Vietgara.Test", now)

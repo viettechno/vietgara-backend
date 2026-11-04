@@ -218,10 +218,12 @@ func mapUniqueViolation(err error) error {
 	}
 }
 
-// DeleteTestUsers implements usecase.TestUserDeleter. Each user
-// is deleted on its own, so one that cannot be removed (say, a test staff
-// member who invited a real user: staff_invitations.invited_by does not
-// cascade) does not keep the others; its error is returned with the rest.
+// DeleteTestUsers implements usecase.TestUserDeleter. Each user is deleted on
+// its own, so one that cannot be removed does not keep the others; its error is
+// returned with the rest. A user can wait for another: a test manager who invited
+// someone into a test owner's garage cannot go until the garage has (the
+// invitation's invited_by does not cascade), so the users that failed are tried
+// again for as long as a pass deleted someone.
 func (r *PostgresUserRepository) DeleteTestUsers(ctx context.Context, emailDomain string, createdBefore time.Time) (int64, error) {
 	if emailDomain == "" {
 		return 0, errDeleteTestUsersEmptyEmailDomain
@@ -231,34 +233,45 @@ func (r *PostgresUserRepository) DeleteTestUsers(ctx context.Context, emailDomai
 
 	rows, err := q.Query(ctx, `
 		SELECT id FROM users
-		WHERE right(lower(email), length($1) + 1) = '@' || $1 AND created_at < $2`,
+		WHERE right(lower(email), length($1) + 1) = '@' || $1 AND created_at < $2
+		ORDER BY id`,
 		strings.ToLower(emailDomain), createdBefore)
 	if err != nil {
 		return 0, fmt.Errorf("list test users: %w", err)
 	}
 
-	ids, err := pgx.CollectRows(rows, pgx.RowTo[string])
+	pending, err := pgx.CollectRows(rows, pgx.RowTo[string])
 	if err != nil {
 		return 0, fmt.Errorf("list test users: %w", err)
 	}
 
-	var (
-		deleted int64
-		errs    []error
-	)
+	var deleted int64
 
-	for _, id := range ids {
-		// Garages, memberships, subscriptions and the rest cascade.
-		if _, err := q.Exec(ctx, `DELETE FROM users WHERE id = $1`, id); err != nil {
-			errs = append(errs, fmt.Errorf("delete test user %s: %w", id, err))
+	for len(pending) > 0 {
+		var (
+			failed []string
+			errs   []error
+		)
 
-			continue
+		for _, id := range pending {
+			if err := r.deleteTestUser(ctx, id); err != nil {
+				failed = append(failed, id)
+				errs = append(errs, fmt.Errorf("delete test user %s: %w", id, err))
+
+				continue
+			}
+
+			deleted++
 		}
 
-		deleted++
+		if len(failed) == len(pending) {
+			return deleted, errors.Join(errs...)
+		}
+
+		pending = failed
 	}
 
-	return deleted, errors.Join(errs...)
+	return deleted, nil
 }
 
 // ListTestUserEmails returns the recipients of test users eligible for purge.

@@ -11,30 +11,22 @@
 	docker-restart-backend \
 	docker-logs-backend \
 	docker-build-backend \
-	docker-up-owner-web \
-	docker-down-owner-web \
-	docker-restart-owner-web \
-	docker-logs-owner-web \
-	docker-build-owner-web \
-	docker-up-admin-web \
-	docker-down-admin-web \
-	docker-restart-admin-web \
-	docker-logs-admin-web \
-	docker-build-admin-web \
 	docker-ps \
-	docker-clean
+	docker-clean \
+	docker-full-up \
+	docker-full-down \
+	docker-full-ps \
+	docker-full-logs
 
 DOCKER_COMPOSE := docker compose
 POSTGRES_SERVICE := vietgara-pgsql
 BACKEND_SERVICE := vietgara-backend
-WEB_OWNER_SERVICE := vietgara-owner-web
-WEB_ADMIN_SERVICE := vietgara-admin-web
 
-docker-up: ## Start PostgreSQL and backend services
+docker-up: ## Start the backend and what it needs (Postgres, Redis, Kafka, Mailpit)
 	@printf "$(CYAN)▶ Starting VietGara services...$(RESET)\n"
 	@$(DOCKER_COMPOSE) up -d
 
-docker-down: ## Stop PostgreSQL and backend services
+docker-down: ## Stop the backend and what it needs
 	@printf "\033[33m▶ Stopping VietGara services...$(RESET)\n"
 	@$(DOCKER_COMPOSE) stop
 
@@ -76,47 +68,25 @@ docker-build-backend: ## Build the backend image
 	@printf "$(CYAN)▶ Building backend image...$(RESET)\n"
 	@$(DOCKER_COMPOSE) build $(BACKEND_SERVICE)
 
-docker-up-owner-web: ## Start the garage web admin
-	@printf "$(CYAN)▶ Starting garage web admin...$(RESET)\n"
-	@$(DOCKER_COMPOSE) up -d $(WEB_OWNER_SERVICE)
-
-docker-down-owner-web: ## Stop the garage web admin
-	@printf "\033[33m▶ Stopping garage web admin...$(RESET)\n"
-	@$(DOCKER_COMPOSE) stop $(WEB_OWNER_SERVICE)
-
-docker-restart-owner-web: ## Restart the garage web admin
-	@printf "$(CYAN)▶ Restarting garage web admin...$(RESET)\n"
-	@$(DOCKER_COMPOSE) restart $(WEB_OWNER_SERVICE)
-
-docker-logs-owner-web: ## Follow garage web admin logs
-	@$(DOCKER_COMPOSE) logs -f $(WEB_OWNER_SERVICE)
-
-docker-build-owner-web: ## Build the garage web admin image
-	@printf "$(CYAN)▶ Building garage web admin image...$(RESET)\n"
-	@$(DOCKER_COMPOSE) build $(WEB_OWNER_SERVICE)
-
-docker-up-admin-web: ## Start the platform admin
-	@printf "$(CYAN)▶ Starting platform admin...$(RESET)\n"
-	@$(DOCKER_COMPOSE) up -d $(WEB_ADMIN_SERVICE)
-
-docker-down-admin-web: ## Stop the platform admin
-	@printf "\033[33m▶ Stopping platform admin...$(RESET)\n"
-	@$(DOCKER_COMPOSE) stop $(WEB_ADMIN_SERVICE)
-
-docker-restart-admin-web: ## Restart the platform admin
-	@printf "$(CYAN)▶ Restarting platform admin...$(RESET)\n"
-	@$(DOCKER_COMPOSE) restart $(WEB_ADMIN_SERVICE)
-
-docker-logs-admin-web: ## Follow platform admin logs
-	@$(DOCKER_COMPOSE) logs -f $(WEB_ADMIN_SERVICE)
-
-docker-build-admin-web: ## Build the platform admin image
-	@printf "$(CYAN)▶ Building platform admin image...$(RESET)\n"
-	@$(DOCKER_COMPOSE) build $(WEB_ADMIN_SERVICE)
-
 docker-ps: ## Show running containers
 	@$(DOCKER_COMPOSE) ps
 
 docker-clean: ## Stop containers and remove volumes
 	@printf "$(RED)⚠ Stop containers and remove volumes...$(RESET)\n"
 	@$(DOCKER_COMPOSE) down -v
+
+# The whole application (the web apps and Kong in front of this backend) is the
+# vietgara-infra/local stack, which adds to docker-compose.yml.
+INFRA_LOCAL ?= ../vietgara-infra/local
+
+docker-full-up: ## Start the whole application (backend, web apps, Kong) from vietgara-infra/local
+	@$(MAKE) -C $(INFRA_LOCAL) up
+
+docker-full-down: ## Stop the whole application
+	@$(MAKE) -C $(INFRA_LOCAL) down
+
+docker-full-ps: ## Show the containers of the whole application
+	@$(MAKE) -C $(INFRA_LOCAL) ps
+
+docker-full-logs: ## Follow the logs of the whole application (SERVICE=vietgara-owner-web for one)
+	@$(MAKE) -C $(INFRA_LOCAL) logs SERVICE=$(SERVICE)

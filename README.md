@@ -60,14 +60,23 @@ httpapi, auth) is in `internal/platform`. The gRPC interceptors are in
 
 ## Run locally
 
-Start the full stack with Docker Compose:
+Start the backend and what it needs with Docker Compose (Postgres, Redis, Kafka, Mailpit, file storage; no web apps, no gateway):
 
 ```bash
 cp .env_example .env
-docker compose up --build        # Postgres, Redis, Kafka, Mailpit, backend, owner web, admin web, Kong
-open http://localhost:8000       # owner web through Kong
-open http://admin.localhost:8000 # platform admin through Kong (plans, subscriptions)
+docker compose up --build        # or: make docker-up
+curl localhost:8080/readyz       # REST (grpc-gateway): /readyz, and /api/v1/... as the web apps call it
+grpcurl -plaintext localhost:50051 list    # gRPC, server reflection is on
 open http://localhost:8025       # Mailpit: every e-mail sent locally
+```
+
+The ports are published on loopback only (`BACKEND_HTTP_PORT`, `BACKEND_GRPC_PORT` change them). Sign up and verify through the API, reading the OTP from Mailpit, as the blackbox suite does.
+
+The whole application, with the owner web, the platform admin and Kong in front of this backend, is `vietgara-infra/local` (needs `vietgara-infra`, `vietgara-owner-web` and `vietgara-admin-web` checked out next to this repository):
+
+```bash
+make docker-full-up              # http://localhost:8000 (owner web), http://admin.localhost:8000 (platform admin)
+make docker-full-down
 ```
 
 Or run only the dependencies in Compose and the backend on the host:

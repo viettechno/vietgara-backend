@@ -258,7 +258,7 @@ func TestRemindersAndGarages(t *testing.T) {
 	t.Parallel()
 
 	w := newWorld(t)
-	due := time.Date(2026, 11, 10, 0, 0, 0, 0, time.UTC)
+	due := time.Date(2026, 1, 10, 0, 0, 0, 0, time.UTC) // long overdue whatever today is
 	customer := uuid.NewString()
 
 	_, err := w.pg.Admin.ExecContext(t.Context(), `INSERT INTO customers (id, garage_id, full_name) VALUES ($1, $2, 'An')`, customer, w.garageA)
@@ -271,7 +271,27 @@ func TestRemindersAndGarages(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{w.garageA}, garages, "only a garage with an open receivable of a known customer")
 
+	// Reminders off, or the first offset out of reach, leave the garage out.
 	w.in(t, w.garageA, func(ctx context.Context) {
+		require.NoError(t, w.repo.SaveSettings(ctx, w.garageA, domain.Settings{PaymentTermsDays: 7, RemindersEnabled: false, ReminderOffsetDays: []int{3}}))
+	})
+
+	garages, err = w.repo.ReminderGarages(t.Context())
+	require.NoError(t, err)
+	require.Empty(t, garages, "reminders are off")
+
+	w.in(t, w.garageA, func(ctx context.Context) {
+		require.NoError(t, w.repo.SaveSettings(ctx, w.garageA, domain.Settings{PaymentTermsDays: 7, RemindersEnabled: true, ReminderOffsetDays: []int{90}}))
+	})
+
+	w.newReceivable(t, w.garageA, "QT-FRESH", 1, 0, time.Now().UTC().AddDate(0, 0, -1).Truncate(24*time.Hour), customer)
+
+	garages, err = w.repo.ReminderGarages(t.Context())
+	require.NoError(t, err)
+	require.Equal(t, []string{w.garageA}, garages, "the old receivable is past the 90 days")
+
+	w.in(t, w.garageA, func(ctx context.Context) {
+		require.NoError(t, w.repo.SaveSettings(ctx, w.garageA, domain.DefaultSettings()))
 		require.NoError(t, w.repo.SaveReminder(ctx, w.garageA, r.ID, &domain.Reminder{
 			OffsetDays: 3, Channel: "email", Outcome: domain.OutcomeFailed, Attempts: 1,
 		}))
@@ -285,7 +305,7 @@ func TestRemindersAndGarages(t *testing.T) {
 
 		open, err := w.repo.OpenWithCustomer(ctx, w.garageA, due.AddDate(0, 0, 3))
 		require.NoError(t, err)
-		require.Len(t, open, 1)
+		require.Len(t, open, 1, "the fresh receivable is not due yet")
 		require.Equal(t, 1, open[0].RemindersSent)
 		require.Len(t, open[0].Reminders, 2)
 		require.Equal(t, domain.OutcomeSent, open[0].Reminders[0].Outcome)
@@ -293,12 +313,18 @@ func TestRemindersAndGarages(t *testing.T) {
 		require.Equal(t, domain.ReasonNoEmail, open[0].Reminders[1].Reason)
 	})
 
-	// A paid receivable leaves the reminder garages.
+	// Paid receivables leave the reminder garages.
 	w.in(t, w.garageA, func(ctx context.Context) {
-		paid := *r
-		paid.PaidAmount = paid.TotalAmount
-		paid.Derive()
-		require.NoError(t, w.repo.Save(ctx, &paid))
+		for _, number := range []string{"QT-1", "QT-FRESH"} {
+			items, _, _, err := w.repo.List(ctx, w.garageA, usecase.ListFilter{Query: number, Today: due, Limit: 5})
+			require.NoError(t, err)
+			require.Len(t, items, 1)
+
+			paid := *items[0]
+			paid.PaidAmount = paid.TotalAmount
+			paid.Derive()
+			require.NoError(t, w.repo.Save(ctx, &paid))
+		}
 	})
 
 	garages, err = w.repo.ReminderGarages(t.Context())

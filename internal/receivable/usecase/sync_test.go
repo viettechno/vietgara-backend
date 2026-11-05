@@ -12,6 +12,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
 	"github.com/viettechno/vietgara-backend/internal/receivable/domain"
 	"github.com/viettechno/vietgara-backend/internal/receivable/usecase"
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
 func event(t *testing.T, garage string, payload any) outbox.Event {
@@ -134,6 +135,20 @@ func TestReceivableUseCase_HandleSettlementChanged(t *testing.T) {
 
 func TestReceivableUseCase_HandleSettlementChanged_Part2(t *testing.T) {
 	t.Parallel()
+
+	t.Run("an event of a settlement that is gone is dropped; any other failure is returned", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.lock()
+		d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(usecase.SettlementView{}, apperror.New(apperror.CodeNotFound, "gone")).Once()
+		require.NoError(t, uc.HandleSettlementChanged(t.Context(), changed(t)))
+
+		uc, d = newUseCase(t)
+		d.lock()
+		d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(usecase.SettlementView{}, errBoom).Once()
+		require.ErrorIs(t, uc.HandleSettlementChanged(t.Context(), changed(t)), errBoom)
+	})
 
 	t.Run("a malformed event is dropped", func(t *testing.T) {
 		t.Parallel()

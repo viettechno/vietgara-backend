@@ -177,7 +177,14 @@ CREATE FUNCTION public.receivable_reminder_garages() RETURNS SETOF uuid
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
     AS $$
-    SELECT DISTINCT garage_id FROM public.receivables WHERE status = 'open' AND customer_id IS NOT NULL;
+    -- A garage with reminders on and an open receivable of a known customer that
+    -- the first offset could already have reached. The day is UTC plus one, a
+    -- superset of every garage's day; the job decides exactly.
+    SELECT DISTINCT r.garage_id
+    FROM public.receivables r
+    LEFT JOIN public.receivable_settings s ON s.garage_id = r.garage_id
+    WHERE r.status = 'open' AND r.customer_id IS NOT NULL AND COALESCE(s.reminders_enabled, true)
+      AND r.due_date <= (now() AT TIME ZONE 'UTC')::date + 1 - COALESCE((SELECT min(o) FROM unnest(s.reminder_offset_days) AS o), 3);
 $$;
 
 REVOKE ALL ON FUNCTION public.receivable_reminder_garages() FROM PUBLIC;
@@ -185,7 +192,8 @@ GRANT ALL ON FUNCTION public.receivable_reminder_garages() TO vietgara_app;
 
 -- The settlements that are not paid and have no receivable: those issued before
 -- the module existed, and any whose event was lost. The reminder job creates
--- their receivables, a batch at a time. It answers ids only.
+-- their receivables, a batch at a time (in random order, so that a few that
+-- keep failing cannot keep the others waiting). It answers ids only.
 CREATE FUNCTION public.receivable_missing_settlements(batch integer) RETURNS TABLE(garage_id uuid, settlement_id uuid)
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'public'
@@ -193,7 +201,7 @@ CREATE FUNCTION public.receivable_missing_settlements(batch integer) RETURNS TAB
     SELECT s.garage_id, s.id FROM public.settlements s
     WHERE s.status <> 'paid'
       AND NOT EXISTS (SELECT 1 FROM public.receivables r WHERE r.garage_id = s.garage_id AND r.settlement_id = s.id)
-    ORDER BY s.created_at
+    ORDER BY random()
     LIMIT batch;
 $$;
 

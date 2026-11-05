@@ -7,6 +7,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
 	"github.com/viettechno/vietgara-backend/internal/receivable/domain"
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
 // settlementEvent is the part of the Billing & Settlement events the module
@@ -26,7 +27,14 @@ func (uc *ReceivableUseCase) HandleSettlementChanged(ctx context.Context, event 
 		return nil //nolint:nilerr // a malformed event cannot succeed on retry: drop it
 	}
 
-	return uc.Sync(ctx, event.GarageID, p.SettlementID)
+	err := uc.Sync(ctx, event.GarageID, p.SettlementID)
+
+	// A settlement that no longer exists cannot be read on any retry: drop the event.
+	if appErr, ok := apperror.As(err); ok && appErr.Code == apperror.CodeNotFound {
+		return nil
+	}
+
+	return err
 }
 
 // Sync brings the receivable of a settlement up to date with the settlement.

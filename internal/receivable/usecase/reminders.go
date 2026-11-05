@@ -169,7 +169,7 @@ func (uc *ReceivableUseCase) remind(ctx context.Context, garageID, receivableID 
 
 	for _, offset := range due[:len(due)-1] {
 		if err := uc.repo.SaveReminder(ctx, garageID, r.ID, &domain.Reminder{
-			OffsetDays: offset, Channel: domain.ChannelEmail, Outcome: domain.OutcomeSkipped, Reason: domain.ReasonSuperseded, Attempts: 1,
+			OffsetDays: offset, Channel: domain.ChannelEmail, Outcome: domain.OutcomeSkipped, Reason: domain.ReasonSuperseded, Attempts: attemptsAfter(r.Reminders, offset),
 		}); err != nil {
 			return err
 		}

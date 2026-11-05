@@ -6,13 +6,21 @@ package handler
 import (
 	"context"
 
+	commonv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/common/v1"
 	platformv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/platform/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/middleware"
 	"github.com/viettechno/vietgara-backend/internal/platform/access"
 	"github.com/viettechno/vietgara-backend/internal/platform/httpapi"
+	"github.com/viettechno/vietgara-backend/internal/platformstaff/domain"
 	"github.com/viettechno/vietgara-backend/internal/platformstaff/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+)
+
+// Paging of the audit log (API Specification Section 1.1).
+const (
+	defaultPageSize = 20
+	maxPageSize     = 100
 )
 
 // Server implements the platform staff gRPC services.
@@ -31,6 +39,7 @@ func NewServer(uc *usecase.UseCase) *Server { return &Server{uc: uc} }
 func Policies() middleware.Policies {
 	read := middleware.PlatformMethod(access.PlatformStaffRead)
 	write := middleware.PlatformMethod(access.PlatformStaffWrite)
+	auditRead := middleware.PlatformMethod(access.PlatformAuditRead)
 
 	return middleware.Policies{
 		platformv1.PlatformStaffService_ListPlatformPermissions_FullMethodName:   read,
@@ -49,6 +58,7 @@ func Policies() middleware.Policies {
 		platformv1.PlatformStaffService_CreatePlatformInvitation_FullMethodName:  write,
 		platformv1.PlatformStaffService_ListPlatformInvitations_FullMethodName:   read,
 		platformv1.PlatformStaffService_RevokePlatformInvitation_FullMethodName:  write,
+		platformv1.PlatformStaffService_ListPlatformAuditLog_FullMethodName:      auditRead,
 
 		platformv1.PlatformAccessService_GetMyPlatformAccess_FullMethodName:       middleware.UserMethod(),
 		platformv1.PlatformAccessService_ListMyPlatformInvitations_FullMethodName: middleware.UserMethod(),
@@ -294,4 +304,52 @@ func (s *Server) DeclinePlatformInvitation(ctx context.Context, req *platformv1.
 	}
 
 	return &platformv1.DeclinePlatformInvitationResponse{Invitation: invitationToProto(inv)}, nil
+}
+
+// ListPlatformAuditLog reads the platform audit log, newest first.
+func (s *Server) ListPlatformAuditLog(ctx context.Context, req *platformv1.ListPlatformAuditLogRequest) (*platformv1.ListPlatformAuditLogResponse, error) {
+	filter := domain.AuditFilter{
+		Action: req.GetAction(), EntityType: req.GetEntityType(), ActorUserID: req.GetActorUserId(),
+	}
+
+	if t := req.GetFrom(); t != nil {
+		from := t.AsTime()
+		filter.From = &from
+	}
+
+	if t := req.GetTo(); t != nil {
+		to := t.AsTime()
+		filter.To = &to
+	}
+
+	page := pageOf(req.GetPage(), req.GetPageSize())
+
+	entries, total, err := s.uc.ListAuditLog(ctx, filter, page)
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	resp := &platformv1.ListPlatformAuditLogResponse{
+		Data:       make([]*platformv1.PlatformAuditEntry, 0, len(entries)),
+		Pagination: &commonv1.Pagination{Total: int32(total), Page: int32(page.Page), PageSize: int32(page.PageSize)}, //nolint:gosec // bounded
+	}
+	for _, e := range entries {
+		resp.Data = append(resp.Data, auditEntryToProto(e))
+	}
+
+	return resp, nil
+}
+
+// pageOf applies the paging defaults of API Specification Section 1.1.
+func pageOf(page, pageSize int32) domain.Page {
+	p, size := int(page), int(pageSize)
+	if p < 1 {
+		p = 1
+	}
+
+	if size < 1 {
+		size = defaultPageSize
+	}
+
+	return domain.Page{Page: p, PageSize: min(size, maxPageSize)}
 }

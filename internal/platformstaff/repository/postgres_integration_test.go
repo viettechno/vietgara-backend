@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/viettechno/vietgara-backend/internal/platform/access"
+	dbpkg "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/platform/db/pgtest"
 	"github.com/viettechno/vietgara-backend/internal/platformstaff/domain"
 	"github.com/viettechno/vietgara-backend/internal/platformstaff/repository"
@@ -286,4 +287,97 @@ func TestAMalformedIDIsNotFound(t *testing.T) {
 
 	require.ErrorIs(t, repo.RemoveMember(ctx, uuid.NewString(), "not-a-uuid"), domain.ErrMemberNotFound)
 	require.ErrorIs(t, repo.RemoveMember(ctx, "not-a-uuid", uuid.NewString()), domain.ErrMemberNotFound)
+}
+
+// TestPlatformAuditLogShowsOnlyEntriesWithoutAGarage covers the read behind
+// audit.read: the entries that belong to no garage, newest first, filtered
+// and paged, while the garages' own entries stay out and the setting that
+// opens the log is closed again before the transaction goes on.
+func TestPlatformAuditLogShowsOnlyEntriesWithoutAGarage(t *testing.T) {
+	pg := pgtest.StartMigrated(t)
+	pool := pg.AppPool(t)
+	repo := repository.NewPostgres(pool)
+	manager := dbpkg.NewTxManager(pool)
+	ctx := t.Context()
+
+	actor := seedUser(t, pg.Admin, "actor@x.test", "active")
+	garage := uuid.NewString()
+	base := time.Date(2026, 11, 1, 8, 0, 0, 0, time.UTC)
+
+	for i, e := range []struct{ garage, actor, action, entityType string }{
+		{"", actor, "plan.created", "plan"},
+		{"", actor, "plan.updated", "plan"},
+		{"", "", "platform_staff.group_created", "platform_group"},
+		{"", actor, "platform.signed_in", "user"},
+		{garage, actor, "role.updated", "role"},
+	} {
+		_, err := pg.Admin.ExecContext(ctx, `
+			INSERT INTO audit_log (actor_user_id, garage_id, action, entity_type, entity_id, after, ip, created_at)
+			VALUES (NULLIF($1, '')::uuid, NULLIF($2, '')::uuid, $3, $4, 'x', '{"n":1}', '1.2.3.4', $5)`,
+			e.actor, e.garage, e.action, e.entityType, base.Add(time.Duration(i)*time.Hour))
+		require.NoError(t, err)
+	}
+
+	list := func(filter domain.AuditFilter, page domain.Page) (entries []*domain.AuditEntry, total int) {
+		t.Helper()
+
+		require.NoError(t, manager.WithTransaction(ctx, dbpkg.UserScope(uuid.NewString()), func(ctx context.Context) error {
+			var err error
+
+			entries, total, err = repo.ListAuditLog(ctx, filter, page)
+
+			return err
+		}))
+
+		return entries, total
+	}
+
+	all, total := list(domain.AuditFilter{}, domain.Page{Page: 1, PageSize: 10})
+	require.Equal(t, 4, total, "the garage's entry is not part of the platform log")
+	require.Len(t, all, 4)
+	assert.Equal(t, "platform.signed_in", all[0].Action, "newest first")
+	assert.Equal(t, "plan.created", all[3].Action)
+	assert.Equal(t, actor, all[0].ActorUserID)
+	assert.Empty(t, all[1].ActorUserID, "a system entry has no actor")
+	assert.JSONEq(t, `{"n":1}`, all[0].AfterJSON)
+	assert.Empty(t, all[0].BeforeJSON)
+	assert.Equal(t, "1.2.3.4", all[0].IP)
+
+	plans, total := list(domain.AuditFilter{Action: "plan."}, domain.Page{Page: 1, PageSize: 10})
+	assert.Equal(t, 2, total)
+	assert.Len(t, plans, 2)
+
+	_, total = list(domain.AuditFilter{Action: "plan_"}, domain.Page{Page: 1, PageSize: 10})
+	assert.Zero(t, total, "an underscore in the filter is a character, not a wildcard")
+
+	byType, _ := list(domain.AuditFilter{EntityType: "user"}, domain.Page{Page: 1, PageSize: 10})
+	assert.Len(t, byType, 1)
+
+	byActor, total := list(domain.AuditFilter{ActorUserID: actor}, domain.Page{Page: 1, PageSize: 10})
+	assert.Equal(t, 3, total)
+	assert.Len(t, byActor, 3)
+
+	from, to := base.Add(time.Hour), base.Add(3*time.Hour)
+	window, total := list(domain.AuditFilter{From: &from, To: &to}, domain.Page{Page: 1, PageSize: 10})
+	assert.Equal(t, 2, total, "from is inclusive, to is exclusive")
+	assert.Equal(t, "plan.updated", window[1].Action)
+
+	second, total := list(domain.AuditFilter{}, domain.Page{Page: 2, PageSize: 3})
+	assert.Equal(t, 4, total)
+	require.Len(t, second, 1)
+	assert.Equal(t, "plan.created", second[0].Action)
+
+	require.NoError(t, manager.WithTransaction(ctx, dbpkg.UserScope(uuid.NewString()), func(ctx context.Context) error {
+		_, _, err := repo.ListAuditLog(ctx, domain.AuditFilter{}, domain.Page{Page: 1, PageSize: 10})
+		require.NoError(t, err)
+
+		var n int
+		require.NoError(t, dbpkg.QuerierFromContext(ctx, pool).QueryRow(ctx, `SELECT count(*) FROM audit_log`).Scan(&n))
+		assert.Zero(t, n, "the log is closed again once the read is done")
+
+		return nil
+	}))
+
+	_, _, err := repo.ListAuditLog(ctx, domain.AuditFilter{}, domain.Page{Page: 1, PageSize: 10})
+	require.Error(t, err, "outside a transaction the setting would not be local to the request")
 }

@@ -18,7 +18,7 @@ import (
 
 const (
 	MIGRATIONS_PATH           = "file://migrations"
-	MIGRATION_CURRENT_VERSION = 88
+	MIGRATION_CURRENT_VERSION = 89
 
 	rlsTestRole = "rls_test_reader"
 )

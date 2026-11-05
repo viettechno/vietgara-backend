@@ -26,6 +26,10 @@ type Repo struct {
 	Members     map[string][]string // group -> users
 	Admins      []string
 	Invitations map[string]*domain.Invitation
+	// AuditLog is what ListAuditLog reads, newest first; the fake applies no filter.
+	AuditLog []*domain.AuditEntry
+	// AuditFilter is the filter of the last ListAuditLog call.
+	AuditFilter domain.AuditFilter
 	FailOn      string // method name that fails
 }
 
@@ -48,6 +52,17 @@ func (r *Repo) fails(method string) error {
 	}
 
 	return nil
+}
+
+// ListAuditLog implements the Repo fake.
+func (r *Repo) ListAuditLog(_ context.Context, f domain.AuditFilter, _ domain.Page) ([]*domain.AuditEntry, int, error) {
+	if err := r.fails("ListAuditLog"); err != nil {
+		return nil, 0, err
+	}
+
+	r.AuditFilter = f
+
+	return r.AuditLog, len(r.AuditLog), nil
 }
 
 // ListRoles implements the Repo fake.

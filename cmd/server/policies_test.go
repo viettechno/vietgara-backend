@@ -9,6 +9,8 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/reflect/protoregistry"
+
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
 )
 
 // publicMethods is the complete list of RPCs that need no access token. It is
@@ -110,4 +112,41 @@ func TestEveryRPCDeclaresItsAuthorization(t *testing.T) {
 	sort.Strings(want)
 
 	assert.Equal(t, want, public, "the anonymous surface changed: update publicMethods after a security review")
+}
+
+// reservedPlatformPermissions are catalogue permissions that no RPC checks
+// yet, because the screens they are named for do not exist: staff can be
+// given them in a role, and they open nothing until then. Give the permission
+// to its RPC when it is built, and remove it from here.
+var reservedPlatformPermissions = map[string]string{
+	string(access.PlatformStatsRead): "platform statistics dashboard (Phase 3 admin dashboards)",
+	string(access.PlatformUserRead):  "platform user directory (Phase 3 admin dashboards)",
+}
+
+// TestEveryPlatformPermissionGuardsSomething keeps the platform permission
+// catalogue honest: each permission is the policy of at least one RPC, or is
+// listed above as reserved, and a reserved one is not checked anywhere.
+func TestEveryPlatformPermissionGuardsSomething(t *testing.T) {
+	t.Parallel()
+
+	guarded := map[string]bool{}
+
+	for _, policy := range apiPolicies() {
+		if policy.Platform != "" {
+			guarded[string(policy.Platform)] = true
+		}
+	}
+
+	for _, entry := range access.PlatformCatalog {
+		name := string(entry.Permission)
+		reason, reserved := reservedPlatformPermissions[name]
+
+		if reserved {
+			assert.False(t, guarded[name], "%s is checked by an RPC: remove it from reservedPlatformPermissions (%s)", name, reason)
+
+			continue
+		}
+
+		assert.True(t, guarded[name], "%s guards no RPC: give it to the RPC it is meant for, or list it in reservedPlatformPermissions", name)
+	}
 }

@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	platformv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/platform/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/viettechno/vietgara-backend/internal/platform/access"
 	"github.com/viettechno/vietgara-backend/internal/platformstaff/domain"
@@ -199,4 +200,12 @@ func maskPaths(paths []string, settable ...string) []string {
 	}
 
 	return out
+}
+
+func auditEntryToProto(e *domain.AuditEntry) *platformv1.PlatformAuditEntry {
+	return &platformv1.PlatformAuditEntry{
+		Id: e.ID, ActorUserId: e.ActorUserID, ActorName: e.ActorName, Action: e.Action,
+		EntityType: e.EntityType, EntityId: e.EntityID, BeforeJson: e.BeforeJSON, AfterJson: e.AfterJSON,
+		Ip: e.IP, CreatedAt: timestamppb.New(e.CreatedAt),
+	}
 }

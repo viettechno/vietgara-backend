@@ -75,6 +75,10 @@ type Repository interface {
 	// past their expiry as expired, so a new one can be made.
 	ExpireStale(ctx context.Context, groupID, userID string, now time.Time) error
 
+	// ListAuditLog returns the platform audit log (entries with no garage),
+	// newest first, and the number of entries that match.
+	ListAuditLog(ctx context.Context, filter domain.AuditFilter, page domain.Page) ([]*domain.AuditEntry, int, error)
+
 	// PlatformAccess implements access.PlatformReader.
 	PlatformAccess(ctx context.Context, userID string) (*access.PlatformAccess, error)
 }

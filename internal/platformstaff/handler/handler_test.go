@@ -12,10 +12,12 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/viettechno/vietgara-backend/internal/middleware"
 	"github.com/viettechno/vietgara-backend/internal/platform/access"
 	"github.com/viettechno/vietgara-backend/internal/platform/auth"
+	"github.com/viettechno/vietgara-backend/internal/platformstaff/domain"
 	"github.com/viettechno/vietgara-backend/internal/platformstaff/handler"
 	"github.com/viettechno/vietgara-backend/internal/platformstaff/platformstafftest"
 	"github.com/viettechno/vietgara-backend/internal/platformstaff/usecase"
@@ -79,7 +81,38 @@ func TestPolicies(t *testing.T) {
 		assert.False(t, p[method].Public)
 	}
 
-	assert.Len(t, p, 20)
+	assert.Equal(t, access.PlatformAuditRead, p[platformv1.PlatformStaffService_ListPlatformAuditLog_FullMethodName].Platform)
+	assert.Len(t, p, 21)
+}
+
+func TestListPlatformAuditLogThroughTheAPI(t *testing.T) {
+	t.Parallel()
+
+	f := newFixture(t)
+	f.repo.AuditLog = []*domain.AuditEntry{{
+		ID: "a1", ActorUserID: "admin", Action: "plan.updated", EntityType: "plan", EntityID: "p1",
+		BeforeJSON: `{"name":"A"}`, AfterJSON: `{"name":"B"}`, IP: "1.2.3.4", CreatedAt: time.Date(2026, 11, 5, 8, 0, 0, 0, time.UTC),
+	}}
+
+	resp, err := f.srv.ListPlatformAuditLog(f.as(t, "admin"), &platformv1.ListPlatformAuditLogRequest{
+		Action: "plan.", From: timestamppb.New(time.Date(2026, 11, 1, 0, 0, 0, 0, time.UTC)),
+	})
+	require.NoError(t, err)
+	require.Len(t, resp.GetData(), 1)
+
+	entry := resp.GetData()[0]
+	assert.Equal(t, "plan.updated", entry.GetAction())
+	assert.JSONEq(t, `{"name":"B"}`, entry.GetAfterJson())
+	assert.Equal(t, "1.2.3.4", entry.GetIp())
+	assert.EqualValues(t, 1, resp.GetPagination().GetTotal())
+	assert.EqualValues(t, 1, resp.GetPagination().GetPage())
+	assert.EqualValues(t, 20, resp.GetPagination().GetPageSize())
+	assert.Equal(t, "plan.", f.repo.AuditFilter.Action)
+	assert.NotNil(t, f.repo.AuditFilter.From)
+	assert.Nil(t, f.repo.AuditFilter.To)
+
+	_, err = f.srv.ListPlatformAuditLog(f.as(t, "admin"), &platformv1.ListPlatformAuditLogRequest{ActorUserId: "x"})
+	requireStatus(t, err, codes.InvalidArgument)
 }
 
 func TestRolesAndGroupsThroughTheAPI(t *testing.T) {

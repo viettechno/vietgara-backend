@@ -596,3 +596,43 @@ func TestCatalogue(t *testing.T) {
 
 	assert.Equal(t, access.PlatformCatalog, newEnv(t).uc.PermissionCatalogue())
 }
+
+func TestListAuditLogNamesTheActors(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t)
+	e.repo.AuditLog = []*domain.AuditEntry{
+		{ID: "a1", ActorUserID: staffID, Action: "plan.updated", EntityType: "plan", EntityID: "p1"},
+		{ID: "a2", ActorUserID: "u-gone", Action: "platform.signed_in", EntityType: "user", EntityID: "u-gone"},
+		{ID: "a3", Action: "plan.created", EntityType: "plan", EntityID: "p2"},
+	}
+
+	entries, total, err := e.uc.ListAuditLog(e.as(t, adminID), domain.AuditFilter{Action: "plan."}, domain.Page{Page: 1, PageSize: 20})
+	require.NoError(t, err)
+	assert.Equal(t, 3, total)
+	assert.Equal(t, "plan.", e.repo.AuditFilter.Action)
+	assert.Equal(t, "Staff Manager", entries[0].ActorName)
+	assert.Empty(t, entries[1].ActorName, "a user who is gone has no name")
+	assert.Empty(t, entries[2].ActorName, "the system has no actor")
+}
+
+func TestListAuditLogRefusesABadFilter(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t)
+	ctx := e.as(t, adminID)
+	page := domain.Page{Page: 1, PageSize: 20}
+
+	_, _, err := e.uc.ListAuditLog(ctx, domain.AuditFilter{ActorUserID: "not-a-uuid"}, page)
+	require.Error(t, err)
+	assert.Equal(t, apperror.ReasonValidation, apperror.ReasonOf(err))
+
+	from, to := e.now, e.now.Add(-time.Hour)
+	_, _, err = e.uc.ListAuditLog(ctx, domain.AuditFilter{From: &from, To: &to}, page)
+	require.Error(t, err)
+	assert.Equal(t, apperror.ReasonValidation, apperror.ReasonOf(err))
+
+	e.repo.FailOn = "ListAuditLog"
+	_, _, err = e.uc.ListAuditLog(ctx, domain.AuditFilter{}, page)
+	require.Error(t, err)
+}

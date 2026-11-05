@@ -6,6 +6,7 @@ package platform_test
 import (
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -366,4 +367,65 @@ func TestOrdinaryUsersHaveNoPlatformAccess(t *testing.T) {
 	catalogue, err := admin.API.ListPlatformPermissions(ctx)
 	require.NoError(t, err)
 	assert.Len(t, catalogue, 12)
+}
+
+// Scenario: E2E-PLT-012: the platform audit log is read with audit.read. A
+// platform change appears with who made it; a user without the permission is
+// refused until a group gives it, at once; the filters and the paging work.
+func TestAuditLogIsReadWithAuditRead(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	admin := fixture.PlatformAdmin(t)
+	reader := fixture.NewVerifiedOwner(t, "plt012")
+
+	name := uniqueName("audited")
+
+	role, err := admin.API.CreatePlatformRole(ctx, &platformv1.PlatformRole{Name: name, Permissions: []platformv1.PlatformPermission{subscriptionRead}})
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = admin.API.DeletePlatformRole(t.Context(), role.GetId()) })
+
+	log, err := admin.API.ListPlatformAuditLog(ctx, url.Values{"action": {"platform_role."}, "entityType": {"platform_role"}, "pageSize": {"100"}})
+	require.NoError(t, err)
+
+	var entry *platformv1.PlatformAuditEntry
+
+	for _, e := range log.GetData() {
+		if e.GetEntityId() == role.GetId() && e.GetAction() == "platform_role.created" {
+			entry = e
+		}
+	}
+
+	require.NotNil(t, entry, "the new role is in the platform log")
+	assert.Equal(t, admin.Session.GetUser().GetId(), entry.GetActorUserId())
+	assert.NotEmpty(t, entry.GetActorName())
+	assert.Contains(t, entry.GetAfterJson(), name)
+	assert.NotEmpty(t, entry.GetIp())
+	assert.NotNil(t, entry.GetCreatedAt())
+
+	for _, e := range log.GetData() {
+		assert.True(t, strings.HasPrefix(e.GetAction(), "platform_role."), "the action filter matches the start: %s", e.GetAction())
+	}
+
+	_, err = reader.API.ListPlatformAuditLog(ctx, nil)
+	fixture.RequireAPIError(t, err, http.StatusForbidden, "PLATFORM_PERMISSION_REQUIRED")
+
+	tm := newTeam(t, "auditors", auditRead)
+	tm.join(t, admin, reader)
+
+	mine, err := reader.API.ListPlatformAuditLog(ctx, url.Values{"action": {"platform_role."}})
+	require.NoError(t, err, "the permission comes from the database, so the same token reads at once")
+	assert.NotEmpty(t, mine.GetData())
+
+	_, err = admin.API.ListPlatformAuditLog(ctx, url.Values{"actorUserId": {"not-a-user"}})
+	fixture.RequireAPIError(t, err, http.StatusBadRequest, "VALIDATION_ERROR")
+
+	_, err = admin.API.ListPlatformAuditLog(ctx, url.Values{"from": {"2026-11-02T00:00:00Z"}, "to": {"2026-11-01T00:00:00Z"}})
+	fixture.RequireAPIError(t, err, http.StatusBadRequest, "VALIDATION_ERROR")
+
+	one, err := admin.API.ListPlatformAuditLog(ctx, url.Values{"action": {"platform_role."}, "pageSize": {"1"}})
+	require.NoError(t, err)
+	assert.Len(t, one.GetData(), 1)
+	assert.Greater(t, one.GetPagination().GetTotal(), int32(1), "the total counts every match, not the page")
 }

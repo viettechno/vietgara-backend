@@ -124,3 +124,14 @@ func (c *Client) DeclinePlatformInvitation(ctx context.Context, invitationID str
 	return call[platformv1.PlatformInvitation](ctx, c, http.MethodPost,
 		"/api/v1/me/platform-invitations/"+url.PathEscape(invitationID)+"/decline", &platformv1.DeclinePlatformInvitationRequest{})
 }
+
+// ListPlatformAuditLog reads the platform audit log; query holds the filters
+// (action, entityType, actorUserId, from, to) and the paging (page, pageSize).
+func (c *Client) ListPlatformAuditLog(ctx context.Context, query url.Values) (*platformv1.ListPlatformAuditLogResponse, error) {
+	path := "/api/v1/admin/audit-log"
+	if len(query) > 0 {
+		path += "?" + query.Encode()
+	}
+
+	return call[platformv1.ListPlatformAuditLogResponse](ctx, c, http.MethodGet, path, nil)
+}

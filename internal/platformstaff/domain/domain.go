@@ -181,3 +181,41 @@ var (
 	ErrInvitationExpired    = errors.New("the invitation has expired")
 	ErrPermissionNotHeld    = errors.New("you can only give permissions you hold yourself")
 )
+
+// AuditEntry is one entry of the platform audit log: a change made at
+// platform level, or a platform sign-in. Entries that belong to a garage are
+// not part of it.
+type AuditEntry struct {
+	ID          string
+	ActorUserID string
+	// ActorName is the actor's name when the user still exists.
+	ActorName  string
+	Action     string
+	EntityType string
+	EntityID   string
+	// BeforeJSON and AfterJSON are the state around the change as JSON text,
+	// empty when the entry has none.
+	BeforeJSON string
+	AfterJSON  string
+	IP         string
+	CreatedAt  time.Time
+}
+
+// AuditFilter narrows a read of the platform audit log; a zero field does
+// not filter.
+type AuditFilter struct {
+	// Action matches the start of the action ("plan." finds every plan change).
+	Action      string
+	EntityType  string
+	ActorUserID string
+	// From is inclusive, To exclusive.
+	From, To *time.Time
+}
+
+// Page is one page of a list.
+type Page struct {
+	Page, PageSize int
+}
+
+// Offset is the number of rows before the page.
+func (p Page) Offset() int { return (p.Page - 1) * p.PageSize }

@@ -334,6 +334,9 @@ func TestSettlementUseCase_VoidPayment(t *testing.T) {
 		d.Settlements.EXPECT().VoidPayment(mock.Anything, garageID, settlementID, "p-1", "nhập nhầm").Return(openSettlement(), nil).Once()
 		d.Settlements.EXPECT().SaveStatus(mock.Anything, garageID, settlementID, domain.StatusPending).Return(nil).Once()
 		entry := expectAudit(d)
+		d.Events.EXPECT().Publish(mock.Anything, usecase.EventPaymentVoucherVoided, garageID, "", map[string]any{
+			"settlement_id": settlementID, "garage_id": garageID, "payment_id": "p-1",
+		}).Return(nil).Once()
 		d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(openSettlement(), nil).Once()
 
 		s, err := uc.VoidPayment(t.Context(), request)
@@ -423,4 +426,23 @@ func TestSettlementUseCase_VoidPayment(t *testing.T) {
 		_, err := uc.VoidPayment(t.Context(), request)
 		assertAppError(t, err, apperror.CodeInternal)
 	})
+}
+
+func TestSettlementUseCase_VoidPayment_EventFailure(t *testing.T) {
+	t.Parallel()
+
+	paid := openSettlement()
+	paid.PaidAmount, paid.Status = 400_000, domain.StatusPartiallyPaid
+	paid.Payments = []domain.Payment{{ID: "p-1", Amount: 400_000, Method: domain.MethodCash, VoucherNumber: "PT-0001", PayerName: "An"}}
+	request := usecase.VoidPaymentRequest{GarageID: garageID, SettlementID: settlementID, PaymentID: "p-1", ActorID: actorID, Reason: "nhập nhầm"}
+
+	uc, d := newUseCase(t)
+	d.Settlements.EXPECT().FindByID(mock.Anything, garageID, settlementID).Return(paid, nil).Once()
+	d.Settlements.EXPECT().VoidPayment(mock.Anything, garageID, settlementID, "p-1", "nhập nhầm").Return(openSettlement(), nil).Once()
+	d.Settlements.EXPECT().SaveStatus(mock.Anything, garageID, settlementID, domain.StatusPending).Return(nil).Once()
+	expectAudit(d)
+	d.Events.EXPECT().Publish(mock.Anything, usecase.EventPaymentVoucherVoided, garageID, "", mock.Anything).Return(errBoom).Once()
+
+	_, err := uc.VoidPayment(t.Context(), request)
+	assertAppError(t, err, apperror.CodeInternal)
 }

@@ -93,6 +93,30 @@ func (s *Server) ExportRevenueExcel(ctx context.Context, req *documentv1.ExportR
 	return excelBody(data), nil
 }
 
+// ExportReceivablesExcel renders the receivables list as an Excel workbook
+// (FR-DOC-02).
+func (s *Server) ExportReceivablesExcel(ctx context.Context, req *documentv1.ExportReceivablesExcelRequest) (*httpbody.HttpBody, error) {
+	data, err := s.uc.ReceivablesExcel(ctx, req.GetGarageId(), req.GetCustomerId(), req.GetQuery(), req.GetOverdueOnly(), req.GetIncludePaid())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return excelBody(data), nil
+}
+
+// ExportReceivableReconciliationExcel renders the reconciliation of a period
+// as an Excel workbook (FR-REC-04).
+func (s *Server) ExportReceivableReconciliationExcel(
+	ctx context.Context, req *documentv1.ExportReceivableReconciliationExcelRequest,
+) (*httpbody.HttpBody, error) {
+	data, err := s.uc.ReconciliationExcel(ctx, req.GetGarageId(), req.GetFrom(), req.GetTo())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return excelBody(data), nil
+}
+
 const dateLayout = "2006-01-02"
 
 // revenuePeriod names a period for the use case; an unspecified one is

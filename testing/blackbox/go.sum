@@ -56,6 +56,8 @@ github.com/viettechno/vietgara-proto v1.21.0 h1:IjnufmrWorJcdNDX/aWKkWfEbMC4h0jk
 github.com/viettechno/vietgara-proto v1.21.0/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
 github.com/viettechno/vietgara-proto v1.22.0 h1:ackeboXZCWi68LDw0tNQHSTLqq9Za/ntOsoMWTBHiHw=
 github.com/viettechno/vietgara-proto v1.22.0/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
+github.com/viettechno/vietgara-proto v1.22.1-0.20261105132355-d8c348a70ba5 h1:EshvGl1vbZW5JEsrwIAd6TXcFjujUZmgD+NucGBMiz4=
+github.com/viettechno/vietgara-proto v1.22.1-0.20261105132355-d8c348a70ba5/go.mod h1:zn5JQyfOYx15Xx1WnW4umx2nck/UzMiV9vR9ZqZpm6w=
 github.com/viettechno/vietgara-testdata v0.4.0 h1:BcPuQRShp598SlQIQvZGW9J9KLHy+xSVA9KllBakyF8=
 github.com/viettechno/vietgara-testdata v0.4.0/go.mod h1:U0TReHiBgomNBgvyFNxgMpcvQA5V8CDaOiLmeOXr1W4=
 github.com/xuri/efp v0.0.2 h1:74yhBh0nfIWLOrN76wtShYVse94pADGYS0/c86jOp8Q=

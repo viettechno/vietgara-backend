@@ -1,0 +1,8 @@
+DROP FUNCTION IF EXISTS public.receivable_reminder_garages();
+DROP TABLE IF EXISTS public.receivable_reminders;
+DROP TABLE IF EXISTS public.receivable_entries;
+DROP TABLE IF EXISTS public.receivables;
+DROP TABLE IF EXISTS public.receivable_settings;
+DROP TYPE IF EXISTS public.reminder_outcome;
+DROP TYPE IF EXISTS public.receivable_entry_kind;
+DROP TYPE IF EXISTS public.receivable_status;

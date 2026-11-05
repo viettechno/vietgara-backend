@@ -152,6 +152,7 @@ func TestVoidSettlementPayment(t *testing.T) {
 	after := openSettlement()
 	e.settlements.EXPECT().VoidPayment(anyArg, garageID, settlementID, "p-1", "typo").Return(after, nil).Once()
 	e.settlements.EXPECT().SaveStatus(anyArg, garageID, settlementID, domain.StatusPending).Return(nil).Once()
+	e.events.EXPECT().Publish(anyArg, "payment_voucher.voided", garageID, "", anyArg).Return(nil).Once()
 
 	voidedAt := time.Now()
 	final := openSettlement()

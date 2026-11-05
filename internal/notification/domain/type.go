@@ -14,12 +14,15 @@ const (
 	TypeSettlementReceipt Type = "settlement_receipt"
 	TypeSettlementPaid    Type = "settlement_paid"
 	TypeLowStock          Type = "low_stock"
+	// TypePaymentReminder reminds a customer of an overdue settlement (Release
+	// 13.0, FR-REC-03).
+	TypePaymentReminder Type = "payment_reminder"
 )
 
 // AllTypes lists the types in the order the settings show them.
 var AllTypes = []Type{
 	TypeQuoteReady, TypeQuoteDecided, TypeVehicleReady, TypePaymentReceived,
-	TypeSettlementReceipt, TypeSettlementPaid, TypeLowStock,
+	TypeSettlementReceipt, TypeSettlementPaid, TypeLowStock, TypePaymentReminder,
 }
 
 // Audience is who an e-mail is for.
@@ -36,7 +39,7 @@ func (t Type) Valid() bool { return slices.Contains(AllTypes, t) }
 
 // Audience is who receives the type.
 func (t Type) Audience() Audience {
-	if slices.Contains([]Type{TypeQuoteReady, TypeVehicleReady, TypePaymentReceived, TypeSettlementReceipt}, t) {
+	if slices.Contains([]Type{TypeQuoteReady, TypeVehicleReady, TypePaymentReceived, TypeSettlementReceipt, TypePaymentReminder}, t) {
 		return AudienceCustomer
 	}
 

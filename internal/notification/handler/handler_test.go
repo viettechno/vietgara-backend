@@ -91,10 +91,10 @@ func TestGetNotificationSettings(t *testing.T) {
 	resp, err := e.srv.GetNotificationSettings(t.Context(), &notificationv1.GetNotificationSettingsRequest{GarageId: garageID})
 	require.NoError(t, err)
 	assert.Equal(t, "Gara", resp.GetSenderName())
-	require.Len(t, resp.GetTypes(), 7)
+	require.Len(t, resp.GetTypes(), 8)
 
 	for _, setting := range resp.GetTypes() {
-		switch setting.GetType() { //nolint:exhaustive // only three of the seven are checked
+		switch setting.GetType() { //nolint:exhaustive // only three of the eight are checked
 		case notificationv1.NotificationType_NOTIFICATION_TYPE_VEHICLE_READY:
 			assert.False(t, setting.GetEnabled())
 			assert.Equal(t, notificationv1.NotificationAudience_NOTIFICATION_AUDIENCE_CUSTOMER, setting.GetAudience())

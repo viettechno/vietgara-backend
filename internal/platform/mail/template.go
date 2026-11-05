@@ -34,6 +34,7 @@ const (
 	TemplateQuoteDecided             = "quote_decided"
 	TemplateSettlementPaid           = "settlement_paid"
 	TemplateLowStock                 = "low_stock"
+	TemplatePaymentReminder          = "payment_reminder"
 )
 
 // Supported locales; Vietnamese is the default.

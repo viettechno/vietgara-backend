@@ -42,6 +42,7 @@ type env struct {
 	revenue        *mocks.MockDocumentRevenueReader
 	garages        *mocks.MockDocumentGarageReader
 	inventory      *mocks.MockDocumentInventoryReader
+	receivables    *mocks.MockDocumentReceivableReader
 	prints         *fakePrints
 }
 
@@ -52,10 +53,11 @@ func newEnv(t *testing.T) *env {
 		quotes: mocks.NewMockDocumentQuoteReader(t), repairOrders: mocks.NewMockDocumentRepairOrderReader(t),
 		settlements: mocks.NewMockDocumentSettlementReader(t), stockMovements: mocks.NewMockDocumentStockMovementReader(t),
 		revenue: mocks.NewMockDocumentRevenueReader(t), garages: mocks.NewMockDocumentGarageReader(t),
-		inventory: mocks.NewMockDocumentInventoryReader(t), prints: &fakePrints{},
+		inventory: mocks.NewMockDocumentInventoryReader(t), receivables: mocks.NewMockDocumentReceivableReader(t), prints: &fakePrints{},
 	}
 
-	uc := usecase.NewDocumentUseCase(e.quotes, e.repairOrders, e.settlements, e.stockMovements, e.revenue, e.garages, e.inventory, e.prints)
+	uc := usecase.NewDocumentUseCase(e.quotes, e.repairOrders, e.settlements, e.stockMovements, e.revenue, e.garages, e.inventory, e.prints).
+		WithReceivables(e.receivables)
 	e.srv = handler.NewServer(uc)
 
 	return e
@@ -69,7 +71,7 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 19)
+	assert.Len(t, p, 21)
 	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportGoodsReceiptPdf_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportStockIssuePdf_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportStockCountExcel_FullMethodName].Garage.Permission)
@@ -422,4 +424,43 @@ func TestExportInventoryDocuments(t *testing.T) {
 
 	_, err = e.srv.ExportStockValuationExcel(t.Context(), &documentv1.ExportStockValuationExcelRequest{GarageId: garageID})
 	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+func TestExportReceivablesExcel(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t)
+	e.receivables.EXPECT().Receivables(anyArg, garageID, "c-1", "51A", true, true).
+		Return([]render.ReceivableRow{{Number: "QT-1", Total: 10, Remaining: 10}}, nil).Once()
+
+	resp, err := e.srv.ExportReceivablesExcel(t.Context(), &documentv1.ExportReceivablesExcelRequest{
+		GarageId: garageID, CustomerId: "c-1", Query: "51A", OverdueOnly: true, IncludePaid: true,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", resp.GetContentType())
+	assert.NotEmpty(t, resp.GetData())
+
+	e.receivables.EXPECT().Receivables(anyArg, garageID, "", "", false, false).Return(nil, errDocumentTestBoom).Once()
+
+	_, err = e.srv.ExportReceivablesExcel(t.Context(), &documentv1.ExportReceivablesExcelRequest{GarageId: garageID})
+	require.Equal(t, codes.Internal, status.Code(err))
+}
+
+func TestExportReceivableReconciliationExcel(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t)
+	e.receivables.EXPECT().Reconciliation(anyArg, garageID, "2026-11-01", "2026-12-01").
+		Return(render.ReconciliationData{From: "2026-11-01", To: "2026-12-01"}, nil).Once()
+
+	resp, err := e.srv.ExportReceivableReconciliationExcel(t.Context(), &documentv1.ExportReceivableReconciliationExcelRequest{
+		GarageId: garageID, From: "2026-11-01", To: "2026-12-01",
+	})
+	require.NoError(t, err)
+	assert.NotEmpty(t, resp.GetData())
+
+	e.receivables.EXPECT().Reconciliation(anyArg, garageID, "x", "y").Return(render.ReconciliationData{}, errDocumentTestBoom).Once()
+
+	_, err = e.srv.ExportReceivableReconciliationExcel(t.Context(), &documentv1.ExportReceivableReconciliationExcelRequest{GarageId: garageID, From: "x", To: "y"})
+	require.Equal(t, codes.Internal, status.Code(err))
 }

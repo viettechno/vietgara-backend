@@ -161,6 +161,12 @@ func (uc *SettlementUseCase) VoidPayment(ctx context.Context, req VoidPaymentReq
 		return nil, err
 	}
 
+	if err := uc.Events.Publish(ctx, EventPaymentVoucherVoided, req.GarageID, "", map[string]any{
+		"settlement_id": req.SettlementID, "garage_id": req.GarageID, "payment_id": req.PaymentID,
+	}); err != nil {
+		return nil, toAppError("void payment", err)
+	}
+
 	return uc.Get(ctx, req.GarageID, req.SettlementID)
 }
 

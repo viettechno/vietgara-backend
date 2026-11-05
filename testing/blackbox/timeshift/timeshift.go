@@ -75,7 +75,37 @@ func AgeRequest(tb testing.TB, staffEmail string) {
 		AND staff_user_id = (SELECT id FROM users WHERE email = $1)`, staffEmail)
 }
 
-func exec(tb testing.TB, sql, arg string) {
+// AgeReceivable is the receivable helper: the due date of the receivable of
+// the settlement moves to a number of days in the past (garage time is not needed: the
+// date is compared with today in the garage's zone, so a day more or less
+// at midnight does not matter to the offsets the scenarios use). The reminder
+// job then finds it overdue.
+func AgeReceivable(tb testing.TB, settlementID string, days int) {
+	tb.Helper()
+
+	exec(tb, `UPDATE receivables SET due_date = (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date - ($2::int)
+		WHERE settlement_id = $1::uuid`, settlementID, days)
+}
+
+// AgeLedger moves every ledger entry of the receivable of the settlement a
+// number of days into the past, as if the settlement had been issued and paid
+// before the period a reconciliation looks at.
+func AgeLedger(tb testing.TB, settlementID string, days int) {
+	tb.Helper()
+
+	exec(tb, `UPDATE receivable_entries SET occurred_at = occurred_at - ($2::int * interval '1 day')
+		WHERE receivable_id IN (SELECT id FROM receivables WHERE settlement_id = $1::uuid)`, settlementID, days)
+}
+
+// ClearReceivableCustomer removes the customer from the receivable of the
+// settlement, as when the customer could not be found.
+func ClearReceivableCustomer(tb testing.TB, settlementID string) {
+	tb.Helper()
+
+	exec(tb, `UPDATE receivables SET customer_id = NULL WHERE settlement_id = $1::uuid`, settlementID)
+}
+
+func exec(tb testing.TB, sql string, args ...any) {
 	tb.Helper()
 
 	cfg := env.Get(tb)
@@ -92,12 +122,12 @@ func exec(tb testing.TB, sql, arg string) {
 
 	defer func() { _ = conn.Close(ctx) }()
 
-	tag, err := conn.Exec(ctx, sql, arg)
+	tag, err := conn.Exec(ctx, sql, args...)
 	if err != nil {
-		tb.Fatalf("shift time for %s: %v", arg, err)
+		tb.Fatalf("shift time for %v: %v", args, err)
 	}
 
 	if tag.RowsAffected() == 0 {
-		tb.Fatalf("shift time for %s: %v", arg, fmt.Errorf("%w", errNoRows))
+		tb.Fatalf("shift time for %v: %v", args, fmt.Errorf("%w", errNoRows))
 	}
 }

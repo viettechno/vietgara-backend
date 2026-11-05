@@ -11,7 +11,7 @@ import (
 func TestType(t *testing.T) {
 	t.Parallel()
 
-	assert.Len(t, domain.AllTypes, 7)
+	assert.Len(t, domain.AllTypes, 8)
 
 	for _, typ := range domain.AllTypes {
 		assert.True(t, typ.Valid(), typ)
@@ -20,7 +20,7 @@ func TestType(t *testing.T) {
 	assert.False(t, domain.Type("").Valid())
 	assert.False(t, domain.Type("other").Valid())
 
-	customer := []domain.Type{domain.TypeQuoteReady, domain.TypeVehicleReady, domain.TypePaymentReceived, domain.TypeSettlementReceipt}
+	customer := []domain.Type{domain.TypeQuoteReady, domain.TypeVehicleReady, domain.TypePaymentReceived, domain.TypeSettlementReceipt, domain.TypePaymentReminder}
 
 	for _, typ := range domain.AllTypes {
 		want := domain.AudienceStaff

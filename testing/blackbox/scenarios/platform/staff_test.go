@@ -419,10 +419,10 @@ func TestAuditLogIsReadWithAuditRead(t *testing.T) {
 	assert.NotEmpty(t, mine.GetData())
 
 	_, err = admin.API.ListPlatformAuditLog(ctx, url.Values{"actorUserId": {"not-a-user"}})
-	fixture.RequireAPIError(t, err, http.StatusBadRequest, "VALIDATION_ERROR")
+	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "VALIDATION_ERROR")
 
 	_, err = admin.API.ListPlatformAuditLog(ctx, url.Values{"from": {"2026-11-02T00:00:00Z"}, "to": {"2026-11-01T00:00:00Z"}})
-	fixture.RequireAPIError(t, err, http.StatusBadRequest, "VALIDATION_ERROR")
+	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "VALIDATION_ERROR")
 
 	one, err := admin.API.ListPlatformAuditLog(ctx, url.Values{"action": {"platform_role."}, "pageSize": {"1"}})
 	require.NoError(t, err)

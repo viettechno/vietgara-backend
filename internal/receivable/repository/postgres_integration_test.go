@@ -283,7 +283,7 @@ func TestRemindersAndGarages(t *testing.T) {
 		}))
 		require.NoError(t, w.repo.MarkReminded(ctx, w.garageA, r.ID, time.Date(2026, 11, 13, 3, 0, 0, 0, time.UTC)))
 
-		open, err := w.repo.OpenWithCustomer(ctx, w.garageA)
+		open, err := w.repo.OpenWithCustomer(ctx, w.garageA, due.AddDate(0, 0, 3))
 		require.NoError(t, err)
 		require.Len(t, open, 1)
 		require.Equal(t, 1, open[0].RemindersSent)
@@ -386,4 +386,96 @@ func TestLedgerPeriodQueries(t *testing.T) {
 		require.NoError(t, err)
 		require.EqualValues(t, 600_000, remaining, "the ledger agrees with the receivable")
 	})
+}
+
+func TestMissingSettlementsAndSettlementLock(t *testing.T) {
+	t.Parallel()
+
+	w := newWorld(t)
+	ctx := t.Context()
+
+	// Settlements need a repair order; the function only reads garage_id, id and
+	// status, so the rows are inserted without their references.
+	tx, err := w.pg.Admin.BeginTx(ctx, nil)
+	require.NoError(t, err)
+
+	_, err = tx.ExecContext(ctx, `SET LOCAL session_replication_role = replica`)
+	require.NoError(t, err)
+
+	var open, paid, covered string
+
+	for target, status := range map[*string]string{&open: "pending", &paid: "paid", &covered: "partially_paid"} {
+		id := uuid.NewString()
+		*target = id
+
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO settlements (id, garage_id, repair_order_id, customer_name, vehicle_license_plate, number, total_amount, status)
+			VALUES ($1, $2, $3, 'An', '51A', $4, 100, $5::settlement_status)`, id, w.garageA, uuid.NewString(), "N-"+id[:6], status)
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, tx.Commit())
+
+	w.in(t, w.garageA, func(ctx context.Context) {
+		require.NoError(t, w.repo.Save(ctx, &domain.Receivable{
+			GarageID: w.garageA, SettlementID: covered, SettlementNumber: "N", CustomerName: "An", VehicleLicensePlate: "51A",
+			TotalAmount: 100, PaidAmount: 10, DueDate: time.Date(2026, 11, 17, 0, 0, 0, 0, time.UTC), Status: domain.StatusOpen,
+		}))
+	})
+
+	missing, err := w.repo.MissingSettlements(ctx, 10)
+	require.NoError(t, err)
+	require.Equal(t, []usecase.MissingSettlement{{GarageID: w.garageA, SettlementID: open}}, missing,
+		"only the unpaid settlement without a receivable; a paid one needs none")
+
+	limited, err := w.repo.MissingSettlements(ctx, 0)
+	require.NoError(t, err)
+	require.Empty(t, limited)
+
+	// Two syncs of one settlement run one after the other.
+	held := make(chan struct{})
+	release := make(chan struct{})
+	finished := make(chan struct{})
+
+	go func() {
+		defer close(finished)
+
+		_ = w.tx.WithTransaction(ctx, platformdb.Scope{UserID: w.owner, GarageID: w.garageA}, func(ctx context.Context) error {
+			if err := w.repo.LockSettlement(ctx, open); err != nil {
+				t.Error(err)
+			}
+
+			close(held)
+			<-release
+
+			return nil
+		})
+	}()
+
+	<-held
+
+	second := make(chan struct{})
+
+	go func() {
+		defer close(second)
+
+		_ = w.tx.WithTransaction(ctx, platformdb.Scope{UserID: w.owner, GarageID: w.garageA}, func(ctx context.Context) error {
+			return w.repo.LockSettlement(ctx, open)
+		})
+	}()
+
+	select {
+	case <-second:
+		t.Fatal("the second sync got the lock while the first held it")
+	case <-time.After(500 * time.Millisecond):
+	}
+
+	close(release)
+	<-finished
+
+	select {
+	case <-second:
+	case <-time.After(10 * time.Second):
+		t.Fatal("the second sync never got the lock")
+	}
 }

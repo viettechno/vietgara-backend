@@ -22,7 +22,7 @@ func expectRun(d *deps, open ...*domain.Receivable) {
 	d.timezone()
 	d.Repo.EXPECT().ReminderGarages(mock.Anything).Return([]string{garageID}, nil).Once()
 	d.Repo.EXPECT().GetSettings(mock.Anything, garageID).Return(domain.DefaultSettings(), nil).Once()
-	d.Repo.EXPECT().OpenWithCustomer(mock.Anything, garageID).Return(open, nil).Once()
+	d.Repo.EXPECT().OpenWithCustomer(mock.Anything, garageID, day(2026, 11, 17)).Return(open, nil).Once()
 }
 
 func expectLoaded(d *deps, r *domain.Receivable) {
@@ -37,6 +37,8 @@ func TestReceivableUseCase_RunReminders(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+		d.noMissing()
+
 		r := overdueBy(3)
 		expectRun(d, r)
 		expectLoaded(d, r)
@@ -56,6 +58,8 @@ func TestReceivableUseCase_RunReminders(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+		d.noMissing()
+
 		early, handled := overdueBy(2), overdueBy(8)
 		handled.Reminders = []domain.Reminder{{OffsetDays: 3, Outcome: domain.OutcomeSent}, {OffsetDays: 7, Outcome: domain.OutcomeSkipped}}
 		expectRun(d, early, handled)
@@ -67,6 +71,8 @@ func TestReceivableUseCase_RunReminders(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+		d.noMissing()
+
 		r := overdueBy(10)
 		expectRun(d, r)
 		expectLoaded(d, r)
@@ -91,6 +97,8 @@ func TestReceivableUseCase_RunReminders_Part2(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+		d.noMissing()
+
 		r := overdueBy(3)
 		expectRun(d, r)
 		expectLoaded(d, r)
@@ -106,6 +114,8 @@ func TestReceivableUseCase_RunReminders_Part2(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+		d.noMissing()
+
 		r := overdueBy(3)
 		r.Reminders = []domain.Reminder{{OffsetDays: 3, Outcome: domain.OutcomeFailed, Attempts: 1}}
 		expectRun(d, r)
@@ -118,6 +128,8 @@ func TestReceivableUseCase_RunReminders_Part2(t *testing.T) {
 		require.NoError(t, uc.RunReminders(t.Context()), "the failure is logged, not returned: the log of the attempt must commit")
 
 		uc, d = newUseCase(t)
+		d.noMissing()
+
 		exhausted := overdueBy(3)
 		exhausted.Reminders = []domain.Reminder{{OffsetDays: 3, Outcome: domain.OutcomeFailed, Attempts: domain.MaxSendAttempts}}
 		expectRun(d, exhausted)
@@ -128,6 +140,7 @@ func TestReceivableUseCase_RunReminders_Part2(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+		d.noMissing()
 		d.inGarage()
 		d.Repo.EXPECT().ReminderGarages(mock.Anything).Return([]string{garageID}, nil).Once()
 		d.Repo.EXPECT().GetSettings(mock.Anything, garageID).Return(domain.Settings{PaymentTermsDays: 7}, nil).Once()
@@ -143,12 +156,15 @@ func TestReceivableUseCase_RunReminders_Part3(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+		d.noMissing()
+
 		r := overdueBy(3)
 		expectRun(d, r)
 		d.Repo.EXPECT().TryLock(mock.Anything, "receivable-reminder:"+receivableID).Return(false, nil).Once()
 		require.NoError(t, uc.RunReminders(t.Context()))
 
 		uc, d = newUseCase(t)
+		d.noMissing()
 		expectRun(d, r)
 
 		paid := overdueBy(3)
@@ -161,12 +177,15 @@ func TestReceivableUseCase_RunReminders_Part3(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+		d.noMissing()
+
 		r := overdueBy(3)
 		expectRun(d, r)
 		d.Repo.EXPECT().TryLock(mock.Anything, "receivable-reminder:"+receivableID).Return(false, errBoom).Once()
 		require.ErrorIs(t, uc.RunReminders(t.Context()), errBoom)
 
 		uc, d = newUseCase(t)
+		d.noMissing()
 		expectRun(d, r)
 		d.Repo.EXPECT().TryLock(mock.Anything, mock.Anything).Return(true, nil).Once()
 		d.Repo.EXPECT().FindByID(mock.Anything, garageID, receivableID).Return(nil, errBoom).Once()
@@ -174,6 +193,8 @@ func TestReceivableUseCase_RunReminders_Part3(t *testing.T) {
 
 		for _, fail := range []string{"save", "mark", "supersede"} {
 			uc, d = newUseCase(t)
+			d.noMissing()
+
 			rr := overdueBy(10)
 			expectRun(d, rr)
 			expectLoaded(d, rr)
@@ -199,16 +220,19 @@ func TestReceivableUseCase_RunReminders_Part3(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+		d.noMissing()
 		d.Repo.EXPECT().ReminderGarages(mock.Anything).Return(nil, errBoom).Once()
 		require.ErrorIs(t, uc.RunReminders(t.Context()), errBoom)
 
 		uc, d = newUseCase(t)
+		d.noMissing()
 		d.inGarage()
 		d.Repo.EXPECT().ReminderGarages(mock.Anything).Return([]string{garageID}, nil).Once()
 		d.Repo.EXPECT().GetSettings(mock.Anything, garageID).Return(domain.Settings{}, errBoom).Once()
 		require.ErrorIs(t, uc.RunReminders(t.Context()), errBoom)
 
 		uc, d = newUseCase(t)
+		d.noMissing()
 		d.inGarage()
 		d.Repo.EXPECT().ReminderGarages(mock.Anything).Return([]string{garageID}, nil).Once()
 		d.Repo.EXPECT().GetSettings(mock.Anything, garageID).Return(domain.DefaultSettings(), nil).Once()
@@ -216,11 +240,12 @@ func TestReceivableUseCase_RunReminders_Part3(t *testing.T) {
 		require.ErrorIs(t, uc.RunReminders(t.Context()), errBoom)
 
 		uc, d = newUseCase(t)
+		d.noMissing()
 		d.inGarage()
 		d.timezone()
 		d.Repo.EXPECT().ReminderGarages(mock.Anything).Return([]string{garageID}, nil).Once()
 		d.Repo.EXPECT().GetSettings(mock.Anything, garageID).Return(domain.DefaultSettings(), nil).Once()
-		d.Repo.EXPECT().OpenWithCustomer(mock.Anything, garageID).Return(nil, errBoom).Once()
+		d.Repo.EXPECT().OpenWithCustomer(mock.Anything, garageID, day(2026, 11, 17)).Return(nil, errBoom).Once()
 		require.ErrorIs(t, uc.RunReminders(t.Context()), errBoom)
 	})
 }
@@ -229,6 +254,8 @@ func TestReceivableUseCase_Schedule(t *testing.T) {
 	t.Parallel()
 
 	uc, d := newUseCase(t)
+	d.noMissing()
+
 	ctx, cancel := context.WithCancel(t.Context())
 
 	d.Repo.EXPECT().ReminderGarages(mock.Anything).RunAndReturn(func(context.Context) ([]string, error) {
@@ -249,4 +276,57 @@ func TestReceivableUseCase_Schedule(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("the schedule did not stop with its context")
 	}
+}
+
+func TestReceivableUseCase_RunReminders_Heal(t *testing.T) {
+	t.Parallel()
+
+	missing := []usecase.MissingSettlement{{GarageID: garageID, SettlementID: settlementID}}
+
+	t.Run("creates the receivable of an unpaid settlement that has none", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.inGarage()
+		d.lock()
+		d.Repo.EXPECT().MissingSettlements(mock.Anything, mock.Anything).Return(missing, nil).Once()
+		d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(settlementView(), nil).Once()
+		d.Repo.EXPECT().FindBySettlement(mock.Anything, garageID, settlementID).Return(openReceivable(day(2026, 11, 17)), nil).Once()
+		d.Repo.EXPECT().Save(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Repo.EXPECT().AddEntries(mock.Anything, garageID, receivableID, mock.Anything).Return(nil).Once()
+		d.Repo.EXPECT().ReminderGarages(mock.Anything).Return(nil, nil).Once()
+
+		require.NoError(t, uc.RunReminders(t.Context()))
+	})
+
+	t.Run("a failed heal is reported and the reminders still run", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.inGarage()
+		d.lock()
+		d.Repo.EXPECT().MissingSettlements(mock.Anything, mock.Anything).Return(missing, nil).Once()
+		d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(usecase.SettlementView{}, errBoom).Once()
+		d.Repo.EXPECT().ReminderGarages(mock.Anything).Return(nil, nil).Once()
+
+		require.ErrorIs(t, uc.RunReminders(t.Context()), errBoom)
+
+		uc, d = newUseCase(t)
+		d.Repo.EXPECT().MissingSettlements(mock.Anything, mock.Anything).Return(nil, errBoom).Once()
+		d.Repo.EXPECT().ReminderGarages(mock.Anything).Return(nil, nil).Once()
+		require.ErrorIs(t, uc.RunReminders(t.Context()), errBoom)
+	})
+
+	t.Run("a garage with no reminder days has nothing to read", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.noMissing()
+		d.inGarage()
+		d.Repo.EXPECT().ReminderGarages(mock.Anything).Return([]string{garageID}, nil).Once()
+		d.Repo.EXPECT().GetSettings(mock.Anything, garageID).Return(domain.Settings{PaymentTermsDays: 7, RemindersEnabled: true}, nil).Once()
+		d.timezone()
+
+		require.NoError(t, uc.RunReminders(t.Context()))
+	})
 }

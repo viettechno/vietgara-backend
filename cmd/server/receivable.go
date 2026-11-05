@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	billingUsecase "github.com/viettechno/vietgara-backend/internal/billing/usecase"
+	customerDomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
 	"github.com/viettechno/vietgara-backend/internal/document/render"
 	notificationUsecase "github.com/viettechno/vietgara-backend/internal/notification/usecase"
@@ -15,6 +17,7 @@ import (
 	receivableUsecase "github.com/viettechno/vietgara-backend/internal/receivable/usecase"
 	repairorderUsecase "github.com/viettechno/vietgara-backend/internal/repairorder/usecase"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
 // receivableModule is the wired Receivables module (HLD module #9, Release
@@ -74,12 +77,27 @@ func (a receivableSettlements) Get(ctx context.Context, garageID, settlementID s
 	}
 
 	// A settlement whose repair order or vehicle is gone keeps its receivable
-	// without a customer: it is listed but never reminded.
-	if ro, err := a.repairOrders.Get(ctx, garageID, s.RepairOrderID); err == nil {
-		if vehicle, err := a.vehicles.FindByID(ctx, garageID, ro.VehicleID); err == nil {
-			view.CustomerID = vehicle.CustomerID
-		}
+	// without a customer: it is listed but never reminded. Any other failure is
+	// returned, so that the event is delivered again and the customer found.
+	ro, err := a.repairOrders.Get(ctx, garageID, s.RepairOrderID)
+	if appErr, ok := apperror.As(err); ok && appErr.Code == apperror.CodeNotFound {
+		return view, nil
 	}
+
+	if err != nil {
+		return receivableUsecase.SettlementView{}, err
+	}
+
+	vehicle, err := a.vehicles.FindByID(ctx, garageID, ro.VehicleID)
+	if errors.Is(err, customerDomain.ErrVehicleNotFound) {
+		return view, nil
+	}
+
+	if err != nil {
+		return receivableUsecase.SettlementView{}, err
+	}
+
+	view.CustomerID = vehicle.CustomerID
 
 	return view, nil
 }

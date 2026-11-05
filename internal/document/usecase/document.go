@@ -11,6 +11,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -221,6 +222,8 @@ func NewDocumentUseCase(
 	}
 }
 
+var errReceivablesNotWired = errors.New("the receivables reader is not set")
+
 // WithReceivables sets the reader of the receivables exports and returns uc.
 func (uc *DocumentUseCase) WithReceivables(r ReceivableReader) *DocumentUseCase {
 	uc.Receivables = r
@@ -231,6 +234,10 @@ func (uc *DocumentUseCase) WithReceivables(r ReceivableReader) *DocumentUseCase 
 // ReceivablesExcel renders the receivables list as an Excel workbook
 // (FR-DOC-02), with the filters of ReceivableService.ListReceivables.
 func (uc *DocumentUseCase) ReceivablesExcel(ctx context.Context, garageID, customerID, query string, overdueOnly, includePaid bool) ([]byte, error) {
+	if uc.Receivables == nil {
+		return nil, apperror.Internal("export receivables excel", errReceivablesNotWired)
+	}
+
 	rows, err := uc.Receivables.Receivables(ctx, garageID, customerID, query, overdueOnly, includePaid)
 	if err != nil {
 		return nil, toAppError("export receivables excel", err)
@@ -247,6 +254,10 @@ func (uc *DocumentUseCase) ReceivablesExcel(ctx context.Context, garageID, custo
 // ReconciliationExcel renders the reconciliation of the period [from, to) as an
 // Excel workbook (FR-REC-04).
 func (uc *DocumentUseCase) ReconciliationExcel(ctx context.Context, garageID, from, to string) ([]byte, error) {
+	if uc.Receivables == nil {
+		return nil, apperror.Internal("export reconciliation excel", errReceivablesNotWired)
+	}
+
 	data, err := uc.Receivables.Reconciliation(ctx, garageID, from, to)
 	if err != nil {
 		return nil, toAppError("export reconciliation excel", err)

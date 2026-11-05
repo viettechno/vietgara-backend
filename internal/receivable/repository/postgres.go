@@ -185,31 +185,43 @@ func scanEntry(row pgx.Row) (domain.Entry, error) {
 }
 
 func (r *PostgresRepository) remindersOf(ctx context.Context, garageID, receivableID string) ([]domain.Reminder, error) {
+	byReceivable, err := r.remindersOfAll(ctx, garageID, []string{receivableID})
+
+	return byReceivable[receivableID], err
+}
+
+// remindersOfAll reads the reminders of several receivables at once.
+func (r *PostgresRepository) remindersOfAll(ctx context.Context, garageID string, receivableIDs []string) (map[string][]domain.Reminder, error) {
+	out := map[string][]domain.Reminder{}
+	if len(receivableIDs) == 0 {
+		return out, nil
+	}
+
 	rows, err := r.q(ctx).Query(ctx, `
-		SELECT id, offset_days, channel, outcome, COALESCE(reason, ''), attempts, created_at, updated_at
-		FROM receivable_reminders WHERE garage_id = $1 AND receivable_id = $2 ORDER BY offset_days`, garageID, receivableID)
+		SELECT receivable_id::text, id, offset_days, channel, outcome, COALESCE(reason, ''), attempts, created_at, updated_at
+		FROM receivable_reminders WHERE garage_id = $1 AND receivable_id = ANY($2::uuid[]) ORDER BY receivable_id, offset_days`,
+		garageID, receivableIDs)
 	if err != nil {
 		return nil, fmt.Errorf("read receivable reminders: %w", err)
 	}
 	defer rows.Close()
 
-	var reminders []domain.Reminder
-
 	for rows.Next() {
 		var (
-			rem     domain.Reminder
-			outcome string
+			receivableID string
+			rem          domain.Reminder
+			outcome      string
 		)
 
-		if err := rows.Scan(&rem.ID, &rem.OffsetDays, &rem.Channel, &outcome, &rem.Reason, &rem.Attempts, &rem.CreatedAt, &rem.UpdatedAt); err != nil {
+		if err := rows.Scan(&receivableID, &rem.ID, &rem.OffsetDays, &rem.Channel, &outcome, &rem.Reason, &rem.Attempts, &rem.CreatedAt, &rem.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan receivable reminder: %w", err)
 		}
 
 		rem.Outcome = domain.Outcome(outcome)
-		reminders = append(reminders, rem)
+		out[receivableID] = append(out[receivableID], rem)
 	}
 
-	return reminders, rows.Err()
+	return out, rows.Err()
 }
 
 // Save inserts the receivable, or updates the amounts, status and customer of
@@ -338,11 +350,12 @@ func (r *PostgresRepository) ReminderGarages(ctx context.Context) ([]string, err
 	return ids, rows.Err()
 }
 
-// OpenWithCustomer returns the garage's open receivables that have a
-// customer, with their reminders.
-func (r *PostgresRepository) OpenWithCustomer(ctx context.Context, garageID string) ([]*domain.Receivable, error) {
+// OpenWithCustomer returns the garage's open receivables that have a customer
+// and are due on or before the given day, with their reminders.
+func (r *PostgresRepository) OpenWithCustomer(ctx context.Context, garageID string, dueOnOrBefore time.Time) ([]*domain.Receivable, error) {
 	rows, err := r.q(ctx).Query(ctx, `SELECT `+receivableColumns+` FROM receivables
-		WHERE garage_id = $1 AND status = 'open' AND customer_id IS NOT NULL ORDER BY due_date, id`, garageID)
+		WHERE garage_id = $1 AND status = 'open' AND customer_id IS NOT NULL AND due_date <= $2::date ORDER BY due_date, id`,
+		garageID, dueOnOrBefore)
 	if err != nil {
 		return nil, fmt.Errorf("list open receivables: %w", err)
 	}
@@ -366,13 +379,54 @@ func (r *PostgresRepository) OpenWithCustomer(ctx context.Context, garageID stri
 		return nil, fmt.Errorf("list open receivables: %w", err)
 	}
 
+	ids := make([]string, len(items))
+	for i, rec := range items {
+		ids[i] = rec.ID
+	}
+
+	reminders, err := r.remindersOfAll(ctx, garageID, ids)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, rec := range items {
-		if rec.Reminders, err = r.remindersOf(ctx, garageID, rec.ID); err != nil {
-			return nil, err
-		}
+		rec.Reminders = reminders[rec.ID]
 	}
 
 	return items, nil
+}
+
+// MissingSettlements returns up to limit settlements that are not paid and
+// have no receivable, through the function that sees across garages.
+func (r *PostgresRepository) MissingSettlements(ctx context.Context, limit int) ([]usecase.MissingSettlement, error) {
+	rows, err := r.q(ctx).Query(ctx, `SELECT garage_id::text, settlement_id::text FROM receivable_missing_settlements($1)`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list missing receivables: %w", err)
+	}
+	defer rows.Close()
+
+	var missing []usecase.MissingSettlement
+
+	for rows.Next() {
+		var m usecase.MissingSettlement
+		if err := rows.Scan(&m.GarageID, &m.SettlementID); err != nil {
+			return nil, fmt.Errorf("scan missing receivable: %w", err)
+		}
+
+		missing = append(missing, m)
+	}
+
+	return missing, rows.Err()
+}
+
+// LockSettlement takes a transaction-scoped advisory lock on the settlement,
+// waiting for it.
+func (r *PostgresRepository) LockSettlement(ctx context.Context, settlementID string) error {
+	if _, err := r.q(ctx).Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 1))`, "receivable-sync:"+settlementID); err != nil {
+		return fmt.Errorf("lock settlement %s: %w", settlementID, err)
+	}
+
+	return nil
 }
 
 // TryLock takes a transaction-scoped advisory lock on key.
@@ -485,7 +539,7 @@ func (r *PostgresRepository) RemainingTotal(ctx context.Context, garageID string
 	var total int64
 
 	err := r.q(ctx).QueryRow(ctx, `
-		SELECT COALESCE(sum(GREATEST(total_amount - paid_amount, 0)), 0) FROM receivables WHERE garage_id = $1`, garageID).Scan(&total)
+		SELECT COALESCE(sum(total_amount - paid_amount), 0) FROM receivables WHERE garage_id = $1`, garageID).Scan(&total)
 	if err != nil {
 		return 0, fmt.Errorf("read remaining total: %w", err)
 	}

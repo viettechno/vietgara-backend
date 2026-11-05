@@ -177,6 +177,7 @@ func TestReceivableUseCase_Settings(t *testing.T) {
 			"no switch":    {GarageID: garageID, PaymentTermsDays: new(7)},
 			"long terms":   {GarageID: garageID, PaymentTermsDays: new(366), RemindersEnabled: new(true)},
 			"bad offsets":  {GarageID: garageID, PaymentTermsDays: new(7), RemindersEnabled: new(true), ReminderOffsetDays: []int{0}},
+			"on, no days":  {GarageID: garageID, PaymentTermsDays: new(7), RemindersEnabled: new(true)},
 			"same offsets": {GarageID: garageID, PaymentTermsDays: new(7), RemindersEnabled: new(true), ReminderOffsetDays: []int{3, 3}},
 		} {
 			_, err := uc.UpdateSettings(t.Context(), req)
@@ -188,7 +189,7 @@ func TestReceivableUseCase_Settings(t *testing.T) {
 	t.Run("failures are internal errors", func(t *testing.T) {
 		t.Parallel()
 
-		req := usecase.UpdateSettingsRequest{GarageID: garageID, PaymentTermsDays: new(7), RemindersEnabled: new(true)}
+		req := usecase.UpdateSettingsRequest{GarageID: garageID, PaymentTermsDays: new(7), RemindersEnabled: new(true), ReminderOffsetDays: []int{3}}
 
 		uc, d := newUseCase(t)
 		d.Repo.EXPECT().GetSettings(mock.Anything, garageID).Return(domain.Settings{}, errBoom).Once()
@@ -211,4 +212,17 @@ func TestReceivableUseCase_Settings(t *testing.T) {
 		_, err = uc.UpdateSettings(t.Context(), req)
 		assertAppError(t, err, apperror.CodeInternal)
 	})
+}
+
+func TestReceivableUseCase_IdsThatAreNotIds(t *testing.T) {
+	t.Parallel()
+
+	uc, _ := newUseCase(t)
+
+	_, err := uc.Get(t.Context(), garageID, "abc")
+	require.Equal(t, usecase.ReasonReceivableNotFound, apperror.ReasonOf(err))
+	assertAppError(t, err, apperror.CodeNotFound)
+
+	_, err = uc.List(t.Context(), usecase.ListRequest{GarageID: garageID, CustomerID: "abc"})
+	assertAppError(t, err, apperror.CodeInvalidArgument)
 }

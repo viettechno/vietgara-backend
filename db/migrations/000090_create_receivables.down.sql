@@ -1,3 +1,4 @@
+DROP FUNCTION IF EXISTS public.receivable_missing_settlements(integer);
 DROP FUNCTION IF EXISTS public.receivable_reminder_garages();
 DROP TABLE IF EXISTS public.receivable_reminders;
 DROP TABLE IF EXISTS public.receivable_entries;

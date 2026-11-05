@@ -100,7 +100,7 @@ func TestSwitchOffAndSenderName(t *testing.T) {
 
 	defaults, err := api.GetNotificationSettings(ctx, k.garageID)
 	require.NoError(t, err)
-	require.Len(t, defaults.GetTypes(), 7)
+	require.Len(t, defaults.GetTypes(), 8)
 
 	for _, setting := range defaults.GetTypes() {
 		assert.True(t, setting.GetEnabled(), setting.GetType().String())

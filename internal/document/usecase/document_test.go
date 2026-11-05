@@ -464,3 +464,15 @@ func TestDocumentUseCase_ReconciliationExcel(t *testing.T) {
 		assertAppError(t, err, apperror.CodeInternal)
 	})
 }
+
+func TestDocumentUseCase_ReceivablesNotWired(t *testing.T) {
+	t.Parallel()
+
+	uc := usecase.NewDocumentUseCase(nil, nil, nil, nil, nil, nil, nil, nil)
+
+	_, err := uc.ReceivablesExcel(t.Context(), garageID, "", "", false, false)
+	assertAppError(t, err, apperror.CodeInternal)
+
+	_, err = uc.ReconciliationExcel(t.Context(), garageID, "a", "b")
+	assertAppError(t, err, apperror.CodeInternal)
+}

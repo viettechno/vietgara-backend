@@ -627,6 +627,63 @@ func (_c *MockReceivableRepository_List_Call) RunAndReturn(run func(ctx context.
 	return _c
 }
 
+// LockSettlement provides a mock function for the type MockReceivableRepository
+func (_mock *MockReceivableRepository) LockSettlement(ctx context.Context, settlementID string) error {
+	ret := _mock.Called(ctx, settlementID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for LockSettlement")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) error); ok {
+		r0 = returnFunc(ctx, settlementID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockReceivableRepository_LockSettlement_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LockSettlement'
+type MockReceivableRepository_LockSettlement_Call struct {
+	*mock.Call
+}
+
+// LockSettlement is a helper method to define mock.On call
+//   - ctx context.Context
+//   - settlementID string
+func (_e *MockReceivableRepository_Expecter) LockSettlement(ctx any, settlementID any) *MockReceivableRepository_LockSettlement_Call {
+	return &MockReceivableRepository_LockSettlement_Call{Call: _e.mock.On("LockSettlement", ctx, settlementID)}
+}
+
+func (_c *MockReceivableRepository_LockSettlement_Call) Run(run func(ctx context.Context, settlementID string)) *MockReceivableRepository_LockSettlement_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockReceivableRepository_LockSettlement_Call) Return(err error) *MockReceivableRepository_LockSettlement_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockReceivableRepository_LockSettlement_Call) RunAndReturn(run func(ctx context.Context, settlementID string) error) *MockReceivableRepository_LockSettlement_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // MarkReminded provides a mock function for the type MockReceivableRepository
 func (_mock *MockReceivableRepository) MarkReminded(ctx context.Context, garageID string, receivableID string, at time.Time) error {
 	ret := _mock.Called(ctx, garageID, receivableID, at)
@@ -696,9 +753,77 @@ func (_c *MockReceivableRepository_MarkReminded_Call) RunAndReturn(run func(ctx 
 	return _c
 }
 
+// MissingSettlements provides a mock function for the type MockReceivableRepository
+func (_mock *MockReceivableRepository) MissingSettlements(ctx context.Context, limit int) ([]usecase.MissingSettlement, error) {
+	ret := _mock.Called(ctx, limit)
+
+	if len(ret) == 0 {
+		panic("no return value specified for MissingSettlements")
+	}
+
+	var r0 []usecase.MissingSettlement
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, int) ([]usecase.MissingSettlement, error)); ok {
+		return returnFunc(ctx, limit)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, int) []usecase.MissingSettlement); ok {
+		r0 = returnFunc(ctx, limit)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]usecase.MissingSettlement)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, int) error); ok {
+		r1 = returnFunc(ctx, limit)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockReceivableRepository_MissingSettlements_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'MissingSettlements'
+type MockReceivableRepository_MissingSettlements_Call struct {
+	*mock.Call
+}
+
+// MissingSettlements is a helper method to define mock.On call
+//   - ctx context.Context
+//   - limit int
+func (_e *MockReceivableRepository_Expecter) MissingSettlements(ctx any, limit any) *MockReceivableRepository_MissingSettlements_Call {
+	return &MockReceivableRepository_MissingSettlements_Call{Call: _e.mock.On("MissingSettlements", ctx, limit)}
+}
+
+func (_c *MockReceivableRepository_MissingSettlements_Call) Run(run func(ctx context.Context, limit int)) *MockReceivableRepository_MissingSettlements_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 int
+		if args[1] != nil {
+			arg1 = args[1].(int)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockReceivableRepository_MissingSettlements_Call) Return(missingSettlements []usecase.MissingSettlement, err error) *MockReceivableRepository_MissingSettlements_Call {
+	_c.Call.Return(missingSettlements, err)
+	return _c
+}
+
+func (_c *MockReceivableRepository_MissingSettlements_Call) RunAndReturn(run func(ctx context.Context, limit int) ([]usecase.MissingSettlement, error)) *MockReceivableRepository_MissingSettlements_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // OpenWithCustomer provides a mock function for the type MockReceivableRepository
-func (_mock *MockReceivableRepository) OpenWithCustomer(ctx context.Context, garageID string) ([]*domain.Receivable, error) {
-	ret := _mock.Called(ctx, garageID)
+func (_mock *MockReceivableRepository) OpenWithCustomer(ctx context.Context, garageID string, dueOnOrBefore time.Time) ([]*domain.Receivable, error) {
+	ret := _mock.Called(ctx, garageID, dueOnOrBefore)
 
 	if len(ret) == 0 {
 		panic("no return value specified for OpenWithCustomer")
@@ -706,18 +831,18 @@ func (_mock *MockReceivableRepository) OpenWithCustomer(ctx context.Context, gar
 
 	var r0 []*domain.Receivable
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]*domain.Receivable, error)); ok {
-		return returnFunc(ctx, garageID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Time) ([]*domain.Receivable, error)); ok {
+		return returnFunc(ctx, garageID, dueOnOrBefore)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []*domain.Receivable); ok {
-		r0 = returnFunc(ctx, garageID)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Time) []*domain.Receivable); ok {
+		r0 = returnFunc(ctx, garageID, dueOnOrBefore)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).([]*domain.Receivable)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, garageID)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, time.Time) error); ok {
+		r1 = returnFunc(ctx, garageID, dueOnOrBefore)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -732,11 +857,12 @@ type MockReceivableRepository_OpenWithCustomer_Call struct {
 // OpenWithCustomer is a helper method to define mock.On call
 //   - ctx context.Context
 //   - garageID string
-func (_e *MockReceivableRepository_Expecter) OpenWithCustomer(ctx any, garageID any) *MockReceivableRepository_OpenWithCustomer_Call {
-	return &MockReceivableRepository_OpenWithCustomer_Call{Call: _e.mock.On("OpenWithCustomer", ctx, garageID)}
+//   - dueOnOrBefore time.Time
+func (_e *MockReceivableRepository_Expecter) OpenWithCustomer(ctx any, garageID any, dueOnOrBefore any) *MockReceivableRepository_OpenWithCustomer_Call {
+	return &MockReceivableRepository_OpenWithCustomer_Call{Call: _e.mock.On("OpenWithCustomer", ctx, garageID, dueOnOrBefore)}
 }
 
-func (_c *MockReceivableRepository_OpenWithCustomer_Call) Run(run func(ctx context.Context, garageID string)) *MockReceivableRepository_OpenWithCustomer_Call {
+func (_c *MockReceivableRepository_OpenWithCustomer_Call) Run(run func(ctx context.Context, garageID string, dueOnOrBefore time.Time)) *MockReceivableRepository_OpenWithCustomer_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -746,9 +872,14 @@ func (_c *MockReceivableRepository_OpenWithCustomer_Call) Run(run func(ctx conte
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
+		var arg2 time.Time
+		if args[2] != nil {
+			arg2 = args[2].(time.Time)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -759,7 +890,7 @@ func (_c *MockReceivableRepository_OpenWithCustomer_Call) Return(receivables []*
 	return _c
 }
 
-func (_c *MockReceivableRepository_OpenWithCustomer_Call) RunAndReturn(run func(ctx context.Context, garageID string) ([]*domain.Receivable, error)) *MockReceivableRepository_OpenWithCustomer_Call {
+func (_c *MockReceivableRepository_OpenWithCustomer_Call) RunAndReturn(run func(ctx context.Context, garageID string, dueOnOrBefore time.Time) ([]*domain.Receivable, error)) *MockReceivableRepository_OpenWithCustomer_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -28,6 +28,7 @@ const (
 	garageID     = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
 	receivableID = "11111111-1111-1111-1111-111111111111"
 	actorID      = "55555555-5555-5555-5555-555555555555"
+	customerID   = "66666666-6666-6666-6666-666666666666"
 )
 
 var (
@@ -108,11 +109,11 @@ func TestListReceivables(t *testing.T) {
 	paid := receivable()
 	paid.Status, paid.PaidAmount = domain.StatusPaid, paid.TotalAmount
 	e.repo.EXPECT().List(mock.Anything, garageID, mock.MatchedBy(func(f usecase.ListFilter) bool {
-		return f.CustomerID == "c-1" && f.OverdueOnly && f.IncludePaid && f.Query == "51A" && f.Limit == 10 && f.Offset == 10
+		return f.CustomerID == customerID && f.OverdueOnly && f.IncludePaid && f.Query == "51A" && f.Limit == 10 && f.Offset == 10
 	})).Return([]*domain.Receivable{receivable(), paid}, 12, usecase.Summary{OpenCount: 3, OutstandingAmount: 5, OverdueCount: 2, OverdueAmount: 4}, nil).Once()
 
 	resp, err := e.srv.ListReceivables(signedIn(t), &receivablev1.ListReceivablesRequest{
-		GarageId: garageID, CustomerId: "c-1", OverdueOnly: true, IncludePaid: true, Query: "51A", Page: 2, PageSize: 10,
+		GarageId: garageID, CustomerId: customerID, OverdueOnly: true, IncludePaid: true, Query: "51A", Page: 2, PageSize: 10,
 	})
 	require.NoError(t, err)
 	require.Len(t, resp.GetData(), 2)
@@ -133,6 +134,9 @@ func TestListReceivables(t *testing.T) {
 	e.repo.EXPECT().List(mock.Anything, garageID, mock.Anything).Return(nil, 0, usecase.Summary{}, errBoom).Once()
 	_, err = e.srv.ListReceivables(signedIn(t), &receivablev1.ListReceivablesRequest{GarageId: garageID})
 	require.Equal(t, codes.Internal, status.Code(err))
+
+	_, err = e.srv.ListReceivables(signedIn(t), &receivablev1.ListReceivablesRequest{GarageId: garageID, CustomerId: "not-an-id"})
+	require.Equal(t, codes.InvalidArgument, status.Code(err))
 }
 
 func TestGetReceivable(t *testing.T) {
@@ -159,6 +163,9 @@ func TestGetReceivable(t *testing.T) {
 	e.repo.EXPECT().FindByID(mock.Anything, garageID, receivableID).Return(nil, domain.ErrReceivableNotFound).Once()
 	_, err = e.srv.GetReceivable(signedIn(t), &receivablev1.GetReceivableRequest{GarageId: garageID, ReceivableId: receivableID})
 	require.Equal(t, codes.NotFound, status.Code(err))
+
+	_, err = e.srv.GetReceivable(signedIn(t), &receivablev1.GetReceivableRequest{GarageId: garageID, ReceivableId: "not-an-id"})
+	require.Equal(t, codes.NotFound, status.Code(err), "an id that is not an id is not found, not an internal error")
 }
 
 func TestReceivableStatusUnspecified(t *testing.T) {
@@ -187,20 +194,20 @@ func TestReceivableSettings(t *testing.T) {
 	assert.Equal(t, []int32{3, 7}, got.GetReminderOffsetDays())
 
 	e.repo.EXPECT().SaveSettings(mock.Anything, garageID, domain.Settings{
-		PaymentTermsDays: 14, RemindersEnabled: false, ReminderOffsetDays: []int{2, 9},
+		PaymentTermsDays: 14, RemindersEnabled: true, ReminderOffsetDays: []int{2, 9},
 	}).Return(nil).Once()
 	e.audit.EXPECT().Record(mock.Anything, mock.Anything).Return(nil).Once()
 
-	days, off := int32(14), false
+	days, on := int32(14), true
 	saved, err := e.srv.UpdateReceivableSettings(signedIn(t), &receivablev1.UpdateReceivableSettingsRequest{
-		GarageId: garageID, Settings: &receivablev1.ReceivableSettings{PaymentTermsDays: &days, RemindersEnabled: &off, ReminderOffsetDays: []int32{9, 2}},
+		GarageId: garageID, Settings: &receivablev1.ReceivableSettings{PaymentTermsDays: &days, RemindersEnabled: &on, ReminderOffsetDays: []int32{9, 2}},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, []int32{2, 9}, saved.GetReminderOffsetDays())
-	assert.False(t, saved.GetRemindersEnabled())
+	assert.True(t, saved.GetRemindersEnabled())
 
 	for name, in := range map[string]*receivablev1.ReceivableSettings{
-		"nothing": nil, "no terms": {RemindersEnabled: &off}, "no switch": {PaymentTermsDays: &days},
+		"nothing": nil, "no terms": {RemindersEnabled: &on}, "no switch": {PaymentTermsDays: &days}, "on, no days": {PaymentTermsDays: &days, RemindersEnabled: &on},
 	} {
 		_, err = e.srv.UpdateReceivableSettings(signedIn(t), &receivablev1.UpdateReceivableSettingsRequest{GarageId: garageID, Settings: in})
 		require.Equal(t, codes.InvalidArgument, status.Code(err), name)

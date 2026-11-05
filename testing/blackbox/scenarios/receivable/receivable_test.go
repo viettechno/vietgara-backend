@@ -151,6 +151,7 @@ func TestSettingsDefaultsValidationAndEffect(t *testing.T) {
 		"offset over 90": {PaymentTermsDays: new(int32(7)), RemindersEnabled: new(true), ReminderOffsetDays: []int32{91}},
 		"no terms":       {RemindersEnabled: new(true)},
 		"no switch":      {PaymentTermsDays: new(int32(7))},
+		"on, no days":    {PaymentTermsDays: new(int32(7)), RemindersEnabled: new(true)},
 	} {
 		_, err = api.UpdateReceivableSettings(ctx, k.GarageID, bad)
 		fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "VALIDATION_ERROR")
@@ -581,4 +582,28 @@ func TestPermissionsAndTenantIsolation(t *testing.T) {
 	// Without a token nothing is served.
 	_, err = fixture.Anonymous(t).ListReceivables(ctx, k.GarageID, client.ReceivableFilter{})
 	fixture.RequireAPIError(t, err, http.StatusUnauthorized, "")
+}
+
+// Scenario: E2E-REC-001 (partial), Release 13.0, a settlement that has no receivable
+// (issued before the module existed, or whose event was lost) gets one from the
+// reminder job (FR-REC-01). Stubbed only: it deletes the receivable with SQL.
+func TestMissingReceivableIsRebuilt(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	k := newKit(t, "rec-001-heal")
+
+	settlement := k.settle(t, 600_000)
+	first := k.receivableOf(t, settlement.GetId(), nil)
+
+	timeshift.DropReceivable(t, settlement.GetId())
+
+	healed := k.receivableOf(t, settlement.GetId(), nil)
+	assert.NotEqual(t, first.GetId(), healed.GetId(), "a new row")
+	assert.EqualValues(t, 600_000, healed.GetRemainingAmount())
+	assert.Equal(t, k.CustomerID, healed.GetCustomerId())
+
+	list, err := k.Owner.API.ListReceivables(ctx, k.GarageID, client.ReceivableFilter{})
+	require.NoError(t, err)
+	assert.Len(t, list.GetData(), 1)
 }

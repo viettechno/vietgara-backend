@@ -38,6 +38,12 @@ type Summary struct {
 	OverdueAmount     int64
 }
 
+// MissingSettlement is a settlement that has no receivable.
+type MissingSettlement struct {
+	GarageID     string
+	SettlementID string
+}
+
 // LedgerLine is one ledger entry with the customer it belongs to.
 type LedgerLine struct {
 	Entry        domain.Entry
@@ -73,8 +79,16 @@ type Repository interface {
 	// customer, across all garages.
 	ReminderGarages(ctx context.Context) ([]string, error)
 	// OpenWithCustomer returns the garage's open receivables that have a
-	// customer, with their reminders.
-	OpenWithCustomer(ctx context.Context, garageID string) ([]*domain.Receivable, error)
+	// customer and a due date on or before dueOnOrBefore, with their reminders.
+	OpenWithCustomer(ctx context.Context, garageID string, dueOnOrBefore time.Time) ([]*domain.Receivable, error)
+	// MissingSettlements returns, across all garages, up to limit settlements
+	// that are not paid and have no receivable yet: the ones issued before the
+	// module existed, or whose event was lost.
+	MissingSettlements(ctx context.Context, limit int) ([]MissingSettlement, error)
+	// LockSettlement takes a transaction-scoped advisory lock on the
+	// settlement, waiting for it, so that two syncs of one settlement run one
+	// after the other.
+	LockSettlement(ctx context.Context, settlementID string) error
 	// TryLock takes a transaction-scoped advisory lock on key, reporting
 	// whether it was free.
 	TryLock(ctx context.Context, key string) (bool, error)

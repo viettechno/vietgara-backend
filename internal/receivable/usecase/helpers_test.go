@@ -63,6 +63,16 @@ func (d *deps) inGarage() {
 		func(ctx context.Context, _ string, fn func(context.Context) error) error { return fn(ctx) }).Maybe()
 }
 
+// noMissing makes the heal step of a reminder run find nothing.
+func (d *deps) noMissing() {
+	d.Repo.EXPECT().MissingSettlements(mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+}
+
+// lock lets a sync take the advisory lock of its settlement.
+func (d *deps) lock() {
+	d.Repo.EXPECT().LockSettlement(mock.Anything, settlementID).Return(nil).Maybe()
+}
+
 func (d *deps) timezone() {
 	d.Garages.EXPECT().Timezone(mock.Anything, garageID).Return("Asia/Ho_Chi_Minh", nil).Maybe()
 }

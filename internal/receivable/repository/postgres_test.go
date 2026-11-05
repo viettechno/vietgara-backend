@@ -121,7 +121,7 @@ func TestFind(t *testing.T) {
 				[]any{"e-1", "charge", int64(1_000_000), "QT-0001", nil, "charge:s-1", now},
 				[]any{"e-2", "payment", int64(400_000), "PT-1", new("cash"), "payment:p-1", now},
 			), nil).
-			ExpectQuery("FROM receivable_reminders", dbtest.NewRows([]any{"m-1", 3, "email", "skipped", "NO_EMAIL", 1, now, now}), nil)
+			ExpectQuery("receivable_id = ANY", dbtest.NewRows([]any{receivableID, "m-1", 3, "email", "skipped", "NO_EMAIL", 1, now, now}), nil)
 
 		r, err := repo().FindByID(tx.Context(t.Context()), garageID, receivableID)
 		require.NoError(t, err)
@@ -160,14 +160,14 @@ func TestFind(t *testing.T) {
 		tx = dbtest.New(t).
 			ExpectQueryRow("FROM receivables WHERE garage_id = $1 AND id = $2", dbtest.Row(receivableRow()...)).
 			ExpectQuery("FROM receivable_entries", dbtest.NewRows(), nil).
-			ExpectQuery("FROM receivable_reminders", nil, errBoom)
+			ExpectQuery("receivable_id = ANY", nil, errBoom)
 		_, err = repo().FindByID(tx.Context(t.Context()), garageID, receivableID)
 		require.ErrorIs(t, err, errBoom)
 
 		tx = dbtest.New(t).
 			ExpectQueryRow("FROM receivables WHERE garage_id = $1 AND id = $2", dbtest.Row(receivableRow()...)).
 			ExpectQuery("FROM receivable_entries", dbtest.NewRows(), nil).
-			ExpectQuery("FROM receivable_reminders", dbtest.NewRows([]any{"m-1"}).WithScanError(errBoom), nil)
+			ExpectQuery("receivable_id = ANY", dbtest.NewRows([]any{"m-1"}).WithScanError(errBoom), nil)
 		_, err = repo().FindByID(tx.Context(t.Context()), garageID, receivableID)
 		require.ErrorIs(t, err, errBoom)
 	})
@@ -282,8 +282,8 @@ func TestReminderQueries(t *testing.T) {
 
 		tx := dbtest.New(t).
 			ExpectQuery("customer_id IS NOT NULL", dbtest.NewRows(receivableRow()), nil).
-			ExpectQuery("FROM receivable_reminders", dbtest.NewRows([]any{"m-1", 3, "email", "sent", nil, 1, now, now}), nil)
-		items, err := repo().OpenWithCustomer(tx.Context(t.Context()), garageID)
+			ExpectQuery("receivable_id = ANY", dbtest.NewRows([]any{receivableID, "m-1", 3, "email", "sent", nil, 1, now, now}), nil)
+		items, err := repo().OpenWithCustomer(tx.Context(t.Context()), garageID, due)
 		require.NoError(t, err)
 		require.Len(t, items, 1)
 		require.Equal(t, domain.OutcomeSent, items[0].Reminders[0].Outcome)
@@ -293,21 +293,21 @@ func TestReminderQueries(t *testing.T) {
 		t.Parallel()
 
 		tx := dbtest.New(t).ExpectQuery("customer_id IS NOT NULL", nil, errBoom)
-		_, err := repo().OpenWithCustomer(tx.Context(t.Context()), garageID)
+		_, err := repo().OpenWithCustomer(tx.Context(t.Context()), garageID, due)
 		require.ErrorIs(t, err, errBoom)
 
 		tx = dbtest.New(t).ExpectQuery("customer_id IS NOT NULL", dbtest.NewRows([]any{"r"}).WithScanError(errBoom), nil)
-		_, err = repo().OpenWithCustomer(tx.Context(t.Context()), garageID)
+		_, err = repo().OpenWithCustomer(tx.Context(t.Context()), garageID, due)
 		require.ErrorIs(t, err, errBoom)
 
 		tx = dbtest.New(t).ExpectQuery("customer_id IS NOT NULL", dbtest.NewRows(receivableRow()).WithErr(errBoom), nil)
-		_, err = repo().OpenWithCustomer(tx.Context(t.Context()), garageID)
+		_, err = repo().OpenWithCustomer(tx.Context(t.Context()), garageID, due)
 		require.ErrorIs(t, err, errBoom)
 
 		tx = dbtest.New(t).
 			ExpectQuery("customer_id IS NOT NULL", dbtest.NewRows(receivableRow()), nil).
-			ExpectQuery("FROM receivable_reminders", nil, errBoom)
-		_, err = repo().OpenWithCustomer(tx.Context(t.Context()), garageID)
+			ExpectQuery("receivable_id = ANY", nil, errBoom)
+		_, err = repo().OpenWithCustomer(tx.Context(t.Context()), garageID, due)
 		require.ErrorIs(t, err, errBoom)
 	})
 
@@ -385,4 +385,28 @@ func TestLedgerQueries(t *testing.T) {
 		_, err = repo().Entries(tx.Context(t.Context()), garageID, now, now)
 		require.ErrorIs(t, err, errBoom)
 	})
+}
+
+func TestMissingSettlementsAndLock(t *testing.T) {
+	t.Parallel()
+
+	tx := dbtest.New(t).ExpectQuery("receivable_missing_settlements", dbtest.NewRows([]any{"g-1", "s-1"}, []any{"g-2", "s-2"}), nil).
+		WithArgs(func(args []any) { require.Equal(t, []any{50}, args) })
+	got, err := repo().MissingSettlements(tx.Context(t.Context()), 50)
+	require.NoError(t, err)
+	require.Equal(t, []usecase.MissingSettlement{{GarageID: "g-1", SettlementID: "s-1"}, {GarageID: "g-2", SettlementID: "s-2"}}, got)
+
+	tx = dbtest.New(t).ExpectQuery("receivable_missing_settlements", nil, errBoom)
+	_, err = repo().MissingSettlements(tx.Context(t.Context()), 1)
+	require.ErrorIs(t, err, errBoom)
+
+	tx = dbtest.New(t).ExpectQuery("receivable_missing_settlements", dbtest.NewRows([]any{"g"}).WithScanError(errBoom), nil)
+	_, err = repo().MissingSettlements(tx.Context(t.Context()), 1)
+	require.ErrorIs(t, err, errBoom)
+
+	tx = dbtest.New(t).ExpectExec("pg_advisory_xact_lock", dbtest.Tag(1), nil)
+	require.NoError(t, repo().LockSettlement(tx.Context(t.Context()), "s-1"))
+
+	tx = dbtest.New(t).ExpectExec("pg_advisory_xact_lock", dbtest.Tag(0), errBoom)
+	require.ErrorIs(t, repo().LockSettlement(tx.Context(t.Context()), "s-1"), errBoom)
 }

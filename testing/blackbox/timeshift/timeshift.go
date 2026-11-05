@@ -97,6 +97,14 @@ func AgeLedger(tb testing.TB, settlementID string, days int) {
 		WHERE receivable_id IN (SELECT id FROM receivables WHERE settlement_id = $1::uuid)`, settlementID, days)
 }
 
+// DropReceivable deletes the receivable of the settlement, with its ledger and
+// reminders, as when its event was lost.
+func DropReceivable(tb testing.TB, settlementID string) {
+	tb.Helper()
+
+	exec(tb, `DELETE FROM receivables WHERE settlement_id = $1::uuid`, settlementID)
+}
+
 // ClearReceivableCustomer removes the customer from the receivable of the
 // settlement, as when the customer could not be found.
 func ClearReceivableCustomer(tb testing.TB, settlementID string) {

@@ -50,6 +50,7 @@ func TestReceivableUseCase_HandleSettlementChanged(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+		d.lock()
 		d.timezone()
 		d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(settlementView(), nil).Once()
 		d.Repo.EXPECT().FindBySettlement(mock.Anything, garageID, settlementID).Return(nil, domain.ErrReceivableNotFound).Once()
@@ -90,6 +91,8 @@ func TestReceivableUseCase_HandleSettlementChanged(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+		d.lock()
+
 		view := settlementView()
 		view.CustomerID, view.PaidAmount = "", 1_000_000
 
@@ -110,6 +113,7 @@ func TestReceivableUseCase_HandleSettlementChanged(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+		d.lock()
 		d.timezone()
 		d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(usecase.SettlementView{
 			ID: settlementID, Number: "QT-0002", CreatedAt: now,
@@ -146,17 +150,20 @@ func TestReceivableUseCase_HandleSettlementChanged_Part2(t *testing.T) {
 
 		// reading the settlement
 		uc, d := newUseCase(t)
+		d.lock()
 		d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(usecase.SettlementView{}, errBoom).Once()
 		require.ErrorIs(t, uc.Sync(t.Context(), garageID, settlementID), errBoom)
 
 		// looking the receivable up
 		uc, d = newUseCase(t)
+		d.lock()
 		d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(settlementView(), nil).Once()
 		d.Repo.EXPECT().FindBySettlement(mock.Anything, garageID, settlementID).Return(nil, errBoom).Once()
 		require.ErrorIs(t, uc.Sync(t.Context(), garageID, settlementID), errBoom)
 
 		// the settings
 		uc, d = newUseCase(t)
+		d.lock()
 		d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(settlementView(), nil).Once()
 		d.Repo.EXPECT().FindBySettlement(mock.Anything, garageID, settlementID).Return(nil, domain.ErrReceivableNotFound).Once()
 		d.Repo.EXPECT().GetSettings(mock.Anything, garageID).Return(domain.Settings{}, errBoom).Once()
@@ -164,6 +171,7 @@ func TestReceivableUseCase_HandleSettlementChanged_Part2(t *testing.T) {
 
 		// the time zone
 		uc, d = newUseCase(t)
+		d.lock()
 		d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(settlementView(), nil).Once()
 		d.Repo.EXPECT().FindBySettlement(mock.Anything, garageID, settlementID).Return(nil, domain.ErrReceivableNotFound).Once()
 		d.Repo.EXPECT().GetSettings(mock.Anything, garageID).Return(domain.DefaultSettings(), nil).Once()
@@ -172,6 +180,7 @@ func TestReceivableUseCase_HandleSettlementChanged_Part2(t *testing.T) {
 
 		// saving
 		uc, d = newUseCase(t)
+		d.lock()
 		d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(settlementView(), nil).Once()
 		d.Repo.EXPECT().FindBySettlement(mock.Anything, garageID, settlementID).Return(openReceivable(day(2026, 11, 17)), nil).Once()
 		d.Repo.EXPECT().Save(mock.Anything, mock.Anything).Return(errBoom).Once()
@@ -179,10 +188,20 @@ func TestReceivableUseCase_HandleSettlementChanged_Part2(t *testing.T) {
 
 		// the ledger
 		uc, d = newUseCase(t)
+		d.lock()
 		d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(settlementView(), nil).Once()
 		d.Repo.EXPECT().FindBySettlement(mock.Anything, garageID, settlementID).Return(openReceivable(day(2026, 11, 17)), nil).Once()
 		d.Repo.EXPECT().Save(mock.Anything, mock.Anything).Return(nil).Once()
 		d.Repo.EXPECT().AddEntries(mock.Anything, garageID, receivableID, mock.Anything).Return(errBoom).Once()
 		require.ErrorIs(t, uc.Sync(t.Context(), garageID, settlementID), errBoom)
 	})
+}
+
+func TestReceivableUseCase_Sync_Lock(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+	d.Repo.EXPECT().LockSettlement(mock.Anything, settlementID).Return(errBoom).Once()
+
+	require.ErrorIs(t, uc.Sync(t.Context(), garageID, settlementID), errBoom, "nothing is read before the lock is held")
 }

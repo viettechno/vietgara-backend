@@ -37,12 +37,12 @@ func (uc *ReceivableUseCase) Schedule(ctx context.Context, interval time.Duratio
 // skips what the first is sending. A failure on one receivable does not stop
 // the others; all failures are returned together.
 func (uc *ReceivableUseCase) RunReminders(ctx context.Context) error {
+	errs := []error{uc.heal(ctx)}
+
 	garages, err := uc.repo.ReminderGarages(ctx)
 	if err != nil {
-		return err
+		return errors.Join(append(errs, err)...)
 	}
-
-	var errs []error
 
 	for _, garageID := range garages {
 		if err := uc.remindGarage(ctx, garageID); err != nil {
@@ -74,7 +74,13 @@ func (uc *ReceivableUseCase) remindGarage(ctx context.Context, garageID string) 
 			return err
 		}
 
-		open, err = uc.repo.OpenWithCustomer(ctx, garageID)
+		if len(settings.ReminderOffsetDays) == 0 {
+			return nil
+		}
+
+		// Only receivables past their due date by the first offset can have a
+		// reminder due.
+		open, err = uc.repo.OpenWithCustomer(ctx, garageID, today.AddDate(0, 0, -settings.ReminderOffsetDays[0]))
 
 		return err
 	})
@@ -91,6 +97,31 @@ func (uc *ReceivableUseCase) remindGarage(ctx context.Context, garageID string) 
 
 		if err := uc.tx.InGarage(ctx, garageID, func(ctx context.Context) error {
 			return uc.remind(ctx, garageID, r.ID, settings, today)
+		}); err != nil {
+			errs = append(errs, err)
+		}
+	}
+
+	return errors.Join(errs...)
+}
+
+// healBatch is how many missing receivables one run creates.
+const healBatch = 200
+
+// heal creates the receivables of the unpaid settlements that have none: those
+// issued before the module existed, and any whose event was lost. Each is
+// synchronized in its own garage transaction like an event would be.
+func (uc *ReceivableUseCase) heal(ctx context.Context) error {
+	missing, err := uc.repo.MissingSettlements(ctx, healBatch)
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+
+	for _, m := range missing {
+		if err := uc.tx.InGarage(ctx, m.GarageID, func(ctx context.Context) error {
+			return uc.Sync(ctx, m.GarageID, m.SettlementID)
 		}); err != nil {
 			errs = append(errs, err)
 		}

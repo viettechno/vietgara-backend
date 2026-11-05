@@ -182,3 +182,20 @@ $$;
 
 REVOKE ALL ON FUNCTION public.receivable_reminder_garages() FROM PUBLIC;
 GRANT ALL ON FUNCTION public.receivable_reminder_garages() TO vietgara_app;
+
+-- The settlements that are not paid and have no receivable: those issued before
+-- the module existed, and any whose event was lost. The reminder job creates
+-- their receivables, a batch at a time. It answers ids only.
+CREATE FUNCTION public.receivable_missing_settlements(batch integer) RETURNS TABLE(garage_id uuid, settlement_id uuid)
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+    SELECT s.garage_id, s.id FROM public.settlements s
+    WHERE s.status <> 'paid'
+      AND NOT EXISTS (SELECT 1 FROM public.receivables r WHERE r.garage_id = s.garage_id AND r.settlement_id = s.id)
+    ORDER BY s.created_at
+    LIMIT batch;
+$$;
+
+REVOKE ALL ON FUNCTION public.receivable_missing_settlements(integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION public.receivable_missing_settlements(integer) TO vietgara_app;

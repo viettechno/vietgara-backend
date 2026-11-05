@@ -88,6 +88,10 @@ func operations(t *testing.T) []operation {
 				continue
 			}
 
+			if pending(path) {
+				continue
+			}
+
 			op := operation{Method: method, Path: path, Enums: map[string]string{}}
 
 			for _, param := range detail.Parameters {
@@ -108,6 +112,24 @@ func operations(t *testing.T) []operation {
 	require.NotEmpty(t, ops, "the OpenAPI document lists operations")
 
 	return ops
+}
+
+// pendingPhase13 are the paths of the Phase 13 endpoints that the backend does
+// not serve yet: the contract lists them, the gateway does not route them. Each
+// slice of the release takes its own paths out of this list.
+var pendingPhase13 = []string{
+	"/purchase-orders", "/payment-out-vouchers", "/supplier-payables", "/reports/supplier-payables", "/reports/technicians",
+	"/profit", "/data-requests",
+}
+
+func pending(path string) bool {
+	for _, fragment := range pendingPhase13 {
+		if strings.Contains(path, fragment) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // body is the JSON body a probe sends: an empty message for writes.

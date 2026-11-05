@@ -189,6 +189,12 @@ func (s Settings) Normalize() (Settings, error) {
 	offsets := slices.Clone(s.ReminderOffsetDays)
 	slices.Sort(offsets)
 
+	// Reminders that are on need a day to remind at: an update that leaves the
+	// schedule out must not silently turn them into nothing.
+	if s.RemindersEnabled && len(offsets) == 0 {
+		return Settings{}, ErrInvalidOffsets
+	}
+
 	if len(offsets) > MaxReminderOffsets || len(slices.Compact(slices.Clone(offsets))) != len(offsets) {
 		return Settings{}, ErrInvalidOffsets
 	}
@@ -222,7 +228,7 @@ func (s Settings) DueOffsets(daysOverdue int, done map[int]bool) []int {
 var (
 	ErrReceivableNotFound = errors.New("receivable not found")
 	ErrInvalidTerms       = errors.New("payment terms must be between 0 and 365 days")
-	ErrInvalidOffsets     = errors.New("reminder offsets must be at most 5 distinct days between 1 and 90")
+	ErrInvalidOffsets     = errors.New("reminders need 1 to 5 distinct days between 1 and 90 to remind at")
 	ErrIncompleteSettings = errors.New("payment terms and the reminder switch are required")
 	ErrInvalidPeriod      = errors.New("dates must be in the form YYYY-MM-DD and from must be before to")
 )

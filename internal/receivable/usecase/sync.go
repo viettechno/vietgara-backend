@@ -31,6 +31,13 @@ func (uc *ReceivableUseCase) HandleSettlementChanged(ctx context.Context, event 
 
 // Sync brings the receivable of a settlement up to date with the settlement.
 func (uc *ReceivableUseCase) Sync(ctx context.Context, garageID, settlementID string) error {
+	// Events of one settlement arrive on separate topics and may be handled by
+	// different instances at once: each sync reads the settlement after the
+	// one before it has written, so a stale read never overwrites a newer one.
+	if err := uc.repo.LockSettlement(ctx, settlementID); err != nil {
+		return err
+	}
+
 	view, err := uc.settlements.Get(ctx, garageID, settlementID)
 	if err != nil {
 		return err

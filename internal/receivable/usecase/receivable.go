@@ -5,7 +5,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/viettechno/vietgara-backend/internal/receivable/domain"
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
 // Deps are the dependencies of ReceivableUseCase.
@@ -104,6 +107,12 @@ func (uc *ReceivableUseCase) today(ctx context.Context, garageID string) (time.T
 func (uc *ReceivableUseCase) List(ctx context.Context, req ListRequest) (*ListResult, error) {
 	page := req.normalize()
 
+	if req.CustomerID != "" {
+		if _, err := uuid.Parse(req.CustomerID); err != nil {
+			return nil, apperror.Validation("customerId", apperror.IssueInvalid, "customerId must be an id")
+		}
+	}
+
 	today, err := uc.today(ctx, req.GarageID)
 	if err != nil {
 		return nil, toAppError("list receivables", err)
@@ -127,6 +136,10 @@ func (uc *ReceivableUseCase) List(ctx context.Context, req ListRequest) (*ListRe
 
 // Get returns one receivable with its ledger and reminders.
 func (uc *ReceivableUseCase) Get(ctx context.Context, garageID, receivableID string) (Item, error) {
+	if _, err := uuid.Parse(receivableID); err != nil {
+		return Item{}, toAppError("get receivable", domain.ErrReceivableNotFound)
+	}
+
 	r, err := uc.repo.FindByID(ctx, garageID, receivableID)
 	if err != nil {
 		return Item{}, toAppError("get receivable", err)

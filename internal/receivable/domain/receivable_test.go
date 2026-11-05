@@ -88,6 +88,12 @@ func TestSettingsNormalize(t *testing.T) {
 
 	_, err = domain.Settings{PaymentTermsDays: 365, ReminderOffsetDays: []int{1, 2, 3, 4, 90}}.Normalize()
 	require.NoError(t, err)
+
+	_, err = domain.Settings{PaymentTermsDays: 7, RemindersEnabled: true}.Normalize()
+	require.ErrorIs(t, err, domain.ErrInvalidOffsets, "reminders that are on need a day to remind at")
+
+	_, err = domain.Settings{PaymentTermsDays: 7}.Normalize()
+	require.NoError(t, err, "reminders that are off need none")
 }
 
 func TestDueOffsets(t *testing.T) {

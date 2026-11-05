@@ -9,23 +9,31 @@ import (
 	customerDomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
 	"github.com/viettechno/vietgara-backend/internal/document/render"
+	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
 	notificationUsecase "github.com/viettechno/vietgara-backend/internal/notification/usecase"
 	"github.com/viettechno/vietgara-backend/internal/platform/audit"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
+	"github.com/viettechno/vietgara-backend/internal/platform/numbering"
+	receivableDomain "github.com/viettechno/vietgara-backend/internal/receivable/domain"
 	receivableHandler "github.com/viettechno/vietgara-backend/internal/receivable/handler"
 	receivableRepository "github.com/viettechno/vietgara-backend/internal/receivable/repository"
 	receivableUsecase "github.com/viettechno/vietgara-backend/internal/receivable/usecase"
 	repairorderUsecase "github.com/viettechno/vietgara-backend/internal/repairorder/usecase"
+	supplierDomain "github.com/viettechno/vietgara-backend/internal/supplier/domain"
+	supplierRepository "github.com/viettechno/vietgara-backend/internal/supplier/repository"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
+	"github.com/viettechno/vietgara-backend/pkg/issuer"
 )
 
 // receivableModule is the wired Receivables module (HLD module #9, Release
 // 13.0): the receivables fed by the events of Billing & Settlement, the
 // scheduled reminders and the reconciliation.
 type receivableModule struct {
-	uc     *receivableUsecase.ReceivableUseCase
-	server *receivableHandler.Server
+	uc             *receivableUsecase.ReceivableUseCase
+	server         *receivableHandler.Server
+	payables       *receivableUsecase.PayableUseCase
+	payablesServer *receivableHandler.PayableServer
 }
 
 func buildReceivable(
@@ -36,19 +44,72 @@ func buildReceivable(
 	vehicles *customerRepository.PostgresVehicleRepository,
 	garages *tenantRepo.PostgresGarageRepository,
 	notification *notificationUsecase.NotificationUseCase,
+	suppliers *supplierRepository.PostgresRepository,
+	users *identityRepo.PostgresUserRepository,
 	auditLog *audit.Logger,
 ) *receivableModule {
+	repo := receivableRepository.NewPostgresRepository(pool)
+
 	uc := receivableUsecase.NewReceivableUseCase(receivableUsecase.Deps{
-		Repo:        receivableRepository.NewPostgresRepository(pool),
+		Repo:        repo,
 		Settlements: receivableSettlements{billing: billing, repairOrders: repairOrders, vehicles: vehicles},
 		Garages:     receivableGarages{garages: garages},
 		Sender:      receivableReminders{uc: notification},
-		PaidOut:     receivablePaidOut{},
+		PaidOut:     repo,
 		Tx:          garageTransactor{tx: tx},
 		Audit:       auditLog,
 	})
 
-	return &receivableModule{uc: uc, server: receivableHandler.NewServer(uc)}
+	payables := receivableUsecase.NewPayableUseCase(receivableUsecase.PayableDeps{
+		Repo: repo, Suppliers: receivableSuppliers{suppliers: suppliers}, Garages: receivableGarages{garages: garages},
+		Issuers: receivableIssuers{garages: garages}, Staff: receivableStaff{users: users},
+		Sequences: numbering.NewSequencer(pool), Audit: auditLog,
+	})
+
+	return &receivableModule{
+		uc: uc, server: receivableHandler.NewServer(uc), payables: payables, payablesServer: receivableHandler.NewPayableServer(payables),
+	}
+}
+
+// receivableSuppliers lets Receivables read the supplier a voucher pays.
+type receivableSuppliers struct {
+	suppliers *supplierRepository.PostgresRepository
+}
+
+func (a receivableSuppliers) Get(ctx context.Context, garageID, supplierID string) (receivableUsecase.SupplierView, error) {
+	s, err := a.suppliers.FindByID(ctx, garageID, supplierID)
+	if errors.Is(err, supplierDomain.ErrSupplierNotFound) {
+		return receivableUsecase.SupplierView{}, receivableDomain.ErrSupplierNotFound
+	}
+
+	if err != nil {
+		return receivableUsecase.SupplierView{}, err
+	}
+
+	return receivableUsecase.SupplierView{Name: s.Name, Address: deref(s.Contact.Address)}, nil
+}
+
+// receivableIssuers gives a voucher the garage's legal identity as it is now.
+type receivableIssuers struct {
+	garages *tenantRepo.PostgresGarageRepository
+}
+
+func (a receivableIssuers) Issuer(ctx context.Context, garageID string) (issuer.Issuer, error) {
+	garage, err := a.garages.FindByID(ctx, garageID)
+	if err != nil {
+		return issuer.Issuer{}, err
+	}
+
+	return issuerOf(garage), nil
+}
+
+// receivableStaff names the staff member who issues a voucher.
+type receivableStaff struct {
+	users *identityRepo.PostgresUserRepository
+}
+
+func (a receivableStaff) FullName(ctx context.Context, userID string) (string, error) {
+	return billingCollectors(a).FullName(ctx, userID)
 }
 
 // receivableSettlements lets Receivables read a settlement with the customer
@@ -128,14 +189,6 @@ func (a receivableReminders) SendPaymentReminder(ctx context.Context, r receivab
 	})
 
 	return receivableUsecase.Delivery{Sent: res.Sent, Reason: res.Reason}, err
-}
-
-// receivablePaidOut totals the payment-out vouchers of a period for the
-// reconciliation. The vouchers arrive with the payables of this release.
-type receivablePaidOut struct{}
-
-func (receivablePaidOut) PaidOut(context.Context, string, time.Time, time.Time) (int64, error) {
-	return 0, nil
 }
 
 // documentReceivables lets Document/Print export the receivables and their

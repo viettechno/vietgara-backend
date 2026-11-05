@@ -431,7 +431,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 
 	// Receivables (Release 13.0): what customers owe, with its reminders and
 	// reconciliation (FR-REC-01, 03, 04).
-	receivable := buildReceivable(pool, tx, billing.uc, repairOrder.uc, vehicleRepo, garages, notification.uc, auditLog)
+	receivable := buildReceivable(pool, tx, billing.uc, repairOrder.uc, vehicleRepo, garages, notification.uc, supplierRepo, users, auditLog)
 	document.uc.WithReceivables(documentReceivables{uc: receivable.uc})
 
 	// Mobile BFFs (Phase 2): the Technician App's work list (Release 2.2)
@@ -515,6 +515,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	reportingv1.RegisterReportingServiceServer(app.grpcServer, reporting.server)
 	notificationv1.RegisterNotificationServiceServer(app.grpcServer, notification.server)
 	receivablev1.RegisterReceivableServiceServer(app.grpcServer, receivable.server)
+	receivablev1.RegisterPayableServiceServer(app.grpcServer, receivable.payablesServer)
 	technicianv1.RegisterTechnicianServiceServer(app.grpcServer, technicianSrv)
 	customerportalv1.RegisterCustomerPortalServiceServer(app.grpcServer, customerPortalSrv)
 	reflection.Register(app.grpcServer)
@@ -550,6 +551,7 @@ func wireEvents(
 		repairorderHandler.Subscribe(dispatcher, processor, repairOrder.uc)
 		notificationHandler.Subscribe(dispatcher, processor, notification.uc)
 		receivableHandler.Subscribe(dispatcher, processor, receivable.uc)
+		receivableHandler.SubscribePayables(dispatcher, processor, receivable.payables)
 		app.workers = append(app.workers, outbox.NewRelay(pool, tx, dispatcher, relayOpts...).Run)
 
 		return nil
@@ -571,6 +573,7 @@ func wireEvents(
 	repairorderHandler.Subscribe(consumer, processor, repairOrder.uc)
 	notificationHandler.Subscribe(consumer, processor, notification.uc)
 	receivableHandler.Subscribe(consumer, processor, receivable.uc)
+	receivableHandler.SubscribePayables(consumer, processor, receivable.payables)
 
 	app.metrics.Register(observability.NewConsumerLagCollector(consumer.Lag))
 
@@ -597,7 +600,7 @@ func apiPolicies() middleware.Policies {
 		customerHandler.LinkPolicies(), customerHandler.TaxProfilePolicies(),
 		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
 		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(), fileHandler.Policies(), catalogueHandler.Policies(), catalogueHandler.JobPolicies(),
-		technicianHandler.Policies(), customerportalHandler.Policies(), dataimportHandler.Policies(), notificationHandler.Policies(), receivableHandler.Policies(),
+		technicianHandler.Policies(), customerportalHandler.Policies(), dataimportHandler.Policies(), notificationHandler.Policies(), receivableHandler.Policies(), receivableHandler.PayablePolicies(),
 	)
 }
 
@@ -640,7 +643,7 @@ func buildGateway(
 		repairorderv1.RegisterRepairOrderServiceHandler, inventoryv1.RegisterInventoryServiceHandler,
 		inventoryv1.RegisterImportServiceHandler,
 		billingv1.RegisterSettlementServiceHandler, documentv1.RegisterDocumentServiceHandler,
-		reportingv1.RegisterReportingServiceHandler, notificationv1.RegisterNotificationServiceHandler, receivablev1.RegisterReceivableServiceHandler,
+		reportingv1.RegisterReportingServiceHandler, notificationv1.RegisterNotificationServiceHandler, receivablev1.RegisterReceivableServiceHandler, receivablev1.RegisterPayableServiceHandler,
 		technicianv1.RegisterTechnicianServiceHandler, customerportalv1.RegisterCustomerPortalServiceHandler,
 	} {
 		if err := register(ctx, mux, conn); err != nil {

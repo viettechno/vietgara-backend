@@ -44,6 +44,11 @@ func newUseCase(t *testing.T) (*usecase.InventoryUseCase, *deps) {
 	uc, d := newBareUseCase(t)
 	d.Repo.EXPECT().DraftLines(mock.Anything, mock.Anything, mock.Anything).Return(nil, nil).Maybe()
 
+	// Completing or reversing a goods receipt tells the payables; the tests of
+	// that event use newBareUseCase and capture its payload themselves.
+	d.Events.EXPECT().Publish(mock.Anything, usecase.EventGoodsReceiptCompleted, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+	d.Events.EXPECT().Publish(mock.Anything, usecase.EventGoodsReceiptCancelled, mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
+
 	return uc, d
 }
 

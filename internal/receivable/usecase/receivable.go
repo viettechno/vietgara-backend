@@ -80,7 +80,11 @@ type ListResult struct {
 
 // location returns the garage's timezone, UTC when it is missing or unknown.
 func (uc *ReceivableUseCase) location(ctx context.Context, garageID string) (*time.Location, error) {
-	name, err := uc.garages.Timezone(ctx, garageID)
+	return locationOf(ctx, uc.garages, garageID)
+}
+
+func locationOf(ctx context.Context, garages GarageReader, garageID string) (*time.Location, error) {
+	name, err := garages.Timezone(ctx, garageID)
 	if err != nil {
 		return nil, err
 	}

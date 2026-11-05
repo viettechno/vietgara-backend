@@ -194,6 +194,7 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: scan:local
+          build-args: APK_REFRESH=${{ github.run_id }}
           cache-from: type=gha
 
       - name: Scan image for vulnerabilities
@@ -209,6 +210,7 @@ jobs:
           push: ${{ github.event_name == 'push' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          build-args: APK_REFRESH=${{ github.run_id }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

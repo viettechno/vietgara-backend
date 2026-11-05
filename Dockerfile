@@ -24,7 +24,12 @@ RUN CGO_ENABLED=0 GOOS="${TARGETOS:-$(go env GOOS)}" GOARCH="${TARGETARCH:-$(go 
 
 FROM alpine:3.22
 
-RUN apk add --no-cache ca-certificates
+# Pick up the fixes of the base image's operating-system packages that are
+# newer than the image itself (the vulnerability scan in CI fails on a fixable
+# HIGH or CRITICAL finding). CI passes a new APK_REFRESH on every run, so a
+# cached layer from before a fix was published is not reused.
+ARG APK_REFRESH=manual
+RUN echo "apk upgrade ($APK_REFRESH)" && apk upgrade --no-cache && apk add --no-cache ca-certificates
 
 WORKDIR /app
 COPY --from=builder /out/vietgara-backend /app/vietgara-backend

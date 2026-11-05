@@ -138,6 +138,7 @@ local defaults.
 | --- | --- |
 | `REDIS_ADDR`, `REDIS_PASSWORD` | Sessions, OTPs, entitlement cache and transaction counters. If empty, these are kept in memory (single instance only) |
 | `ENTITLEMENT_CACHE_TTL`, `LICENSE_EXPIRY_JOB_INTERVAL` | License enforcement |
+| `RECEIVABLE_REMINDER_JOB_INTERVAL` | How often the job that sends overdue payment reminders runs (default `1h`; see [Receivables](#receivables-release-130)) |
 | `KAFKA_BROKERS`, `KAFKA_TOPIC_PREFIX`, `KAFKA_CONSUMER_GROUP`, `OUTBOX_RELAY_INTERVAL` | Domain events. If `KAFKA_BROKERS` is empty, events are delivered in-process. See [Events](#events) |
 
 **Observability**
@@ -234,6 +235,19 @@ How failures are handled:
 - Invitation e-mails are sent after the invitation is committed. If sending
   fails, the error is logged and the invitation still appears on the
   invitee's Invitations page.
+
+### Receivables (Release 13.0)
+
+The Receivables module keeps what customers owe, fed by the settlement and
+payment events of Billing & Settlement: `GET /api/v1/garages/{id}/receivables`
+lists them most overdue first with a summary, `GET .../receivables/{id}` adds
+the ledger and the reminders sent. A garage sets its payment terms (7 days by
+default) and its reminder schedule (3 and 7 days overdue by default) in
+`receivable-settings`; an hourly job (`RECEIVABLE_REMINDER_JOB_INTERVAL`) sends
+each reminder once, by e-mail, unless the customer opted out, has no address or
+the garage switched `payment_reminder` off. `reports/receivable-reconciliation`
+reconciles a period, and both it and the receivables list export to Excel.
+Reading needs `billing.read`, changing the settings `billing.write`.
 
 ### E-mails of a garage (Release 10.1)
 

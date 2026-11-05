@@ -14,6 +14,7 @@ var typeToProto = map[domain.Type]notificationv1.NotificationType{
 	domain.TypeSettlementReceipt: notificationv1.NotificationType_NOTIFICATION_TYPE_SETTLEMENT_RECEIPT,
 	domain.TypeSettlementPaid:    notificationv1.NotificationType_NOTIFICATION_TYPE_SETTLEMENT_PAID,
 	domain.TypeLowStock:          notificationv1.NotificationType_NOTIFICATION_TYPE_LOW_STOCK,
+	domain.TypePaymentReminder:   notificationv1.NotificationType_NOTIFICATION_TYPE_PAYMENT_REMINDER,
 }
 
 // typeFromProto maps an unspecified or unknown type to the empty type.

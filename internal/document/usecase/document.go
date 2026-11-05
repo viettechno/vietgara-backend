@@ -11,6 +11,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -163,6 +164,15 @@ type RevenueReader interface {
 	Revenue(ctx context.Context, garageID, period string, from, to time.Time) (RevenueInfo, error)
 }
 
+// ReceivableReader reads the receivables for Excel export (Release 13.0);
+// implemented by an adapter over the Receivables module in cmd/server. The
+// filters are those of ReceivableService.ListReceivables.
+type ReceivableReader interface {
+	Receivables(ctx context.Context, garageID, customerID, query string, overdueOnly, includePaid bool) ([]render.ReceivableRow, error)
+	// Reconciliation reconciles the period [from, to) of "YYYY-MM-DD" days.
+	Reconciliation(ctx context.Context, garageID, from, to string) (render.ReconciliationData, error)
+}
+
 // GarageHeaderInfo is the Tenant module's view of a garage that every
 // document's letterhead needs.
 type GarageHeaderInfo struct {
@@ -196,6 +206,9 @@ type DocumentUseCase struct {
 	Garages        GarageReader
 	Inventory      InventoryDocumentReader
 	Prints         PrintStore
+	// Receivables serves the Excel exports of Release 13.0; set it with
+	// WithReceivables.
+	Receivables ReceivableReader
 }
 
 // NewDocumentUseCase wires the use case to its dependencies.
@@ -207,6 +220,55 @@ func NewDocumentUseCase(
 		Quotes: quotes, RepairOrders: repairOrders, Settlements: settlements, StockMovements: stockMovements,
 		Revenue: revenue, Garages: garages, Inventory: inventory, Prints: prints,
 	}
+}
+
+var errReceivablesNotWired = errors.New("the receivables reader is not set")
+
+// WithReceivables sets the reader of the receivables exports and returns uc.
+func (uc *DocumentUseCase) WithReceivables(r ReceivableReader) *DocumentUseCase {
+	uc.Receivables = r
+
+	return uc
+}
+
+// ReceivablesExcel renders the receivables list as an Excel workbook
+// (FR-DOC-02), with the filters of ReceivableService.ListReceivables.
+func (uc *DocumentUseCase) ReceivablesExcel(ctx context.Context, garageID, customerID, query string, overdueOnly, includePaid bool) ([]byte, error) {
+	if uc.Receivables == nil {
+		return nil, apperror.Internal("export receivables excel", errReceivablesNotWired)
+	}
+
+	rows, err := uc.Receivables.Receivables(ctx, garageID, customerID, query, overdueOnly, includePaid)
+	if err != nil {
+		return nil, toAppError("export receivables excel", err)
+	}
+
+	workbook, err := render.ReceivablesExcel(rows)
+	if err != nil {
+		return nil, apperror.Internal("export receivables excel", err)
+	}
+
+	return workbook, nil
+}
+
+// ReconciliationExcel renders the reconciliation of the period [from, to) as an
+// Excel workbook (FR-REC-04).
+func (uc *DocumentUseCase) ReconciliationExcel(ctx context.Context, garageID, from, to string) ([]byte, error) {
+	if uc.Receivables == nil {
+		return nil, apperror.Internal("export reconciliation excel", errReceivablesNotWired)
+	}
+
+	data, err := uc.Receivables.Reconciliation(ctx, garageID, from, to)
+	if err != nil {
+		return nil, toAppError("export reconciliation excel", err)
+	}
+
+	workbook, err := render.ReconciliationExcel(data)
+	if err != nil {
+		return nil, apperror.Internal("export reconciliation excel", err)
+	}
+
+	return workbook, nil
 }
 
 func findVoucher(vouchers []VoucherInfo, paymentID string) (VoucherInfo, bool) {

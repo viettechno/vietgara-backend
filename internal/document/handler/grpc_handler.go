@@ -54,6 +54,9 @@ func Policies() middleware.Policies {
 		documentv1.DocumentService_ExportPurchasesExcel_FullMethodName:       middleware.GarageMethod(costRead),
 		documentv1.DocumentService_ExportStockValuationExcel_FullMethodName:  middleware.GarageMethod(costRead),
 
+		documentv1.DocumentService_ExportReceivablesExcel_FullMethodName:              middleware.GarageMethod(billingRead),
+		documentv1.DocumentService_ExportReceivableReconciliationExcel_FullMethodName: middleware.GarageMethod(billingRead),
+
 		documentv1.DocumentService_PrintQuotePdf_FullMethodName:             middleware.GarageMethod(quoteRead),
 		documentv1.DocumentService_PrintRepairOrderPdf_FullMethodName:       middleware.GarageMethod(repairOrderRead),
 		documentv1.DocumentService_PrintSettlementReceiptPdf_FullMethodName: middleware.GarageMethod(billingRead),

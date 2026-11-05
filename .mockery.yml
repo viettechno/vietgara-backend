@@ -429,6 +429,11 @@ packages:
           structname: "MockBillingAuditLogger"
   github.com/viettechno/vietgara-backend/internal/document/usecase:
     interfaces:
+      ReceivableReader:
+        config:
+          filename: "document_usecase_receivable_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockDocumentReceivableReader"
       QuoteReader:
         config:
           filename: "document_usecase_quote_reader.go"
@@ -560,3 +565,40 @@ packages:
           filename: "dataimport_usecase_audit_logger.go"
           dir: "./internal/mocks"
           structname: "MockImportAuditLogger"
+  github.com/viettechno/vietgara-backend/internal/receivable/usecase:
+    interfaces:
+      Repository:
+        config:
+          filename: "receivable_usecase_repository.go"
+          dir: "./internal/mocks"
+          structname: "MockReceivableRepository"
+      SettlementReader:
+        config:
+          filename: "receivable_usecase_settlement_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockReceivableSettlementReader"
+      GarageReader:
+        config:
+          filename: "receivable_usecase_garage_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockReceivableGarageReader"
+      ReminderSender:
+        config:
+          filename: "receivable_usecase_reminder_sender.go"
+          dir: "./internal/mocks"
+          structname: "MockReceivableReminderSender"
+      PaidOutReader:
+        config:
+          filename: "receivable_usecase_paid_out_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockReceivablePaidOutReader"
+      Transactor:
+        config:
+          filename: "receivable_usecase_transactor.go"
+          dir: "./internal/mocks"
+          structname: "MockReceivableTransactor"
+      AuditLogger:
+        config:
+          filename: "receivable_usecase_audit_logger.go"
+          dir: "./internal/mocks"
+          structname: "MockReceivableAuditLogger"

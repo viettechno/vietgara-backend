@@ -1,0 +1,16 @@
+{{define "subject"}}Payment reminder for settlement {{.Number}} at {{.GarageName}}{{end}}
+{{define "text"}}Hello {{.CustomerName}},
+
+Settlement {{.Number}} at {{.GarageName}} is {{.DaysOverdue}} days overdue (due {{.DueDate}}). Amount still owed: {{.Remaining}} VND.
+
+If you have already paid, please ignore this e-mail. For help, contact {{.GarageName}}{{if .GaragePhone}} on {{.GaragePhone}}{{end}}.
+
+Do not want this kind of e-mail any more? Opt out at:
+{{.OptOutURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.CustomerName}},</p>
+<p>Settlement <strong>{{.Number}}</strong> at <strong>{{.GarageName}}</strong> is <strong>{{.DaysOverdue}} days overdue</strong> (due {{.DueDate}}). Amount still owed: <strong>{{.Remaining}} VND</strong>.</p>
+<p>If you have already paid, please ignore this e-mail. For help, contact {{.GarageName}}{{if .GaragePhone}} on {{.GaragePhone}}{{end}}.</p>
+<p style="color:#666;font-size:12px"><a href="{{.OptOutURL}}">Opt out</a> of this kind of e-mail.</p>
+<p>VietGara</p>{{end}}

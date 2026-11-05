@@ -29,6 +29,9 @@ const EventSettlementCreated = "settlement.created"
 const (
 	EventPaymentVoucherIssued = "payment_voucher.issued"
 	EventSettlementPaid       = "settlement.paid"
+	// EventPaymentVoucherVoided is published when a voucher is voided
+	// (Release 13.0), so that Receivables reopens the amount.
+	EventPaymentVoucherVoided = "payment_voucher.voided"
 )
 
 // Deps are the dependencies of SettlementUseCase.

@@ -315,6 +315,8 @@ func TestRender(t *testing.T) {
 		{"en vehicle ready", mail.TemplateVehicleReady, "en", customerMail, "Your vehicle 51A-111.11 is ready", "Address: 1 Le Loi"},
 		{"vi payment received", mail.TemplatePaymentReceived, "vi", customerMail, "Gara <A> đã nhận 500.000 đ cho xe 51A-111.11", "Số tiền còn lại: 300.000 đ"},
 		{"en payment received", mail.TemplatePaymentReceived, "en", customerMail, "Gara <A> received 500.000 VND for 51A-111.11", "Balance left: 300.000 VND"},
+		{"vi payment reminder", mail.TemplatePaymentReminder, "vi", map[string]any{"CustomerName": "An", "GarageName": "Gara <A>", "GaragePhone": "0901", "Number": "QT-0001", "Remaining": "600.000", "DaysOverdue": 3, "DueDate": "17/11/2026", "OptOutURL": "https://x/opt-out"}, "Nhắc thanh toán quyết toán QT-0001 tại Gara <A>", "quá hạn thanh toán 3 ngày"},
+		{"en payment reminder", mail.TemplatePaymentReminder, "en", map[string]any{"CustomerName": "An", "GarageName": "Gara <A>", "GaragePhone": "", "Number": "QT-0001", "Remaining": "600.000", "DaysOverdue": 7, "DueDate": "17/11/2026", "OptOutURL": "https://x/opt-out"}, "Payment reminder for settlement QT-0001 at Gara <A>", "is 7 days overdue"},
 		{"vi receipt attached", mail.TemplateSettlementReceipt, "vi", customerMail, "Biên nhận ST-001 cho xe 51A-111.11", "đính kèm dưới dạng PDF"},
 		{"en receipt not attached", mail.TemplateSettlementReceipt, "en", map[string]any{"CustomerName": "An", "VehiclePlate": "51A-111.11", "GarageName": "Gara <A>", "Number": "ST-001", "Total": "800.000", "Attached": false}, "Receipt ST-001 for 51A-111.11", "could not be attached"},
 		{"vi quote approved", mail.TemplateQuoteDecided, "vi", staffMail, "Báo giá BG-001 đã được duyệt", "đã duyệt báo giá BG-001"},

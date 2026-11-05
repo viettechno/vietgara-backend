@@ -38,6 +38,7 @@ type deps struct {
 	Revenue        *mocks.MockDocumentRevenueReader
 	Garages        *mocks.MockDocumentGarageReader
 	Inventory      *mocks.MockDocumentInventoryReader
+	Receivables    *mocks.MockDocumentReceivableReader
 	Prints         *fakePrints
 }
 
@@ -48,10 +49,11 @@ func newUseCase(t *testing.T) (*usecase.DocumentUseCase, *deps) {
 		Quotes: mocks.NewMockDocumentQuoteReader(t), RepairOrders: mocks.NewMockDocumentRepairOrderReader(t),
 		Settlements: mocks.NewMockDocumentSettlementReader(t), StockMovements: mocks.NewMockDocumentStockMovementReader(t),
 		Revenue: mocks.NewMockDocumentRevenueReader(t), Garages: mocks.NewMockDocumentGarageReader(t),
-		Inventory: mocks.NewMockDocumentInventoryReader(t), Prints: &fakePrints{},
+		Inventory: mocks.NewMockDocumentInventoryReader(t), Receivables: mocks.NewMockDocumentReceivableReader(t), Prints: &fakePrints{},
 	}
 
-	uc := usecase.NewDocumentUseCase(d.Quotes, d.RepairOrders, d.Settlements, d.StockMovements, d.Revenue, d.Garages, d.Inventory, d.Prints)
+	uc := usecase.NewDocumentUseCase(d.Quotes, d.RepairOrders, d.Settlements, d.StockMovements, d.Revenue, d.Garages, d.Inventory, d.Prints).
+		WithReceivables(d.Receivables)
 
 	return uc, d
 }
@@ -409,4 +411,68 @@ func TestDocumentUseCase_InventoryDocuments(t *testing.T) {
 		_, err = uc.StockIssuePDF(t.Context(), garageID, repairOrderID, false)
 		assertAppError(t, err, apperror.CodeInternal)
 	})
+}
+
+func TestDocumentUseCase_ReceivablesExcel(t *testing.T) {
+	t.Parallel()
+
+	t.Run("renders the receivables with the filters of the list", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Receivables.EXPECT().Receivables(mock.Anything, garageID, "c-1", "51A", true, false).
+			Return([]render.ReceivableRow{{Number: "QT-1", Total: 10, Remaining: 10}}, nil).Once()
+
+		workbook, err := uc.ReceivablesExcel(t.Context(), garageID, "c-1", "51A", true, false)
+		require.NoError(t, err)
+		require.Equal(t, "PK", string(workbook[:2]))
+	})
+
+	t.Run("reader failure", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Receivables.EXPECT().Receivables(mock.Anything, garageID, "", "", false, false).Return(nil, errBoom).Once()
+
+		_, err := uc.ReceivablesExcel(t.Context(), garageID, "", "", false, false)
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+}
+
+func TestDocumentUseCase_ReconciliationExcel(t *testing.T) {
+	t.Parallel()
+
+	t.Run("renders the reconciliation", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Receivables.EXPECT().Reconciliation(mock.Anything, garageID, "2026-11-01", "2026-12-01").
+			Return(render.ReconciliationData{From: "2026-11-01", To: "2026-12-01", Matches: true}, nil).Once()
+
+		workbook, err := uc.ReconciliationExcel(t.Context(), garageID, "2026-11-01", "2026-12-01")
+		require.NoError(t, err)
+		require.Equal(t, "PK", string(workbook[:2]))
+	})
+
+	t.Run("reader failure", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Receivables.EXPECT().Reconciliation(mock.Anything, garageID, "a", "b").Return(render.ReconciliationData{}, errBoom).Once()
+
+		_, err := uc.ReconciliationExcel(t.Context(), garageID, "a", "b")
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+}
+
+func TestDocumentUseCase_ReceivablesNotWired(t *testing.T) {
+	t.Parallel()
+
+	uc := usecase.NewDocumentUseCase(nil, nil, nil, nil, nil, nil, nil, nil)
+
+	_, err := uc.ReceivablesExcel(t.Context(), garageID, "", "", false, false)
+	assertAppError(t, err, apperror.CodeInternal)
+
+	_, err = uc.ReconciliationExcel(t.Context(), garageID, "a", "b")
+	assertAppError(t, err, apperror.CodeInternal)
 }

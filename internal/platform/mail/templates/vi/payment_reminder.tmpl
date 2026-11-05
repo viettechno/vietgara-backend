@@ -1,0 +1,16 @@
+{{define "subject"}}Nhắc thanh toán quyết toán {{.Number}} tại {{.GarageName}}{{end}}
+{{define "text"}}Xin chào {{.CustomerName}},
+
+Quyết toán {{.Number}} tại {{.GarageName}} đã quá hạn thanh toán {{.DaysOverdue}} ngày (hạn thanh toán {{.DueDate}}). Số tiền còn lại: {{.Remaining}} đ.
+
+Nếu bạn đã thanh toán, vui lòng bỏ qua e-mail này. Cần hỗ trợ, liên hệ {{.GarageName}}{{if .GaragePhone}} theo số {{.GaragePhone}}{{end}}.
+
+Không muốn nhận loại e-mail này nữa? Huỷ nhận tại:
+{{.OptOutURL}}
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.CustomerName}},</p>
+<p>Quyết toán <strong>{{.Number}}</strong> tại <strong>{{.GarageName}}</strong> đã quá hạn thanh toán <strong>{{.DaysOverdue}} ngày</strong> (hạn thanh toán {{.DueDate}}). Số tiền còn lại: <strong>{{.Remaining}} đ</strong>.</p>
+<p>Nếu bạn đã thanh toán, vui lòng bỏ qua e-mail này. Cần hỗ trợ, liên hệ {{.GarageName}}{{if .GaragePhone}} theo số {{.GaragePhone}}{{end}}.</p>
+<p style="color:#666;font-size:12px"><a href="{{.OptOutURL}}">Huỷ nhận</a> loại e-mail này.</p>
+<p>VietGara</p>{{end}}

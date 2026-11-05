@@ -82,7 +82,7 @@ func newUseCase(t *testing.T) (*usecase.QuoteUseCase, *deps) {
 	uc := usecase.NewQuoteUseCase(usecase.Deps{
 		Quotes: d.Quotes, Vehicles: d.Vehicles, Garages: d.Garages, Limits: d.Limits,
 		Sequences: d.Sequences, RepairOrders: d.RepairOrders, BillingParties: d.Parties, Notifier: d.Notifier, Events: d.Events, Tx: passTx{}, Parts: d.Parts, Jobs: d.Jobs,
-		AppBaseURL: "https://vietgara.vn/", Now: func() time.Time { return now },
+		AppBaseURL: "https://app.vietgara.vn/", Now: func() time.Time { return now },
 	})
 
 	return uc, d

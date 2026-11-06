@@ -89,6 +89,7 @@ var noRLS = map[string]string{ //nolint:gosec // G101 matches the table name cre
 	"platform_admins":              "platform configuration",
 	"plans":                        "platform catalogue, the same for every garage",
 	"contact_requests":             "platform scope: requests from the public website, written without any session and read by support from the database",
+	"data_request_confirmations":   "no garage: public personal-data requests waiting for their e-mail link, known only by the address, written and consumed without any session",
 	"platform_payment_settings":    "platform configuration",
 	"platform_roles":               "platform scope, no garage: authorized by the platform_staff permissions (Release 8.1)",
 	"platform_role_permissions":    "platform scope, like platform_roles",

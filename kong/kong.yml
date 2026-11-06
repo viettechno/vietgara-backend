@@ -52,6 +52,16 @@ _ignore:
       minute: 30
       hour: 300
       error_message: RATE_LIMITED
+  # The personal-data request page (FR-CUS-05): every call can send an e-mail or
+  # erase a customer, so it gets a far lower allowance than the public quote.
+  - &data_request_limit
+    name: rate-limiting
+    config:
+      limit_by: ip
+      policy: local
+      minute: 20
+      hour: 100
+      error_message: RATE_LIMITED
   - &default_limit
     name: rate-limiting
     config:
@@ -114,8 +124,8 @@ services:
 
   # The REST/JSON API (API Specification): grpc-gateway in the backend serves
   # every /api/v1 path itself, so the prefix is kept. The longest matching
-  # path wins: sign-in and the public quote link get strict limits, the rest
-  # of /api the default one.
+  # path wins: sign-in, the public quote link and the data-request page get
+  # strict limits, the rest of /api the default one.
   - name: backend-http
     url: http://vietgara-backend:8080
     plugins:
@@ -152,6 +162,16 @@ services:
           - https
         plugins:
           - *refresh_limit
+      # The personal-data request page and its e-mailed link, for people without the app.
+      - name: public-data-request-route
+        paths:
+          - /api/v1/public/data-requests
+        strip_path: false
+        protocols:
+          - http
+          - https
+        plugins:
+          - *data_request_limit
       # The customer's quote link: no sign-in, the token is the credential.
       - name: public-quote-route
         paths:

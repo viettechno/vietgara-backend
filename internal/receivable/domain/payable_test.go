@@ -35,18 +35,6 @@ func TestPayable_DeriveRemainingAndAge(t *testing.T) {
 	require.Zero(t, p.AgeDays(time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)), "a receipt dated tomorrow is not negative")
 }
 
-func TestAging_Add(t *testing.T) {
-	t.Parallel()
-
-	var a domain.Aging
-
-	for age, amount := range map[int]int64{0: 1, 30: 2, 31: 4, 60: 8, 61: 16, 90: 32, 91: 64} {
-		a.Add(amount, age)
-	}
-
-	require.Equal(t, domain.Aging{Total: 127, Current: 3, Days31to60: 12, Days61to90: 48, Over90: 64}, a)
-}
-
 func TestPaymentOutVoucher_Amounts(t *testing.T) {
 	t.Parallel()
 

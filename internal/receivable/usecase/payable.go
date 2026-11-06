@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -71,12 +72,16 @@ type receiptCompleted struct {
 func (uc *PayableUseCase) HandleReceiptCompleted(ctx context.Context, event outbox.Event) error {
 	var p receiptCompleted
 	if err := json.Unmarshal(event.Data, &p); err != nil || event.GarageID == "" || p.GoodsReceiptID == "" {
-		return nil //nolint:nilerr // a malformed event cannot succeed on retry: drop it
+		slog.Error("receivable: dropped a malformed goods_receipt.completed event", "event_id", event.ID, "error", err)
+
+		return nil
 	}
 
 	date, err := time.Parse(time.DateOnly, p.ReceiptDate)
 	if err != nil {
-		return nil //nolint:nilerr // likewise
+		slog.Error("receivable: dropped a goods_receipt.completed event with a bad date", "event_id", event.ID, "error", err)
+
+		return nil
 	}
 
 	for _, s := range p.Suppliers {
@@ -105,7 +110,9 @@ func (uc *PayableUseCase) HandleReceiptCancelled(ctx context.Context, event outb
 	}
 
 	if err := json.Unmarshal(event.Data, &p); err != nil || event.GarageID == "" || p.GoodsReceiptID == "" {
-		return nil //nolint:nilerr // a malformed event cannot succeed on retry: drop it
+		slog.Error("receivable: dropped a malformed goods_receipt.cancelled event", "event_id", event.ID, "error", err)
+
+		return nil
 	}
 
 	return uc.repo.CancelPayables(ctx, event.GarageID, p.GoodsReceiptID)

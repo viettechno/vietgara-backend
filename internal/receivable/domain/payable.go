@@ -87,22 +87,6 @@ type Aging struct {
 	Over90       int64
 }
 
-// Add counts one open payable's remaining amount in its age bucket.
-func (a *Aging) Add(remaining int64, ageDays int) {
-	a.Total += remaining
-
-	switch {
-	case ageDays <= 30:
-		a.Current += remaining
-	case ageDays <= 60:
-		a.Days31to60 += remaining
-	case ageDays <= 90:
-		a.Days61to90 += remaining
-	default:
-		a.Over90 += remaining
-	}
-}
-
 // Allocation applies part of a voucher to one payable.
 type Allocation struct {
 	PayableID          string

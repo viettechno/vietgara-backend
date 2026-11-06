@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -337,9 +338,15 @@ func (uc *PayableUseCase) releaseAllocations(ctx context.Context, v *domain.Paym
 		}
 
 		for _, a := range v.Allocations {
-			if a.PayableID == p.ID {
-				p.PaidAmount = max(0, p.PaidAmount-a.Amount)
+			if a.PayableID != p.ID {
+				continue
 			}
+
+			if p.PaidAmount < a.Amount {
+				slog.Error("receivable: payable paid less than its voided allocation", "payable_id", p.ID, "paid", p.PaidAmount, "allocated", a.Amount)
+			}
+
+			p.PaidAmount = max(0, p.PaidAmount-a.Amount)
 		}
 
 		p.Derive()

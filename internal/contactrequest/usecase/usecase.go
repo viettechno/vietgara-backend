@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -26,6 +27,7 @@ const (
 	MaxPerHour = 10
 
 	maxUserAgent = 300
+	mailTimeout  = 20 * time.Second
 	tag          = "contact_request"
 )
 
@@ -93,14 +95,29 @@ func (uc *UseCase) Create(ctx context.Context, in domain.Input, src Source) (str
 		return "", apperror.Internal("create contact request", err)
 	}
 
-	if err := uc.mailer.Send(ctx, uc.supportMail(req)); err != nil {
+	// The request is stored: telling support must not depend on the caller staying connected.
+	mailCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), mailTimeout)
+	defer cancel()
+
+	if err := uc.mailer.Send(mailCtx, uc.supportMail(req)); err != nil {
 		slog.ErrorContext(ctx, "contactrequest: e-mail to support failed", "request_id", req.ID, "error", err)
 	}
 
 	return req.ID, nil
 }
 
+// hashIP is a keyed hash of the source. An IPv6 address counts by its /64, the smallest network a
+// subscriber is given, so that rotating the low bits does not give a fresh allowance.
 func (uc *UseCase) hashIP(ip string) string {
+	if addr, err := netip.ParseAddr(ip); err == nil {
+		addr = addr.Unmap()
+		if addr.Is6() {
+			addr = netip.PrefixFrom(addr, 64).Masked().Addr()
+		}
+
+		ip = addr.String()
+	}
+
 	mac := hmac.New(sha256.New, uc.ipKey)
 	mac.Write([]byte("contact-request-source\n" + ip))
 

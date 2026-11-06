@@ -100,6 +100,22 @@ func TestCreateHashesTheSameSourceTheSameWay(t *testing.T) {
 	assert.NotEqual(t, repo.stored[0].SourceIPHash, repo.stored[2].SourceIPHash)
 }
 
+func TestCreateCountsAnIPv6SourceByItsNetwork(t *testing.T) {
+	t.Parallel()
+
+	repo := &fakeRepo{}
+	uc := newUC(repo, &fakeMailer{})
+
+	for _, ip := range []string{"2001:db8:1:2::1", "2001:DB8:1:2:ffff::9", "2001:db8:1:3::1", "::ffff:203.0.113.7", "203.0.113.7"} {
+		_, err := uc.Create(t.Context(), input(), usecase.Source{IP: ip})
+		require.NoError(t, err)
+	}
+
+	assert.Equal(t, repo.stored[0].SourceIPHash, repo.stored[1].SourceIPHash, "the same /64")
+	assert.NotEqual(t, repo.stored[0].SourceIPHash, repo.stored[2].SourceIPHash, "another /64")
+	assert.Equal(t, repo.stored[3].SourceIPHash, repo.stored[4].SourceIPHash, "an IPv4-mapped address is the IPv4 one")
+}
+
 func TestCreateRefusesWithoutStoring(t *testing.T) {
 	t.Parallel()
 
@@ -119,6 +135,29 @@ func TestCreateRefusesWithoutStoring(t *testing.T) {
 	assert.Equal(t, apperror.CodeResourceExhausted, appErr.Code)
 	assert.Empty(t, limited.stored)
 	assert.Empty(t, mailer.sent)
+}
+
+func TestCreateMailsEvenWhenTheCallerGoesAway(t *testing.T) {
+	t.Parallel()
+
+	ctx, cancel := context.WithCancel(t.Context())
+	repo, mailer := &fakeRepo{}, &ctxMailer{}
+	uc := usecase.New(repo, mailer, "support@vietgara.vn", []byte("0123456789abcdef0123456789abcdef"))
+
+	cancel()
+
+	_, err := uc.Create(ctx, input(), usecase.Source{})
+	require.NoError(t, err)
+	require.Len(t, mailer.errs, 1)
+	assert.NoError(t, mailer.errs[0], "the e-mail is not cancelled with the request")
+}
+
+type ctxMailer struct{ errs []error }
+
+func (m *ctxMailer) Send(ctx context.Context, _ mail.Message) error {
+	m.errs = append(m.errs, ctx.Err())
+
+	return nil
 }
 
 func TestCreateKeepsTheRequestWhenTheMailFails(t *testing.T) {

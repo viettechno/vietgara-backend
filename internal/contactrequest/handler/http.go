@@ -3,6 +3,7 @@
 package handler
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
 	"net"
@@ -48,6 +49,14 @@ func (s *Server) RegisterHTTPRoutes(mux *runtime.ServeMux) error {
 	})
 }
 
+// keyMatches compares digests, so that the comparison takes the same time whatever the length of the
+// given key.
+func (s *Server) keyMatches(given string) bool {
+	want, got := sha256.Sum256([]byte(s.key)), sha256.Sum256([]byte(given))
+
+	return subtle.ConstantTimeCompare(want[:], got[:]) == 1
+}
+
 type requestBody struct {
 	Name       string `json:"name"`
 	GarageName string `json:"garageName"`
@@ -59,7 +68,7 @@ type requestBody struct {
 }
 
 func (s *Server) create(w http.ResponseWriter, r *http.Request) {
-	if subtle.ConstantTimeCompare([]byte(r.Header.Get(KeyHeader)), []byte(s.key)) != 1 {
+	if !s.keyMatches(r.Header.Get(KeyHeader)) {
 		httpapi.WriteError(w, r, apperror.New(apperror.CodeUnauthenticated, "missing or wrong key"))
 
 		return

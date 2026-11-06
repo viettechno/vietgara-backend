@@ -49,6 +49,10 @@ func TestNormalizeRefuses(t *testing.T) {
 		{"e-mail with a name", func(in *domain.Input) { in.Email = "A <a@example.com>" }, "email"},
 		{"long message", func(in *domain.Input) { in.Message = strings.Repeat("a", 2001) }, "message"},
 		{"control character in message", func(in *domain.Input) { in.Message = "a\x00b" }, "message"},
+		{"bidi override in the name", func(in *domain.Input) { in.Name = "A\u202eB" }, "name"},
+		{"zero-width space in the name", func(in *domain.Input) { in.Name = "A\u200bB" }, "name"},
+		{"line separator in the garage", func(in *domain.Input) { in.GarageName = "A\u2028B" }, "garageName"},
+		{"non-ASCII digits in the phone", func(in *domain.Input) { in.Phone = "٠١٢٣٤٥٦٧٨٩" }, "phone"},
 		{"unknown locale", func(in *domain.Input) { in.Locale = "fr" }, "locale"},
 	}
 

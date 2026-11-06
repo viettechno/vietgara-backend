@@ -122,18 +122,24 @@ func singleLine(s string, maxLen int) bool {
 	return utf8.RuneCountInString(s) <= maxLen && !hasControl(s, false)
 }
 
+// hasControl reports control characters and the invisible ones that spoof how text is shown: line
+// and paragraph separators, zero-width characters, byte order mark and bidirectional overrides.
 func hasControl(s string, allowNewline bool) bool {
 	for _, r := range s {
 		if allowNewline && (r == '\n' || r == '\r' || r == '\t') {
 			continue
 		}
 
-		if unicode.IsControl(r) {
+		if unicode.IsControl(r) || unicode.In(r, unicode.Zl, unicode.Zp) || spoofing(r) {
 			return true
 		}
 	}
 
 	return false
+}
+
+func spoofing(r rune) bool {
+	return (r >= 0x200B && r <= 0x200F) || (r >= 0x202A && r <= 0x202E) || (r >= 0x2066 && r <= 0x2069) || r == 0xFEFF
 }
 
 func validPhone(s string) bool {
@@ -145,7 +151,7 @@ func validPhone(s string) bool {
 
 	for _, r := range s {
 		switch {
-		case unicode.IsDigit(r):
+		case r >= '0' && r <= '9':
 			digits++
 		case strings.ContainsRune("+-.() ", r):
 		default:

@@ -73,7 +73,7 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 24)
+	assert.Len(t, p, 26)
 	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportGoodsReceiptPdf_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportStockIssuePdf_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportStockCountExcel_FullMethodName].Garage.Permission)
@@ -515,5 +515,34 @@ func TestPaymentOutVoucherPdf(t *testing.T) {
 	assert.Equal(t, codes.NotFound, status.Code(err))
 
 	_, err = e.srv.PrintPaymentOutVoucherPdf(t.Context(), &documentv1.PrintPaymentOutVoucherPdfRequest{GarageId: garageID, VoucherId: "v-2"})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+}
+
+func TestPurchaseOrderPdf(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t)
+	info := usecase.PurchaseOrderInfo{Number: "DH-2026-00001", Date: "12/10/2026", SupplierName: "Sao Mai"}
+	e.inventory.EXPECT().PurchaseOrder(anyArg, garageID, "po-1").Return(info, nil).Times(2)
+	e.garages.EXPECT().Get(anyArg, garageID).Return(defaultGarage(), nil).Times(2)
+
+	exported, err := e.srv.ExportPurchaseOrderPdf(t.Context(), &documentv1.ExportPurchaseOrderPdfRequest{GarageId: garageID, PurchaseOrderId: "po-1"})
+	require.NoError(t, err)
+	assert.Equal(t, "application/pdf", exported.GetContentType())
+	assert.Empty(t, e.prints.log, "an export is not a print")
+
+	printed, err := e.srv.PrintPurchaseOrderPdf(t.Context(), &documentv1.PrintPurchaseOrderPdfRequest{GarageId: garageID, PurchaseOrderId: "po-1"})
+	require.NoError(t, err)
+	assert.Equal(t, "%PDF", string(printed.GetData()[:4]))
+	require.Len(t, e.prints.log, 1)
+	assert.Equal(t, printmodel.TypePurchaseOrder, e.prints.log[0].Type)
+
+	gone := apperror.New(apperror.CodeNotFound, "gone")
+	e.inventory.EXPECT().PurchaseOrder(anyArg, garageID, "po-2").Return(usecase.PurchaseOrderInfo{}, gone).Times(2)
+
+	_, err = e.srv.ExportPurchaseOrderPdf(t.Context(), &documentv1.ExportPurchaseOrderPdfRequest{GarageId: garageID, PurchaseOrderId: "po-2"})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	_, err = e.srv.PrintPurchaseOrderPdf(t.Context(), &documentv1.PrintPurchaseOrderPdfRequest{GarageId: garageID, PurchaseOrderId: "po-2"})
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }

@@ -111,6 +111,78 @@ func (_c *MockDocumentInventoryReader_GoodsReceipt_Call) RunAndReturn(run func(c
 	return _c
 }
 
+// PurchaseOrder provides a mock function for the type MockDocumentInventoryReader
+func (_mock *MockDocumentInventoryReader) PurchaseOrder(ctx context.Context, garageID string, orderID string) (usecase.PurchaseOrderInfo, error) {
+	ret := _mock.Called(ctx, garageID, orderID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PurchaseOrder")
+	}
+
+	var r0 usecase.PurchaseOrderInfo
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (usecase.PurchaseOrderInfo, error)); ok {
+		return returnFunc(ctx, garageID, orderID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) usecase.PurchaseOrderInfo); ok {
+		r0 = returnFunc(ctx, garageID, orderID)
+	} else {
+		r0 = ret.Get(0).(usecase.PurchaseOrderInfo)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, garageID, orderID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockDocumentInventoryReader_PurchaseOrder_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PurchaseOrder'
+type MockDocumentInventoryReader_PurchaseOrder_Call struct {
+	*mock.Call
+}
+
+// PurchaseOrder is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - orderID string
+func (_e *MockDocumentInventoryReader_Expecter) PurchaseOrder(ctx any, garageID any, orderID any) *MockDocumentInventoryReader_PurchaseOrder_Call {
+	return &MockDocumentInventoryReader_PurchaseOrder_Call{Call: _e.mock.On("PurchaseOrder", ctx, garageID, orderID)}
+}
+
+func (_c *MockDocumentInventoryReader_PurchaseOrder_Call) Run(run func(ctx context.Context, garageID string, orderID string)) *MockDocumentInventoryReader_PurchaseOrder_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockDocumentInventoryReader_PurchaseOrder_Call) Return(purchaseOrderInfo usecase.PurchaseOrderInfo, err error) *MockDocumentInventoryReader_PurchaseOrder_Call {
+	_c.Call.Return(purchaseOrderInfo, err)
+	return _c
+}
+
+func (_c *MockDocumentInventoryReader_PurchaseOrder_Call) RunAndReturn(run func(ctx context.Context, garageID string, orderID string) (usecase.PurchaseOrderInfo, error)) *MockDocumentInventoryReader_PurchaseOrder_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Purchases provides a mock function for the type MockDocumentInventoryReader
 func (_mock *MockDocumentInventoryReader) Purchases(ctx context.Context, garageID string, supplierID string, from string, to string) ([]render.PurchaseRow, int64, error) {
 	ret := _mock.Called(ctx, garageID, supplierID, from, to)

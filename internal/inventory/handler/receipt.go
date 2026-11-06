@@ -180,6 +180,11 @@ func receiptToProto(ctx context.Context, r *domain.GoodsReceipt) *inventoryv1.Go
 		DeliveryNoteNumber: r.DeliveryNoteNumber, Notes: r.Notes, Lines: make([]*inventoryv1.GoodsReceiptLine, 0, len(r.Lines)),
 		CompletedAt: converter.TimePtrToProto(r.CompletedAt), CancelledAt: converter.TimePtrToProto(r.CancelledAt),
 		CreatedAt: converter.TimeToProto(r.CreatedAt), UpdatedAt: converter.TimeToProto(r.UpdatedAt),
+		PurchaseOrderNumber: r.PurchaseOrderNumber,
+	}
+
+	if r.PurchaseOrderID != nil {
+		out.PurchaseOrderId = *r.PurchaseOrderID
 	}
 
 	if seeCost {

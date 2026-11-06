@@ -326,6 +326,11 @@ packages:
           filename: "inventory_usecase_repository.go"
           dir: "./internal/mocks"
           structname: "MockInventoryRepository"
+      OrderMailer:
+        config:
+          filename: "inventory_usecase_order_mailer.go"
+          dir: "./internal/mocks"
+          structname: "MockOrderMailer"
       EventPublisher:
         config:
           filename: "inventory_usecase_event_publisher.go"

@@ -37,6 +37,80 @@ func (_m *MockNotificationReceipts) EXPECT() *MockNotificationReceipts_Expecter 
 	return &MockNotificationReceipts_Expecter{mock: &_m.Mock}
 }
 
+// PurchaseOrder provides a mock function for the type MockNotificationReceipts
+func (_mock *MockNotificationReceipts) PurchaseOrder(ctx context.Context, garageID string, orderID string) ([]byte, error) {
+	ret := _mock.Called(ctx, garageID, orderID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for PurchaseOrder")
+	}
+
+	var r0 []byte
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) ([]byte, error)); ok {
+		return returnFunc(ctx, garageID, orderID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) []byte); ok {
+		r0 = returnFunc(ctx, garageID, orderID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]byte)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, garageID, orderID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockNotificationReceipts_PurchaseOrder_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PurchaseOrder'
+type MockNotificationReceipts_PurchaseOrder_Call struct {
+	*mock.Call
+}
+
+// PurchaseOrder is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - orderID string
+func (_e *MockNotificationReceipts_Expecter) PurchaseOrder(ctx any, garageID any, orderID any) *MockNotificationReceipts_PurchaseOrder_Call {
+	return &MockNotificationReceipts_PurchaseOrder_Call{Call: _e.mock.On("PurchaseOrder", ctx, garageID, orderID)}
+}
+
+func (_c *MockNotificationReceipts_PurchaseOrder_Call) Run(run func(ctx context.Context, garageID string, orderID string)) *MockNotificationReceipts_PurchaseOrder_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockNotificationReceipts_PurchaseOrder_Call) Return(bytes []byte, err error) *MockNotificationReceipts_PurchaseOrder_Call {
+	_c.Call.Return(bytes, err)
+	return _c
+}
+
+func (_c *MockNotificationReceipts_PurchaseOrder_Call) RunAndReturn(run func(ctx context.Context, garageID string, orderID string) ([]byte, error)) *MockNotificationReceipts_PurchaseOrder_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SettlementReceipt provides a mock function for the type MockNotificationReceipts
 func (_mock *MockNotificationReceipts) SettlementReceipt(ctx context.Context, garageID string, settlementID string) ([]byte, error) {
 	ret := _mock.Called(ctx, garageID, settlementID)

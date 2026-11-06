@@ -22,7 +22,7 @@ const (
 )
 
 func receiptHeader() []any {
-	return []any{receiptID, garageID, "PN-1", "draft", supplierID, "2026-10-15", "DN-1", "notes", nil, nil, "user", "user", now, now}
+	return []any{receiptID, garageID, "PN-1", "draft", supplierID, "2026-10-15", "DN-1", "notes", nil, nil, "user", "user", now, now, nil, ""}
 }
 
 func receiptLineRow() []any {

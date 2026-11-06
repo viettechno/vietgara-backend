@@ -564,3 +564,48 @@ func TestDocumentUseCase_PayablesNotWired(t *testing.T) {
 	_, err = uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", false)
 	assertAppError(t, err, apperror.CodeInternal)
 }
+
+func TestDocumentUseCase_PurchaseOrderPDF(t *testing.T) {
+	t.Parallel()
+
+	info := usecase.PurchaseOrderInfo{
+		Number: "DH-2026-00001", Status: "sent", Date: "29/10/2026", ExpectedDate: "05/11/2026", SupplierName: "Sao Mai", Notes: "Giao sớm",
+		Lines:    []printmodel.PurchaseOrderRow{{SKU: "OIL", Name: "Dầu", Quantity: "16", Unit: "L", UnitCost: 90_000, Amount: 1_440_000}},
+		ShowCost: true, TotalAmount: 1_440_000,
+	}
+
+	t.Run("renders it, and a print is logged", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Inventory.EXPECT().PurchaseOrder(mock.Anything, garageID, "po-1").Return(info, nil).Times(2)
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Times(2)
+
+		exported, err := uc.PurchaseOrderPDF(t.Context(), garageID, "po-1", false)
+		require.NoError(t, err)
+		require.Equal(t, "%PDF", string(exported[:4]))
+		require.Empty(t, d.Prints.log)
+
+		_, err = uc.PurchaseOrderPDF(t.Context(), garageID, "po-1", true)
+		require.NoError(t, err)
+		require.Len(t, d.Prints.log, 1)
+		require.Equal(t, printmodel.TypePurchaseOrder, d.Prints.log[0].Type)
+	})
+
+	t.Run("reader and letterhead failures", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Inventory.EXPECT().PurchaseOrder(mock.Anything, garageID, "po-1").Return(usecase.PurchaseOrderInfo{}, errBoom).Once()
+
+		_, err := uc.PurchaseOrderPDF(t.Context(), garageID, "po-1", false)
+		assertAppError(t, err, apperror.CodeInternal)
+
+		uc, d = newUseCase(t)
+		d.Inventory.EXPECT().PurchaseOrder(mock.Anything, garageID, "po-1").Return(usecase.PurchaseOrderInfo{}, nil).Once()
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(usecase.GarageHeaderInfo{}, errBoom).Once()
+
+		_, err = uc.PurchaseOrderPDF(t.Context(), garageID, "po-1", false)
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+}

@@ -60,6 +60,8 @@ var templates = []Template{
 	entry(printmodel.A4, 1, stockIssueTemplate),
 	entry(printmodel.A4, 1, paymentOutTemplate),
 	entry(printmodel.A5, 1, paymentOutTemplate),
+	entry(printmodel.A4, 1, purchaseOrderTemplate),
+	entry(printmodel.A5, 1, purchaseOrderTemplate),
 }
 
 // Lookup returns the template of a document type, paper size and version.

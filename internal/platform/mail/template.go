@@ -35,6 +35,7 @@ const (
 	TemplateSettlementPaid           = "settlement_paid"
 	TemplateLowStock                 = "low_stock"
 	TemplatePaymentReminder          = "payment_reminder"
+	TemplatePurchaseOrder            = "purchase_order"
 )
 
 // Supported locales; Vietnamese is the default.

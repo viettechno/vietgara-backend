@@ -311,6 +311,25 @@ func (uc *DocumentUseCase) GoodsReceiptPDF(ctx context.Context, garageID, receip
 	}, printed)
 }
 
+// PurchaseOrderPDF renders a purchase order as a PDF (FR-INV-16), or prints
+// it. Prices are on it only for a caller who may see costs.
+func (uc *DocumentUseCase) PurchaseOrderPDF(ctx context.Context, garageID, orderID string, printed bool) ([]byte, error) {
+	order, err := uc.Inventory.PurchaseOrder(ctx, garageID, orderID)
+	if err != nil {
+		return nil, toAppError("export purchase order pdf", err)
+	}
+
+	garage, err := uc.letterhead(ctx, garageID, issuer.Issuer{})
+	if err != nil {
+		return nil, err
+	}
+
+	return uc.pdf(ctx, garageID, orderID, printmodel.PurchaseOrder{
+		Garage: garage, Number: order.Number, Status: order.Status, Date: order.Date, ExpectedDate: order.ExpectedDate,
+		SupplierName: order.SupplierName, Notes: order.Notes, Lines: order.Lines, ShowCost: order.ShowCost, TotalAmount: order.TotalAmount,
+	}, printed)
+}
+
 // StockIssuePDF renders a repair order's stock issue (phiếu xuất kho) as a
 // PDF (FR-INV-20), or prints it. The document id is the repair order's.
 func (uc *DocumentUseCase) StockIssuePDF(ctx context.Context, garageID, repairOrderID string, printed bool) ([]byte, error) {

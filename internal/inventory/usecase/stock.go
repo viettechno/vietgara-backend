@@ -43,6 +43,7 @@ type InventoryUseCase struct {
 	directory Directory
 	sequences Sequencer
 	audit     AuditLogger
+	mailer    OrderMailer
 	now       func() time.Time
 }
 
@@ -106,9 +107,22 @@ func (uc *InventoryUseCase) ListStockLevels(ctx context.Context, req ListStockLe
 	return &Page[*domain.StockLevel]{Items: levels, Total: total, Page: page.Page, PageSize: page.PageSize}, nil
 }
 
-// listLowStock pages through every matching part, because the threshold
-// (Catalogue) and the quantity (Inventory) are only comparable together.
+// listLowStock pages the parts at or below their threshold.
 func (uc *InventoryUseCase) listLowStock(ctx context.Context, garageID string, query PartQuery, page PageRequest) (*Page[*domain.StockLevel], error) {
+	low, err := uc.lowStock(ctx, garageID, query)
+	if err != nil {
+		return nil, err
+	}
+
+	from := min(page.offset(), len(low))
+	to := min(from+page.PageSize, len(low))
+
+	return &Page[*domain.StockLevel]{Items: low[from:to], Total: len(low), Page: page.Page, PageSize: page.PageSize}, nil
+}
+
+// lowStock pages through every matching part, because the threshold
+// (Catalogue) and the quantity (Inventory) are only comparable together.
+func (uc *InventoryUseCase) lowStock(ctx context.Context, garageID string, query PartQuery) ([]*domain.StockLevel, error) {
 	balances, err := uc.repo.Balances(ctx, garageID, nil)
 	if err != nil {
 		return nil, toAppError("list stock levels", err)
@@ -135,10 +149,7 @@ func (uc *InventoryUseCase) listLowStock(ctx context.Context, garageID string, q
 		}
 	}
 
-	from := min(page.offset(), len(low))
-	to := min(from+page.PageSize, len(low))
-
-	return &Page[*domain.StockLevel]{Items: low[from:to], Total: len(low), Page: page.Page, PageSize: page.PageSize}, nil
+	return low, nil
 }
 
 // GetStockLevel returns one part with its stock on hand.

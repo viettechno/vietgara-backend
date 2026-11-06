@@ -48,6 +48,9 @@ type layout struct {
 	goods [6]float64
 	// stock are the columns of a stock issue: SKU, part, quantity.
 	stock [3]float64
+	// order are the columns of a purchase order: SKU, part, quantity, unit
+	// cost, amount.
+	order [5]float64
 }
 
 func layoutFor(paper printmodel.Paper) layout {
@@ -58,6 +61,7 @@ func layoutFor(paper printmodel.Paper) layout {
 			payments: [3]float64{30, 38, 60},
 			goods:    [6]float64{16, 34, 14, 22, 20, 22},
 			stock:    [3]float64{26, 70, 32},
+			order:    [5]float64{20, 48, 20, 20, 20},
 		}
 	}
 
@@ -67,6 +71,7 @@ func layoutFor(paper printmodel.Paper) layout {
 		payments: [3]float64{50, 60, 75},
 		goods:    [6]float64{24, 52, 22, 30, 24, 22},
 		stock:    [3]float64{35, 100, 40},
+		order:    [5]float64{26, 68, 26, 26, 28},
 	}
 }
 

@@ -149,6 +149,9 @@ type StaffReader interface {
 // the Document module.
 type Receipts interface {
 	SettlementReceipt(ctx context.Context, garageID, settlementID string) ([]byte, error)
+	// PurchaseOrder renders a purchase order; its prices are on it only when
+	// the caller of the request may see costs.
+	PurchaseOrder(ctx context.Context, garageID, orderID string) ([]byte, error)
 }
 
 // Transactor runs fn in a transaction scoped to a garage.

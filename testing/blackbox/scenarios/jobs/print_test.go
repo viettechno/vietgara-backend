@@ -63,7 +63,7 @@ func TestPrintAnswersThePDF(t *testing.T) {
 
 	got, err := api.GetPrintSettings(ctx, garageID)
 	require.NoError(t, err)
-	require.Len(t, got.GetSettings(), 7)
+	require.Len(t, got.GetSettings(), 8)
 
 	for _, setting := range got.GetSettings() {
 		assert.Equal(t, documentv1.PaperSize_PAPER_SIZE_A4, setting.GetPaperSize(), setting.GetDocumentType().String())
@@ -172,7 +172,7 @@ func TestPrintSettingsBelongToTheGarage(t *testing.T) {
 
 	seen, err := member.API.GetPrintSettings(ctx, garageID)
 	require.NoError(t, err)
-	assert.Len(t, seen.GetSettings(), 7)
+	assert.Len(t, seen.GetSettings(), 8)
 
 	_, err = member.API.UpdatePrintSetting(ctx, garageID, documentv1.DocumentType_DOCUMENT_TYPE_QUOTE, documentv1.PaperSize_PAPER_SIZE_A5, false)
 	fixture.RequireAPIError(t, err, http.StatusForbidden, "")

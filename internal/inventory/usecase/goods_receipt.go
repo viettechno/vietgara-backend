@@ -278,6 +278,10 @@ func (uc *InventoryUseCase) CompleteGoodsReceipt(ctx context.Context, garageID, 
 		return nil, toAppError(op, err)
 	}
 
+	if err := uc.countAgainstOrder(ctx, r, 1); err != nil {
+		return nil, toAppError(op, err)
+	}
+
 	if err := uc.auditReceipt(ctx, actorID, ActionGoodsReceiptCompleted, domain.GoodsReceiptDraft, r); err != nil {
 		return nil, err
 	}
@@ -397,6 +401,12 @@ func (uc *InventoryUseCase) CancelGoodsReceipt(ctx context.Context, garageID, re
 
 	if err := uc.repo.SaveGoodsReceipt(ctx, r); err != nil {
 		return nil, toAppError(op, err)
+	}
+
+	if before == domain.GoodsReceiptCompleted {
+		if err := uc.countAgainstOrder(ctx, r, -1); err != nil {
+			return nil, toAppError(op, err)
+		}
 	}
 
 	if err := uc.auditReceipt(ctx, actorID, ActionGoodsReceiptCancelled, before, r); err != nil {

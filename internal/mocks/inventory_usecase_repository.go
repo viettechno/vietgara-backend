@@ -291,6 +291,63 @@ func (_c *MockInventoryRepository_CreatePartReturn_Call) RunAndReturn(run func(c
 	return _c
 }
 
+// CreatePurchaseOrder provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) CreatePurchaseOrder(ctx context.Context, o *domain.PurchaseOrder) error {
+	ret := _mock.Called(ctx, o)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreatePurchaseOrder")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.PurchaseOrder) error); ok {
+		r0 = returnFunc(ctx, o)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_CreatePurchaseOrder_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreatePurchaseOrder'
+type MockInventoryRepository_CreatePurchaseOrder_Call struct {
+	*mock.Call
+}
+
+// CreatePurchaseOrder is a helper method to define mock.On call
+//   - ctx context.Context
+//   - o *domain.PurchaseOrder
+func (_e *MockInventoryRepository_Expecter) CreatePurchaseOrder(ctx any, o any) *MockInventoryRepository_CreatePurchaseOrder_Call {
+	return &MockInventoryRepository_CreatePurchaseOrder_Call{Call: _e.mock.On("CreatePurchaseOrder", ctx, o)}
+}
+
+func (_c *MockInventoryRepository_CreatePurchaseOrder_Call) Run(run func(ctx context.Context, o *domain.PurchaseOrder)) *MockInventoryRepository_CreatePurchaseOrder_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.PurchaseOrder
+		if args[1] != nil {
+			arg1 = args[1].(*domain.PurchaseOrder)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_CreatePurchaseOrder_Call) Return(err error) *MockInventoryRepository_CreatePurchaseOrder_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_CreatePurchaseOrder_Call) RunAndReturn(run func(ctx context.Context, o *domain.PurchaseOrder) error) *MockInventoryRepository_CreatePurchaseOrder_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // CreateStockCount provides a mock function for the type MockInventoryRepository
 func (_mock *MockInventoryRepository) CreateStockCount(ctx context.Context, c *domain.StockCount) error {
 	ret := _mock.Called(ctx, c)
@@ -825,6 +882,86 @@ func (_c *MockInventoryRepository_FindGoodsReceipt_Call) RunAndReturn(run func(c
 	return _c
 }
 
+// FindPurchaseOrder provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) FindPurchaseOrder(ctx context.Context, garageID string, orderID string, forUpdate bool) (*domain.PurchaseOrder, error) {
+	ret := _mock.Called(ctx, garageID, orderID, forUpdate)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindPurchaseOrder")
+	}
+
+	var r0 *domain.PurchaseOrder
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, bool) (*domain.PurchaseOrder, error)); ok {
+		return returnFunc(ctx, garageID, orderID, forUpdate)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, bool) *domain.PurchaseOrder); ok {
+		r0 = returnFunc(ctx, garageID, orderID, forUpdate)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*domain.PurchaseOrder)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, bool) error); ok {
+		r1 = returnFunc(ctx, garageID, orderID, forUpdate)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockInventoryRepository_FindPurchaseOrder_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindPurchaseOrder'
+type MockInventoryRepository_FindPurchaseOrder_Call struct {
+	*mock.Call
+}
+
+// FindPurchaseOrder is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - orderID string
+//   - forUpdate bool
+func (_e *MockInventoryRepository_Expecter) FindPurchaseOrder(ctx any, garageID any, orderID any, forUpdate any) *MockInventoryRepository_FindPurchaseOrder_Call {
+	return &MockInventoryRepository_FindPurchaseOrder_Call{Call: _e.mock.On("FindPurchaseOrder", ctx, garageID, orderID, forUpdate)}
+}
+
+func (_c *MockInventoryRepository_FindPurchaseOrder_Call) Run(run func(ctx context.Context, garageID string, orderID string, forUpdate bool)) *MockInventoryRepository_FindPurchaseOrder_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 bool
+		if args[3] != nil {
+			arg3 = args[3].(bool)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_FindPurchaseOrder_Call) Return(purchaseOrder *domain.PurchaseOrder, err error) *MockInventoryRepository_FindPurchaseOrder_Call {
+	_c.Call.Return(purchaseOrder, err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_FindPurchaseOrder_Call) RunAndReturn(run func(ctx context.Context, garageID string, orderID string, forUpdate bool) (*domain.PurchaseOrder, error)) *MockInventoryRepository_FindPurchaseOrder_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // FindStockCount provides a mock function for the type MockInventoryRepository
 func (_mock *MockInventoryRepository) FindStockCount(ctx context.Context, garageID string, countID string, forUpdate bool) (*domain.StockCount, error) {
 	ret := _mock.Called(ctx, garageID, countID, forUpdate)
@@ -1299,6 +1436,78 @@ func (_c *MockInventoryRepository_GoodsReceiptNumbers_Call) RunAndReturn(run fun
 	return _c
 }
 
+// HasDraftReceipt provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) HasDraftReceipt(ctx context.Context, garageID string, orderID string) (bool, error) {
+	ret := _mock.Called(ctx, garageID, orderID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for HasDraftReceipt")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (bool, error)); ok {
+		return returnFunc(ctx, garageID, orderID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) bool); ok {
+		r0 = returnFunc(ctx, garageID, orderID)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, garageID, orderID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockInventoryRepository_HasDraftReceipt_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'HasDraftReceipt'
+type MockInventoryRepository_HasDraftReceipt_Call struct {
+	*mock.Call
+}
+
+// HasDraftReceipt is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - orderID string
+func (_e *MockInventoryRepository_Expecter) HasDraftReceipt(ctx any, garageID any, orderID any) *MockInventoryRepository_HasDraftReceipt_Call {
+	return &MockInventoryRepository_HasDraftReceipt_Call{Call: _e.mock.On("HasDraftReceipt", ctx, garageID, orderID)}
+}
+
+func (_c *MockInventoryRepository_HasDraftReceipt_Call) Run(run func(ctx context.Context, garageID string, orderID string)) *MockInventoryRepository_HasDraftReceipt_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_HasDraftReceipt_Call) Return(b bool, err error) *MockInventoryRepository_HasDraftReceipt_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_HasDraftReceipt_Call) RunAndReturn(run func(ctx context.Context, garageID string, orderID string) (bool, error)) *MockInventoryRepository_HasDraftReceipt_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // InsertStockCountLines provides a mock function for the type MockInventoryRepository
 func (_mock *MockInventoryRepository) InsertStockCountLines(ctx context.Context, garageID string, countID string, actor *string, lines []domain.StockCountLine) error {
 	ret := _mock.Called(ctx, garageID, countID, actor, lines)
@@ -1524,6 +1733,86 @@ func (_c *MockInventoryRepository_ListPartReturns_Call) Return(repairOrderPartRe
 }
 
 func (_c *MockInventoryRepository_ListPartReturns_Call) RunAndReturn(run func(ctx context.Context, garageID string, repairOrderID string) ([]domain.RepairOrderPartReturn, error)) *MockInventoryRepository_ListPartReturns_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListPurchaseOrders provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) ListPurchaseOrders(ctx context.Context, garageID string, filter usecase.PurchaseOrderFilter) ([]*domain.PurchaseOrder, int, error) {
+	ret := _mock.Called(ctx, garageID, filter)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListPurchaseOrders")
+	}
+
+	var r0 []*domain.PurchaseOrder
+	var r1 int
+	var r2 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.PurchaseOrderFilter) ([]*domain.PurchaseOrder, int, error)); ok {
+		return returnFunc(ctx, garageID, filter)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, usecase.PurchaseOrderFilter) []*domain.PurchaseOrder); ok {
+		r0 = returnFunc(ctx, garageID, filter)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*domain.PurchaseOrder)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, usecase.PurchaseOrderFilter) int); ok {
+		r1 = returnFunc(ctx, garageID, filter)
+	} else {
+		r1 = ret.Get(1).(int)
+	}
+	if returnFunc, ok := ret.Get(2).(func(context.Context, string, usecase.PurchaseOrderFilter) error); ok {
+		r2 = returnFunc(ctx, garageID, filter)
+	} else {
+		r2 = ret.Error(2)
+	}
+	return r0, r1, r2
+}
+
+// MockInventoryRepository_ListPurchaseOrders_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListPurchaseOrders'
+type MockInventoryRepository_ListPurchaseOrders_Call struct {
+	*mock.Call
+}
+
+// ListPurchaseOrders is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - filter usecase.PurchaseOrderFilter
+func (_e *MockInventoryRepository_Expecter) ListPurchaseOrders(ctx any, garageID any, filter any) *MockInventoryRepository_ListPurchaseOrders_Call {
+	return &MockInventoryRepository_ListPurchaseOrders_Call{Call: _e.mock.On("ListPurchaseOrders", ctx, garageID, filter)}
+}
+
+func (_c *MockInventoryRepository_ListPurchaseOrders_Call) Run(run func(ctx context.Context, garageID string, filter usecase.PurchaseOrderFilter)) *MockInventoryRepository_ListPurchaseOrders_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 usecase.PurchaseOrderFilter
+		if args[2] != nil {
+			arg2 = args[2].(usecase.PurchaseOrderFilter)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_ListPurchaseOrders_Call) Return(purchaseOrders []*domain.PurchaseOrder, n int, err error) *MockInventoryRepository_ListPurchaseOrders_Call {
+	_c.Call.Return(purchaseOrders, n, err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_ListPurchaseOrders_Call) RunAndReturn(run func(ctx context.Context, garageID string, filter usecase.PurchaseOrderFilter) ([]*domain.PurchaseOrder, int, error)) *MockInventoryRepository_ListPurchaseOrders_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1907,6 +2196,80 @@ func (_c *MockInventoryRepository_LockBalances_Call) Return(err error) *MockInve
 }
 
 func (_c *MockInventoryRepository_LockBalances_Call) RunAndReturn(run func(ctx context.Context, garageID string, partIDs []string) error) *MockInventoryRepository_LockBalances_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// OnOrder provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) OnOrder(ctx context.Context, garageID string, partIDs []string) (map[string]string, error) {
+	ret := _mock.Called(ctx, garageID, partIDs)
+
+	if len(ret) == 0 {
+		panic("no return value specified for OnOrder")
+	}
+
+	var r0 map[string]string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) (map[string]string, error)); ok {
+		return returnFunc(ctx, garageID, partIDs)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, []string) map[string]string); ok {
+		r0 = returnFunc(ctx, garageID, partIDs)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(map[string]string)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, []string) error); ok {
+		r1 = returnFunc(ctx, garageID, partIDs)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockInventoryRepository_OnOrder_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'OnOrder'
+type MockInventoryRepository_OnOrder_Call struct {
+	*mock.Call
+}
+
+// OnOrder is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - partIDs []string
+func (_e *MockInventoryRepository_Expecter) OnOrder(ctx any, garageID any, partIDs any) *MockInventoryRepository_OnOrder_Call {
+	return &MockInventoryRepository_OnOrder_Call{Call: _e.mock.On("OnOrder", ctx, garageID, partIDs)}
+}
+
+func (_c *MockInventoryRepository_OnOrder_Call) Run(run func(ctx context.Context, garageID string, partIDs []string)) *MockInventoryRepository_OnOrder_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_OnOrder_Call) Return(stringToString map[string]string, err error) *MockInventoryRepository_OnOrder_Call {
+	_c.Call.Return(stringToString, err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_OnOrder_Call) RunAndReturn(run func(ctx context.Context, garageID string, partIDs []string) (map[string]string, error)) *MockInventoryRepository_OnOrder_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -2370,6 +2733,63 @@ func (_c *MockInventoryRepository_SaveGoodsReceipt_Call) Return(err error) *Mock
 }
 
 func (_c *MockInventoryRepository_SaveGoodsReceipt_Call) RunAndReturn(run func(ctx context.Context, r *domain.GoodsReceipt) error) *MockInventoryRepository_SaveGoodsReceipt_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SavePurchaseOrder provides a mock function for the type MockInventoryRepository
+func (_mock *MockInventoryRepository) SavePurchaseOrder(ctx context.Context, o *domain.PurchaseOrder) error {
+	ret := _mock.Called(ctx, o)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SavePurchaseOrder")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, *domain.PurchaseOrder) error); ok {
+		r0 = returnFunc(ctx, o)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockInventoryRepository_SavePurchaseOrder_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SavePurchaseOrder'
+type MockInventoryRepository_SavePurchaseOrder_Call struct {
+	*mock.Call
+}
+
+// SavePurchaseOrder is a helper method to define mock.On call
+//   - ctx context.Context
+//   - o *domain.PurchaseOrder
+func (_e *MockInventoryRepository_Expecter) SavePurchaseOrder(ctx any, o any) *MockInventoryRepository_SavePurchaseOrder_Call {
+	return &MockInventoryRepository_SavePurchaseOrder_Call{Call: _e.mock.On("SavePurchaseOrder", ctx, o)}
+}
+
+func (_c *MockInventoryRepository_SavePurchaseOrder_Call) Run(run func(ctx context.Context, o *domain.PurchaseOrder)) *MockInventoryRepository_SavePurchaseOrder_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 *domain.PurchaseOrder
+		if args[1] != nil {
+			arg1 = args[1].(*domain.PurchaseOrder)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInventoryRepository_SavePurchaseOrder_Call) Return(err error) *MockInventoryRepository_SavePurchaseOrder_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockInventoryRepository_SavePurchaseOrder_Call) RunAndReturn(run func(ctx context.Context, o *domain.PurchaseOrder) error) *MockInventoryRepository_SavePurchaseOrder_Call {
 	_c.Call.Return(run)
 	return _c
 }

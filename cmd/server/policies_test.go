@@ -37,25 +37,15 @@ var publicMethods = []string{
 // answers NO_POLICY (403) instead of reaching the unimplemented handler. Give
 // the method a policy when you implement it, and remove it from here.
 var notImplemented = map[string]string{
-	"/vietgara.customer.v1.DataRequestService/CompleteDataRequest":                 "Phase 13",
-	"/vietgara.customer.v1.DataRequestService/CreateDataRequest":                   "Phase 13",
-	"/vietgara.customer.v1.DataRequestService/GetDataRequest":                      "Phase 13",
-	"/vietgara.customer.v1.DataRequestService/ListDataRequests":                    "Phase 13",
-	"/vietgara.customer.v1.PublicDataRequestService/ConfirmPublicDataRequest":      "Phase 13",
-	"/vietgara.customer.v1.PublicDataRequestService/SubmitPublicDataRequest":       "Phase 13",
-	"/vietgara.document.v1.DocumentService/ExportPurchaseOrderPdf":                 "Phase 13",
-	"/vietgara.document.v1.DocumentService/PrintPurchaseOrderPdf":                  "Phase 13",
-	"/vietgara.inventory.v1.PurchaseOrderService/CancelPurchaseOrder":              "Phase 13",
-	"/vietgara.inventory.v1.PurchaseOrderService/CreatePurchaseOrder":              "Phase 13",
-	"/vietgara.inventory.v1.PurchaseOrderService/CreatePurchaseOrdersFromLowStock": "Phase 13",
-	"/vietgara.inventory.v1.PurchaseOrderService/GetPurchaseOrder":                 "Phase 13",
-	"/vietgara.inventory.v1.PurchaseOrderService/ListPurchaseOrders":               "Phase 13",
-	"/vietgara.inventory.v1.PurchaseOrderService/ReceivePurchaseOrder":             "Phase 13",
-	"/vietgara.inventory.v1.PurchaseOrderService/SendPurchaseOrder":                "Phase 13",
-	"/vietgara.inventory.v1.PurchaseOrderService/UpdatePurchaseOrder":              "Phase 13",
-	"/vietgara.reporting.v1.ReportingService/GetProfitReport":                      "Phase 13",
-	"/vietgara.reporting.v1.ReportingService/GetRepairOrderProfit":                 "Phase 13",
-	"/vietgara.reporting.v1.ReportingService/GetTechnicianReport":                  "Phase 13",
+	"/vietgara.customer.v1.DataRequestService/CompleteDataRequest":            "Phase 13",
+	"/vietgara.customer.v1.DataRequestService/CreateDataRequest":              "Phase 13",
+	"/vietgara.customer.v1.DataRequestService/GetDataRequest":                 "Phase 13",
+	"/vietgara.customer.v1.DataRequestService/ListDataRequests":               "Phase 13",
+	"/vietgara.customer.v1.PublicDataRequestService/ConfirmPublicDataRequest": "Phase 13",
+	"/vietgara.customer.v1.PublicDataRequestService/SubmitPublicDataRequest":  "Phase 13",
+	"/vietgara.reporting.v1.ReportingService/GetProfitReport":                 "Phase 13",
+	"/vietgara.reporting.v1.ReportingService/GetRepairOrderProfit":            "Phase 13",
+	"/vietgara.reporting.v1.ReportingService/GetTechnicianReport":             "Phase 13",
 }
 
 // TestEveryRPCDeclaresItsAuthorization is the automated part of the

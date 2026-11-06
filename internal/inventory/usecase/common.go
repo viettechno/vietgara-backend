@@ -90,6 +90,19 @@ var classified = []struct {
 	{domain.ErrTooManyDefaults, apperror.CodeInvalidArgument, ""},
 	{domain.ErrInvalidQuantity, apperror.CodeInvalidArgument, ""},
 	{domain.ErrInvalidCost, apperror.CodeInvalidArgument, ""},
+
+	// Release 13.0.
+	{domain.ErrPurchaseOrderNotFound, apperror.CodeNotFound, ReasonPurchaseOrderNotFound},
+	{domain.ErrPurchaseOrderNotDraft, apperror.CodeFailedPrecondition, ReasonPurchaseOrderNotDraft},
+	{domain.ErrPurchaseOrderNotSendable, apperror.CodeFailedPrecondition, ReasonPurchaseOrderNotSendable},
+	{domain.ErrPurchaseOrderNotCancellable, apperror.CodeFailedPrecondition, ReasonPurchaseOrderNotCancellable},
+	{domain.ErrPurchaseOrderNothingToReceive, apperror.CodeFailedPrecondition, ReasonPurchaseOrderNothingToReceive},
+	{domain.ErrPurchaseOrderReceiptOpen, apperror.CodeFailedPrecondition, ReasonPurchaseOrderReceiptOpen},
+	{domain.ErrSupplierEmailRequired, apperror.CodeInvalidArgument, ReasonSupplierEmailRequired},
+	{domain.ErrDuplicatePart, apperror.CodeInvalidArgument, ""},
+	{domain.ErrInvalidExpectedDate, apperror.CodeInvalidArgument, ""},
+	{domain.ErrNotesTooLong, apperror.CodeInvalidArgument, ""},
+	{domain.ErrMessageTooLong, apperror.CodeInvalidArgument, ""},
 }
 
 // Reasons that tell clients which rule refused a request.
@@ -110,6 +123,16 @@ const (
 	ReasonInsufficientStock              = "INSUFFICIENT_STOCK"
 	ReasonStockIssueNotPosted            = "STOCK_ISSUE_NOT_POSTED"
 	ReasonReturnExceedsIssued            = "RETURN_EXCEEDS_ISSUED"
+
+	// Release 13.0.
+	ReasonPurchaseOrderNotFound         = "PURCHASE_ORDER_NOT_FOUND"
+	ReasonPurchaseOrderNotDraft         = "PURCHASE_ORDER_NOT_DRAFT"
+	ReasonPurchaseOrderNotSendable      = "PURCHASE_ORDER_NOT_SENDABLE"
+	ReasonPurchaseOrderNotCancellable   = "PURCHASE_ORDER_NOT_CANCELLABLE"
+	ReasonPurchaseOrderNothingToReceive = "PURCHASE_ORDER_NOTHING_TO_RECEIVE"
+	ReasonPurchaseOrderReceiptOpen      = "PURCHASE_ORDER_RECEIPT_OPEN"
+	ReasonSupplierEmailRequired         = "SUPPLIER_EMAIL_REQUIRED"
+	ReasonSupplierNotFound              = "SUPPLIER_NOT_FOUND"
 )
 
 // toAppError classifies err into an *apperror.AppError; op names the

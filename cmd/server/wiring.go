@@ -479,6 +479,25 @@ func (d inventoryDirectory) SupplierNames(ctx context.Context, garageID string, 
 	return names, nil
 }
 
+func (d inventoryDirectory) SupplierContacts(ctx context.Context, garageID string, ids []string) (map[string]inventoryUsecase.SupplierContact, error) {
+	contacts := make(map[string]inventoryUsecase.SupplierContact, len(ids))
+
+	for _, id := range ids {
+		s, err := d.suppliers.FindByID(ctx, garageID, id)
+		if errors.Is(err, supplierDomain.ErrSupplierNotFound) {
+			continue
+		}
+
+		if err != nil {
+			return nil, err
+		}
+
+		contacts[id] = inventoryUsecase.SupplierContact{Name: s.Name, Email: deref(s.Contact.Email)}
+	}
+
+	return contacts, nil
+}
+
 func (d inventoryDirectory) UserName(ctx context.Context, userID string) (string, error) {
 	if userID == "" {
 		return "", nil
@@ -847,6 +866,45 @@ func (d documentInventory) GoodsReceipt(ctx context.Context, garageID, receiptID
 	}
 
 	return info, nil
+}
+
+func (d documentInventory) PurchaseOrder(ctx context.Context, garageID, orderID string) (documentUsecase.PurchaseOrderInfo, error) {
+	o, err := d.uc.GetPurchaseOrder(ctx, garageID, orderID)
+	if err != nil {
+		return documentUsecase.PurchaseOrderInfo{}, err
+	}
+
+	a, ok := access.FromContext(ctx)
+
+	info := documentUsecase.PurchaseOrderInfo{
+		Number: o.Number, Status: string(o.Status), Date: orderDay(o.OrderDate), ExpectedDate: orderDay(o.ExpectedDate),
+		SupplierName: o.SupplierName, Notes: o.Notes, ShowCost: ok && a.Has(access.InventoryCostRead), TotalAmount: o.TotalAmount,
+	}
+
+	for i := range o.Lines {
+		l := &o.Lines[i]
+
+		unit := l.BaseUnitAbbreviation
+		if l.UnitID != nil {
+			unit = l.UnitAbbreviation
+		}
+
+		info.Lines = append(info.Lines, printmodel.PurchaseOrderRow{
+			SKU: l.PartSKU, Name: l.PartName, Quantity: l.EnteredQuantity, Unit: unit, UnitCost: l.UnitCost, Amount: l.Amount(),
+		})
+	}
+
+	return info, nil
+}
+
+// orderDay shows a "YYYY-MM-DD" date as the documents do, "" for none.
+func orderDay(date string) string {
+	d, err := time.Parse(time.DateOnly, date)
+	if err != nil {
+		return ""
+	}
+
+	return d.Format("02/01/2006")
 }
 
 func (d documentInventory) StockIssue(ctx context.Context, garageID, repairOrderID string) (documentUsecase.StockIssueInfo, error) {

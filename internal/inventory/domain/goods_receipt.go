@@ -70,7 +70,11 @@ type GoodsReceipt struct {
 	ReceiptDate        string
 	DeliveryNoteNumber string
 	Notes              string
-	Lines              []GoodsReceiptLine
+	// PurchaseOrderID is the order the receipt was created from; nil for a
+	// receipt of its own. PurchaseOrderNumber is derived.
+	PurchaseOrderID     *string
+	PurchaseOrderNumber string
+	Lines               []GoodsReceiptLine
 	// TotalAmount is the sum of the lines' amounts; the repository fills it
 	// for list pages, which carry no lines.
 	TotalAmount int64

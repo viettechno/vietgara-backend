@@ -12,6 +12,7 @@ import (
 	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
 	documentUsecase "github.com/viettechno/vietgara-backend/internal/document/usecase"
 	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
+	inventoryUsecase "github.com/viettechno/vietgara-backend/internal/inventory/usecase"
 	notificationHandler "github.com/viettechno/vietgara-backend/internal/notification/handler"
 	notificationRepository "github.com/viettechno/vietgara-backend/internal/notification/repository"
 	notificationUsecase "github.com/viettechno/vietgara-backend/internal/notification/usecase"
@@ -200,6 +201,23 @@ type notificationReceipts struct {
 
 func (a notificationReceipts) SettlementReceipt(ctx context.Context, garageID, settlementID string) ([]byte, error) {
 	return a.documents.SettlementReceiptPDF(ctx, garageID, settlementID, false)
+}
+
+func (a notificationReceipts) PurchaseOrder(ctx context.Context, garageID, orderID string) ([]byte, error) {
+	return a.documents.PurchaseOrderPDF(ctx, garageID, orderID, false)
+}
+
+// inventoryOrderMailer gives Inventory the call that e-mails a purchase order
+// to its supplier. It is set once Notification is built, since Inventory is
+// built first.
+type inventoryOrderMailer struct {
+	uc *notificationUsecase.NotificationUseCase
+}
+
+func (m inventoryOrderMailer) SendPurchaseOrder(ctx context.Context, mail inventoryUsecase.OrderMail) (bool, error) {
+	return m.uc.PurchaseOrder(ctx, notificationUsecase.PurchaseOrderRequest{
+		GarageID: mail.GarageID, OrderID: mail.OrderID, Number: mail.Number, SupplierName: mail.SupplierName, To: mail.To, Message: mail.Message,
+	})
 }
 
 // quoteNotifier gives Quote the call that e-mails an approval link. It is set

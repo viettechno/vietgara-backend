@@ -429,6 +429,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// its own; every e-mail is triggered by an event consumer (wireEvents).
 	notification := buildNotification(pool, tx, mailer, users, customerRepo, vehicleRepo, customerUC, garages, document.uc, signingKey)
 	quoteNotifications.uc = notification.uc
+	inventory.uc.SetOrderMailer(inventoryOrderMailer{uc: notification.uc})
 
 	// Receivables (Release 13.0): what customers owe, with its reminders and
 	// reconciliation (FR-REC-01, 03, 04).
@@ -510,6 +511,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	quotev1.RegisterPublicQuoteServiceServer(app.grpcServer, quote.server)
 	repairorderv1.RegisterRepairOrderServiceServer(app.grpcServer, repairOrder.server)
 	inventoryv1.RegisterInventoryServiceServer(app.grpcServer, inventory.server)
+	inventoryv1.RegisterPurchaseOrderServiceServer(app.grpcServer, inventoryHandler.NewPurchaseOrderServer(inventory.uc))
 	inventoryv1.RegisterImportServiceServer(app.grpcServer, dataImport.server)
 	billingv1.RegisterSettlementServiceServer(app.grpcServer, billing.server)
 	documentv1.RegisterDocumentServiceServer(app.grpcServer, document.server)
@@ -599,7 +601,7 @@ func apiPolicies() middleware.Policies {
 	return middleware.Merge(
 		identityHandler.Policies(), platformStaffHandler.Policies(), supportHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
 		customerHandler.LinkPolicies(), customerHandler.TaxProfilePolicies(),
-		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), billingHandler.Policies(),
+		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), inventoryHandler.PurchaseOrderPolicies(), billingHandler.Policies(),
 		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(), fileHandler.Policies(), catalogueHandler.Policies(), catalogueHandler.JobPolicies(),
 		technicianHandler.Policies(), customerportalHandler.Policies(), dataimportHandler.Policies(), notificationHandler.Policies(), receivableHandler.Policies(), receivableHandler.PayablePolicies(),
 	)
@@ -642,7 +644,7 @@ func buildGateway(
 		supplierv1.RegisterSupplierServiceHandler, filev1.RegisterFileServiceHandler,
 		cataloguev1.RegisterCatalogueServiceHandler, cataloguev1.RegisterJobServiceHandler,
 		quotev1.RegisterQuoteServiceHandler, quotev1.RegisterPublicQuoteServiceHandler,
-		repairorderv1.RegisterRepairOrderServiceHandler, inventoryv1.RegisterInventoryServiceHandler,
+		repairorderv1.RegisterRepairOrderServiceHandler, inventoryv1.RegisterInventoryServiceHandler, inventoryv1.RegisterPurchaseOrderServiceHandler,
 		inventoryv1.RegisterImportServiceHandler,
 		billingv1.RegisterSettlementServiceHandler, documentv1.RegisterDocumentServiceHandler,
 		reportingv1.RegisterReportingServiceHandler, notificationv1.RegisterNotificationServiceHandler, receivablev1.RegisterReceivableServiceHandler, receivablev1.RegisterPayableServiceHandler,

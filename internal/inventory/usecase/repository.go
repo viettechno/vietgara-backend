@@ -85,6 +85,16 @@ type GoodsReceiptFilter struct {
 	Offset     int
 }
 
+// PurchaseOrderFilter selects one page of a garage's purchase orders.
+type PurchaseOrderFilter struct {
+	// Query matches the number, the supplier's name or the notes.
+	Query      string
+	SupplierID string
+	Status     domain.PurchaseOrderStatus
+	Limit      int
+	Offset     int
+}
+
 // PurchaseFilter selects the completed receipt lines of a purchases report
 // (FR-INV-19): From inclusive, To exclusive, both "YYYY-MM-DD" or empty.
 type PurchaseFilter struct {
@@ -138,6 +148,22 @@ type Repository interface {
 	// ListGoodsReceipts returns one page of receipts, newest first, without
 	// lines but with TotalAmount.
 	ListGoodsReceipts(ctx context.Context, garageID string, filter GoodsReceiptFilter) ([]*domain.GoodsReceipt, int, error)
+
+	// CreatePurchaseOrder inserts the order and its lines.
+	CreatePurchaseOrder(ctx context.Context, o *domain.PurchaseOrder) error
+	// FindPurchaseOrder returns the order with its lines, or
+	// domain.ErrPurchaseOrderNotFound; forUpdate locks it.
+	FindPurchaseOrder(ctx context.Context, garageID, orderID string, forUpdate bool) (*domain.PurchaseOrder, error)
+	// SavePurchaseOrder persists the header and replaces the lines.
+	SavePurchaseOrder(ctx context.Context, o *domain.PurchaseOrder) error
+	// ListPurchaseOrders returns one page, newest first, without lines but
+	// with TotalAmount and the supplier id.
+	ListPurchaseOrders(ctx context.Context, garageID string, filter PurchaseOrderFilter) ([]*domain.PurchaseOrder, int, error)
+	// OnOrder returns the base-unit quantity still to be delivered per part by
+	// draft, sent and partially received orders.
+	OnOrder(ctx context.Context, garageID string, partIDs []string) (map[string]string, error)
+	// HasDraftReceipt reports whether a draft goods receipt of the order exists.
+	HasDraftReceipt(ctx context.Context, garageID, orderID string) (bool, error)
 
 	// PartSuppliers returns the usual suppliers of a part, default first,
 	// without the derived supplier names.
@@ -312,6 +338,9 @@ type Directory interface {
 	// SupplierNames returns the name per supplier id of the garage, active or
 	// not; unknown ids are absent.
 	SupplierNames(ctx context.Context, garageID string, ids []string) (map[string]string, error)
+	// SupplierContacts returns the name and e-mail per supplier id of the
+	// garage, active or not; unknown ids are absent.
+	SupplierContacts(ctx context.Context, garageID string, ids []string) (map[string]SupplierContact, error)
 	// UserName returns a user's full name, "" when unknown.
 	UserName(ctx context.Context, userID string) (string, error)
 }

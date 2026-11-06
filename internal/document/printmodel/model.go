@@ -23,11 +23,13 @@ const (
 	TypeStockIssue     DocumentType = "stock_issue"
 	// TypePaymentOut is the payment-out voucher (phiếu chi, Release 13.0).
 	TypePaymentOut DocumentType = "payment_out"
+	// TypePurchaseOrder is the purchase order to a supplier (Release 13.0).
+	TypePurchaseOrder DocumentType = "purchase_order"
 )
 
 // Types lists every printable document, in the order the settings show them.
 func Types() []DocumentType {
-	return []DocumentType{TypeQuote, TypeRepairOrder, TypeSettlement, TypePaymentVoucher, TypeGoodsReceipt, TypeStockIssue, TypePaymentOut}
+	return []DocumentType{TypeQuote, TypeRepairOrder, TypeSettlement, TypePaymentVoucher, TypeGoodsReceipt, TypeStockIssue, TypePaymentOut, TypePurchaseOrder}
 }
 
 // Valid reports whether t is a printable document.
@@ -244,3 +246,35 @@ type StockIssue struct {
 
 // Type implements Model.
 func (StockIssue) Type() DocumentType { return TypeStockIssue }
+
+// PurchaseOrderRow is one line of a purchase order.
+type PurchaseOrderRow struct {
+	SKU      string `json:"sku"`
+	Name     string `json:"name"`
+	Quantity string `json:"quantity"`
+	// Unit is the unit Quantity is typed in.
+	Unit string `json:"unit"`
+	// UnitCost and Amount are the expected VND; they are left out of the
+	// document when ShowCost is false.
+	UnitCost int64 `json:"unitCost"`
+	Amount   int64 `json:"amount"`
+}
+
+// PurchaseOrder is the print model of a purchase order (FR-INV-16).
+type PurchaseOrder struct {
+	Garage       GarageHeader       `json:"garage"`
+	Number       string             `json:"number"`
+	Status       string             `json:"status"`
+	Date         string             `json:"date"`
+	ExpectedDate string             `json:"expectedDate"`
+	SupplierName string             `json:"supplierName"`
+	Notes        string             `json:"notes"`
+	Lines        []PurchaseOrderRow `json:"lines"`
+	// ShowCost prints the price columns and the total; a caller without
+	// inventory.cost.read gets quantities only.
+	ShowCost    bool  `json:"showCost"`
+	TotalAmount int64 `json:"totalAmount"`
+}
+
+// Type implements Model.
+func (PurchaseOrder) Type() DocumentType { return TypePurchaseOrder }

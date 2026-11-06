@@ -104,3 +104,23 @@ func TestPaymentOutVoucherPDF_ManyReceiptsKeepSignaturesTogether(t *testing.T) {
 	assert.Equal(t, 1, pages(one))
 	assert.Greater(t, pages(many), 1, "a long list runs onto a second page without breaking the render")
 }
+
+func TestPurchaseOrderPDF(t *testing.T) {
+	t.Parallel()
+
+	data := printmodel.PurchaseOrder{
+		Garage: printmodel.GarageHeader{Name: "Công ty TNHH Gara Ánh Dương"}, Number: "DH-2026-00001", Status: "sent", Date: "12/10/2026",
+		ExpectedDate: "20/10/2026", SupplierName: "Nhà cung cấp Sao Mai", Notes: "Giao trong giờ hành chính",
+		Lines:    []printmodel.PurchaseOrderRow{{SKU: "OIL", Name: "Dầu nhớt", Quantity: "16", Unit: "L", UnitCost: 90_000, Amount: 1_440_000}},
+		ShowCost: true, TotalAmount: 1_440_000,
+	}
+
+	priced, err := a4(data)
+	require.NoError(t, err)
+	assert.Equal(t, "%PDF", string(priced[:4]))
+
+	data.ShowCost, data.ExpectedDate, data.Notes = false, "", ""
+	plain, err := a4(data)
+	require.NoError(t, err)
+	assert.NotEqual(t, len(priced), len(plain), "a caller without the cost permission gets no prices")
+}

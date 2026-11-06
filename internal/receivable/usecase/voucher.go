@@ -99,9 +99,13 @@ func (uc *PayableUseCase) CreateVoucher(ctx context.Context, req CreateVoucherRe
 
 // validateVoucher checks what can be checked without reading anything.
 func validateVoucher(req *CreateVoucherRequest) error {
-	if _, err := uuid.Parse(req.SupplierID); err != nil {
+	supplierID, err := uuid.Parse(req.SupplierID)
+	if err != nil {
 		return domain.ErrSupplierNotFound
 	}
+
+	// Ids are compared as text further on, so keep only the canonical form.
+	req.SupplierID = supplierID.String()
 
 	if !validMethods[req.Method] {
 		return domain.ErrInvalidPaymentOutMethod
@@ -121,12 +125,14 @@ func validateVoucher(req *CreateVoucherRequest) error {
 
 	seen := map[string]bool{}
 
-	for _, a := range req.Allocations {
-		if _, err := uuid.Parse(a.PayableID); err != nil || a.Amount <= 0 || seen[a.PayableID] {
+	for i, a := range req.Allocations {
+		payableID, err := uuid.Parse(a.PayableID)
+		if err != nil || a.Amount <= 0 || seen[payableID.String()] {
 			return domain.ErrInvalidAllocation
 		}
 
-		seen[a.PayableID] = true
+		req.Allocations[i].PayableID = payableID.String()
+		seen[payableID.String()] = true
 		sum += a.Amount
 	}
 

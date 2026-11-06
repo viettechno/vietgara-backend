@@ -53,6 +53,16 @@ func (s *Server) PrintPaymentVoucherPdf(ctx context.Context, req *documentv1.Pri
 	return pdfBody(data), nil
 }
 
+// PrintPaymentOutVoucherPdf prints one payment-out voucher (FR-DOC-05).
+func (s *Server) PrintPaymentOutVoucherPdf(ctx context.Context, req *documentv1.PrintPaymentOutVoucherPdfRequest) (*httpbody.HttpBody, error) {
+	data, err := s.uc.PaymentOutVoucherPDF(ctx, req.GetGarageId(), req.GetVoucherId(), true)
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return pdfBody(data), nil
+}
+
 // PrintGoodsReceiptPdf prints the goods receipt (FR-DOC-05).
 func (s *Server) PrintGoodsReceiptPdf(ctx context.Context, req *documentv1.PrintGoodsReceiptPdfRequest) (*httpbody.HttpBody, error) {
 	data, err := s.uc.GoodsReceiptPDF(ctx, req.GetGarageId(), req.GetGoodsReceiptId(), true)
@@ -115,6 +125,8 @@ var documentTypeFromProto = map[documentv1.DocumentType]printmodel.DocumentType{
 	documentv1.DocumentType_DOCUMENT_TYPE_PAYMENT_VOUCHER: printmodel.TypePaymentVoucher,
 	documentv1.DocumentType_DOCUMENT_TYPE_GOODS_RECEIPT:   printmodel.TypeGoodsReceipt,
 	documentv1.DocumentType_DOCUMENT_TYPE_STOCK_ISSUE:     printmodel.TypeStockIssue,
+
+	documentv1.DocumentType_DOCUMENT_TYPE_PAYMENT_OUT_VOUCHER: printmodel.TypePaymentOut,
 }
 
 var paperFromProto = map[documentv1.PaperSize]printmodel.Paper{

@@ -173,6 +173,32 @@ type ReceivableReader interface {
 	Reconciliation(ctx context.Context, garageID, from, to string) (render.ReconciliationData, error)
 }
 
+// PaymentOutInfo is a payment-out voucher as the Document module prints it.
+type PaymentOutInfo struct {
+	Number       string
+	Date         string
+	PayeeName    string
+	PayeeAddress string
+	Reason       string
+	Amount       int64
+	Method       string
+	Receipts     []printmodel.PaymentOutReceiptRow
+	IssuerName   string
+	// Issuer is the legal identity the voucher was issued with.
+	Issuer     issuer.Issuer
+	Voided     bool
+	VoidReason string
+}
+
+// PayableReader reads the supplier payables and payment-out vouchers for the
+// documents of Release 13.0; implemented by an adapter over the Receivables
+// module in cmd/server. The filters are those of
+// PayableService.ListSupplierPayables.
+type PayableReader interface {
+	SupplierPayables(ctx context.Context, garageID, supplierID string, includePaid bool) ([]render.PayableRow, error)
+	PaymentOutVoucher(ctx context.Context, garageID, voucherID string) (PaymentOutInfo, error)
+}
+
 // GarageHeaderInfo is the Tenant module's view of a garage that every
 // document's letterhead needs.
 type GarageHeaderInfo struct {
@@ -209,6 +235,9 @@ type DocumentUseCase struct {
 	// Receivables serves the Excel exports of Release 13.0; set it with
 	// WithReceivables.
 	Receivables ReceivableReader
+	// Payables serves the payables workbook and the payment-out voucher;
+	// set it with WithPayables.
+	Payables PayableReader
 }
 
 // NewDocumentUseCase wires the use case to its dependencies.
@@ -222,7 +251,37 @@ func NewDocumentUseCase(
 	}
 }
 
-var errReceivablesNotWired = errors.New("the receivables reader is not set")
+var (
+	errReceivablesNotWired = errors.New("the receivables reader is not set")
+	errPayablesNotWired    = errors.New("the payables reader is not set")
+)
+
+// WithPayables sets the reader of the payables documents and returns uc.
+func (uc *DocumentUseCase) WithPayables(r PayableReader) *DocumentUseCase {
+	uc.Payables = r
+
+	return uc
+}
+
+// SupplierPayablesExcel renders the supplier payables as an Excel workbook
+// (FR-DOC-02), with the filters of PayableService.ListSupplierPayables.
+func (uc *DocumentUseCase) SupplierPayablesExcel(ctx context.Context, garageID, supplierID string, includePaid bool) ([]byte, error) {
+	if uc.Payables == nil {
+		return nil, apperror.Internal("export supplier payables excel", errPayablesNotWired)
+	}
+
+	rows, err := uc.Payables.SupplierPayables(ctx, garageID, supplierID, includePaid)
+	if err != nil {
+		return nil, toAppError("export supplier payables excel", err)
+	}
+
+	workbook, err := render.SupplierPayablesExcel(rows)
+	if err != nil {
+		return nil, apperror.Internal("export supplier payables excel", err)
+	}
+
+	return workbook, nil
+}
 
 // WithReceivables sets the reader of the receivables exports and returns uc.
 func (uc *DocumentUseCase) WithReceivables(r ReceivableReader) *DocumentUseCase {

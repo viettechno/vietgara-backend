@@ -59,3 +59,23 @@ func TestPaymentVoucherPDF(t *testing.T) {
 	require.NoError(t, err)
 	assert.NotEqual(t, len(pdf), len(voided), "a voided voucher is marked")
 }
+
+func TestPaymentOutVoucherPDF(t *testing.T) {
+	t.Parallel()
+
+	data := printmodel.PaymentOutVoucher{
+		Garage: printmodel.GarageHeader{Name: "Công ty TNHH Gara Ánh Dương", Address: "12 Nguyễn Huệ, Quận 1"},
+		Number: "PC-2026-00001", Date: "12/10/2026", PayeeName: "Nhà cung cấp Sao Mai", Reason: "Thanh toán tiền hàng",
+		Amount: 1_500_000, Method: "Chuyển khoản", IssuerName: "Lê Thu Ngân",
+		Receipts: []printmodel.PaymentOutReceiptRow{{Number: "NK-1", Amount: 1_000_000}, {Number: "NK-2", Amount: 500_000}},
+	}
+
+	pdf, err := a4(data)
+	require.NoError(t, err)
+	assert.Equal(t, "%PDF", string(pdf[:4]))
+
+	data.Voided, data.VoidReason = true, "chi nhầm"
+	voided, err := a4(data)
+	require.NoError(t, err)
+	assert.NotEqual(t, len(pdf), len(voided), "a voided voucher is marked")
+}

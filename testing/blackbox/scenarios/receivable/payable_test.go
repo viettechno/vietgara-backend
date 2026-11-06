@@ -1,6 +1,7 @@
 package receivable_test
 
 import (
+	"bytes"
 	"context"
 	"net/http"
 	"strconv"
@@ -12,9 +13,11 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	billingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/billing/v1"
+	documentv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/document/v1"
 	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
 	receivablev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/receivable/v1"
 	supplierv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/supplier/v1"
+	"github.com/xuri/excelize/v2"
 
 	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
@@ -572,4 +575,79 @@ func TestPayablePermissionsAndTenantIsolation(t *testing.T) {
 	// Without a token nothing is served.
 	_, err = fixture.Anonymous(t).ListSupplierPayables(ctx, p.GarageID, "", false)
 	fixture.RequireAPIError(t, err, http.StatusUnauthorized, "")
+}
+
+// Scenario: E2E-PAY-006, Release 13.0, the voucher as a PDF on A4 and A5 and
+// the payables as Excel (FR-BIL-07, FR-DOC-04).
+func TestVoucherPDFAndPayablesWorkbook(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	p := newPayables(t, "pay-006")
+	api := p.Owner.API
+
+	payable := p.payablesOf(t, api, p.receipt(t, 5, receiptLine{p.oil, p.acme, "10", 100_000}), 1)[p.acme.GetId()]
+
+	v, err := p.voucher(t, p.acme, 1_000_000, billingv1.PaymentMethod_PAYMENT_METHOD_BANK_TRANSFER, allocation(payable, 1_000_000))
+	require.NoError(t, err)
+
+	// The export opens, with the voucher's figures and Vietnamese words.
+	contentType, a4, err := api.DownloadPaymentOutVoucherPDF(ctx, p.GarageID, v.GetId())
+	require.NoError(t, err)
+	assert.Contains(t, contentType, "pdf")
+	assert.Contains(t, string(a4), "/MediaBox [0 0 595.28 841.89]")
+
+	text := fixture.PDFText(t, a4)
+	assert.Contains(t, text, "PHIẾU CHI")
+	assert.Contains(t, text, v.GetNumber())
+	assert.Contains(t, text, p.acme.GetName())
+	assert.Contains(t, text, "Một triệu đồng")
+
+	// The first print has no copy mark; with the mark on, the second has it.
+	_, first, err := api.PrintPaymentOutVoucherPDF(ctx, p.GarageID, v.GetId())
+	require.NoError(t, err)
+	assert.NotContains(t, fixture.PDFText(t, first), "BẢN SAO")
+
+	_, err = api.UpdatePrintSetting(ctx, p.GarageID, documentv1.DocumentType_DOCUMENT_TYPE_PAYMENT_OUT_VOUCHER, documentv1.PaperSize_PAPER_SIZE_A5, true)
+	require.NoError(t, err)
+
+	_, second, err := api.PrintPaymentOutVoucherPDF(ctx, p.GarageID, v.GetId())
+	require.NoError(t, err)
+	assert.Contains(t, string(second), "/MediaBox [0 0 420.94 595.28]", "a reprint of A5 keeps the size of the first print's paper setting")
+	assert.Contains(t, fixture.PDFText(t, second), "BẢN SAO")
+
+	settings, err := api.GetPrintSettings(ctx, p.GarageID)
+	require.NoError(t, err)
+
+	var found bool
+
+	for _, s := range settings.GetSettings() {
+		if s.GetDocumentType() == documentv1.DocumentType_DOCUMENT_TYPE_PAYMENT_OUT_VOUCHER {
+			found = true
+
+			assert.Equal(t, []documentv1.PaperSize{documentv1.PaperSize_PAPER_SIZE_A4, documentv1.PaperSize_PAPER_SIZE_A5}, s.GetAvailablePaperSizes())
+		}
+	}
+
+	assert.True(t, found, "the payment-out voucher is one of the print settings")
+
+	// The workbook has the rows and the totals.
+	_, workbook, err := api.DownloadSupplierPayablesExcel(ctx, p.GarageID, "", true)
+	require.NoError(t, err)
+
+	sheets, err := excelize.OpenReader(bytes.NewReader(workbook))
+	require.NoError(t, err)
+
+	defer func() { _ = sheets.Close() }()
+
+	rows, err := sheets.GetRows("Payables")
+	require.NoError(t, err)
+	require.Len(t, rows, 3, "a header, the payable and the total")
+	assert.Equal(t, "1000000", rows[1][4])
+	assert.Equal(t, "Total", rows[2][0])
+
+	other := fixture.NewBusiness(t, "pay-006-other")
+
+	_, _, err = other.Owner.API.DownloadPaymentOutVoucherPDF(ctx, other.GarageID, v.GetId())
+	fixture.RequireAPIError(t, err, http.StatusNotFound, "PAYMENT_OUT_VOUCHER_NOT_FOUND")
 }

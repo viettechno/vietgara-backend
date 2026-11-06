@@ -63,3 +63,27 @@ func (c *Client) VoidPaymentOutVoucher(ctx context.Context, garageID, voucherID,
 	return call[receivablev1.PaymentOutVoucher](ctx, c, http.MethodPost, voucherPath(garageID, voucherID)+":void",
 		&receivablev1.VoidPaymentOutVoucherRequest{Reason: reason})
 }
+
+// DownloadPaymentOutVoucherPDF downloads a voucher's PDF.
+func (c *Client) DownloadPaymentOutVoucherPDF(ctx context.Context, garageID, voucherID string) (string, []byte, error) {
+	return c.DownloadRaw(ctx, http.MethodGet, voucherPath(garageID, voucherID)+"/pdf")
+}
+
+// PrintPaymentOutVoucherPDF prints a voucher: the PDF, and a line in the print log.
+func (c *Client) PrintPaymentOutVoucherPDF(ctx context.Context, garageID, voucherID string) (string, []byte, error) {
+	return c.DownloadRaw(ctx, http.MethodPost, voucherPath(garageID, voucherID)+"/pdf:print")
+}
+
+// DownloadSupplierPayablesExcel downloads the supplier payables as a workbook.
+func (c *Client) DownloadSupplierPayablesExcel(ctx context.Context, garageID, supplierID string, includePaid bool) (string, []byte, error) {
+	q := url.Values{}
+	if supplierID != "" {
+		q.Set("supplierId", supplierID)
+	}
+
+	if includePaid {
+		q.Set("includePaid", "true")
+	}
+
+	return c.DownloadRaw(ctx, http.MethodGet, withQuery(garagePath(garageID)+"/reports/supplier-payables/excel", q))
+}

@@ -432,7 +432,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// Receivables (Release 13.0): what customers owe, with its reminders and
 	// reconciliation (FR-REC-01, 03, 04).
 	receivable := buildReceivable(pool, tx, billing.uc, repairOrder.uc, vehicleRepo, garages, notification.uc, supplierRepo, users, auditLog)
-	document.uc.WithReceivables(documentReceivables{uc: receivable.uc})
+	document.uc.WithReceivables(documentReceivables{uc: receivable.uc}).WithPayables(documentPayables{uc: receivable.payables})
 
 	// Mobile BFFs (Phase 2): the Technician App's work list (Release 2.2)
 	// and the Customer App's vehicles and history (Release 2.4).

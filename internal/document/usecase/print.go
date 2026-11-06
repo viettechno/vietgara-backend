@@ -267,6 +267,31 @@ func (uc *DocumentUseCase) PaymentVoucherPDF(ctx context.Context, garageID, sett
 	}, printed)
 }
 
+// PaymentOutVoucherPDF renders a payment-out voucher as a PDF in the 02-TT
+// layout (FR-BIL-07), from the legal identity it was issued with, or prints
+// it.
+func (uc *DocumentUseCase) PaymentOutVoucherPDF(ctx context.Context, garageID, voucherID string, printed bool) ([]byte, error) {
+	if uc.Payables == nil {
+		return nil, apperror.Internal("export payment-out voucher pdf", errPayablesNotWired)
+	}
+
+	voucher, err := uc.Payables.PaymentOutVoucher(ctx, garageID, voucherID)
+	if err != nil {
+		return nil, toAppError("export payment-out voucher pdf", err)
+	}
+
+	garage, err := uc.letterhead(ctx, garageID, voucher.Issuer)
+	if err != nil {
+		return nil, err
+	}
+
+	return uc.pdf(ctx, garageID, voucherID, printmodel.PaymentOutVoucher{
+		Garage: garage, Number: voucher.Number, Date: voucher.Date, PayeeName: voucher.PayeeName, PayeeAddress: voucher.PayeeAddress,
+		Reason: voucher.Reason, Amount: voucher.Amount, Method: voucher.Method, Receipts: voucher.Receipts,
+		IssuerName: voucher.IssuerName, Voided: voucher.Voided, VoidReason: voucher.VoidReason,
+	}, printed)
+}
+
 // GoodsReceiptPDF renders a goods receipt as a PDF (FR-INV-06), or prints it.
 func (uc *DocumentUseCase) GoodsReceiptPDF(ctx context.Context, garageID, receiptID string, printed bool) ([]byte, error) {
 	receipt, err := uc.Inventory.GoodsReceipt(ctx, garageID, receiptID)

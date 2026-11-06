@@ -69,7 +69,6 @@ MANUAL_ONLY = {
     "E2E-NOT-007": "a real mailbox: the provider, the attachment and the mail client's unsubscribe control",
     "E2E-LIC-017": "needs the period end moved with SQL helper H1 twice, and a renewal before and after it",
     "E2E-REC-009": "the receivables screen: a browser test of vietgara-e2e",
-    "E2E-PAY-006": "the voucher PDF and the payables workbook arrive with the printing change of Release 13.0",
     "E2E-PAY-008": "the payables screen and the voucher form: a browser test of vietgara-e2e",
 }
 # Test-harness packages whose calls execute as part of a test run. seed/

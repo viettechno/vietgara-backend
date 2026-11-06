@@ -45,7 +45,7 @@ func paymentVoucherTemplate(data printmodel.PaymentVoucher, o Options) ([]byte, 
 	writeField(pdf, lay, "Hình thức", data.Method)
 	writeField(pdf, lay, "Kèm theo", "Quyết toán "+data.SettlementNumber)
 
-	writeSignatures(pdf, lay, data.CollectorName)
+	writeSignatures(pdf, lay, voucherRoles[:], data.CollectorName, "Thủ quỹ")
 
 	return finish(pdf)
 }
@@ -62,12 +62,11 @@ func writeField(pdf *fpdf.Fpdf, lay layout, label, value string) {
 // voucherRoles are the signature blocks of the 01-TT voucher, left to right.
 var voucherRoles = [...]string{"Giám đốc", "Kế toán trưởng", "Người nộp tiền", "Người lập phiếu", "Thủ quỹ"}
 
-// writeSignatures prints the 01-TT signature blocks; the collector's name
-// is printed under "Thủ quỹ".
-func writeSignatures(pdf *fpdf.Fpdf, lay layout, collector string) {
+// writeSignatures prints the signature blocks of a voucher; the name is
+// printed under the block of the role named.
+func writeSignatures(pdf *fpdf.Fpdf, lay layout, roles []string, name, nameRole string) {
 	pdf.Ln(8)
 
-	roles := voucherRoles
 	width := lay.content / float64(len(roles))
 
 	pdf.SetFont(fontFamily, "B", lay.signature)
@@ -89,12 +88,12 @@ func writeSignatures(pdf *fpdf.Fpdf, lay layout, collector string) {
 	pdf.SetFont(fontFamily, "", lay.signature)
 
 	for _, role := range roles {
-		name := ""
-		if role == "Thủ quỹ" {
-			name = collector
+		printed := ""
+		if role == nameRole {
+			printed = name
 		}
 
-		pdf.CellFormat(width, 5, name, "", 0, "C", false, 0, "")
+		pdf.CellFormat(width, 5, printed, "", 0, "C", false, 0, "")
 	}
 
 	pdf.Ln(-1)

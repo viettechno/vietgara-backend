@@ -124,9 +124,8 @@ services:
 
   # The REST/JSON API (API Specification): grpc-gateway in the backend serves
   # every /api/v1 path itself, so the prefix is kept. The longest matching
-  # path wins: sign-in, the public quote link and the data-request page get strict
-  # limits, the rest
-  # of /api the default one.
+  # path wins: sign-in, the public quote link and the data-request page get
+  # strict limits, the rest of /api the default one.
   - name: backend-http
     url: http://vietgara-backend:8080
     plugins:

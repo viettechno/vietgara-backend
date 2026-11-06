@@ -4,6 +4,7 @@ package repository_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,21 +82,7 @@ func (f *reportFixture) line(orderID, kind, status, nonBillable string, total in
 	return id
 }
 
-func join(ids []string) string {
-	out := ""
-
-	var outSb87 strings.Builder
-	for i, id := range ids {
-		if i > 0 {
-			outSb87.WriteString(",")
-		}
-
-		outSb87.WriteString(id)
-	}
-	out += outSb87.String()
-
-	return out
-}
+func join(ids []string) string { return strings.Join(ids, ",") }
 
 func (f *reportFixture) in(fn func(ctx context.Context)) {
 	f.t.Helper()

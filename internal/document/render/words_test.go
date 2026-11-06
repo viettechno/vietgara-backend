@@ -1,6 +1,8 @@
 package render_test
 
 import (
+	"bytes"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -78,4 +80,27 @@ func TestPaymentOutVoucherPDF(t *testing.T) {
 	voided, err := a4(data)
 	require.NoError(t, err)
 	assert.NotEqual(t, len(pdf), len(voided), "a voided voucher is marked")
+}
+
+func TestPaymentOutVoucherPDF_ManyReceiptsKeepSignaturesTogether(t *testing.T) {
+	t.Parallel()
+
+	data := printmodel.PaymentOutVoucher{
+		Garage: printmodel.GarageHeader{Name: "Công ty TNHH Gara Ánh Dương"}, Number: "PC-2026-00002", Date: "12/10/2026",
+		PayeeName: "Nhà cung cấp Sao Mai", Reason: "Thanh toán tiền hàng", Amount: 40_000_000, Method: "Tiền mặt", IssuerName: "Lê Thu Ngân",
+	}
+
+	one, err := a4(data)
+	require.NoError(t, err)
+
+	for i := range 40 {
+		data.Receipts = append(data.Receipts, printmodel.PaymentOutReceiptRow{Number: fmt.Sprintf("NK-%d", i+1), Amount: 1_000_000})
+	}
+
+	many, err := a4(data)
+	require.NoError(t, err)
+
+	pages := func(pdf []byte) int { return bytes.Count(pdf, []byte("/Type /Page\n")) }
+	assert.Equal(t, 1, pages(one))
+	assert.Greater(t, pages(many), 1, "a long list runs onto a second page without breaking the render")
 }

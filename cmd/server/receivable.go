@@ -279,7 +279,7 @@ func (a documentPayables) SupplierPayables(ctx context.Context, garageID, suppli
 			})
 		}
 
-		if page*res.PageSize >= res.Total {
+		if len(res.Items) == 0 || page*res.PageSize >= res.Total {
 			return rows, nil
 		}
 	}
@@ -303,6 +303,10 @@ func (a documentPayables) PaymentOutVoucher(ctx context.Context, garageID, vouch
 	}
 
 	for _, al := range v.Allocations {
+		if al.Cancelled {
+			continue // the receipt was reversed: it is no longer paid by this voucher
+		}
+
 		info.Receipts = append(info.Receipts, printmodel.PaymentOutReceiptRow{Number: al.GoodsReceiptNumber, Amount: al.Amount})
 	}
 

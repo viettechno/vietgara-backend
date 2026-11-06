@@ -65,6 +65,17 @@ var voucherRoles = [...]string{"Giám đốc", "Kế toán trưởng", "Người
 // writeSignatures prints the signature blocks of a voucher; the name is
 // printed under the block of the role named.
 func writeSignatures(pdf *fpdf.Fpdf, lay layout, roles []string, name, nameRole string) {
+	// The blocks are kept together: when they do not fit what is left of the
+	// page they all go to the next one.
+	const blockHeight = 41
+
+	_, pageHeight := pdf.GetPageSize()
+	_, bottom := pdf.GetAutoPageBreak()
+
+	if pdf.GetY()+blockHeight > pageHeight-bottom {
+		pdf.AddPage()
+	}
+
 	pdf.Ln(8)
 
 	width := lay.content / float64(len(roles))

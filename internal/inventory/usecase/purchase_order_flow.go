@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"errors"
 	"math/big"
 	"net/mail"
 	"slices"
@@ -11,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/viettechno/vietgara-backend/internal/inventory/domain"
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
 // OrderMail is a purchase order to be e-mailed to its supplier.
@@ -30,6 +32,8 @@ type OrderMail struct {
 type OrderMailer interface {
 	SendPurchaseOrder(ctx context.Context, order OrderMail) (bool, error)
 }
+
+var errNoMailer = errors.New("no mailer is wired for purchase orders")
 
 // SetOrderMailer gives the use case the means to e-mail an order. It is set
 // once Notification is built, since Inventory is built first.
@@ -85,34 +89,21 @@ func (uc *InventoryUseCase) CreatePurchaseOrdersFromLowStock(
 		return nil, toAppError(op, err)
 	}
 
-	bySupplier, order := map[string][]PurchaseOrderLineInput{}, []string{}
-	result := &CreatePurchaseOrdersFromLowStockResult{}
+	groups, result := groupLowStock(low, onOrder, defaults), &CreatePurchaseOrdersFromLowStockResult{}
+	result.Unassigned = groups.unassigned
 
-	for _, l := range low {
-		quantity := domain.SuggestedQuantity(l.ReorderThreshold, l.QuantityAvailable, onOrder[l.PartID])
-		if quantity == "" {
-			continue
-		}
-
-		supplier, ok := defaults[l.PartID]
-		if !ok {
-			result.Unassigned = append(result.Unassigned, l)
-
-			continue
-		}
-
-		if _, seen := bySupplier[supplier]; !seen {
-			order = append(order, supplier)
-		}
-
-		bySupplier[supplier] = append(bySupplier[supplier], PurchaseOrderLineInput{PartID: l.PartID, EnteredQuantity: quantity})
-	}
-
-	for _, supplier := range order {
+	for _, supplier := range groups.order {
 		o, err := uc.CreatePurchaseOrder(ctx, CreatePurchaseOrderRequest{
 			GarageID: req.GarageID, ActorID: req.ActorID, SupplierID: supplier, ExpectedDate: req.ExpectedDate,
-			Lines: bySupplier[supplier],
+			Lines: groups.lines[supplier],
 		})
+		if appErr, ok := apperror.As(err); ok && appErr.Reason == ReasonSupplierNotFound {
+			// The part's default supplier is gone: its parts are returned, the others are still ordered.
+			result.Unassigned = append(result.Unassigned, groups.levels[supplier]...)
+
+			continue
+		}
+
 		if err != nil {
 			return nil, err
 		}
@@ -157,8 +148,12 @@ func (uc *InventoryUseCase) SendPurchaseOrder(ctx context.Context, req SendPurch
 
 	// Only the bare address is ever used, whatever form is stored.
 	address, parseErr := mail.ParseAddress(strings.TrimSpace(o.SupplierEmail))
-	if parseErr != nil || uc.mailer == nil {
+	if parseErr != nil {
 		return nil, toAppError(op, domain.ErrSupplierEmailRequired)
+	}
+
+	if uc.mailer == nil {
+		return nil, apperror.Internal(op, errNoMailer)
 	}
 
 	to := address.Address
@@ -258,20 +253,7 @@ func (uc *InventoryUseCase) ReceivePurchaseOrder(ctx context.Context, garageID, 
 		return nil, toAppError(op, domain.ErrPurchaseOrderReceiptOpen)
 	}
 
-	inputs := make([]ReceiptLineInput, 0, len(o.Lines))
-
-	for i := range o.Lines {
-		l := &o.Lines[i]
-		if domain.IsZero(l.Outstanding()) {
-			continue
-		}
-
-		quantity, unit := l.OutstandingEntered()
-
-		inputs = append(inputs, ReceiptLineInput{
-			PartID: l.PartID, UnitID: derefOr(unit), EnteredQuantity: quantity, SupplierID: o.SupplierID, UnitCost: costPerEntered(l, unit),
-		})
-	}
+	inputs := receiptInputs(o)
 
 	if len(inputs) == 0 {
 		return nil, toAppError(op, domain.ErrPurchaseOrderNothingToReceive)
@@ -295,6 +277,10 @@ func (uc *InventoryUseCase) ReceivePurchaseOrder(ctx context.Context, garageID, 
 
 	if r.Lines, err = uc.buildReceiptLines(ctx, garageID, r.DefaultSupplierID, inputs, nil, true); err != nil {
 		return nil, toAppError(op, err)
+	}
+
+	if err := uc.checkSuppliers(ctx, garageID, r); err != nil {
+		return nil, orderError(op, err)
 	}
 
 	if err := uc.repo.CreateGoodsReceipt(ctx, r); err != nil {
@@ -369,4 +355,64 @@ func costPerEntered(l *domain.PurchaseOrderLine, unit *string) int64 {
 	n, _ := domain.WholeDong(perBase.FloatString(4))
 
 	return n
+}
+
+// lowStockGroups are the low parts grouped by default supplier, in the order
+// the suppliers first appear.
+type lowStockGroups struct {
+	order      []string
+	lines      map[string][]PurchaseOrderLineInput
+	levels     map[string][]*domain.StockLevel
+	unassigned []*domain.StockLevel
+}
+
+// groupLowStock works out the quantity of each low part that still needs
+// ordering and groups the parts by their default supplier; a part with none is
+// unassigned.
+func groupLowStock(low []*domain.StockLevel, onOrder, defaults map[string]string) lowStockGroups {
+	g := lowStockGroups{lines: map[string][]PurchaseOrderLineInput{}, levels: map[string][]*domain.StockLevel{}}
+
+	for _, l := range low {
+		quantity := domain.SuggestedQuantity(l.ReorderThreshold, l.QuantityAvailable, onOrder[l.PartID])
+		if quantity == "" {
+			continue
+		}
+
+		supplier, ok := defaults[l.PartID]
+		if !ok {
+			g.unassigned = append(g.unassigned, l)
+
+			continue
+		}
+
+		if _, seen := g.lines[supplier]; !seen {
+			g.order = append(g.order, supplier)
+		}
+
+		g.lines[supplier] = append(g.lines[supplier], PurchaseOrderLineInput{PartID: l.PartID, EnteredQuantity: quantity})
+		g.levels[supplier] = append(g.levels[supplier], l)
+	}
+
+	return g
+}
+
+// receiptInputs are the lines of the receipt that receives what the order still
+// waits for.
+func receiptInputs(o *domain.PurchaseOrder) []ReceiptLineInput {
+	inputs := make([]ReceiptLineInput, 0, len(o.Lines))
+
+	for i := range o.Lines {
+		l := &o.Lines[i]
+		if domain.IsZero(l.Outstanding()) {
+			continue
+		}
+
+		quantity, unit := l.OutstandingEntered()
+
+		inputs = append(inputs, ReceiptLineInput{
+			PartID: l.PartID, UnitID: derefOr(unit), EnteredQuantity: quantity, SupplierID: o.SupplierID, UnitCost: costPerEntered(l, unit),
+		})
+	}
+
+	return inputs
 }

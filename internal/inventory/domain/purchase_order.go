@@ -225,6 +225,11 @@ func SuggestedQuantity(threshold, available, onOrder string) string {
 		return ""
 	}
 
+	// A part with no threshold is never ordered.
+	if target.Sign() <= 0 {
+		return ""
+	}
+
 	target.Mul(target, big.NewRat(2, 1))
 
 	for _, s := range []string{available, onOrder} {

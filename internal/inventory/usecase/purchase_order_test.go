@@ -627,7 +627,7 @@ func TestInventoryUseCase_SendPurchaseOrder(t *testing.T) {
 		d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(draftOrder(), nil).Once()
 
 		_, err := uc.SendPurchaseOrder(t.Context(), sendRequest)
-		assertAppError(t, err, apperror.CodeInvalidArgument)
+		assertAppError(t, err, apperror.CodeInternal)
 	})
 }
 
@@ -858,6 +858,7 @@ func TestInventoryUseCase_ReceivePurchaseOrder(t *testing.T) {
 			d.Sequences.EXPECT().Next(mock.Anything, garageID, "goods_receipt", mock.Anything).Return(7, nil).Once()
 			d.Repo.EXPECT().DefaultSuppliers(mock.Anything, garageID, mock.Anything).Return(nil, nil).Once()
 			d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, "", "6").Return(usecase.ResolvedQuantity{Base: "6"}, nil).Once()
+			d.Directory.EXPECT().SupplierNames(mock.Anything, garageID, mock.Anything).Return(supplierNames(supplierA), nil).Once()
 			d.Repo.EXPECT().CreateGoodsReceipt(mock.Anything, mock.Anything).Return(errBoom).Once()
 		},
 		"description": func(d *deps) {
@@ -866,6 +867,7 @@ func TestInventoryUseCase_ReceivePurchaseOrder(t *testing.T) {
 			d.Sequences.EXPECT().Next(mock.Anything, garageID, "goods_receipt", mock.Anything).Return(7, nil).Once()
 			d.Repo.EXPECT().DefaultSuppliers(mock.Anything, garageID, mock.Anything).Return(nil, nil).Once()
 			d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, "", "6").Return(usecase.ResolvedQuantity{Base: "6"}, nil).Once()
+			d.Directory.EXPECT().SupplierNames(mock.Anything, garageID, mock.Anything).Return(supplierNames(supplierA), nil).Once()
 			d.Repo.EXPECT().CreateGoodsReceipt(mock.Anything, mock.Anything).Return(nil).Once()
 			d.Directory.EXPECT().SupplierNames(mock.Anything, garageID, mock.Anything).Return(nil, errBoom).Once()
 		},
@@ -1167,4 +1169,46 @@ func TestInventoryUseCase_SendPurchaseOrder_UsesTheBareAddress(t *testing.T) {
 
 	_, err := uc.SendPurchaseOrder(t.Context(), sendRequest)
 	require.NoError(t, err)
+}
+
+func TestInventoryUseCase_CreatePurchaseOrdersFromLowStock_StaleDefaultSupplier(t *testing.T) {
+	t.Parallel()
+
+	second := samplePart()
+	second.ID, second.SKU = otherPartID, "FLT-1"
+
+	uc, d := orderUseCase(t)
+	d.Parts.EXPECT().SearchParts(mock.Anything, garageID, mock.Anything).Return([]usecase.PartInfo{samplePart(), second}, 2, nil).Once()
+	d.Repo.EXPECT().Balances(mock.Anything, garageID, []string(nil)).Return(map[string]usecase.Balance{partID: {OnHand: "1"}, otherPartID: {OnHand: "1"}}, nil).Once()
+	d.Repo.EXPECT().OnOrder(mock.Anything, garageID, mock.Anything).Return(nil, nil).Once()
+	d.Repo.EXPECT().DefaultSuppliers(mock.Anything, garageID, mock.Anything).Return(map[string]string{partID: supplierA, otherPartID: supplierB}, nil).Once()
+	d.Directory.ExpectedCalls = nil
+	d.Directory.EXPECT().SupplierContacts(mock.Anything, garageID, []string{supplierA}).Return(contacts("a@b.test"), nil).Maybe()
+	d.Directory.EXPECT().SupplierContacts(mock.Anything, garageID, []string{supplierB}).Return(map[string]usecase.SupplierContact{}, nil).Maybe()
+	d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, mock.Anything, mock.Anything).Return(usecase.ResolvedQuantity{Base: "9"}, nil).Maybe()
+	d.Sequences.EXPECT().Next(mock.Anything, garageID, "purchase_order", mock.Anything).Return(1, nil).Maybe()
+	d.Repo.EXPECT().CreatePurchaseOrder(mock.Anything, mock.Anything).Return(nil).Once()
+
+	res, err := uc.CreatePurchaseOrdersFromLowStock(t.Context(), usecase.CreatePurchaseOrdersFromLowStockRequest{GarageID: garageID, ActorID: actorID})
+	require.NoError(t, err)
+	assert.Len(t, res.Orders, 1, "the healthy supplier is still ordered")
+	require.Len(t, res.Unassigned, 1, "the part whose supplier is gone is returned")
+	assert.Equal(t, otherPartID, res.Unassigned[0].PartID)
+}
+
+func TestInventoryUseCase_ReceivePurchaseOrder_SupplierMustStillExist(t *testing.T) {
+	t.Parallel()
+
+	uc, d := orderUseCase(t)
+	o := draftOrder()
+	o.Status, o.Lines[0].ReceivedQuantity = domain.PurchaseOrderSent, "0"
+	d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(o, nil).Once()
+	d.Repo.EXPECT().HasDraftReceipt(mock.Anything, garageID, orderID).Return(false, nil).Once()
+	d.Sequences.EXPECT().Next(mock.Anything, garageID, "goods_receipt", mock.Anything).Return(1, nil).Once()
+	d.Repo.EXPECT().DefaultSuppliers(mock.Anything, garageID, mock.Anything).Return(nil, nil).Once()
+	d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, "", "10").Return(usecase.ResolvedQuantity{Base: "10"}, nil).Once()
+	d.Directory.EXPECT().SupplierNames(mock.Anything, garageID, mock.Anything).Return(map[string]string{}, nil).Once()
+
+	_, err := uc.ReceivePurchaseOrder(t.Context(), garageID, orderID, actorID)
+	assertAppError(t, err, apperror.CodeNotFound)
 }

@@ -114,6 +114,7 @@ func TestSuggestedQuantity(t *testing.T) {
 		{"at least one", "10", "19.5", "", "1"},
 		{"decimals", "2.5", "0.25", "", "4.75"},
 		{"no threshold, nothing to order", "0", "0", "", ""},
+		{"no threshold, but reserved stock", "0", "-3", "", ""},
 		{"unreadable threshold", "x", "0", "", ""},
 		{"unreadable available", "10", "x", "", ""},
 	}

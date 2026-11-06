@@ -359,6 +359,10 @@ func (r *PostgresRepository) MovementsReference(ctx context.Context, garageID, p
 			WHERE garage_id = $1 AND (($2::text <> '' AND part_id = NULLIF($2, '')::uuid)
 				OR ($3::text <> '' AND unit_id = NULLIF($3, '')::uuid)))
 		OR EXISTS (
+			SELECT 1 FROM purchase_order_lines
+			WHERE garage_id = $1 AND (($2::text <> '' AND part_id = NULLIF($2, '')::uuid)
+				OR ($3::text <> '' AND unit_id = NULLIF($3, '')::uuid)))
+		OR EXISTS (
 			SELECT 1 FROM repair_order_part_returns
 			WHERE garage_id = $1 AND (($2::text <> '' AND part_id = NULLIF($2, '')::uuid)
 				OR ($3::text <> '' AND unit_id = NULLIF($3, '')::uuid)))`,

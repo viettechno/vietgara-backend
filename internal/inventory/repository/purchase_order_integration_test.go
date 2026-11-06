@@ -173,3 +173,29 @@ func TestPurchaseOrders_AnotherGarageSeesNothing(t *testing.T) {
 		assert.Empty(t, onOrder)
 	})
 }
+
+func TestPurchaseOrders_KeepTheirPartsUnitsAndSuppliersReferenced(t *testing.T) {
+	f := newFixture(t)
+
+	f.in(f.garage, func(ctx context.Context) {
+		referenced, err := f.repo.MovementsReference(ctx, f.garage, f.part2, "")
+		require.NoError(t, err)
+		assert.False(t, referenced)
+
+		used, err := f.repo.SupplierReferenced(ctx, f.garage, f.sup2)
+		require.NoError(t, err)
+		assert.False(t, used)
+
+		o := f.order("DH-2026-00001", domain.PurchaseOrderDraft, line(f.part2, "3", "", 0))
+		o.SupplierID = f.sup2
+		require.NoError(t, f.repo.CreatePurchaseOrder(ctx, o))
+
+		referenced, err = f.repo.MovementsReference(ctx, f.garage, f.part2, "")
+		require.NoError(t, err)
+		assert.True(t, referenced, "a part on an order is deactivated, not deleted")
+
+		used, err = f.repo.SupplierReferenced(ctx, f.garage, f.sup2)
+		require.NoError(t, err)
+		assert.True(t, used)
+	})
+}

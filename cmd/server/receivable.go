@@ -295,7 +295,7 @@ func (a documentPayables) PaymentOutVoucher(ctx context.Context, garageID, vouch
 	// A snapshot that cannot be read leaves the letterhead to the garage's
 	// profile, as a voucher without one does.
 	var legal issuer.Issuer
-	if err := json.Unmarshal(v.Issuer, &legal); err != nil {
+	if err := json.Unmarshal(v.Issuer, &legal); len(v.Issuer) > 0 && err != nil {
 		slog.Warn("receivable: unreadable voucher issuer snapshot", "voucher_id", v.ID, "error", err)
 
 		legal = issuer.Issuer{}

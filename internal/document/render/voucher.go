@@ -45,7 +45,7 @@ func paymentVoucherTemplate(data printmodel.PaymentVoucher, o Options) ([]byte, 
 	writeField(pdf, lay, "Hình thức", data.Method)
 	writeField(pdf, lay, "Kèm theo", "Quyết toán "+data.SettlementNumber)
 
-	writeSignatures(pdf, lay, voucherRoles[:], data.CollectorName, "Thủ quỹ")
+	writeSignatures(pdf, lay, voucherRoles[:], data.CollectorName, "Thủ quỹ", false)
 
 	return finish(pdf)
 }
@@ -63,10 +63,11 @@ func writeField(pdf *fpdf.Fpdf, lay layout, label, value string) {
 var voucherRoles = [...]string{"Giám đốc", "Kế toán trưởng", "Người nộp tiền", "Người lập phiếu", "Thủ quỹ"}
 
 // writeSignatures prints the signature blocks of a voucher; the name is
-// printed under the block of the role named.
-func writeSignatures(pdf *fpdf.Fpdf, lay layout, roles []string, name, nameRole string) {
-	// The blocks are kept together: when they do not fit what is left of the
-	// page they all go to the next one.
+// printed under the block of the role named. With keepTogether the blocks all
+// go to the next page when they do not fit what is left of this one; the
+// template that is already in use (payment voucher v1) does not, so its
+// reprints stay as they were first printed.
+func writeSignatures(pdf *fpdf.Fpdf, lay layout, roles []string, name, nameRole string, keepTogether bool) {
 	const (
 		gap, row, space = 8, 5, 18
 		blockHeight     = gap + 3*row + space // the Ln(gap), three rows and the space for the signatures below
@@ -75,7 +76,7 @@ func writeSignatures(pdf *fpdf.Fpdf, lay layout, roles []string, name, nameRole 
 	_, pageHeight := pdf.GetPageSize()
 	_, bottom := pdf.GetAutoPageBreak()
 
-	if pdf.GetY()+blockHeight > pageHeight-bottom {
+	if keepTogether && pdf.GetY()+blockHeight > pageHeight-bottom {
 		pdf.AddPage()
 	} else {
 		pdf.Ln(gap)

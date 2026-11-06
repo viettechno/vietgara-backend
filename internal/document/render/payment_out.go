@@ -47,7 +47,7 @@ func paymentOutTemplate(data printmodel.PaymentOutVoucher, o Options) ([]byte, e
 		writeField(pdf, lay, "Kèm theo", "Phiếu nhập "+r.Number+": "+formatVND(r.Amount))
 	}
 
-	writeSignatures(pdf, lay, paymentOutRoles[:], data.IssuerName, "Người lập phiếu")
+	writeSignatures(pdf, lay, paymentOutRoles[:], data.IssuerName, "Người lập phiếu", true)
 
 	return finish(pdf)
 }

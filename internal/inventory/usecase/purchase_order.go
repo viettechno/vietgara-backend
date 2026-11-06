@@ -213,7 +213,7 @@ func (uc *InventoryUseCase) buildOrderLines(
 	ctx context.Context, garageID string, inputs []PurchaseOrderLineInput, existing []domain.PurchaseOrderLine, canSetCost bool,
 ) ([]domain.PurchaseOrderLine, error) {
 	lines := make([]domain.PurchaseOrderLine, 0, len(inputs))
-	seen := map[string]bool{}
+	seen, usedIDs := map[string]bool{}, map[string]bool{}
 
 	for _, in := range inputs {
 		if seen[in.PartID] {
@@ -226,6 +226,13 @@ func (uc *InventoryUseCase) buildOrderLines(
 		if err != nil {
 			return nil, err
 		}
+
+		// Two inputs naming one existing line: the second gets a key of its own.
+		if usedIDs[line.ID] {
+			line.ID = uuid.NewString()
+		}
+
+		usedIDs[line.ID] = true
 
 		line.UnitCost = in.UnitCost
 		if !canSetCost {

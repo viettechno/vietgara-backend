@@ -155,10 +155,13 @@ func (uc *InventoryUseCase) SendPurchaseOrder(ctx context.Context, req SendPurch
 		return nil, toAppError(op, err)
 	}
 
-	to := strings.TrimSpace(o.SupplierEmail)
-	if _, parseErr := mail.ParseAddress(to); parseErr != nil || uc.mailer == nil {
+	// Only the bare address is ever used, whatever form is stored.
+	address, parseErr := mail.ParseAddress(strings.TrimSpace(o.SupplierEmail))
+	if parseErr != nil || uc.mailer == nil {
 		return nil, toAppError(op, domain.ErrSupplierEmailRequired)
 	}
+
+	to := address.Address
 
 	sent, err := uc.mailer.SendPurchaseOrder(ctx, OrderMail{
 		GarageID: req.GarageID, OrderID: o.ID, Number: o.Number, SupplierName: o.SupplierName, To: to, Message: req.Message,

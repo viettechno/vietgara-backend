@@ -1128,3 +1128,43 @@ func TestInventoryUseCase_ReceivePurchaseOrder_ExactQuantities(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
+
+func TestInventoryUseCase_UpdatePurchaseOrder_TwoLinesNamingOneId(t *testing.T) {
+	t.Parallel()
+
+	uc, d := orderUseCase(t)
+	other := samplePart()
+	other.ID = otherPartID
+
+	d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(draftOrder(), nil).Once()
+	d.Parts.ExpectedCalls = nil
+	d.Parts.EXPECT().Parts(mock.Anything, garageID, []string{partID}).Return([]usecase.PartInfo{samplePart()}, nil).Maybe()
+	d.Parts.EXPECT().Parts(mock.Anything, garageID, []string{otherPartID}).Return([]usecase.PartInfo{other}, nil).Maybe()
+	d.Parts.EXPECT().Parts(mock.Anything, garageID, mock.Anything).Return([]usecase.PartInfo{samplePart(), other}, nil).Maybe()
+	d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, mock.Anything, mock.Anything, mock.Anything).Return(usecase.ResolvedQuantity{Base: "1"}, nil).Twice()
+	d.Repo.EXPECT().SavePurchaseOrder(mock.Anything, mock.MatchedBy(func(o *domain.PurchaseOrder) bool {
+		return len(o.Lines) == 2 && o.Lines[0].ID == "ol-1" && o.Lines[1].ID != "ol-1" && o.Lines[1].ID != ""
+	})).Return(nil).Once()
+
+	_, err := uc.UpdatePurchaseOrder(t.Context(), usecase.UpdatePurchaseOrderRequest{
+		GarageID: garageID, OrderID: orderID, ActorID: actorID, SupplierID: supplierA,
+		Lines: []usecase.PurchaseOrderLineInput{
+			{ID: "ol-1", PartID: partID, EnteredQuantity: "1"}, {ID: "ol-1", PartID: otherPartID, EnteredQuantity: "1"},
+		},
+	})
+	require.NoError(t, err)
+}
+
+func TestInventoryUseCase_SendPurchaseOrder_UsesTheBareAddress(t *testing.T) {
+	t.Parallel()
+
+	uc, d, m := mailerUseCase(t)
+	d.Directory.ExpectedCalls = nil
+	d.Directory.EXPECT().SupplierContacts(mock.Anything, garageID, mock.Anything).Return(contacts("Sao Mai <sales@mai.test>"), nil).Maybe()
+	d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(draftOrder(), nil).Once()
+	m.EXPECT().SendPurchaseOrder(mock.Anything, mock.MatchedBy(func(mail usecase.OrderMail) bool { return mail.To == "sales@mai.test" })).Return(true, nil).Once()
+	d.Repo.EXPECT().SavePurchaseOrder(mock.Anything, mock.MatchedBy(func(o *domain.PurchaseOrder) bool { return o.SentTo == "sales@mai.test" })).Return(nil).Once()
+
+	_, err := uc.SendPurchaseOrder(t.Context(), sendRequest)
+	require.NoError(t, err)
+}

@@ -27,9 +27,6 @@ const (
 	MaxPerSourcePerHour  = 10
 	// LinkValidity is how long the e-mailed link works.
 	LinkValidity = 24 * time.Hour
-	// Retention is how long a waiting request is kept before it is purged with
-	// its details.
-	Retention = 7 * 24 * time.Hour
 
 	mailTimeout = 30 * time.Second
 	tokenBytes  = 32
@@ -99,12 +96,8 @@ func (uc *PublicUseCase) Submit(ctx context.Context, req SubmitRequest) error {
 		return toAppError(op, domain.ErrInvalidType)
 	}
 
-	details := strings.TrimSpace(req.Details)
-	if req.Type != domain.TypeCorrect {
-		details = ""
-	}
-
-	if err := checkDetails(req.Type, details); err != nil {
+	details, err := normalizeDetails(req.Type, req.Details)
+	if err != nil {
 		return toAppError(op, err)
 	}
 
@@ -196,9 +189,10 @@ func (uc *PublicUseCase) Confirm(ctx context.Context, token string) (int, error)
 
 	n, err := uc.act(ctx, c)
 	if err != nil {
-		// What was done stays done (acting is idempotent: an anonymized customer
-		// no longer holds the address); the link is given back so that the
-		// person can finish the rest.
+		// What was done stays done; the link is given back so that the person
+		// can finish the rest. A deletion repeats harmlessly (an anonymized
+		// customer no longer holds the address); a correction or a view may
+		// leave a second record in a garage that was reached before.
 		uc.restore(ctx, c)
 
 		return 0, toAppError(op, err)
@@ -316,10 +310,10 @@ func (uc *PublicUseCase) mailView(ctx context.Context, c *domain.Confirmation, s
 	return uc.mailer.Send(ctx, msg)
 }
 
-// Purge deletes the waiting requests older than the retention, with their
-// details; it returns how many.
+// Purge deletes the waiting requests whose link has expired, with their
+// address and details; it returns how many.
 func (uc *PublicUseCase) Purge(ctx context.Context) (int, error) {
-	n, err := uc.confirmations.PurgeBefore(ctx, uc.now().UTC().Add(-Retention))
+	n, err := uc.confirmations.PurgeExpired(ctx, uc.now().UTC())
 	if err != nil {
 		return 0, toAppError("purge data request confirmations", err)
 	}

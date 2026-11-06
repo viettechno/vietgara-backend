@@ -156,6 +156,19 @@ func TestCustomerUseCase_AnonymizedCustomerCannotBeChanged(t *testing.T) {
 	assertAppError(t, err, apperror.CodeFailedPrecondition)
 }
 
+func TestCustomerUseCase_OptOutEmailOfAnAnonymizedCustomerChangesNothing(t *testing.T) {
+	t.Parallel()
+
+	done := existingCustomer()
+	done.AnonymizedAt = new(fixedNow)
+
+	customers := mocks.NewMockCustomerRepository(t)
+	customers.EXPECT().FindByID(mock.Anything, garageID, customerID).Return(done, nil).Once()
+	uc := usecase.NewCustomerUseCase(customers, mocks.NewMockVehicleRepository(t), nil, clock())
+
+	require.NoError(t, uc.OptOutEmail(t.Context(), garageID, customerID))
+}
+
 func TestCustomerUseCase_Export(t *testing.T) {
 	t.Parallel()
 

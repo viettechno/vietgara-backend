@@ -136,8 +136,8 @@ func TestPostgresRepository_Confirmations(t *testing.T) {
 		ExpectQueryRow("DELETE FROM data_request_confirmations WHERE token_hash", dbtest.Row("c-1", "a@b.vn", "delete", "", "en", "h", "s", now, now)).
 		ExpectQueryRow("DELETE FROM data_request_confirmations WHERE token_hash", dbtest.ErrRow(pgx.ErrNoRows)).
 		ExpectQueryRow("DELETE FROM data_request_confirmations WHERE token_hash", dbtest.ErrRow(errBoom)).
-		ExpectExec("DELETE FROM data_request_confirmations WHERE created_at", dbtest.Tag(3), nil).
-		ExpectExec("DELETE FROM data_request_confirmations WHERE created_at", dbtest.Tag(0), errBoom)
+		ExpectExec("DELETE FROM data_request_confirmations WHERE expires_at", dbtest.Tag(3), nil).
+		ExpectExec("DELETE FROM data_request_confirmations WHERE expires_at", dbtest.Tag(0), errBoom)
 	ctx := tx.Context(t.Context())
 
 	require.NoError(t, repo.CreateConfirmation(ctx, c))
@@ -161,11 +161,11 @@ func TestPostgresRepository_Confirmations(t *testing.T) {
 	_, err = repo.Consume(ctx, "h", now)
 	require.ErrorIs(t, err, errBoom)
 
-	purged, err := repo.PurgeBefore(ctx, now)
+	purged, err := repo.PurgeExpired(ctx, now)
 	require.NoError(t, err)
 	assert.Equal(t, 3, purged)
 
-	_, err = repo.PurgeBefore(ctx, now)
+	_, err = repo.PurgeExpired(ctx, now)
 	require.ErrorIs(t, err, errBoom)
 }
 

@@ -200,6 +200,10 @@ func (uc *CustomerUseCase) OptOutEmail(ctx context.Context, garageID, customerID
 		return toAppError("opt out of e-mail", err)
 	}
 
+	if c.IsAnonymized() {
+		return nil // nothing is held to opt out of
+	}
+
 	if !c.SetEmailOptOut(true, uc.opts.now().UTC(), "") {
 		return nil
 	}

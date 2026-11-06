@@ -156,7 +156,7 @@ func (r *PostgresCustomerRepository) Update(ctx context.Context, c *domain.Custo
 	row := q.QueryRow(ctx, `
 		UPDATE customers SET full_name = $3, phone = $4, email = $5, address = $6, consent_log = $7, updated_by = $8,
 			locale = COALESCE(NULLIF($9, ''), 'vi'), email_opt_out_at = $10
-		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL
+		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL AND anonymized_at IS NULL
 		RETURNING updated_at`,
 		c.GarageID, c.ID, c.FullName, c.Phone, c.Email, c.Address, consent, c.UpdatedBy, c.Locale, c.EmailOptOutAt,
 	)

@@ -55,12 +55,8 @@ func (uc *StaffUseCase) Create(ctx context.Context, req CreateRequest) (*domain.
 		return nil, toAppError(op, domain.ErrInvalidType)
 	}
 
-	details := strings.TrimSpace(req.Details)
-	if req.Type != domain.TypeCorrect {
-		details = ""
-	}
-
-	if err := checkDetails(req.Type, details); err != nil {
+	details, err := normalizeDetails(req.Type, req.Details)
+	if err != nil {
 		return nil, toAppError(op, err)
 	}
 
@@ -137,6 +133,22 @@ func exportOf(ctx context.Context, customers Customers, documents Documents, gar
 	}
 
 	return string(out), nil
+}
+
+// normalizeDetails trims what a person asks to correct and drops it for the
+// other types; a correction needs it, within the limit.
+func normalizeDetails(t domain.Type, details string) (string, error) {
+	details = strings.TrimSpace(details)
+
+	if t != domain.TypeCorrect {
+		return "", nil
+	}
+
+	if err := checkDetails(t, details); err != nil {
+		return "", err
+	}
+
+	return details, nil
 }
 
 func checkDetails(t domain.Type, details string) error {

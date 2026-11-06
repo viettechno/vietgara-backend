@@ -314,45 +314,45 @@ func (_c *MockDataRequestConfirmations_CreateConfirmation_Call) RunAndReturn(run
 	return _c
 }
 
-// PurgeBefore provides a mock function for the type MockDataRequestConfirmations
-func (_mock *MockDataRequestConfirmations) PurgeBefore(ctx context.Context, t time.Time) (int, error) {
-	ret := _mock.Called(ctx, t)
+// PurgeExpired provides a mock function for the type MockDataRequestConfirmations
+func (_mock *MockDataRequestConfirmations) PurgeExpired(ctx context.Context, now time.Time) (int, error) {
+	ret := _mock.Called(ctx, now)
 
 	if len(ret) == 0 {
-		panic("no return value specified for PurgeBefore")
+		panic("no return value specified for PurgeExpired")
 	}
 
 	var r0 int
 	var r1 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, time.Time) (int, error)); ok {
-		return returnFunc(ctx, t)
+		return returnFunc(ctx, now)
 	}
 	if returnFunc, ok := ret.Get(0).(func(context.Context, time.Time) int); ok {
-		r0 = returnFunc(ctx, t)
+		r0 = returnFunc(ctx, now)
 	} else {
 		r0 = ret.Get(0).(int)
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, time.Time) error); ok {
-		r1 = returnFunc(ctx, t)
+		r1 = returnFunc(ctx, now)
 	} else {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
 }
 
-// MockDataRequestConfirmations_PurgeBefore_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PurgeBefore'
-type MockDataRequestConfirmations_PurgeBefore_Call struct {
+// MockDataRequestConfirmations_PurgeExpired_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'PurgeExpired'
+type MockDataRequestConfirmations_PurgeExpired_Call struct {
 	*mock.Call
 }
 
-// PurgeBefore is a helper method to define mock.On call
+// PurgeExpired is a helper method to define mock.On call
 //   - ctx context.Context
-//   - t time.Time
-func (_e *MockDataRequestConfirmations_Expecter) PurgeBefore(ctx any, t any) *MockDataRequestConfirmations_PurgeBefore_Call {
-	return &MockDataRequestConfirmations_PurgeBefore_Call{Call: _e.mock.On("PurgeBefore", ctx, t)}
+//   - now time.Time
+func (_e *MockDataRequestConfirmations_Expecter) PurgeExpired(ctx any, now any) *MockDataRequestConfirmations_PurgeExpired_Call {
+	return &MockDataRequestConfirmations_PurgeExpired_Call{Call: _e.mock.On("PurgeExpired", ctx, now)}
 }
 
-func (_c *MockDataRequestConfirmations_PurgeBefore_Call) Run(run func(ctx context.Context, t time.Time)) *MockDataRequestConfirmations_PurgeBefore_Call {
+func (_c *MockDataRequestConfirmations_PurgeExpired_Call) Run(run func(ctx context.Context, now time.Time)) *MockDataRequestConfirmations_PurgeExpired_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -370,12 +370,12 @@ func (_c *MockDataRequestConfirmations_PurgeBefore_Call) Run(run func(ctx contex
 	return _c
 }
 
-func (_c *MockDataRequestConfirmations_PurgeBefore_Call) Return(n int, err error) *MockDataRequestConfirmations_PurgeBefore_Call {
+func (_c *MockDataRequestConfirmations_PurgeExpired_Call) Return(n int, err error) *MockDataRequestConfirmations_PurgeExpired_Call {
 	_c.Call.Return(n, err)
 	return _c
 }
 
-func (_c *MockDataRequestConfirmations_PurgeBefore_Call) RunAndReturn(run func(ctx context.Context, t time.Time) (int, error)) *MockDataRequestConfirmations_PurgeBefore_Call {
+func (_c *MockDataRequestConfirmations_PurgeExpired_Call) RunAndReturn(run func(ctx context.Context, now time.Time) (int, error)) *MockDataRequestConfirmations_PurgeExpired_Call {
 	_c.Call.Return(run)
 	return _c
 }

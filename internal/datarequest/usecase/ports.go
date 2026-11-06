@@ -90,8 +90,8 @@ type Confirmations interface {
 	// Consume deletes and returns the unexpired confirmation with this token
 	// hash, or domain.ErrTokenInvalid.
 	Consume(ctx context.Context, tokenHash string, now time.Time) (*domain.Confirmation, error)
-	// PurgeBefore deletes the confirmations created before t.
-	PurgeBefore(ctx context.Context, t time.Time) (int, error)
+	// PurgeExpired deletes the confirmations whose link expired before now.
+	PurgeExpired(ctx context.Context, now time.Time) (int, error)
 }
 
 // Transactor runs fn in a transaction scoped to a garage.

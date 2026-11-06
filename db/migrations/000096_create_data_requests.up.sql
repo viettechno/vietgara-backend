@@ -51,7 +51,7 @@ ALTER TABLE ONLY public.customer_data_requests
 CREATE TRIGGER trigger_customer_data_requests_row_audit BEFORE INSERT OR UPDATE ON public.customer_data_requests FOR EACH ROW EXECUTE FUNCTION public.set_row_audit();
 
 ALTER TABLE ONLY public.customer_data_requests
-    ADD CONSTRAINT customer_data_requests_garage_customer_fkey FOREIGN KEY (garage_id, customer_id) REFERENCES public.customers(garage_id, id) ON DELETE RESTRICT;
+    ADD CONSTRAINT customer_data_requests_garage_customer_fkey FOREIGN KEY (garage_id, customer_id) REFERENCES public.customers(garage_id, id);
 
 ALTER TABLE public.customer_data_requests ENABLE ROW LEVEL SECURITY;
 

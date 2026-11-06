@@ -711,13 +711,13 @@ func TestPublicUseCase_PurgeAndSchedule(t *testing.T) {
 	t.Parallel()
 
 	uc, d := newPublic(t)
-	d.Confirmations.EXPECT().PurgeBefore(mock.Anything, now.Add(-usecase.Retention)).Return(3, nil).Once()
+	d.Confirmations.EXPECT().PurgeExpired(mock.Anything, now).Return(3, nil).Once()
 
 	n, err := uc.Purge(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, 3, n)
 
-	d.Confirmations.EXPECT().PurgeBefore(mock.Anything, mock.Anything).Return(0, errBoom).Once()
+	d.Confirmations.EXPECT().PurgeExpired(mock.Anything, mock.Anything).Return(0, errBoom).Once()
 
 	_, err = uc.Purge(t.Context())
 	assertAppError(t, err, apperror.CodeInternal)
@@ -725,14 +725,14 @@ func TestPublicUseCase_PurgeAndSchedule(t *testing.T) {
 	// Scheduled: purges once at once, then stops with the context.
 	ctx, cancel := context.WithCancel(t.Context())
 
-	d.Confirmations.EXPECT().PurgeBefore(mock.Anything, mock.Anything).Run(func(context.Context, time.Time) { cancel() }).Return(0, nil).Once()
+	d.Confirmations.EXPECT().PurgeExpired(mock.Anything, mock.Anything).Run(func(context.Context, time.Time) { cancel() }).Return(0, nil).Once()
 
 	uc.Schedule(ctx, time.Hour)
 
 	// A failing purge is logged, not fatal.
 	ctx, cancel = context.WithCancel(t.Context())
 
-	d.Confirmations.EXPECT().PurgeBefore(mock.Anything, mock.Anything).Run(func(context.Context, time.Time) { cancel() }).Return(0, errBoom).Once()
+	d.Confirmations.EXPECT().PurgeExpired(mock.Anything, mock.Anything).Run(func(context.Context, time.Time) { cancel() }).Return(0, errBoom).Once()
 
 	uc.Schedule(ctx, time.Hour)
 }

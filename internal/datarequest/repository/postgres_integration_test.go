@@ -200,7 +200,19 @@ func TestRequests_AreStoredPerGarage(t *testing.T) {
 		assert.Equal(t, 1, total)
 		assert.Equal(t, "Changed phone to 0912345678", items[0].Outcome)
 
+		waiting := &domain.Request{
+			ID: uuid.NewString(), GarageID: w.garage, CustomerID: w.customer, Type: domain.TypeCorrect, Status: domain.StatusPending, Source: domain.SourcePublic,
+			Details: "change my plate", RequestedAt: time.Now().UTC(),
+		}
+		require.NoError(t, w.requests.Create(ctx, waiting))
+
 		require.NoError(t, w.requests.ClearDetails(ctx, w.garage, w.customer))
+
+		closed, err := w.requests.Find(ctx, w.garage, waiting.ID)
+		require.NoError(t, err)
+		assert.Equal(t, domain.StatusRejected, closed.Status, "a correction still waiting has nothing left to correct")
+		assert.Empty(t, closed.Details)
+		assert.NotNil(t, closed.CompletedAt)
 
 		again, err := w.requests.Find(ctx, w.garage, id)
 		require.NoError(t, err)
@@ -263,9 +275,9 @@ func TestConfirmations_WorkOnceAndExpire(t *testing.T) {
 	_, err = w.requests.Consume(ctx, "unknown", now)
 	require.ErrorIs(t, err, domain.ErrTokenInvalid)
 
-	purged, err := w.requests.PurgeBefore(ctx, now.Add(-7*24*time.Hour))
+	purged, err := w.requests.PurgeExpired(ctx, now)
 	require.NoError(t, err)
-	assert.Equal(t, 1, purged, "only the one older than 7 days; the other was consumed or is recent")
+	assert.Equal(t, 2, purged, "the two whose link expired; the live one was consumed")
 }
 
 func TestFindByEmail_ReachesEveryGarage(t *testing.T) {
@@ -331,4 +343,28 @@ func TestAnonymizedCustomerKeepsItsVehiclesAndProfilesLocked(t *testing.T) {
 
 	require.NoError(t, w.pg.Admin.QueryRowContext(t.Context(), `SELECT vin FROM vehicles WHERE id = $1`, vehicle).Scan(&vin))
 	assert.Nil(t, vin)
+}
+
+func TestAnonymizedCustomerCannotBeUpdated(t *testing.T) {
+	t.Parallel()
+
+	w := newWorld(t)
+	w.seed(w.garage, w.customer, "an@x.test")
+
+	w.in(w.garage, func(ctx context.Context) {
+		stale, err := w.customers.FindByID(ctx, w.garage, w.customer)
+		require.NoError(t, err)
+
+		_, err = w.customers.Anonymize(ctx, w.garage, w.customer, w.owner)
+		require.NoError(t, err)
+
+		// A form opened before the erasure is saved after it.
+		stale.FullName, stale.Email = "An Nguyen", new("an@x.test")
+		require.ErrorIs(t, w.customers.Update(ctx, stale), customerDomain.ErrCustomerNotFound)
+	})
+
+	var name string
+
+	require.NoError(t, w.pg.Admin.QueryRowContext(t.Context(), `SELECT full_name FROM customers WHERE id = $1`, w.customer).Scan(&name))
+	assert.Equal(t, customerDomain.AnonymizedName, name)
 }

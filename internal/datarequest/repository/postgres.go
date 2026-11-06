@@ -140,12 +140,15 @@ func (r *PostgresRepository) List(ctx context.Context, garageID string, f usecas
 }
 
 // ClearDetails empties the details of every request of the customer and the
-// outcome of its corrections, which may repeat what was corrected.
+// outcome of its corrections, which may repeat what was corrected, and closes
+// the corrections still waiting: there is nothing left to correct.
 func (r *PostgresRepository) ClearDetails(ctx context.Context, garageID, customerID string) error {
 	_, err := platformdb.QuerierFromContext(ctx, r.pool).Exec(ctx,
 		`UPDATE customer_data_requests SET details = '',
-			outcome = CASE WHEN type = 'correct' AND outcome <> '' THEN 'Cleared when the customer was anonymized' ELSE outcome END
-		WHERE garage_id = $1 AND customer_id = $2 AND (details <> '' OR (type = 'correct' AND outcome <> ''))`, garageID, customerID)
+			outcome = CASE WHEN type = 'correct' AND (outcome <> '' OR status = 'pending') THEN 'Cleared when the customer was anonymized' ELSE outcome END,
+			status = CASE WHEN status = 'pending' THEN 'rejected'::data_request_status ELSE status END,
+			completed_at = CASE WHEN status = 'pending' THEN now() ELSE completed_at END
+		WHERE garage_id = $1 AND customer_id = $2 AND (details <> '' OR status = 'pending' OR (type = 'correct' AND outcome <> ''))`, garageID, customerID)
 
 	return err
 }
@@ -207,9 +210,9 @@ func (r *PostgresRepository) Consume(ctx context.Context, tokenHash string, now 
 	return &c, nil
 }
 
-// PurgeBefore deletes the waiting requests created before t.
-func (r *PostgresRepository) PurgeBefore(ctx context.Context, t time.Time) (int, error) {
-	tag, err := platformdb.QuerierFromContext(ctx, r.pool).Exec(ctx, `DELETE FROM data_request_confirmations WHERE created_at < $1`, t)
+// PurgeExpired deletes the waiting requests whose link expired before now.
+func (r *PostgresRepository) PurgeExpired(ctx context.Context, now time.Time) (int, error) {
+	tag, err := platformdb.QuerierFromContext(ctx, r.pool).Exec(ctx, `DELETE FROM data_request_confirmations WHERE expires_at < $1`, now)
 	if err != nil {
 		return 0, err
 	}

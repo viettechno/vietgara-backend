@@ -21,11 +21,13 @@ const (
 	TypePaymentVoucher DocumentType = "payment_voucher"
 	TypeGoodsReceipt   DocumentType = "goods_receipt"
 	TypeStockIssue     DocumentType = "stock_issue"
+	// TypePaymentOut is the payment-out voucher (phiếu chi, Release 13.0).
+	TypePaymentOut DocumentType = "payment_out"
 )
 
 // Types lists every printable document, in the order the settings show them.
 func Types() []DocumentType {
-	return []DocumentType{TypeQuote, TypeRepairOrder, TypeSettlement, TypePaymentVoucher, TypeGoodsReceipt, TypeStockIssue}
+	return []DocumentType{TypeQuote, TypeRepairOrder, TypeSettlement, TypePaymentVoucher, TypeGoodsReceipt, TypeStockIssue, TypePaymentOut}
 }
 
 // Valid reports whether t is a printable document.
@@ -180,6 +182,35 @@ type PaymentVoucher struct {
 
 // Type implements Model.
 func (PaymentVoucher) Type() DocumentType { return TypePaymentVoucher }
+
+// PaymentOutVoucher is the print model of a payment-out voucher (phiếu chi,
+// FR-BIL-07).
+type PaymentOutVoucher struct {
+	Garage GarageHeader `json:"garage"`
+	Number string       `json:"number"`
+	// Date is the day the voucher was issued, "02/01/2006".
+	Date         string `json:"date"`
+	PayeeName    string `json:"payeeName"`
+	PayeeAddress string `json:"payeeAddress"`
+	Reason       string `json:"reason"`
+	Amount       int64  `json:"amount"`
+	Method       string `json:"method"`
+	// Receipts are the goods receipts the voucher pays, with the amount of each.
+	Receipts   []PaymentOutReceiptRow `json:"receipts"`
+	IssuerName string                 `json:"issuerName"`
+	// Voided marks a voucher that no longer counts; VoidReason says why.
+	Voided     bool   `json:"voided"`
+	VoidReason string `json:"voidReason"`
+}
+
+// PaymentOutReceiptRow is one goods receipt a payment-out voucher pays.
+type PaymentOutReceiptRow struct {
+	Number string `json:"number"`
+	Amount int64  `json:"amount"`
+}
+
+// Type implements Model.
+func (PaymentOutVoucher) Type() DocumentType { return TypePaymentOut }
 
 // GoodsReceipt is the print model of a goods receipt (FR-INV-06).
 type GoodsReceipt struct {

@@ -193,3 +193,73 @@ func write(f *excelize.File, what string) ([]byte, error) {
 
 	return buf.Bytes(), nil
 }
+
+// PayableRow is one supplier payable of the payables workbook (FR-DOC-02).
+type PayableRow struct {
+	Receipt     string
+	Supplier    string
+	ReceiptDate string
+	AgeDays     int
+	Total       int64
+	Paid        int64
+	Remaining   int64
+	Status      string
+}
+
+const payablesSheet = "Payables"
+
+// SupplierPayablesExcel renders the supplier payables as an Excel workbook:
+// one row per payable and a total row. Amounts are numbers, so the sheet can
+// be summed.
+func SupplierPayablesExcel(rows []PayableRow) ([]byte, error) {
+	f := excelize.NewFile()
+	defer func() { _ = f.Close() }()
+
+	if err := f.SetSheetName("Sheet1", payablesSheet); err != nil {
+		return nil, fmt.Errorf("render payables excel: %w", err)
+	}
+
+	bold, err := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true}})
+	if err != nil {
+		return nil, fmt.Errorf("render payables excel: %w", err)
+	}
+
+	headers := []any{"Goods receipt", "Supplier", "Receipt date", "Age (days)", "Total (VND)", "Paid (VND)", "Remaining (VND)", "Status"}
+	if err := f.SetSheetRow(payablesSheet, "A1", &headers); err != nil {
+		return nil, fmt.Errorf("render payables excel: %w", err)
+	}
+
+	if err := f.SetRowStyle(payablesSheet, 1, 1, bold); err != nil {
+		return nil, fmt.Errorf("render payables excel: %w", err)
+	}
+
+	var total, paid, remaining int64
+
+	for i, r := range rows {
+		cells := []any{r.Receipt, r.Supplier, r.ReceiptDate, r.AgeDays, r.Total, r.Paid, r.Remaining, r.Status}
+		if err := f.SetSheetRow(payablesSheet, fmt.Sprintf("A%d", i+2), &cells); err != nil {
+			return nil, fmt.Errorf("render payables excel: %w", err)
+		}
+
+		total, paid, remaining = total+r.Total, paid+r.Paid, remaining+r.Remaining
+	}
+
+	totalRow := len(rows) + 2
+	cells := []any{labelTotal, "", "", "", total, paid, remaining, ""}
+
+	if err := f.SetSheetRow(payablesSheet, fmt.Sprintf("A%d", totalRow), &cells); err != nil {
+		return nil, fmt.Errorf("render payables excel: %w", err)
+	}
+
+	if err := f.SetRowStyle(payablesSheet, totalRow, totalRow, bold); err != nil {
+		return nil, fmt.Errorf("render payables excel: %w", err)
+	}
+
+	for col, width := range map[string]float64{"A": 16, "B": 28, "C": 13, "D": 11, "E": 16, "F": 16, "G": 16, "H": 10} {
+		if err := f.SetColWidth(payablesSheet, col, col, width); err != nil {
+			return nil, fmt.Errorf("render payables excel: %w", err)
+		}
+	}
+
+	return write(f, "payables")
+}

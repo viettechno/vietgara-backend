@@ -29,6 +29,7 @@ func TestPrintPolicies(t *testing.T) {
 		documentv1.DocumentService_PrintPaymentVoucherPdf_FullMethodName:    access.BillingRead,
 		documentv1.DocumentService_PrintGoodsReceiptPdf_FullMethodName:      access.InventoryRead,
 		documentv1.DocumentService_PrintStockIssuePdf_FullMethodName:        access.InventoryRead,
+		documentv1.DocumentService_PrintPaymentOutVoucherPdf_FullMethodName: access.BillingRead,
 		documentv1.DocumentService_UpdatePrintSetting_FullMethodName:        access.GarageWrite,
 	} {
 		require.NotNil(t, p[method].Garage, method)

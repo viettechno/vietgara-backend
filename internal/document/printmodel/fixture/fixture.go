@@ -6,6 +6,8 @@ import "github.com/viettechno/vietgara-backend/internal/document/printmodel"
 
 // The customer and the vehicle every document is for.
 const (
+	// issuedOn is the day every fixture document is dated.
+	issuedOn = "29/10/2026"
 	customer = "Trần Thị Bình"
 	plate    = "51F-123.45"
 )
@@ -43,14 +45,14 @@ func All() []printmodel.Model {
 		printmodel.Settlement{
 			Garage: garage(), BillTo: billTo(), Number: "QT-202610-0001", Status: "partially_paid", CustomerName: customer,
 			VehiclePlate: plate, TotalAmount: 490_000, PaidAmount: 200_000,
-			Payments: []printmodel.PaymentRow{{Date: "29/10/2026", Method: "cash", Amount: 200_000}},
+			Payments: []printmodel.PaymentRow{{Date: issuedOn, Method: "cash", Amount: 200_000}},
 		},
 		printmodel.PaymentVoucher{
-			Garage: garage(), Number: "PT-202610-0001", Date: "29/10/2026", PayerName: customer, PayerAddress: "7 Hai Bà Trưng",
+			Garage: garage(), Number: "PT-202610-0001", Date: issuedOn, PayerName: customer, PayerAddress: "7 Hai Bà Trưng",
 			Reason: "Thanh toán quyết toán", Amount: 200_000, Method: "Tiền mặt", SettlementNumber: "QT-202610-0001", CollectorName: "Lê Văn Cường",
 		},
 		printmodel.GoodsReceipt{
-			Garage: garage(), Number: "NK-202610-0001", Status: "completed", Date: "29/10/2026", DeliveryNoteNumber: "GH-77", Notes: "Hàng đủ",
+			Garage: garage(), Number: "NK-202610-0001", Status: "completed", Date: issuedOn, DeliveryNoteNumber: "GH-77", Notes: "Hàng đủ",
 			Lines: []printmodel.GoodsReceiptRow{
 				{SKU: "OIL-5W30", Name: "Dầu nhớt 5W-30", Quantity: "4", Unit: "L", Supplier: "Nhà cung cấp A", UnitCost: 90_000, Amount: 360_000},
 			},
@@ -60,6 +62,11 @@ func All() []printmodel.Model {
 			Garage: garage(), Number: "XK-202610-0001", Status: "posted", RepairOrderNumber: "LSC-202610-0001",
 			PostedAt: "29/10/2026 09:30", PostedBy: "Lê Văn Cường",
 			Lines: []printmodel.StockIssueRow{{SKU: "OIL-5W30", Name: "Dầu nhớt 5W-30", Quantity: "4", Unit: "L"}},
+		},
+		printmodel.PaymentOutVoucher{
+			Garage: garage(), Number: "PC-2026-00001", Date: issuedOn, PayeeName: "Nhà cung cấp A", PayeeAddress: "12 Lê Lợi, Quận 1",
+			Reason: "Thanh toán tiền hàng theo phiếu nhập NK-202610-0001", Amount: 360_000, Method: "Chuyển khoản",
+			Receipts: []printmodel.PaymentOutReceiptRow{{Number: "NK-202610-0001", Amount: 360_000}}, IssuerName: "Lê Văn Cường",
 		},
 	}
 }

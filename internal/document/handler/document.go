@@ -117,6 +117,28 @@ func (s *Server) ExportReceivableReconciliationExcel(
 	return excelBody(data), nil
 }
 
+// ExportSupplierPayablesExcel renders the supplier payables as an Excel
+// workbook (FR-DOC-02).
+func (s *Server) ExportSupplierPayablesExcel(ctx context.Context, req *documentv1.ExportSupplierPayablesExcelRequest) (*httpbody.HttpBody, error) {
+	data, err := s.uc.SupplierPayablesExcel(ctx, req.GetGarageId(), req.GetSupplierId(), req.GetIncludePaid())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return excelBody(data), nil
+}
+
+// ExportPaymentOutVoucherPdf renders one payment-out voucher as a PDF
+// (FR-BIL-07).
+func (s *Server) ExportPaymentOutVoucherPdf(ctx context.Context, req *documentv1.ExportPaymentOutVoucherPdfRequest) (*httpbody.HttpBody, error) {
+	data, err := s.uc.PaymentOutVoucherPDF(ctx, req.GetGarageId(), req.GetVoucherId(), false)
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return pdfBody(data), nil
+}
+
 const dateLayout = "2006-01-02"
 
 // revenuePeriod names a period for the use case; an unspecified one is

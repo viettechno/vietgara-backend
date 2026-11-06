@@ -43,6 +43,7 @@ type env struct {
 	garages        *mocks.MockDocumentGarageReader
 	inventory      *mocks.MockDocumentInventoryReader
 	receivables    *mocks.MockDocumentReceivableReader
+	payables       *mocks.MockDocumentPayableReader
 	prints         *fakePrints
 }
 
@@ -53,11 +54,12 @@ func newEnv(t *testing.T) *env {
 		quotes: mocks.NewMockDocumentQuoteReader(t), repairOrders: mocks.NewMockDocumentRepairOrderReader(t),
 		settlements: mocks.NewMockDocumentSettlementReader(t), stockMovements: mocks.NewMockDocumentStockMovementReader(t),
 		revenue: mocks.NewMockDocumentRevenueReader(t), garages: mocks.NewMockDocumentGarageReader(t),
-		inventory: mocks.NewMockDocumentInventoryReader(t), receivables: mocks.NewMockDocumentReceivableReader(t), prints: &fakePrints{},
+		inventory: mocks.NewMockDocumentInventoryReader(t), receivables: mocks.NewMockDocumentReceivableReader(t),
+		payables: mocks.NewMockDocumentPayableReader(t), prints: &fakePrints{},
 	}
 
 	uc := usecase.NewDocumentUseCase(e.quotes, e.repairOrders, e.settlements, e.stockMovements, e.revenue, e.garages, e.inventory, e.prints).
-		WithReceivables(e.receivables)
+		WithReceivables(e.receivables).WithPayables(e.payables)
 	e.srv = handler.NewServer(uc)
 
 	return e
@@ -71,7 +73,7 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 21)
+	assert.Len(t, p, 24)
 	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportGoodsReceiptPdf_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportStockIssuePdf_FullMethodName].Garage.Permission)
 	assert.Equal(t, access.InventoryRead, p[documentv1.DocumentService_ExportStockCountExcel_FullMethodName].Garage.Permission)
@@ -463,4 +465,55 @@ func TestExportReceivableReconciliationExcel(t *testing.T) {
 
 	_, err = e.srv.ExportReceivableReconciliationExcel(t.Context(), &documentv1.ExportReceivableReconciliationExcelRequest{GarageId: garageID, From: "x", To: "y"})
 	require.Equal(t, codes.Internal, status.Code(err))
+}
+
+func TestExportSupplierPayablesExcel(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t)
+	e.payables.EXPECT().SupplierPayables(anyArg, garageID, "s-1", true).
+		Return([]render.PayableRow{{Receipt: "NK-1", Total: 10, Remaining: 10}}, nil).Once()
+
+	resp, err := e.srv.ExportSupplierPayablesExcel(t.Context(), &documentv1.ExportSupplierPayablesExcelRequest{
+		GarageId: garageID, SupplierId: "s-1", IncludePaid: true,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", resp.GetContentType())
+	assert.NotEmpty(t, resp.GetData())
+
+	e.payables.EXPECT().SupplierPayables(anyArg, garageID, "", false).Return(nil, errDocumentTestBoom).Once()
+
+	_, err = e.srv.ExportSupplierPayablesExcel(t.Context(), &documentv1.ExportSupplierPayablesExcelRequest{GarageId: garageID})
+	require.Equal(t, codes.Internal, status.Code(err))
+}
+
+func TestPaymentOutVoucherPdf(t *testing.T) {
+	t.Parallel()
+
+	e := newEnv(t)
+	info := usecase.PaymentOutInfo{
+		Number: "PC-2026-00001", Date: "12/10/2026", PayeeName: "Sao Mai", Amount: 1_000_000, Issuer: issuer.Issuer{Name: "Công ty An Phát"},
+	}
+	e.payables.EXPECT().PaymentOutVoucher(anyArg, garageID, "v-1").Return(info, nil).Times(2)
+
+	exported, err := e.srv.ExportPaymentOutVoucherPdf(t.Context(), &documentv1.ExportPaymentOutVoucherPdfRequest{GarageId: garageID, VoucherId: "v-1"})
+	require.NoError(t, err)
+	assert.Equal(t, "application/pdf", exported.GetContentType())
+	assert.Empty(t, e.prints.log, "an export is not a print")
+
+	printed, err := e.srv.PrintPaymentOutVoucherPdf(t.Context(), &documentv1.PrintPaymentOutVoucherPdfRequest{GarageId: garageID, VoucherId: "v-1"})
+	require.NoError(t, err)
+	assert.Equal(t, "%PDF", string(printed.GetData()[:4]))
+	require.Len(t, e.prints.log, 1)
+	assert.Equal(t, printmodel.TypePaymentOut, e.prints.log[0].Type)
+	assert.Equal(t, "v-1", e.prints.log[0].DocumentID)
+
+	gone := apperror.New(apperror.CodeNotFound, "gone")
+	e.payables.EXPECT().PaymentOutVoucher(anyArg, garageID, "v-2").Return(usecase.PaymentOutInfo{}, gone).Times(2)
+
+	_, err = e.srv.ExportPaymentOutVoucherPdf(t.Context(), &documentv1.ExportPaymentOutVoucherPdfRequest{GarageId: garageID, VoucherId: "v-2"})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+
+	_, err = e.srv.PrintPaymentOutVoucherPdf(t.Context(), &documentv1.PrintPaymentOutVoucherPdfRequest{GarageId: garageID, VoucherId: "v-2"})
+	assert.Equal(t, codes.NotFound, status.Code(err))
 }

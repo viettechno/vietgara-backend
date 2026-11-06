@@ -45,7 +45,7 @@ func paymentVoucherTemplate(data printmodel.PaymentVoucher, o Options) ([]byte, 
 	writeField(pdf, lay, "Hình thức", data.Method)
 	writeField(pdf, lay, "Kèm theo", "Quyết toán "+data.SettlementNumber)
 
-	writeSignatures(pdf, lay, data.CollectorName)
+	writeSignatures(pdf, lay, voucherRoles[:], data.CollectorName, "Thủ quỹ", false)
 
 	return finish(pdf)
 }
@@ -62,39 +62,53 @@ func writeField(pdf *fpdf.Fpdf, lay layout, label, value string) {
 // voucherRoles are the signature blocks of the 01-TT voucher, left to right.
 var voucherRoles = [...]string{"Giám đốc", "Kế toán trưởng", "Người nộp tiền", "Người lập phiếu", "Thủ quỹ"}
 
-// writeSignatures prints the 01-TT signature blocks; the collector's name
-// is printed under "Thủ quỹ".
-func writeSignatures(pdf *fpdf.Fpdf, lay layout, collector string) {
-	pdf.Ln(8)
+// writeSignatures prints the signature blocks of a voucher; the name is
+// printed under the block of the role named. With keepTogether the blocks all
+// go to the next page when they do not fit what is left of this one; the
+// template that is already in use (payment voucher v1) does not, so its
+// reprints stay as they were first printed.
+func writeSignatures(pdf *fpdf.Fpdf, lay layout, roles []string, name, nameRole string, keepTogether bool) {
+	const (
+		gap, row, space = 8, 5, 18
+		blockHeight     = gap + 3*row + space // the Ln(gap), three rows and the space for the signatures below
+	)
 
-	roles := voucherRoles
+	_, pageHeight := pdf.GetPageSize()
+	_, bottom := pdf.GetAutoPageBreak()
+
+	if keepTogether && pdf.GetY()+blockHeight > pageHeight-bottom {
+		pdf.AddPage()
+	} else {
+		pdf.Ln(gap)
+	}
+
 	width := lay.content / float64(len(roles))
 
 	pdf.SetFont(fontFamily, "B", lay.signature)
 
 	for _, role := range roles {
-		pdf.CellFormat(width, 5, role, "", 0, "C", false, 0, "")
+		pdf.CellFormat(width, row, role, "", 0, "C", false, 0, "")
 	}
 
 	pdf.Ln(-1)
 	pdf.SetFont(fontFamily, "", lay.signatureNote)
 
 	for range roles {
-		pdf.CellFormat(width, 5, "(Ký, họ tên)", "", 0, "C", false, 0, "")
+		pdf.CellFormat(width, row, "(Ký, họ tên)", "", 0, "C", false, 0, "")
 	}
 
 	pdf.Ln(-1)
-	pdf.Ln(18)
+	pdf.Ln(space)
 
 	pdf.SetFont(fontFamily, "", lay.signature)
 
 	for _, role := range roles {
-		name := ""
-		if role == "Thủ quỹ" {
-			name = collector
+		printed := ""
+		if role == nameRole {
+			printed = name
 		}
 
-		pdf.CellFormat(width, 5, name, "", 0, "C", false, 0, "")
+		pdf.CellFormat(width, row, printed, "", 0, "C", false, 0, "")
 	}
 
 	pdf.Ln(-1)

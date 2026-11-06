@@ -434,6 +434,11 @@ packages:
           filename: "document_usecase_receivable_reader.go"
           dir: "./internal/mocks"
           structname: "MockDocumentReceivableReader"
+      PayableReader:
+        config:
+          filename: "document_usecase_payable_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockDocumentPayableReader"
       QuoteReader:
         config:
           filename: "document_usecase_quote_reader.go"

@@ -1,6 +1,10 @@
 {
   "goods_receipt/A4/v1/copy=false": "619052ba14a153f505683c435f4b450b66fe280b55a9b61a69eea42437387996",
   "goods_receipt/A4/v1/copy=true": "74585ee23f69093f47d7a287d1b864ef73d03bd5602828d6c9b6f6727b53c161",
+  "payment_out/A4/v1/copy=false": "008d8402165fbadb5076891ba8db6b24ded2c6de83cc5d01c9c7e0d7da7cffc4",
+  "payment_out/A4/v1/copy=true": "f04bbf10faab60d5336c2dfafe3e5e402d3546a45d2fabdb0f403750db1dc93a",
+  "payment_out/A5/v1/copy=false": "dbb7826117816cfde8bdbb7336d03f87e38daf42f6a98ea1834dbc15846bea60",
+  "payment_out/A5/v1/copy=true": "bc3ddcdf38451a5fcd3077b15669da0f6db1dbb18d7a8b484aeabf6d9a6e7a09",
   "payment_voucher/A4/v1/copy=false": "7c45c805e33f37db376e8a0e3ed65be026afc1a85cdaf35c6ca59ae1aaa97a46",
   "payment_voucher/A4/v1/copy=true": "0387b350319da2d1499bec1666bb57b214f0fb2f97a38cb811529da7bec04072",
   "payment_voucher/A5/v1/copy=false": "7dfcaf95b39ce92bc1704e629f7df65238f5cfae8483c52072cd5b1d44c82e76",

@@ -2,13 +2,18 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"time"
 
+	billingDomain "github.com/viettechno/vietgara-backend/internal/billing/domain"
 	billingUsecase "github.com/viettechno/vietgara-backend/internal/billing/usecase"
 	customerDomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
+	"github.com/viettechno/vietgara-backend/internal/document/printmodel"
 	"github.com/viettechno/vietgara-backend/internal/document/render"
+	documentUsecase "github.com/viettechno/vietgara-backend/internal/document/usecase"
 	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
 	notificationUsecase "github.com/viettechno/vietgara-backend/internal/notification/usecase"
 	"github.com/viettechno/vietgara-backend/internal/platform/audit"
@@ -247,4 +252,68 @@ func (a documentReceivables) Reconciliation(ctx context.Context, garageID, from,
 	}
 
 	return out, nil
+}
+
+// documentPayables lets Document/Print export the supplier payables as Excel
+// (FR-DOC-02) and print the payment-out voucher (FR-BIL-07).
+type documentPayables struct {
+	uc *receivableUsecase.PayableUseCase
+}
+
+func (a documentPayables) SupplierPayables(ctx context.Context, garageID, supplierID string, includePaid bool) ([]render.PayableRow, error) {
+	var rows []render.PayableRow
+
+	for page := 1; ; page++ {
+		res, err := a.uc.ListPayables(ctx, receivableUsecase.ListPayablesRequest{
+			GarageID: garageID, SupplierID: supplierID, IncludePaid: includePaid,
+			PageRequest: receivableUsecase.PageRequest{Page: page, PageSize: receivableUsecase.MaxPageSize},
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		for _, item := range res.Items {
+			p := item.Payable
+			rows = append(rows, render.PayableRow{
+				Receipt: p.GoodsReceiptNumber, Supplier: p.SupplierName, ReceiptDate: p.ReceiptDate.Format(time.DateOnly), AgeDays: item.AgeDays,
+				Total: p.TotalAmount, Paid: p.PaidAmount, Remaining: p.Remaining(), Status: string(p.Status),
+			})
+		}
+
+		if len(res.Items) == 0 || page*res.PageSize >= res.Total {
+			return rows, nil
+		}
+	}
+}
+
+func (a documentPayables) PaymentOutVoucher(ctx context.Context, garageID, voucherID string) (documentUsecase.PaymentOutInfo, error) {
+	v, err := a.uc.GetVoucher(ctx, garageID, voucherID)
+	if err != nil {
+		return documentUsecase.PaymentOutInfo{}, err
+	}
+
+	// A snapshot that cannot be read leaves the letterhead to the garage's
+	// profile, as a voucher without one does.
+	var legal issuer.Issuer
+	if err := json.Unmarshal(v.Issuer, &legal); len(v.Issuer) > 0 && err != nil {
+		slog.Warn("receivable: unreadable voucher issuer snapshot", "voucher_id", v.ID, "error", err)
+
+		legal = issuer.Issuer{}
+	}
+
+	info := documentUsecase.PaymentOutInfo{
+		Number: v.Number, Date: v.CreatedAt.In(vietnamTime).Format("02/01/2006"), PayeeName: v.PayeeName, PayeeAddress: v.PayeeAddress,
+		Reason: v.Reason, Amount: v.Amount, Method: voucherMethod(billingDomain.PaymentMethod(v.Method)), IssuerName: v.IssuerName,
+		Issuer: legal, Voided: v.Voided(), VoidReason: v.VoidReason,
+	}
+
+	for _, al := range v.Allocations {
+		if al.Cancelled {
+			continue // the receipt was reversed: it is no longer paid by this voucher
+		}
+
+		info.Receipts = append(info.Receipts, printmodel.PaymentOutReceiptRow{Number: al.GoodsReceiptNumber, Amount: al.Amount})
+	}
+
+	return info, nil
 }

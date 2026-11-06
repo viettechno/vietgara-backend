@@ -116,3 +116,29 @@ func TestReconciliationExcel(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []string{"Ledger agrees with the receivables", "No"}, rows[7])
 }
+
+func TestSupplierPayablesExcel(t *testing.T) {
+	t.Parallel()
+
+	data, err := render.SupplierPayablesExcel([]render.PayableRow{
+		{Receipt: "NK-1", Supplier: "=HYPERLINK(\"http://x\")", ReceiptDate: "2026-10-01", AgeDays: 50, Total: 700_000, Paid: 200_000, Remaining: 500_000, Status: "open"},
+		{Receipt: "NK-2", Supplier: "Sao Mai", ReceiptDate: "2026-11-10", AgeDays: 10, Total: 300_000, Remaining: 300_000, Status: "open"},
+	})
+	require.NoError(t, err)
+
+	f, err := excelize.OpenReader(bytes.NewReader(data))
+	require.NoError(t, err)
+
+	defer func() { _ = f.Close() }()
+
+	rows, err := f.GetRows("Payables")
+	require.NoError(t, err)
+	require.Len(t, rows, 4)
+	assert.Equal(t, "Remaining (VND)", rows[0][6])
+	assert.Equal(t, []string{"NK-1", "=HYPERLINK(\"http://x\")", "2026-10-01", "50", "700000", "200000", "500000", "open"}, rows[1])
+	assert.Equal(t, []string{"Total", "", "", "", "1000000", "200000", "800000"}, rows[3][:7])
+
+	formula, err := f.GetCellFormula("Payables", "B2")
+	require.NoError(t, err)
+	assert.Empty(t, formula, "text that looks like a formula stays text")
+}

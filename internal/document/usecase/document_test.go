@@ -39,6 +39,7 @@ type deps struct {
 	Garages        *mocks.MockDocumentGarageReader
 	Inventory      *mocks.MockDocumentInventoryReader
 	Receivables    *mocks.MockDocumentReceivableReader
+	Payables       *mocks.MockDocumentPayableReader
 	Prints         *fakePrints
 }
 
@@ -49,11 +50,12 @@ func newUseCase(t *testing.T) (*usecase.DocumentUseCase, *deps) {
 		Quotes: mocks.NewMockDocumentQuoteReader(t), RepairOrders: mocks.NewMockDocumentRepairOrderReader(t),
 		Settlements: mocks.NewMockDocumentSettlementReader(t), StockMovements: mocks.NewMockDocumentStockMovementReader(t),
 		Revenue: mocks.NewMockDocumentRevenueReader(t), Garages: mocks.NewMockDocumentGarageReader(t),
-		Inventory: mocks.NewMockDocumentInventoryReader(t), Receivables: mocks.NewMockDocumentReceivableReader(t), Prints: &fakePrints{},
+		Inventory: mocks.NewMockDocumentInventoryReader(t), Receivables: mocks.NewMockDocumentReceivableReader(t),
+		Payables: mocks.NewMockDocumentPayableReader(t), Prints: &fakePrints{},
 	}
 
 	uc := usecase.NewDocumentUseCase(d.Quotes, d.RepairOrders, d.Settlements, d.StockMovements, d.Revenue, d.Garages, d.Inventory, d.Prints).
-		WithReceivables(d.Receivables)
+		WithReceivables(d.Receivables).WithPayables(d.Payables)
 
 	return uc, d
 }
@@ -474,5 +476,91 @@ func TestDocumentUseCase_ReceivablesNotWired(t *testing.T) {
 	assertAppError(t, err, apperror.CodeInternal)
 
 	_, err = uc.ReconciliationExcel(t.Context(), garageID, "a", "b")
+	assertAppError(t, err, apperror.CodeInternal)
+}
+
+func TestDocumentUseCase_SupplierPayablesExcel(t *testing.T) {
+	t.Parallel()
+
+	t.Run("renders the payables with the filters of the list", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Payables.EXPECT().SupplierPayables(mock.Anything, garageID, "s-1", true).
+			Return([]render.PayableRow{{Receipt: "NK-1", Total: 10, Remaining: 10}}, nil).Once()
+
+		workbook, err := uc.SupplierPayablesExcel(t.Context(), garageID, "s-1", true)
+		require.NoError(t, err)
+		require.Equal(t, "PK", string(workbook[:2]))
+	})
+
+	t.Run("reader failure", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Payables.EXPECT().SupplierPayables(mock.Anything, garageID, "", false).Return(nil, errBoom).Once()
+
+		_, err := uc.SupplierPayablesExcel(t.Context(), garageID, "", false)
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+}
+
+func TestDocumentUseCase_PaymentOutVoucherPDF(t *testing.T) {
+	t.Parallel()
+
+	info := usecase.PaymentOutInfo{
+		Number: "PC-2026-00001", Date: "29/10/2026", PayeeName: "Sao Mai", Reason: "Thanh toán", Amount: 360_000, Method: "Tiền mặt",
+		Receipts: []printmodel.PaymentOutReceiptRow{{Number: "NK-1", Amount: 360_000}}, IssuerName: "Binh", Issuer: issuer.Issuer{Name: "Gara An Phat"},
+	}
+
+	t.Run("renders it from the identity it was issued with, and a print is logged", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Payables.EXPECT().PaymentOutVoucher(mock.Anything, garageID, "v-1").Return(info, nil).Times(2)
+
+		exported, err := uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", false)
+		require.NoError(t, err)
+		require.Equal(t, "%PDF", string(exported[:4]))
+		require.Empty(t, d.Prints.log)
+
+		printed, err := uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", true)
+		require.NoError(t, err)
+		require.Equal(t, "%PDF", string(printed[:4]))
+		require.Len(t, d.Prints.log, 1)
+		require.Equal(t, printmodel.TypePaymentOut, d.Prints.log[0].Type)
+	})
+
+	t.Run("reader failure", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Payables.EXPECT().PaymentOutVoucher(mock.Anything, garageID, "v-1").Return(usecase.PaymentOutInfo{}, errBoom).Once()
+
+		_, err := uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", false)
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+
+	t.Run("letterhead failure", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Payables.EXPECT().PaymentOutVoucher(mock.Anything, garageID, "v-1").Return(usecase.PaymentOutInfo{}, nil).Once()
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(usecase.GarageHeaderInfo{}, errBoom).Once()
+
+		_, err := uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", false)
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+}
+
+func TestDocumentUseCase_PayablesNotWired(t *testing.T) {
+	t.Parallel()
+
+	uc := usecase.NewDocumentUseCase(nil, nil, nil, nil, nil, nil, nil, nil)
+
+	_, err := uc.SupplierPayablesExcel(t.Context(), garageID, "", false)
+	assertAppError(t, err, apperror.CodeInternal)
+
+	_, err = uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", false)
 	assertAppError(t, err, apperror.CodeInternal)
 }

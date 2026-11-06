@@ -23,6 +23,7 @@ const key = "a-key-the-website-and-the-backend-share"
 type repo struct {
 	stored []*domain.Request
 	count  int
+	source string
 }
 
 func (r *repo) Create(_ context.Context, req *domain.Request) error {
@@ -31,7 +32,11 @@ func (r *repo) Create(_ context.Context, req *domain.Request) error {
 	return nil
 }
 
-func (r *repo) CountSince(context.Context, string, time.Time) (int, error) { return r.count, nil }
+func (r *repo) CountSince(_ context.Context, hash string, _ time.Time) (int, error) {
+	r.source = hash
+
+	return r.count, nil
+}
 
 type mailer struct{ sent []mail.Message }
 
@@ -138,4 +143,26 @@ func TestAnswers429WhenTheSourceIsOverItsLimit(t *testing.T) {
 	rec := post(setup(t, key, r, &mailer{}), goodBody, map[string]string{handler.KeyHeader: key})
 	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
 	assert.Empty(t, r.stored)
+}
+
+func TestCountsTheVisitorNotTheProxy(t *testing.T) {
+	t.Parallel()
+
+	source := func(headers map[string]string) string {
+		r := &repo{}
+		headers[handler.KeyHeader] = key
+		rec := post(setup(t, key, r, &mailer{}), goodBody, headers)
+		require.Equal(t, http.StatusAccepted, rec.Code)
+
+		return r.source
+	}
+
+	visitor := source(map[string]string{"X-Real-IP": "198.51.100.1", handler.VisitorIPHeader: "203.0.113.7"})
+	other := source(map[string]string{"X-Real-IP": "198.51.100.1", handler.VisitorIPHeader: "203.0.113.8"})
+	proxy := source(map[string]string{"X-Real-IP": "198.51.100.1"})
+	bad := source(map[string]string{"X-Real-IP": "198.51.100.1", handler.VisitorIPHeader: "not an address"})
+
+	assert.NotEqual(t, visitor, other, "two visitors behind one proxy are counted apart")
+	assert.NotEqual(t, visitor, proxy)
+	assert.Equal(t, proxy, bad, "an unparsable address falls back to the gateway's")
 }

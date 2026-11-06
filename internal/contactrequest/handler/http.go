@@ -85,9 +85,18 @@ func (s *Server) create(w http.ResponseWriter, r *http.Request) {
 	httpapi.WriteJSON(w, http.StatusAccepted, map[string]string{"id": id})
 }
 
-// sourceIP is the address the gateway resolved (it overwrites X-Real-IP), else
+// VisitorIPHeader carries the address of the visitor, which the website's function reads from
+// Cloudflare: the gateway sees only Cloudflare's address, shared by every visitor.
+const VisitorIPHeader = "X-Visitor-IP"
+
+// sourceIP is the visitor's address as the website's function reports it (the caller holds the
+// key, so it is trusted), else the address the gateway resolved (it overwrites X-Real-IP), else
 // the peer of the connection.
 func sourceIP(r *http.Request) string {
+	if ip := net.ParseIP(strings.TrimSpace(r.Header.Get(VisitorIPHeader))); ip != nil {
+		return ip.String()
+	}
+
 	if ip := strings.TrimSpace(r.Header.Get("X-Real-IP")); ip != "" {
 		return ip
 	}

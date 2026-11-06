@@ -491,6 +491,26 @@ packages:
           filename: "reporting_usecase_garage_reader.go"
           dir: "./internal/mocks"
           structname: "MockReportingGarageReader"
+      WorkReader:
+        config:
+          filename: "reporting_usecase_work_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockReportingWorkReader"
+      OrderReader:
+        config:
+          filename: "reporting_usecase_order_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockReportingOrderReader"
+      CostReader:
+        config:
+          filename: "reporting_usecase_cost_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockReportingCostReader"
+      NameReader:
+        config:
+          filename: "reporting_usecase_name_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockReportingNameReader"
   github.com/viettechno/vietgara-backend/internal/notification/usecase:
     interfaces:
       Mailer:

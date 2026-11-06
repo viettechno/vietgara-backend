@@ -47,6 +47,7 @@ DOC_FILES = [
     "14_Receivables.md",
     "15_Payables_Vouchers.md",
     "16_Purchase_Orders.md",
+    "17_Reports.md",
 ]
 DOC_BASE = "docs/05-Testing/E2E_Scenarios"
 RAW_BASE = "https://raw.githubusercontent.com/viettechno/vietgara-docs/{ref}/" + DOC_BASE
@@ -72,6 +73,7 @@ MANUAL_ONLY = {
     "E2E-REC-009": "the receivables screen: a browser test of vietgara-e2e",
     "E2E-PAY-008": "the payables screen and the voucher form: a browser test of vietgara-e2e",
     "E2E-PO-008": "the purchase order screens: a browser test of vietgara-e2e",
+    "E2E-RPT-007": "the report screens: a browser test of vietgara-e2e",
 }
 # Test-harness packages whose calls execute as part of a test run. seed/
 # is deliberately excluded: seeding is setup, not coverage.

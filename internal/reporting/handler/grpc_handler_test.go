@@ -13,6 +13,7 @@ import (
 	reportingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/reporting/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/mocks"
+	"github.com/viettechno/vietgara-backend/internal/platform/access"
 	"github.com/viettechno/vietgara-backend/internal/reporting/handler"
 	"github.com/viettechno/vietgara-backend/internal/reporting/usecase"
 )
@@ -42,8 +43,11 @@ func TestPolicies(t *testing.T) {
 	t.Parallel()
 
 	p := handler.Policies()
-	assert.Len(t, p, 1)
+	assert.Len(t, p, 4)
 	assert.NotNil(t, p[reportingv1.ReportingService_GetRevenueReport_FullMethodName].Garage)
+	assert.Equal(t, access.ReportRead, p[reportingv1.ReportingService_GetTechnicianReport_FullMethodName].Garage.Permission)
+	assert.Equal(t, access.ReportRead, p[reportingv1.ReportingService_GetProfitReport_FullMethodName].Garage.Permission)
+	assert.Equal(t, access.RepairOrderRead, p[reportingv1.ReportingService_GetRepairOrderProfit_FullMethodName].Garage.Permission)
 }
 
 func TestGetRevenueReport(t *testing.T) {

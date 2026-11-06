@@ -12,6 +12,12 @@ import (
 type Deps struct {
 	Settlements SettlementReader
 	Garages     GarageReader
+	// Work, Orders, Costs and Names serve the technician and profit reports
+	// of Release 13.1.
+	Work   WorkReader
+	Orders OrderReader
+	Costs  CostReader
+	Names  NameReader
 }
 
 // ReportingUseCase implements the Reporting module's revenue report.
@@ -86,6 +92,8 @@ func toAppError(op string, err error) error {
 	switch {
 	case errors.Is(err, ErrInvalidPeriod), errors.Is(err, ErrInvalidDateRange):
 		return apperror.Wrap(apperror.CodeInvalidArgument, err.Error(), err)
+	case errors.Is(err, ErrOrderNotFound):
+		return apperror.Wrap(apperror.CodeNotFound, err.Error(), err)
 	default:
 		return apperror.Wrap(apperror.CodeInternal, op, err)
 	}

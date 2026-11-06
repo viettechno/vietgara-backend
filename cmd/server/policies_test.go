@@ -43,9 +43,6 @@ var notImplemented = map[string]string{
 	"/vietgara.customer.v1.DataRequestService/ListDataRequests":               "Phase 13",
 	"/vietgara.customer.v1.PublicDataRequestService/ConfirmPublicDataRequest": "Phase 13",
 	"/vietgara.customer.v1.PublicDataRequestService/SubmitPublicDataRequest":  "Phase 13",
-	"/vietgara.reporting.v1.ReportingService/GetProfitReport":                 "Phase 13",
-	"/vietgara.reporting.v1.ReportingService/GetRepairOrderProfit":            "Phase 13",
-	"/vietgara.reporting.v1.ReportingService/GetTechnicianReport":             "Phase 13",
 }
 
 // TestEveryRPCDeclaresItsAuthorization is the automated part of the

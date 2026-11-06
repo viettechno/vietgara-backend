@@ -107,8 +107,8 @@ func (r *PostgresRepository) ClosedLines(ctx context.Context, garageID, timezone
 	return scanProfitLines(rows)
 }
 
-// OrderLines returns every line of one repair order that is not cancelled, or
-// domain.ErrRepairOrderNotFound.
+// OrderLines returns every line of one repair order (a cancelled order is not
+// found), or domain.ErrRepairOrderNotFound.
 func (r *PostgresRepository) OrderLines(ctx context.Context, garageID, repairOrderID string) ([]ProfitLine, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 

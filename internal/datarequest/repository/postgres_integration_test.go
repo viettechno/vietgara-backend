@@ -16,6 +16,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/datarequest/domain"
 	"github.com/viettechno/vietgara-backend/internal/datarequest/repository"
 	"github.com/viettechno/vietgara-backend/internal/datarequest/usecase"
+	notificationRepository "github.com/viettechno/vietgara-backend/internal/notification/repository"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/platform/db/pgtest"
 )
@@ -367,4 +368,25 @@ func TestAnonymizedCustomerCannotBeUpdated(t *testing.T) {
 
 	require.NoError(t, w.pg.Admin.QueryRowContext(t.Context(), `SELECT full_name FROM customers WHERE id = $1`, w.customer).Scan(&name))
 	assert.Equal(t, customerDomain.AnonymizedName, name)
+}
+
+func TestNotificationLogRowsLoseTheirRecipientAndErrorText(t *testing.T) {
+	t.Parallel()
+
+	w := newWorld(t)
+	w.seed(w.garage, w.customer, "an@x.test")
+	w.exec(`INSERT INTO notification_log (id, channel, template, recipient, status, error, garage_id, customer_id, type)
+		VALUES ($1, 'email', 'payment_received', 'an@x.test', 'failed', 'mailbox an@x.test not found', $2, $3, 'payment_received')`, uuid.NewString(), w.garage, w.customer)
+
+	log := notificationRepository.NewPostgresRepository(w.pool)
+
+	w.in(w.garage, func(ctx context.Context) {
+		require.NoError(t, log.ClearRecipients(ctx, w.garage, w.customer))
+	})
+
+	var leftover int
+
+	require.NoError(t, w.pg.Admin.QueryRowContext(t.Context(),
+		`SELECT count(*) FROM notification_log WHERE customer_id = $1 AND (recipient <> '' OR coalesce(error, '') <> '')`, w.customer).Scan(&leftover))
+	assert.Zero(t, leftover)
 }

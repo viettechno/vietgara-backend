@@ -6,8 +6,9 @@
 ALTER TABLE public.customers ADD COLUMN anonymized_at timestamp with time zone;
 
 -- The notification log is append-only; anonymizing a customer is the one thing
--- that changes it: the recipient address of the customer's rows is cleared.
-GRANT UPDATE (recipient) ON public.notification_log TO vietgara_app;
+-- that changes it: the recipient address of the customer's rows, and the error
+-- text of a failed send, which may repeat it, are cleared.
+GRANT UPDATE (recipient, error) ON public.notification_log TO vietgara_app;
 
 CREATE TYPE public.data_request_type AS ENUM ('view', 'correct', 'delete');
 
@@ -61,7 +62,7 @@ COMMENT ON POLICY customer_data_requests_rls_policy ON public.customer_data_requ
 
 -- A public request waits here for its e-mail link. It belongs to no garage: the
 -- person is known only by the address. The token is stored as a hash, the row
--- is deleted after 7 days with its details, and nothing is stored once the
+-- is deleted once its link has expired (24 hours) with its details, and nothing is stored once the
 -- request has acted.
 CREATE TABLE public.data_request_confirmations (
     id uuid DEFAULT gen_random_uuid() NOT NULL,

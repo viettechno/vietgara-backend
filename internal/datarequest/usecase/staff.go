@@ -138,29 +138,20 @@ func exportOf(ctx context.Context, customers Customers, documents Documents, gar
 // normalizeDetails trims what a person asks to correct and drops it for the
 // other types; a correction needs it, within the limit.
 func normalizeDetails(t domain.Type, details string) (string, error) {
-	details = strings.TrimSpace(details)
-
 	if t != domain.TypeCorrect {
 		return "", nil
 	}
 
-	if err := checkDetails(t, details); err != nil {
-		return "", err
+	details = strings.TrimSpace(details)
+
+	switch {
+	case details == "":
+		return "", domain.ErrDetailsRequired
+	case utf8.RuneCountInString(details) > domain.MaxTextLen:
+		return "", domain.ErrTextTooLong
+	default:
+		return details, nil
 	}
-
-	return details, nil
-}
-
-func checkDetails(t domain.Type, details string) error {
-	if t == domain.TypeCorrect && details == "" {
-		return domain.ErrDetailsRequired
-	}
-
-	if utf8.RuneCountInString(details) > domain.MaxTextLen {
-		return domain.ErrTextTooLong
-	}
-
-	return nil
 }
 
 // CompleteRequest is the input of Complete.

@@ -160,6 +160,16 @@ func revenuePeriod(p reportingv1.RevenuePeriod) string {
 	}
 }
 
+// ExportPurchaseOrderPdf renders a purchase order as a PDF (FR-INV-16).
+func (s *Server) ExportPurchaseOrderPdf(ctx context.Context, req *documentv1.ExportPurchaseOrderPdfRequest) (*httpbody.HttpBody, error) {
+	data, err := s.uc.PurchaseOrderPDF(ctx, req.GetGarageId(), req.GetPurchaseOrderId(), false)
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return pdfBody(data), nil
+}
+
 // ExportGoodsReceiptPdf renders a goods receipt as a PDF (FR-INV-06).
 func (s *Server) ExportGoodsReceiptPdf(ctx context.Context, req *documentv1.ExportGoodsReceiptPdfRequest) (*httpbody.HttpBody, error) {
 	data, err := s.uc.GoodsReceiptPDF(ctx, req.GetGarageId(), req.GetGoodsReceiptId(), false)

@@ -273,6 +273,8 @@ func (r *PostgresRepository) SaveSupplierReturn(ctx context.Context, s *domain.S
 
 // ListSupplierReturns returns one page of returns, newest first, with their
 // credit.
+//
+//nolint:dupl // each document has its own tables and filters
 func (r *PostgresRepository) ListSupplierReturns(ctx context.Context, garageID string, filter usecase.SupplierReturnFilter) ([]*domain.SupplierReturn, int, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 

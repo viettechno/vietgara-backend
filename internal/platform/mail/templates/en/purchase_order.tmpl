@@ -1,0 +1,15 @@
+{{define "subject"}}Purchase order {{.Number}} from {{.GarageName}}{{end}}
+{{define "text"}}Hello {{.SupplierName}},
+
+{{.GarageName}} sends you purchase order {{.Number}} (see the attached PDF).
+{{if .Message}}
+{{.Message}}
+{{end}}
+For any question contact {{.GarageName}}{{if .GaragePhone}} on {{.GaragePhone}}{{end}} or reply to this e-mail.
+
+VietGara{{end}}
+{{define "html"}}<p>Hello {{.SupplierName}},</p>
+<p><strong>{{.GarageName}}</strong> sends you purchase order <strong>{{.Number}}</strong> (see the attached PDF).</p>
+{{if .Message}}<p style="white-space:pre-line">{{.Message}}</p>{{end}}
+<p>For any question contact {{.GarageName}}{{if .GaragePhone}} on {{.GaragePhone}}{{end}} or reply to this e-mail.</p>
+<p>VietGara</p>{{end}}

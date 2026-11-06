@@ -22,6 +22,8 @@ const (
 )
 
 // ListGoodsReceipts lists the garage's goods receipts (FR-INV-06).
+//
+//nolint:dupl // one list RPC per document, each with its own request and response types
 func (s *Server) ListGoodsReceipts(ctx context.Context, req *inventoryv1.ListGoodsReceiptsRequest) (*inventoryv1.ListGoodsReceiptsResponse, error) {
 	return run(ctx, func(string) (*inventoryv1.ListGoodsReceiptsResponse, error) {
 		page, err := s.uc.ListGoodsReceipts(ctx, usecase.ListGoodsReceiptsRequest{
@@ -180,6 +182,11 @@ func receiptToProto(ctx context.Context, r *domain.GoodsReceipt) *inventoryv1.Go
 		DeliveryNoteNumber: r.DeliveryNoteNumber, Notes: r.Notes, Lines: make([]*inventoryv1.GoodsReceiptLine, 0, len(r.Lines)),
 		CompletedAt: converter.TimePtrToProto(r.CompletedAt), CancelledAt: converter.TimePtrToProto(r.CancelledAt),
 		CreatedAt: converter.TimeToProto(r.CreatedAt), UpdatedAt: converter.TimeToProto(r.UpdatedAt),
+		PurchaseOrderNumber: r.PurchaseOrderNumber,
+	}
+
+	if r.PurchaseOrderID != nil {
+		out.PurchaseOrderId = *r.PurchaseOrderID
 	}
 
 	if seeCost {

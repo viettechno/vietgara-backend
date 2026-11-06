@@ -30,6 +30,7 @@ var (
 
 type env struct {
 	srv       *handler.Server
+	uc        *usecase.InventoryUseCase
 	repo      *mocks.MockInventoryRepository
 	parts     *mocks.MockInventoryPartCatalogue
 	events    *mocks.MockInventoryEventPublisher
@@ -51,10 +52,11 @@ func newEnv(t *testing.T) *env {
 	e.repo.EXPECT().DraftLines(mock.Anything, mock.Anything, mock.Anything).Return(nil, nil).Maybe()
 	e.events.EXPECT().Publish(mock.Anything, "goods_receipt.completed", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
 	e.events.EXPECT().Publish(mock.Anything, "goods_receipt.cancelled", mock.Anything, mock.Anything, mock.Anything).Return(nil).Maybe()
-	e.srv = handler.NewServer(usecase.NewInventoryUseCase(usecase.Dependencies{
+	e.uc = usecase.NewInventoryUseCase(usecase.Dependencies{
 		Repo: e.repo, Parts: e.parts, Events: e.events, Garages: e.garages, Directory: e.directory, Sequences: e.sequences,
 		Audit: e.audit, Now: func() time.Time { return time.Date(2026, time.October, 15, 3, 0, 0, 0, time.UTC) },
-	}))
+	})
+	e.srv = handler.NewServer(e.uc)
 
 	return e
 }

@@ -68,5 +68,13 @@ func All() []printmodel.Model {
 			Reason: "Thanh toán tiền hàng theo phiếu nhập NK-202610-0001", Amount: 360_000, Method: "Chuyển khoản",
 			Receipts: []printmodel.PaymentOutReceiptRow{{Number: "NK-202610-0001", Amount: 360_000}}, IssuerName: "Lê Văn Cường",
 		},
+		printmodel.PurchaseOrder{
+			Garage: garage(), Number: "DH-2026-00001", Status: "sent", Date: issuedOn, ExpectedDate: "05/11/2026",
+			SupplierName: "Nhà cung cấp A", Notes: "Giao trong giờ hành chính",
+			Lines: []printmodel.PurchaseOrderRow{
+				{SKU: "OIL-5W30", Name: "Dầu nhớt 5W-30", Quantity: "16", Unit: "L", UnitCost: 90_000, Amount: 1_440_000},
+			},
+			ShowCost: true, TotalAmount: 1_440_000,
+		},
 	}
 }

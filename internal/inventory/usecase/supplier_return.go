@@ -226,6 +226,8 @@ type ListSupplierReturnsRequest struct {
 
 // ListSupplierReturns returns one page of the garage's returns to supplier,
 // newest first, without lines.
+//
+//nolint:dupl // each document is described with its own derived names
 func (uc *InventoryUseCase) ListSupplierReturns(ctx context.Context, req ListSupplierReturnsRequest) (*Page[*domain.SupplierReturn], error) {
 	const op = "list supplier returns"
 

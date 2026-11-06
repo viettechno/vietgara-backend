@@ -1,0 +1,15 @@
+{{define "subject"}}Đơn đặt hàng {{.Number}} từ {{.GarageName}}{{end}}
+{{define "text"}}Xin chào {{.SupplierName}},
+
+{{.GarageName}} gửi bạn đơn đặt hàng {{.Number}} (xem tệp PDF đính kèm).
+{{if .Message}}
+{{.Message}}
+{{end}}
+Mọi thắc mắc xin liên hệ {{.GarageName}}{{if .GaragePhone}} theo số {{.GaragePhone}}{{end}} hoặc trả lời e-mail này.
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào {{.SupplierName}},</p>
+<p><strong>{{.GarageName}}</strong> gửi bạn đơn đặt hàng <strong>{{.Number}}</strong> (xem tệp PDF đính kèm).</p>
+{{if .Message}}<p style="white-space:pre-line">{{.Message}}</p>{{end}}
+<p>Mọi thắc mắc xin liên hệ {{.GarageName}}{{if .GaragePhone}} theo số {{.GaragePhone}}{{end}} hoặc trả lời e-mail này.</p>
+<p>VietGara</p>{{end}}

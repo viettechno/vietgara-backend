@@ -108,6 +108,17 @@ type GoodsReceiptInfo struct {
 	TotalAmount int64
 }
 
+// PurchaseOrderInfo is the Inventory module's view of a purchase order that
+// Document/Print needs to render its PDF.
+type PurchaseOrderInfo struct {
+	Number, Status, Date, ExpectedDate, SupplierName, Notes string
+	Lines                                                   []printmodel.PurchaseOrderRow
+	// ShowCost is false for a caller without inventory.cost.read: the
+	// document then prints quantities only.
+	ShowCost    bool
+	TotalAmount int64
+}
+
 // StockIssueInfo is the Inventory module's view of a stock issue that
 // Document/Print needs to render its PDF.
 type StockIssueInfo struct {
@@ -132,6 +143,8 @@ type StockCountInfo struct {
 // policy checks.
 type InventoryDocumentReader interface {
 	GoodsReceipt(ctx context.Context, garageID, receiptID string) (GoodsReceiptInfo, error)
+	// PurchaseOrder returns a purchase order for its PDF (FR-INV-16).
+	PurchaseOrder(ctx context.Context, garageID, orderID string) (PurchaseOrderInfo, error)
 	// StockIssue returns the stock issue of a repair order.
 	StockIssue(ctx context.Context, garageID, repairOrderID string) (StockIssueInfo, error)
 	// Purchases lists the purchases report; from is inclusive and to

@@ -12,7 +12,8 @@ import (
 )
 
 const receiptColumns = `r.id, r.garage_id, r.number, r.status::text, r.default_supplier_id, to_char(r.receipt_date, 'YYYY-MM-DD'),
-	r.delivery_note_number, r.notes, r.completed_at, r.cancelled_at, r.created_by, r.updated_by, r.created_at, r.updated_at`
+	r.delivery_note_number, r.notes, r.completed_at, r.cancelled_at, r.created_by, r.updated_by, r.created_at, r.updated_at,
+	r.purchase_order_id, COALESCE((SELECT p.number FROM purchase_orders p WHERE p.garage_id = r.garage_id AND p.id = r.purchase_order_id), '')`
 
 func scanReceipt(row pgx.Row) (*domain.GoodsReceipt, error) {
 	var (
@@ -21,7 +22,8 @@ func scanReceipt(row pgx.Row) (*domain.GoodsReceipt, error) {
 	)
 
 	err := row.Scan(&r.ID, &r.GarageID, &r.Number, &status, &r.DefaultSupplierID, &r.ReceiptDate, &r.DeliveryNoteNumber,
-		&r.Notes, &r.CompletedAt, &r.CancelledAt, &r.CreatedBy, &r.UpdatedBy, &r.CreatedAt, &r.UpdatedAt)
+		&r.Notes, &r.CompletedAt, &r.CancelledAt, &r.CreatedBy, &r.UpdatedBy, &r.CreatedAt, &r.UpdatedAt, &r.PurchaseOrderID,
+		&r.PurchaseOrderNumber)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, domain.ErrGoodsReceiptNotFound
@@ -41,11 +43,11 @@ func (r *PostgresRepository) CreateGoodsReceipt(ctx context.Context, receipt *do
 
 	err := q.QueryRow(ctx, `
 		INSERT INTO goods_receipts (id, garage_id, number, status, default_supplier_id, receipt_date, delivery_note_number,
-		                            notes, created_by, updated_by)
-		VALUES ($1, $2, $3, $4::goods_receipt_status, $5, $6::date, $7, $8, $9, $10)
+		                            notes, created_by, updated_by, purchase_order_id)
+		VALUES ($1, $2, $3, $4::goods_receipt_status, $5, $6::date, $7, $8, $9, $10, $11)
 		RETURNING created_at, updated_at`,
 		receipt.ID, receipt.GarageID, receipt.Number, string(receipt.Status), receipt.DefaultSupplierID, receipt.ReceiptDate,
-		receipt.DeliveryNoteNumber, receipt.Notes, receipt.CreatedBy, receipt.UpdatedBy,
+		receipt.DeliveryNoteNumber, receipt.Notes, receipt.CreatedBy, receipt.UpdatedBy, receipt.PurchaseOrderID,
 	).Scan(&receipt.CreatedAt, &receipt.UpdatedAt)
 	if err != nil {
 		return err
@@ -73,6 +75,8 @@ func (r *PostgresRepository) insertReceiptLines(ctx context.Context, receipt *do
 }
 
 // FindGoodsReceipt returns the receipt with its lines in order.
+//
+//nolint:dupl // each document has its own tables and filters
 func (r *PostgresRepository) FindGoodsReceipt(ctx context.Context, garageID, receiptID string, forUpdate bool) (*domain.GoodsReceipt, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
@@ -175,7 +179,8 @@ func (r *PostgresRepository) ListGoodsReceipts(ctx context.Context, garageID str
 
 		if err := rows.Scan(&receipt.ID, &receipt.GarageID, &receipt.Number, &status, &receipt.DefaultSupplierID,
 			&receipt.ReceiptDate, &receipt.DeliveryNoteNumber, &receipt.Notes, &receipt.CompletedAt, &receipt.CancelledAt,
-			&receipt.CreatedBy, &receipt.UpdatedBy, &receipt.CreatedAt, &receipt.UpdatedAt, &receipt.TotalAmount); err != nil {
+			&receipt.CreatedBy, &receipt.UpdatedBy, &receipt.CreatedAt, &receipt.UpdatedAt, &receipt.PurchaseOrderID,
+			&receipt.PurchaseOrderNumber, &receipt.TotalAmount); err != nil {
 			return nil, 0, err
 		}
 

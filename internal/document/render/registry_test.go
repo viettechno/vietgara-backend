@@ -21,7 +21,7 @@ import (
 )
 
 // a5Documents are the documents that have an A5 template.
-var a5Documents = []printmodel.DocumentType{printmodel.TypeQuote, printmodel.TypeSettlement, printmodel.TypePaymentVoucher, printmodel.TypePaymentOut}
+var a5Documents = []printmodel.DocumentType{printmodel.TypeQuote, printmodel.TypeSettlement, printmodel.TypePaymentVoucher, printmodel.TypePaymentOut, printmodel.TypePurchaseOrder}
 
 func TestRegistry(t *testing.T) {
 	t.Parallel()

@@ -63,6 +63,16 @@ func (s *Server) PrintPaymentOutVoucherPdf(ctx context.Context, req *documentv1.
 	return pdfBody(data), nil
 }
 
+// PrintPurchaseOrderPdf prints the purchase order (FR-DOC-05).
+func (s *Server) PrintPurchaseOrderPdf(ctx context.Context, req *documentv1.PrintPurchaseOrderPdfRequest) (*httpbody.HttpBody, error) {
+	data, err := s.uc.PurchaseOrderPDF(ctx, req.GetGarageId(), req.GetPurchaseOrderId(), true)
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return pdfBody(data), nil
+}
+
 // PrintGoodsReceiptPdf prints the goods receipt (FR-DOC-05).
 func (s *Server) PrintGoodsReceiptPdf(ctx context.Context, req *documentv1.PrintGoodsReceiptPdfRequest) (*httpbody.HttpBody, error) {
 	data, err := s.uc.GoodsReceiptPDF(ctx, req.GetGarageId(), req.GetGoodsReceiptId(), true)
@@ -124,6 +134,7 @@ var documentTypeFromProto = map[documentv1.DocumentType]printmodel.DocumentType{
 	documentv1.DocumentType_DOCUMENT_TYPE_SETTLEMENT:      printmodel.TypeSettlement,
 	documentv1.DocumentType_DOCUMENT_TYPE_PAYMENT_VOUCHER: printmodel.TypePaymentVoucher,
 	documentv1.DocumentType_DOCUMENT_TYPE_GOODS_RECEIPT:   printmodel.TypeGoodsReceipt,
+	documentv1.DocumentType_DOCUMENT_TYPE_PURCHASE_ORDER:  printmodel.TypePurchaseOrder,
 	documentv1.DocumentType_DOCUMENT_TYPE_STOCK_ISSUE:     printmodel.TypeStockIssue,
 
 	documentv1.DocumentType_DOCUMENT_TYPE_PAYMENT_OUT_VOUCHER: printmodel.TypePaymentOut,

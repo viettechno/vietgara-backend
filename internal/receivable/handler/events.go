@@ -17,4 +17,5 @@ func Subscribe(bus outbox.Subscriber, processor *outbox.Processor, uc *usecase.R
 	bus.Subscribe("settlement.created", h)
 	bus.Subscribe("payment_voucher.issued", h)
 	bus.Subscribe("payment_voucher.voided", h)
+	bus.Subscribe("customer.anonymized", processor.Wrap(ConsumerName+"-anonymized", uc.HandleCustomerAnonymized))
 }

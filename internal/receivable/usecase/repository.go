@@ -58,6 +58,9 @@ type Repository interface {
 	GetSettings(ctx context.Context, garageID string) (domain.Settings, error)
 	// SaveSettings inserts or replaces the garage's settings.
 	SaveSettings(ctx context.Context, garageID string, s domain.Settings) error
+	// AnonymizeCustomer replaces the customer name and the plate copied into
+	// the customer's receivables.
+	AnonymizeCustomer(ctx context.Context, garageID, customerID string) error
 
 	// FindBySettlement returns the receivable of a settlement without its
 	// ledger, or domain.ErrReceivableNotFound.

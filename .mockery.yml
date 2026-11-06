@@ -511,6 +511,43 @@ packages:
           filename: "reporting_usecase_name_reader.go"
           dir: "./internal/mocks"
           structname: "MockReportingNameReader"
+  github.com/viettechno/vietgara-backend/internal/datarequest/usecase:
+    interfaces:
+      Customers:
+        config:
+          filename: "datarequest_usecase_customers.go"
+          dir: "./internal/mocks"
+          structname: "MockDataRequestCustomers"
+      Documents:
+        config:
+          filename: "datarequest_usecase_documents.go"
+          dir: "./internal/mocks"
+          structname: "MockDataRequestDocuments"
+      Names:
+        config:
+          filename: "datarequest_usecase_names.go"
+          dir: "./internal/mocks"
+          structname: "MockDataRequestNames"
+      Repository:
+        config:
+          filename: "datarequest_usecase_repository.go"
+          dir: "./internal/mocks"
+          structname: "MockDataRequestRepository"
+      Confirmations:
+        config:
+          filename: "datarequest_usecase_confirmations.go"
+          dir: "./internal/mocks"
+          structname: "MockDataRequestConfirmations"
+      Transactor:
+        config:
+          filename: "datarequest_usecase_transactor.go"
+          dir: "./internal/mocks"
+          structname: "MockDataRequestTransactor"
+      Mailer:
+        config:
+          filename: "datarequest_usecase_mailer.go"
+          dir: "./internal/mocks"
+          structname: "MockDataRequestMailer"
   github.com/viettechno/vietgara-backend/internal/notification/usecase:
     interfaces:
       Mailer:

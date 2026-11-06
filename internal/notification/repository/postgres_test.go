@@ -197,3 +197,16 @@ func bytesOf(t *testing.T, arg any) []byte {
 
 	return b
 }
+
+func TestPostgresRepository_ClearRecipients(t *testing.T) {
+	t.Parallel()
+
+	tx := dbtest.New(t).
+		ExpectExec("UPDATE notification_log SET recipient", dbtest.Tag(3), nil).
+		ExpectExec("UPDATE notification_log SET recipient", dbtest.Tag(0), errBoom)
+	ctx := tx.Context(t.Context())
+	repo := repository.NewPostgresRepository(nil)
+
+	require.NoError(t, repo.ClearRecipients(ctx, "g-1", "c-1"))
+	require.ErrorIs(t, repo.ClearRecipients(ctx, "g-1", "c-1"), errBoom)
+}

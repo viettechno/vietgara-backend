@@ -1,0 +1,19 @@
+{{define "subject"}}Confirm your personal-data request{{end}}
+{{define "text"}}Hello,
+
+We received a request to {{if eq .Type "delete"}}delete{{else if eq .Type "correct"}}correct{{else}}view{{end}} the personal data tied to this e-mail address at the garages that use VietGara.
+
+To confirm, open this link within {{.Hours}} hours (it works once):
+{{.ConfirmURL}}
+{{if eq .Type "delete"}}
+Note: deletion cannot be undone. Personal data is anonymized; the financial documents the law requires are kept.
+{{end}}
+If you did not make this request, ignore this e-mail: nothing will happen.
+
+VietGara{{end}}
+{{define "html"}}<p>Hello,</p>
+<p>We received a request to <strong>{{if eq .Type "delete"}}delete{{else if eq .Type "correct"}}correct{{else}}view{{end}}</strong> the personal data tied to this e-mail address at the garages that use VietGara.</p>
+<p>To confirm, open this link within {{.Hours}} hours (it works once):<br><a href="{{.ConfirmURL}}">{{.ConfirmURL}}</a></p>
+{{if eq .Type "delete"}}<p>Note: deletion cannot be undone. Personal data is anonymized; the financial documents the law requires are kept.</p>{{end}}
+<p>If you did not make this request, ignore this e-mail: nothing will happen.</p>
+<p>VietGara</p>{{end}}

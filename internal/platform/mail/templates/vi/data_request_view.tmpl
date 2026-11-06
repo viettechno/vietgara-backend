@@ -1,0 +1,18 @@
+{{define "subject"}}Dữ liệu cá nhân của bạn tại các gara dùng VietGara{{end}}
+{{define "text"}}Xin chào,
+
+Dưới đây là dữ liệu cá nhân gắn với địa chỉ e-mail này mà các gara đang giữ.
+{{range .Sections}}
+== {{.Garage}} ==
+{{.Data}}
+{{end}}
+Chúng tôi không lưu lại bản sao của dữ liệu này.
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào,</p>
+<p>Dưới đây là dữ liệu cá nhân gắn với địa chỉ e-mail này mà các gara đang giữ.</p>
+{{range .Sections}}<h3>{{.Garage}}</h3>
+<pre>{{.Data}}</pre>
+{{end}}
+<p>Chúng tôi không lưu lại bản sao của dữ liệu này.</p>
+<p>VietGara</p>{{end}}

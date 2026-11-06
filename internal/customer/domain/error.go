@@ -6,6 +6,25 @@ import "errors"
 // identity while a live document refers to it (FR-CUS-02).
 const ReasonVehicleFieldLocked = "VEHICLE_FIELD_LOCKED"
 
+// ReasonCustomerAnonymized is the error reason of a change of an anonymized
+// customer (FR-CUS-05).
+const ReasonCustomerAnonymized = "CUSTOMER_ANONYMIZED"
+
+// AnonymizedName replaces the name of a customer whose data was erased
+// (PD-06); the plate of a vehicle becomes AnonymizedPlatePrefix and a part of
+// its id.
+const (
+	AnonymizedName        = "Khách hàng đã ẩn danh"
+	AnonymizedPlatePrefix = "ANON-"
+)
+
+// AnonymizedCounts is what an anonymization changed.
+type AnonymizedCounts struct {
+	Customers   int
+	Vehicles    int
+	TaxProfiles int
+}
+
 // Sentinel errors for business-rule violations in the Customer & Vehicle
 // module.
 var (
@@ -35,6 +54,10 @@ var (
 	// ErrOwnerChangeOnUpdate is returned when an update tries to change the
 	// owner, which ChangeVehicleOwner alone does.
 	ErrOwnerChangeOnUpdate = errors.New("the owner is changed with a change of owner, not an update")
+
+	// ErrCustomerAnonymized is returned for changing a customer whose personal
+	// data was erased: it cannot be edited or given vehicles.
+	ErrCustomerAnonymized = errors.New("the customer was anonymized and can no longer be changed")
 
 	ErrPhoneTaken        = errors.New("another customer already uses this phone number")
 	ErrLicensePlateTaken = errors.New("another vehicle already uses this license plate")

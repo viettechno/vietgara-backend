@@ -78,6 +78,17 @@ func (r *PostgresRepository) SaveSettings(ctx context.Context, garageID string, 
 	return nil
 }
 
+// AnonymizeCustomer replaces the customer name and the plate copied into the
+// customer's receivables with the placeholders (PD-06).
+func (r *PostgresRepository) AnonymizeCustomer(ctx context.Context, garageID, customerID string) error {
+	_, err := r.q(ctx).Exec(ctx, `
+		UPDATE receivables SET customer_name = $3, vehicle_license_plate = $4
+		WHERE garage_id = $1 AND customer_id = $2 AND (customer_name <> $3 OR vehicle_license_plate <> $4)`,
+		garageID, customerID, domain.AnonymizedName, domain.AnonymizedPlate)
+
+	return err
+}
+
 const receivableColumns = `id, garage_id, settlement_id, settlement_number, customer_id, customer_name, vehicle_license_plate,
 	total_amount, paid_amount, due_date, status, reminders_sent, last_reminder_at, created_at, updated_at`
 

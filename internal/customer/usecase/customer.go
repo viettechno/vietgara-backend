@@ -165,6 +165,10 @@ func (uc *CustomerUseCase) Update(ctx context.Context, req UpdateCustomerRequest
 		return nil, toAppError("update customer", err)
 	}
 
+	if c.IsAnonymized() {
+		return nil, toAppError("update customer", domain.ErrCustomerAnonymized)
+	}
+
 	fields := customerFields{FullName: req.FullName, Phone: req.Phone, Email: req.Email, Address: req.Address, Locale: req.Locale}
 	if err := fields.apply(c); err != nil {
 		return nil, toAppError("update customer", err)

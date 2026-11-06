@@ -1,0 +1,18 @@
+{{define "subject"}}Your personal data at the garages that use VietGara{{end}}
+{{define "text"}}Hello,
+
+Here is the personal data tied to this e-mail address that the garages hold.
+{{range .Sections}}
+== {{.Garage}} ==
+{{.Data}}
+{{end}}
+We keep no copy of this data.
+
+VietGara{{end}}
+{{define "html"}}<p>Hello,</p>
+<p>Here is the personal data tied to this e-mail address that the garages hold.</p>
+{{range .Sections}}<h3>{{.Garage}}</h3>
+<pre>{{.Data}}</pre>
+{{end}}
+<p>We keep no copy of this data.</p>
+<p>VietGara</p>{{end}}

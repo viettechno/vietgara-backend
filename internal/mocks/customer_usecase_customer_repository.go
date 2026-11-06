@@ -39,6 +39,84 @@ func (_m *MockCustomerRepository) EXPECT() *MockCustomerRepository_Expecter {
 	return &MockCustomerRepository_Expecter{mock: &_m.Mock}
 }
 
+// Anonymize provides a mock function for the type MockCustomerRepository
+func (_mock *MockCustomerRepository) Anonymize(ctx context.Context, garageID string, customerID string, actorID string) (domain.AnonymizedCounts, error) {
+	ret := _mock.Called(ctx, garageID, customerID, actorID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Anonymize")
+	}
+
+	var r0 domain.AnonymizedCounts
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string) (domain.AnonymizedCounts, error)); ok {
+		return returnFunc(ctx, garageID, customerID, actorID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, string) domain.AnonymizedCounts); ok {
+		r0 = returnFunc(ctx, garageID, customerID, actorID)
+	} else {
+		r0 = ret.Get(0).(domain.AnonymizedCounts)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, string) error); ok {
+		r1 = returnFunc(ctx, garageID, customerID, actorID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockCustomerRepository_Anonymize_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Anonymize'
+type MockCustomerRepository_Anonymize_Call struct {
+	*mock.Call
+}
+
+// Anonymize is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - customerID string
+//   - actorID string
+func (_e *MockCustomerRepository_Expecter) Anonymize(ctx any, garageID any, customerID any, actorID any) *MockCustomerRepository_Anonymize_Call {
+	return &MockCustomerRepository_Anonymize_Call{Call: _e.mock.On("Anonymize", ctx, garageID, customerID, actorID)}
+}
+
+func (_c *MockCustomerRepository_Anonymize_Call) Run(run func(ctx context.Context, garageID string, customerID string, actorID string)) *MockCustomerRepository_Anonymize_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockCustomerRepository_Anonymize_Call) Return(anonymizedCounts domain.AnonymizedCounts, err error) *MockCustomerRepository_Anonymize_Call {
+	_c.Call.Return(anonymizedCounts, err)
+	return _c
+}
+
+func (_c *MockCustomerRepository_Anonymize_Call) RunAndReturn(run func(ctx context.Context, garageID string, customerID string, actorID string) (domain.AnonymizedCounts, error)) *MockCustomerRepository_Anonymize_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Create provides a mock function for the type MockCustomerRepository
 func (_mock *MockCustomerRepository) Create(ctx context.Context, c *domain.Customer) error {
 	ret := _mock.Called(ctx, c)

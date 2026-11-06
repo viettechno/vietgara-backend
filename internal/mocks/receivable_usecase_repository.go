@@ -109,6 +109,69 @@ func (_c *MockReceivableRepository_AddEntries_Call) RunAndReturn(run func(ctx co
 	return _c
 }
 
+// AnonymizeCustomer provides a mock function for the type MockReceivableRepository
+func (_mock *MockReceivableRepository) AnonymizeCustomer(ctx context.Context, garageID string, customerID string) error {
+	ret := _mock.Called(ctx, garageID, customerID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for AnonymizeCustomer")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+		r0 = returnFunc(ctx, garageID, customerID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockReceivableRepository_AnonymizeCustomer_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'AnonymizeCustomer'
+type MockReceivableRepository_AnonymizeCustomer_Call struct {
+	*mock.Call
+}
+
+// AnonymizeCustomer is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - customerID string
+func (_e *MockReceivableRepository_Expecter) AnonymizeCustomer(ctx any, garageID any, customerID any) *MockReceivableRepository_AnonymizeCustomer_Call {
+	return &MockReceivableRepository_AnonymizeCustomer_Call{Call: _e.mock.On("AnonymizeCustomer", ctx, garageID, customerID)}
+}
+
+func (_c *MockReceivableRepository_AnonymizeCustomer_Call) Run(run func(ctx context.Context, garageID string, customerID string)) *MockReceivableRepository_AnonymizeCustomer_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockReceivableRepository_AnonymizeCustomer_Call) Return(err error) *MockReceivableRepository_AnonymizeCustomer_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockReceivableRepository_AnonymizeCustomer_Call) RunAndReturn(run func(ctx context.Context, garageID string, customerID string) error) *MockReceivableRepository_AnonymizeCustomer_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // BalanceBefore provides a mock function for the type MockReceivableRepository
 func (_mock *MockReceivableRepository) BalanceBefore(ctx context.Context, garageID string, t time.Time) (int64, error) {
 	ret := _mock.Called(ctx, garageID, t)

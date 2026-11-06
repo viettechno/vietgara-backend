@@ -57,6 +57,9 @@ type Repository interface {
 	// survives the rollback of the event's transaction and a redelivery does
 	// not send it again.
 	Sent(ctx context.Context, log *domain.Log) error
+	// ClearRecipients empties the recipient address of the customer's rows
+	// (PD-06).
+	ClearRecipients(ctx context.Context, garageID, customerID string) error
 	// AlreadySent reports whether the e-mail of key was sent.
 	AlreadySent(ctx context.Context, key SentKey) (bool, error)
 	// List returns a garage's rows, newest first, and how many match.

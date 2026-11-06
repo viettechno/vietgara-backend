@@ -18,7 +18,7 @@ func customerValues(consent string) []any {
 
 	return []any{
 		customerID, garageID, "Tran Binh", &phone, nil, nil, []byte(consent), true,
-		nil, nil, testTime, testTime, "en", &testTime, 2, new("linked"),
+		nil, nil, testTime, testTime, "en", &testTime, &testTime, 2, new("linked"),
 	}
 }
 
@@ -88,6 +88,7 @@ func TestPostgresCustomerRepository_FindByID(t *testing.T) {
 		assert.Equal(t, domain.LinkLinked, c.LinkStatus)
 		assert.Equal(t, "en", c.Locale)
 		assert.Equal(t, &testTime, c.EmailOptOutAt)
+		assert.Equal(t, &testTime, c.AnonymizedAt)
 		assert.Equal(t, []domain.ConsentRecord{{Granted: true, RecordedAt: testTime, RecordedBy: "user-1"}}, c.ConsentLog)
 	})
 

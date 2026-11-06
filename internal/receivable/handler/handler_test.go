@@ -258,7 +258,8 @@ func TestSubscribe(t *testing.T) {
 	b := bus{}
 	handler.Subscribe(b, outbox.NewProcessor(nil, nil), usecase.NewReceivableUseCase(usecase.Deps{}))
 
-	assert.Len(t, b, 3)
+	assert.Len(t, b, 4)
+	assert.Contains(t, b, "customer.anonymized")
 	assert.Contains(t, b, "settlement.created")
 	assert.Contains(t, b, "payment_voucher.issued")
 	assert.Contains(t, b, "payment_voucher.voided")

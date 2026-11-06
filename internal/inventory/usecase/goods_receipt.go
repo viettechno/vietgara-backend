@@ -288,7 +288,59 @@ func (uc *InventoryUseCase) CompleteGoodsReceipt(ctx context.Context, garageID, 
 
 	r.TotalAmount = r.Total()
 
+	if err := uc.publishReceiptCompleted(ctx, actorID, r); err != nil {
+		return nil, toAppError(op, err)
+	}
+
 	return r, nil
+}
+
+// Events of a goods receipt (Release 13.0): the Receivables module makes a
+// payable per supplier of a completed receipt and cancels them when it is
+// reversed.
+const (
+	EventGoodsReceiptCompleted = "goods_receipt.completed"
+	EventGoodsReceiptCancelled = "goods_receipt.cancelled"
+)
+
+// publishReceiptCompleted tells the payables what each supplier of the
+// receipt is owed: the cost of its lines. A supplier whose lines record no
+// cost is left out, and a receipt with no cost at all makes no payable.
+func (uc *InventoryUseCase) publishReceiptCompleted(ctx context.Context, actorID string, r *domain.GoodsReceipt) error {
+	type owed struct {
+		SupplierID   string `json:"supplier_id"`
+		SupplierName string `json:"supplier_name"`
+		Amount       int64  `json:"amount"`
+	}
+
+	var (
+		suppliers []owed
+		index     = map[string]int{}
+	)
+
+	for i := range r.Lines {
+		l := &r.Lines[i]
+		if l.SupplierID == nil || l.Amount() <= 0 {
+			continue
+		}
+
+		at, ok := index[*l.SupplierID]
+		if !ok {
+			at = len(suppliers)
+			index[*l.SupplierID] = at
+			suppliers = append(suppliers, owed{SupplierID: *l.SupplierID, SupplierName: l.SupplierName})
+		}
+
+		suppliers[at].Amount += l.Amount()
+	}
+
+	if len(suppliers) == 0 {
+		return nil
+	}
+
+	return uc.events.Publish(ctx, EventGoodsReceiptCompleted, r.GarageID, actorID, map[string]any{
+		"goods_receipt_id": r.ID, "garage_id": r.GarageID, "number": r.Number, "receipt_date": r.ReceiptDate, "suppliers": suppliers,
+	})
 }
 
 // receiveLine writes the IN movement of one receipt line and remembers the
@@ -356,6 +408,16 @@ func (uc *InventoryUseCase) CancelGoodsReceipt(ctx context.Context, garageID, re
 	}
 
 	r.TotalAmount = r.Total()
+
+	// Only a completed receipt made payables, and only it can be reversed.
+	if before == domain.GoodsReceiptCompleted {
+		err := uc.events.Publish(ctx, EventGoodsReceiptCancelled, r.GarageID, actorID, map[string]any{
+			"goods_receipt_id": r.ID, "garage_id": r.GarageID,
+		})
+		if err != nil {
+			return nil, toAppError(op, err)
+		}
+	}
 
 	return r, nil
 }

@@ -1,6 +1,8 @@
 package usecase_test
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -336,6 +338,7 @@ func TestInventoryUseCase_CompleteGoodsReceipt(t *testing.T) {
 		t.Parallel()
 
 		uc, d := newUseCase(t)
+
 		r := draftReceipt(receiptLine(partID, supplierA, "10", 150000), receiptLine(otherPartID, supplierB, "2", 0))
 		d.Repo.EXPECT().FindGoodsReceipt(mock.Anything, garageID, receiptID, true).Return(r, nil).Once()
 
@@ -533,6 +536,135 @@ func TestInventoryUseCase_CancelGoodsReceipt(t *testing.T) {
 		d.Repo.EXPECT().SaveGoodsReceipt(mock.Anything, mock.Anything).Return(errBoom).Once()
 
 		_, err = uc.CancelGoodsReceipt(t.Context(), garageID, receiptID, actorID)
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+}
+
+func TestInventoryUseCase_GoodsReceiptEvents(t *testing.T) {
+	t.Parallel()
+
+	t.Run("completing tells the payables what each supplier is owed and leaves out the one with no cost", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newBareUseCase(t)
+		d.Repo.EXPECT().DraftLines(mock.Anything, mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+
+		r := draftReceipt(receiptLine(partID, supplierA, "10", 150000), receiptLine(otherPartID, supplierB, "2", 0), receiptLine(partID, supplierA, "1", 10000))
+		d.Repo.EXPECT().FindGoodsReceipt(mock.Anything, garageID, receiptID, true).Return(r, nil).Once()
+
+		other := samplePart()
+		other.ID = otherPartID
+		d.Parts.EXPECT().Parts(mock.Anything, garageID, mock.Anything).Return([]usecase.PartInfo{samplePart(), other}, nil).Maybe()
+		d.Directory.EXPECT().SupplierNames(mock.Anything, garageID, mock.Anything).Return(supplierNames(supplierA, supplierB), nil).Maybe()
+		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.Anything).Return(nil).Times(3)
+		d.Repo.EXPECT().RecordLastCost(mock.Anything, garageID, partID, supplierA, mock.Anything).Return(nil).Times(2)
+		d.Repo.EXPECT().SaveGoodsReceipt(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Audit.EXPECT().Record(mock.Anything, mock.Anything).Return(nil).Once()
+
+		var payload map[string]any
+
+		d.Events.EXPECT().Publish(mock.Anything, usecase.EventGoodsReceiptCompleted, garageID, actorID, mock.Anything).
+			Run(func(_ context.Context, _, _, _ string, p any) { payload, _ = p.(map[string]any) }).Return(nil).Once()
+
+		_, err := uc.CompleteGoodsReceipt(t.Context(), garageID, receiptID, actorID)
+		require.NoError(t, err)
+
+		require.Equal(t, receiptID, payload["goods_receipt_id"])
+		suppliers := fmt.Sprintf("%v", payload["suppliers"])
+		assert.Contains(t, suppliers, supplierA)
+		assert.Contains(t, suppliers, "1510000", "10 x 150,000 + 1 x 10,000 for one supplier")
+		assert.NotContains(t, suppliers, supplierB, "no cost, no payable")
+	})
+
+	t.Run("a receipt with no cost at all publishes nothing", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newBareUseCase(t)
+		d.Repo.EXPECT().DraftLines(mock.Anything, mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+		d.Repo.EXPECT().FindGoodsReceipt(mock.Anything, garageID, receiptID, true).Return(draftReceipt(receiptLine(partID, supplierA, "5", 0)), nil).Once()
+		d.Parts.EXPECT().Parts(mock.Anything, garageID, mock.Anything).Return([]usecase.PartInfo{samplePart()}, nil).Maybe()
+		d.Directory.EXPECT().SupplierNames(mock.Anything, garageID, mock.Anything).Return(supplierNames(supplierA), nil).Maybe()
+		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Repo.EXPECT().SaveGoodsReceipt(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Audit.EXPECT().Record(mock.Anything, mock.Anything).Return(nil).Once()
+
+		_, err := uc.CompleteGoodsReceipt(t.Context(), garageID, receiptID, actorID)
+		require.NoError(t, err)
+	})
+
+	t.Run("a failing publish fails the completion", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newBareUseCase(t)
+		d.Repo.EXPECT().DraftLines(mock.Anything, mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+		d.Repo.EXPECT().FindGoodsReceipt(mock.Anything, garageID, receiptID, true).Return(draftReceipt(receiptLine(partID, supplierA, "5", 1000)), nil).Once()
+		d.Parts.EXPECT().Parts(mock.Anything, garageID, mock.Anything).Return([]usecase.PartInfo{samplePart()}, nil).Maybe()
+		d.Directory.EXPECT().SupplierNames(mock.Anything, garageID, mock.Anything).Return(supplierNames(supplierA), nil).Maybe()
+		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Repo.EXPECT().RecordLastCost(mock.Anything, garageID, partID, supplierA, mock.Anything).Return(nil).Once()
+		d.Repo.EXPECT().SaveGoodsReceipt(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Audit.EXPECT().Record(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Events.EXPECT().Publish(mock.Anything, usecase.EventGoodsReceiptCompleted, garageID, actorID, mock.Anything).Return(errBoom).Once()
+
+		_, err := uc.CompleteGoodsReceipt(t.Context(), garageID, receiptID, actorID)
+		assertAppError(t, err, apperror.CodeInternal)
+	})
+}
+
+func TestInventoryUseCase_GoodsReceiptReversalEvents(t *testing.T) {
+	t.Parallel()
+
+	t.Run("reversing a completed receipt cancels its payables; cancelling a draft does not", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newBareUseCase(t)
+		d.Repo.EXPECT().DraftLines(mock.Anything, mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+
+		completed := draftReceipt(receiptLine(partID, supplierA, "5", 1000))
+		completed.Status = domain.GoodsReceiptCompleted
+		d.Repo.EXPECT().FindGoodsReceipt(mock.Anything, garageID, receiptID, true).Return(completed, nil).Once()
+		d.Repo.EXPECT().Balances(mock.Anything, garageID, mock.Anything).Return(map[string]usecase.Balance{partID: {OnHand: "10"}}, nil).Once()
+		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Repo.EXPECT().SaveGoodsReceipt(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Audit.EXPECT().Record(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Parts.EXPECT().Parts(mock.Anything, garageID, mock.Anything).Return([]usecase.PartInfo{samplePart()}, nil).Maybe()
+		d.Directory.EXPECT().SupplierNames(mock.Anything, garageID, mock.Anything).Return(supplierNames(supplierA), nil).Maybe()
+		d.Events.EXPECT().Publish(mock.Anything, usecase.EventGoodsReceiptCancelled, garageID, actorID,
+			map[string]any{"goods_receipt_id": receiptID, "garage_id": garageID}).Return(nil).Once()
+
+		_, err := uc.CancelGoodsReceipt(t.Context(), garageID, receiptID, actorID)
+		require.NoError(t, err)
+
+		uc, d = newBareUseCase(t)
+		d.Repo.EXPECT().DraftLines(mock.Anything, mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+		d.Repo.EXPECT().FindGoodsReceipt(mock.Anything, garageID, receiptID, true).Return(draftReceipt(receiptLine(partID, supplierA, "5", 1000)), nil).Once()
+		d.Repo.EXPECT().SaveGoodsReceipt(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Audit.EXPECT().Record(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Parts.EXPECT().Parts(mock.Anything, garageID, mock.Anything).Return([]usecase.PartInfo{samplePart()}, nil).Maybe()
+		d.Directory.EXPECT().SupplierNames(mock.Anything, garageID, mock.Anything).Return(supplierNames(supplierA), nil).Maybe()
+
+		_, err = uc.CancelGoodsReceipt(t.Context(), garageID, receiptID, actorID)
+		require.NoError(t, err)
+	})
+
+	t.Run("a failing publish fails the reversal", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newBareUseCase(t)
+		d.Repo.EXPECT().DraftLines(mock.Anything, mock.Anything, mock.Anything).Return(nil, nil).Maybe()
+
+		completed := draftReceipt(receiptLine(partID, supplierA, "5", 1000))
+		completed.Status = domain.GoodsReceiptCompleted
+		d.Repo.EXPECT().FindGoodsReceipt(mock.Anything, garageID, receiptID, true).Return(completed, nil).Once()
+		d.Repo.EXPECT().Balances(mock.Anything, garageID, mock.Anything).Return(map[string]usecase.Balance{partID: {OnHand: "10"}}, nil).Once()
+		d.Repo.EXPECT().RecordTransaction(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Repo.EXPECT().SaveGoodsReceipt(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Audit.EXPECT().Record(mock.Anything, mock.Anything).Return(nil).Once()
+		d.Parts.EXPECT().Parts(mock.Anything, garageID, mock.Anything).Return([]usecase.PartInfo{samplePart()}, nil).Maybe()
+		d.Directory.EXPECT().SupplierNames(mock.Anything, garageID, mock.Anything).Return(supplierNames(supplierA), nil).Maybe()
+		d.Events.EXPECT().Publish(mock.Anything, usecase.EventGoodsReceiptCancelled, garageID, actorID, mock.Anything).Return(errBoom).Once()
+
+		_, err := uc.CancelGoodsReceipt(t.Context(), garageID, receiptID, actorID)
 		assertAppError(t, err, apperror.CodeInternal)
 	})
 }

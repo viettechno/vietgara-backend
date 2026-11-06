@@ -597,6 +597,31 @@ packages:
           filename: "receivable_usecase_transactor.go"
           dir: "./internal/mocks"
           structname: "MockReceivableTransactor"
+      PayableRepository:
+        config:
+          filename: "receivable_usecase_payable_repository.go"
+          dir: "./internal/mocks"
+          structname: "MockReceivablePayableRepository"
+      SupplierReader:
+        config:
+          filename: "receivable_usecase_supplier_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockReceivableSupplierReader"
+      IssuerReader:
+        config:
+          filename: "receivable_usecase_issuer_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockReceivableIssuerReader"
+      StaffReader:
+        config:
+          filename: "receivable_usecase_staff_reader.go"
+          dir: "./internal/mocks"
+          structname: "MockReceivableStaffReader"
+      Sequencer:
+        config:
+          filename: "receivable_usecase_sequencer.go"
+          dir: "./internal/mocks"
+          structname: "MockReceivableSequencer"
       AuditLogger:
         config:
           filename: "receivable_usecase_audit_logger.go"

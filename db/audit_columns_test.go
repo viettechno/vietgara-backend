@@ -19,8 +19,9 @@ import (
 // updated_at / updated_by when its rows change) with the matching trigger
 // from create_row_audit_functions, or be added here deliberately (NFR-MT-07).
 var auditAllowlist = map[string]string{
-	"processed_events": "idempotent-consumer ledger of the event bus, keyed by consumer and event",
-	"idempotency_keys": "request replay cache keyed by user and key, purged after 24 hours",
+	"processed_events":           "idempotent-consumer ledger of the event bus, keyed by consumer and event",
+	"idempotency_keys":           "request replay cache keyed by user and key, purged after 24 hours",
+	"data_request_confirmations": "public personal-data requests waiting for their e-mail link: nobody is signed in, purged once their link has expired",
 }
 
 // TestRowAuditColumns fails when a table has neither the audit columns

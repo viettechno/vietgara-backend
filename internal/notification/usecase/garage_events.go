@@ -276,3 +276,19 @@ func safeFileName(s string) string {
 		}
 	}, s)
 }
+
+// HandleCustomerAnonymized clears the recipient address of the customer's rows
+// in the notification log (PD-06). It is idempotent.
+func (uc *NotificationUseCase) HandleCustomerAnonymized(ctx context.Context, event outbox.Event) error {
+	var p struct {
+		CustomerID string `json:"customer_id"`
+	}
+
+	if err := json.Unmarshal(event.Data, &p); err != nil || p.CustomerID == "" || event.GarageID == "" {
+		slog.Error("notification: dropped a malformed customer.anonymized event", "event_id", event.ID, "error", err)
+
+		return nil
+	}
+
+	return uc.Log.ClearRecipients(ctx, event.GarageID, p.CustomerID)
+}

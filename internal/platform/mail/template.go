@@ -36,6 +36,8 @@ const (
 	TemplateLowStock                 = "low_stock"
 	TemplatePaymentReminder          = "payment_reminder"
 	TemplatePurchaseOrder            = "purchase_order"
+	TemplateDataRequestConfirmation  = "data_request_confirmation"
+	TemplateDataRequestView          = "data_request_view"
 )
 
 // Supported locales; Vietnamese is the default.

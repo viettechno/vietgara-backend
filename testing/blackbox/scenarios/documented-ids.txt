@@ -1,5 +1,5 @@
 # Documented E2E scenario IDs and priorities.
-# Generated from vietgara-docs@49ef0ec on 2026-11-06.
+# Generated from vietgara-docs@d1e7204 on 2026-11-06.
 # DO NOT EDIT: regenerate with
 #   python3 testing/blackbox/scripts/check_traceability.py --regen --docs-dir <vietgara-docs> --out testing/blackbox/scenarios/documented-ids.txt
 E2E-BIL-001 P1
@@ -55,6 +55,16 @@ E2E-DOC-002 P2
 E2E-DOC-003 P2
 E2E-DOC-004 P1
 E2E-DOC-005 P2
+E2E-DSR-001 P1
+E2E-DSR-002 P1
+E2E-DSR-003 P1
+E2E-DSR-004 P1
+E2E-DSR-005 P1
+E2E-DSR-006 P1
+E2E-DSR-007 P2
+E2E-DSR-008 P2
+E2E-DSR-009 P1
+E2E-DSR-010 P2
 E2E-IAM-001 P1
 E2E-IAM-002 P1
 E2E-IAM-003 P2

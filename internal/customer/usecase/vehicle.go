@@ -247,6 +247,10 @@ func (uc *VehicleUseCase) assignOwner(ctx context.Context, v *domain.Vehicle, cu
 		return toAppError("find vehicle owner", err)
 	}
 
+	if owner.IsAnonymized() {
+		return toAppError("find vehicle owner", domain.ErrCustomerAnonymized)
+	}
+
 	v.CustomerID, v.CustomerName = owner.ID, owner.FullName
 
 	return nil

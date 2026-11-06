@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 
 	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
 	"github.com/viettechno/vietgara-backend/internal/receivable/domain"
@@ -63,7 +64,17 @@ func (uc *ReceivableUseCase) Sync(ctx context.Context, garageID, settlementID st
 		}
 	}
 
-	r.SettlementNumber, r.CustomerName, r.VehicleLicensePlate = view.Number, view.CustomerName, view.VehicleLicensePlate
+	r.SettlementNumber = view.Number
+
+	// The settlement keeps the name and plate of when it was issued; the
+	// receivable, once its customer was anonymized, does not take them back.
+	switch {
+	case view.CustomerAnonymized:
+		r.CustomerName, r.VehicleLicensePlate = domain.AnonymizedName, domain.AnonymizedPlate
+	case !r.Anonymized():
+		r.CustomerName, r.VehicleLicensePlate = view.CustomerName, view.VehicleLicensePlate
+	}
+
 	r.TotalAmount, r.PaidAmount = view.TotalAmount, view.PaidAmount
 
 	if view.CustomerID != "" {
@@ -124,4 +135,21 @@ func entriesOf(view SettlementView) []domain.Entry {
 	}
 
 	return entries
+}
+
+// HandleCustomerAnonymized replaces the name and the plate that the customer's
+// receivables copied from their settlements with placeholders (PD-06). It is
+// idempotent. The reminder log holds no personal data.
+func (uc *ReceivableUseCase) HandleCustomerAnonymized(ctx context.Context, event outbox.Event) error {
+	var p struct {
+		CustomerID string `json:"customer_id"`
+	}
+
+	if err := json.Unmarshal(event.Data, &p); err != nil || p.CustomerID == "" || event.GarageID == "" {
+		slog.Error("receivable: dropped a malformed customer.anonymized event", "event_id", event.ID, "error", err)
+
+		return nil
+	}
+
+	return uc.repo.AnonymizeCustomer(ctx, event.GarageID, p.CustomerID)
 }

@@ -164,6 +164,7 @@ func (a receivableSettlements) Get(ctx context.Context, garageID, settlementID s
 	}
 
 	view.CustomerID = vehicle.CustomerID
+	view.CustomerAnonymized = vehicle.CustomerName == customerDomain.AnonymizedName
 
 	return view, nil
 }

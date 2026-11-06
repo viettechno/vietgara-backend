@@ -65,6 +65,7 @@ import (
 	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
 	customerportalHandler "github.com/viettechno/vietgara-backend/internal/customerportal/handler"
 	dataimportHandler "github.com/viettechno/vietgara-backend/internal/dataimport/handler"
+	dataRequestHandler "github.com/viettechno/vietgara-backend/internal/datarequest/handler"
 	documentHandler "github.com/viettechno/vietgara-backend/internal/document/handler"
 	fileHandler "github.com/viettechno/vietgara-backend/internal/file/handler"
 	identityHandler "github.com/viettechno/vietgara-backend/internal/identity/handler"
@@ -401,7 +402,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		customerUsecase.WithAuditor(auditLog),
 	)
 	customerUC := customerUsecase.NewCustomerUseCase(customerRepo, vehicleRepo, usage,
-		customerUsecase.WithUserDirectory(linkUsers{identity: identityUC}))
+		customerUsecase.WithUserDirectory(linkUsers{identity: identityUC}), customerUsecase.WithAuditor(auditLog),
+		customerUsecase.WithEvents(events), customerUsecase.WithTaxProfiles(customerRepository.NewPostgresTaxProfileRepository(pool)))
 	customerSrv := customerHandler.NewServer(customerUC, vehicleUC)
 
 	customerLinks := buildCustomerLinks(pool, customerRepo, identityUC, garages, auditLog)
@@ -427,6 +429,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// Notification (Release 1.5): the e-mail channel only (FR-NOT-04) --
 	// registration confirmation and license renewal reminders. No RPCs of
 	// its own; every e-mail is triggered by an event consumer (wireEvents).
+	dataRequest := buildDataRequest(pool, garageTransactor{tx: tx}, mailer, customerUC, customerRepo, users, garages, signingKey)
 	notification := buildNotification(pool, tx, mailer, users, customerRepo, vehicleRepo, customerUC, garages, document.uc, signingKey)
 	quoteNotifications.uc = notification.uc
 	inventory.uc.SetOrderMailer(inventoryOrderMailer{uc: notification.uc})
@@ -445,6 +448,10 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	if err := wireEvents(app, pool, tx, tenantUC, license, inventory, repairOrder, notification, receivable); err != nil {
 		return nil, err
 	}
+
+	app.workers = append(app.workers, func(ctx context.Context) {
+		dataRequest.publicCase.Schedule(ctx, envDuration("DATA_REQUEST_PURGE_INTERVAL", time.Hour))
+	})
 
 	app.workers = append(app.workers, func(ctx context.Context) {
 		receivable.uc.Schedule(ctx, envDuration("RECEIVABLE_REMINDER_JOB_INTERVAL", receivableUsecase.DefaultReminderInterval))
@@ -503,6 +510,8 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	customerv1.RegisterVehicleServiceServer(app.grpcServer, customerSrv)
 	customerv1.RegisterCustomerLinkServiceServer(app.grpcServer, customerLinkSrv)
 	customerv1.RegisterCustomerTaxProfileServiceServer(app.grpcServer, taxProfileSrv)
+	customerv1.RegisterDataRequestServiceServer(app.grpcServer, dataRequest.staff)
+	customerv1.RegisterPublicDataRequestServiceServer(app.grpcServer, dataRequest.public)
 	supplierv1.RegisterSupplierServiceServer(app.grpcServer, supplierSrv)
 	filev1.RegisterFileServiceServer(app.grpcServer, fileModule.server)
 	cataloguev1.RegisterCatalogueServiceServer(app.grpcServer, catalogue.server)
@@ -600,7 +609,7 @@ func wireEvents(
 func apiPolicies() middleware.Policies {
 	return middleware.Merge(
 		identityHandler.Policies(), platformStaffHandler.Policies(), supportHandler.Policies(), tenantHandler.Policies(), licenseHandler.Policies(), customerHandler.Policies(),
-		customerHandler.LinkPolicies(), customerHandler.TaxProfilePolicies(),
+		customerHandler.LinkPolicies(), customerHandler.TaxProfilePolicies(), dataRequestHandler.Policies(), dataRequestHandler.PublicPolicies(),
 		quoteHandler.Policies(), repairorderHandler.Policies(), inventoryHandler.Policies(), inventoryHandler.PurchaseOrderPolicies(), billingHandler.Policies(),
 		documentHandler.Policies(), reportingHandler.Policies(), supplierHandler.Policies(), fileHandler.Policies(), catalogueHandler.Policies(), catalogueHandler.JobPolicies(),
 		technicianHandler.Policies(), customerportalHandler.Policies(), dataimportHandler.Policies(), notificationHandler.Policies(), receivableHandler.Policies(), receivableHandler.PayablePolicies(),
@@ -641,6 +650,7 @@ func buildGateway(
 		supportv1.RegisterSupportServiceHandler, supportv1.RegisterGarageSupportServiceHandler,
 		customerv1.RegisterCustomerServiceHandler, customerv1.RegisterVehicleServiceHandler,
 		customerv1.RegisterCustomerLinkServiceHandler, customerv1.RegisterCustomerTaxProfileServiceHandler,
+		customerv1.RegisterDataRequestServiceHandler, customerv1.RegisterPublicDataRequestServiceHandler,
 		supplierv1.RegisterSupplierServiceHandler, filev1.RegisterFileServiceHandler,
 		cataloguev1.RegisterCatalogueServiceHandler, cataloguev1.RegisterJobServiceHandler,
 		quotev1.RegisterQuoteServiceHandler, quotev1.RegisterPublicQuoteServiceHandler,

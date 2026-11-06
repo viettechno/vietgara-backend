@@ -58,6 +58,9 @@ type Repository interface {
 	GetSettings(ctx context.Context, garageID string) (domain.Settings, error)
 	// SaveSettings inserts or replaces the garage's settings.
 	SaveSettings(ctx context.Context, garageID string, s domain.Settings) error
+	// AnonymizeCustomer replaces the customer name and the plate copied into
+	// the customer's receivables.
+	AnonymizeCustomer(ctx context.Context, garageID, customerID string) error
 
 	// FindBySettlement returns the receivable of a settlement without its
 	// ledger, or domain.ErrReceivableNotFound.
@@ -126,10 +129,14 @@ type SettlementView struct {
 	CustomerID          string
 	CustomerName        string
 	VehicleLicensePlate string
-	TotalAmount         int64
-	PaidAmount          int64
-	CreatedAt           time.Time
-	Payments            []PaymentView
+	// CustomerAnonymized is true when the customer's personal data was erased
+	// (PD-06): the receivable then holds placeholders, not the settlement's
+	// name and plate.
+	CustomerAnonymized bool
+	TotalAmount        int64
+	PaidAmount         int64
+	CreatedAt          time.Time
+	Payments           []PaymentView
 }
 
 // SettlementReader reads a settlement; implemented by an adapter over the

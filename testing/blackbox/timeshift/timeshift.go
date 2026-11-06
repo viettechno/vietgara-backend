@@ -139,3 +139,11 @@ func exec(tb testing.TB, sql string, args ...any) {
 		tb.Fatalf("shift time for %v: %v", args, fmt.Errorf("%w", errNoRows))
 	}
 }
+
+// ExpireDataRequestLink moves the expiry of the waiting personal-data requests
+// of an address back by a day, so that their e-mailed links have expired.
+func ExpireDataRequestLink(tb testing.TB, email string) {
+	tb.Helper()
+
+	exec(tb, `UPDATE data_request_confirmations SET expires_at = now() - interval '1 hour' WHERE lower(email) = lower($1)`, email)
+}

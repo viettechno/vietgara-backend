@@ -60,9 +60,11 @@ type Page[T any] struct {
 type Option func(*options)
 
 type options struct {
-	now   func() time.Time
-	audit LinkAuditor
-	users UserDirectory
+	now      func() time.Time
+	audit    LinkAuditor
+	users    UserDirectory
+	events   EventPublisher
+	profiles TaxProfileRepository
 }
 
 // WithUserDirectory lets CustomerUseCase.Lookup tell whether a VietGara user
@@ -187,6 +189,8 @@ func toAppError(op string, err error) error {
 	}
 
 	switch {
+	case errors.Is(err, domain.ErrCustomerAnonymized):
+		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err).WithReason(domain.ReasonCustomerAnonymized)
 	case errors.Is(err, domain.ErrVehicleFieldLocked):
 		return apperror.Wrap(apperror.CodeFailedPrecondition, err.Error(), err).WithReason(domain.ReasonVehicleFieldLocked)
 	case isAny(err, notFoundErrors):

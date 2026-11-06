@@ -165,6 +165,10 @@ func (uc *CustomerUseCase) Update(ctx context.Context, req UpdateCustomerRequest
 		return nil, toAppError("update customer", err)
 	}
 
+	if c.IsAnonymized() {
+		return nil, toAppError("update customer", domain.ErrCustomerAnonymized)
+	}
+
 	fields := customerFields{FullName: req.FullName, Phone: req.Phone, Email: req.Email, Address: req.Address, Locale: req.Locale}
 	if err := fields.apply(c); err != nil {
 		return nil, toAppError("update customer", err)
@@ -194,6 +198,10 @@ func (uc *CustomerUseCase) OptOutEmail(ctx context.Context, garageID, customerID
 	c, err := uc.customers.FindByID(ctx, garageID, customerID)
 	if err != nil {
 		return toAppError("opt out of e-mail", err)
+	}
+
+	if c.IsAnonymized() {
+		return nil // nothing is held to opt out of
 	}
 
 	if !c.SetEmailOptOut(true, uc.opts.now().UTC(), "") {

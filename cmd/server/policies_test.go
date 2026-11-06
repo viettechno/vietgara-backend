@@ -19,6 +19,11 @@ import (
 // must see in this diff. The OAuth redirect of Google sign-in is plain HTTP
 // and is not an RPC.
 var publicMethods = []string{
+	// The request page for people without the app (Release 13.1, FR-CUS-05): it
+	// answers the same for any address, e-mails the link only to that address and
+	// is throttled per address and per source; the design is reviewed in LLD 11.3.
+	"/vietgara.customer.v1.PublicDataRequestService/SubmitPublicDataRequest",
+	"/vietgara.customer.v1.PublicDataRequestService/ConfirmPublicDataRequest",
 	"/vietgara.identity.v1.AuthService/Login",
 	"/vietgara.identity.v1.AuthService/RefreshToken",
 	"/vietgara.identity.v1.AuthService/Logout",
@@ -36,14 +41,7 @@ var publicMethods = []string{
 // yet. They have no policy on purpose, so the gateway of the application
 // answers NO_POLICY (403) instead of reaching the unimplemented handler. Give
 // the method a policy when you implement it, and remove it from here.
-var notImplemented = map[string]string{
-	"/vietgara.customer.v1.DataRequestService/CompleteDataRequest":            "Phase 13",
-	"/vietgara.customer.v1.DataRequestService/CreateDataRequest":              "Phase 13",
-	"/vietgara.customer.v1.DataRequestService/GetDataRequest":                 "Phase 13",
-	"/vietgara.customer.v1.DataRequestService/ListDataRequests":               "Phase 13",
-	"/vietgara.customer.v1.PublicDataRequestService/ConfirmPublicDataRequest": "Phase 13",
-	"/vietgara.customer.v1.PublicDataRequestService/SubmitPublicDataRequest":  "Phase 13",
-}
+var notImplemented = map[string]string{}
 
 // TestEveryRPCDeclaresItsAuthorization is the automated part of the
 // authorization review (Security Architecture 3): every method of every

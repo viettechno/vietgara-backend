@@ -89,6 +89,16 @@ type Reminder struct {
 	UpdatedAt  time.Time
 }
 
+// The texts that replace the name and the plate of a customer whose personal
+// data was erased (PD-06); the name is the Customer module's.
+const (
+	AnonymizedName  = "Khách hàng đã ẩn danh"
+	AnonymizedPlate = "ANON"
+)
+
+// Anonymized reports whether the receivable's customer was anonymized.
+func (r *Receivable) Anonymized() bool { return r.CustomerName == AnonymizedName }
+
 // Receivable is what a customer still owes for one settlement.
 type Receivable struct {
 	ID               string

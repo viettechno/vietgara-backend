@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/viettechno/vietgara-backend/internal/platform/outbox"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -719,4 +721,39 @@ func TestAGarageSeesAShortReasonNotTheProvidersAnswer(t *testing.T) {
 
 	long := fmt.Errorf("%s", strings.Repeat("a", 500)) //nolint:err113 // a long error, built for the test
 	assert.Len(t, usecase.FailureReasonForTest(long), 200)
+}
+
+func TestHandleCustomerAnonymized(t *testing.T) {
+	t.Parallel()
+
+	t.Run("clears the recipient address of the customer's rows", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newGarageUseCase(t)
+		d.Log.EXPECT().ClearRecipients(mock.Anything, garageID, customerID).Return(nil).Once()
+
+		require.NoError(t, uc.HandleCustomerAnonymized(t.Context(), event(garageID, "customer.anonymized", `{"customer_id":"`+customerID+`"}`)))
+	})
+
+	t.Run("a failure is returned so the event is delivered again", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newGarageUseCase(t)
+		d.Log.EXPECT().ClearRecipients(mock.Anything, garageID, customerID).Return(errBoom2).Once()
+
+		require.ErrorIs(t, uc.HandleCustomerAnonymized(t.Context(), event(garageID, "customer.anonymized", `{"customer_id":"`+customerID+`"}`)), errBoom2)
+	})
+
+	t.Run("a malformed event is dropped", func(t *testing.T) {
+		t.Parallel()
+
+		uc, _ := newGarageUseCase(t)
+
+		for _, e := range []outbox.Event{
+			event(garageID, "customer.anonymized", `not json`), event(garageID, "customer.anonymized", `{}`),
+			event("", "customer.anonymized", `{"customer_id":"`+customerID+`"}`),
+		} {
+			require.NoError(t, uc.HandleCustomerAnonymized(t.Context(), e))
+		}
+	})
 }

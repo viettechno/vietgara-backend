@@ -140,8 +140,13 @@ func (uc *TaxProfileUseCase) Create(ctx context.Context, req CreateTaxProfileReq
 		return nil, toAppError("create tax profile", domain.ErrInvalidTaxProfile)
 	}
 
-	if _, err := uc.customers.FindByID(ctx, req.GarageID, req.CustomerID); err != nil {
+	owner, err := uc.customers.FindByID(ctx, req.GarageID, req.CustomerID)
+	if err != nil {
 		return nil, toAppError("create tax profile", err)
+	}
+
+	if owner.IsAnonymized() {
+		return nil, toAppError("create tax profile", domain.ErrCustomerAnonymized)
 	}
 
 	p := &domain.TaxProfile{

@@ -41,6 +41,10 @@ type CustomerRepository interface {
 	// SetActive deactivates or reactivates a customer, or returns
 	// domain.ErrCustomerNotFound.
 	SetActive(ctx context.Context, garageID, customerID string, active bool, updatedBy string) error
+	// Anonymize erases the personal data of the customer, of its vehicles and
+	// of its tax profiles, and ends its link to a user; it returns what it
+	// changed, or domain.ErrCustomerNotFound.
+	Anonymize(ctx context.Context, garageID, customerID, actorID string) (domain.AnonymizedCounts, error)
 }
 
 // VehicleRepository defines the persistence contract for vehicles. Every

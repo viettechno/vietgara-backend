@@ -77,6 +77,16 @@ func (r *PostgresRepository) Sent(ctx context.Context, log *domain.Log) error {
 	return r.Failed(ctx, log)
 }
 
+// ClearRecipients empties the recipient address of the customer's rows and the
+// error text of failed sends, which may repeat it: the one change the
+// append-only log allows (PD-06).
+func (r *PostgresRepository) ClearRecipients(ctx context.Context, garageID, customerID string) error {
+	_, err := platformdb.QuerierFromContext(ctx, r.pool).Exec(ctx,
+		`UPDATE notification_log SET recipient = '', error = '' WHERE garage_id = $1 AND customer_id = $2 AND (recipient <> '' OR error <> '')`, garageID, customerID)
+
+	return err
+}
+
 // AlreadySent reports whether a sent row of the key exists: for the event, or
 // for the document when the key says one e-mail per document.
 func (r *PostgresRepository) AlreadySent(ctx context.Context, key usecase.SentKey) (bool, error) {

@@ -56,6 +56,10 @@ type Customer struct {
 	// nil while they receive them.
 	EmailOptOutAt *time.Time
 	ConsentLog    []ConsentRecord
+	// AnonymizedAt is when the customer's personal data was erased (FR-CUS-05,
+	// PD-06); nil for a customer who was not. An anonymized customer cannot be
+	// edited.
+	AnonymizedAt *time.Time
 	// IsActive is false once the customer was deactivated instead of
 	// deleted because documents refer to it (FR-CAT-07).
 	IsActive bool
@@ -69,6 +73,9 @@ type Customer struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
+
+// IsAnonymized reports whether the customer's personal data was erased.
+func (c *Customer) IsAnonymized() bool { return c.AnonymizedAt != nil }
 
 // LatestConsent returns the most recent consent decision, or nil when none
 // was ever recorded.

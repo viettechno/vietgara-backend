@@ -1,0 +1,19 @@
+{{define "subject"}}Xác nhận yêu cầu về dữ liệu cá nhân của bạn{{end}}
+{{define "text"}}Xin chào,
+
+Chúng tôi nhận được yêu cầu {{if eq .Type "delete"}}xóa{{else if eq .Type "correct"}}chỉnh sửa{{else}}xem{{end}} dữ liệu cá nhân gắn với địa chỉ e-mail này tại các gara dùng VietGara.
+
+Để xác nhận, hãy mở liên kết sau trong {{.Hours}} giờ (chỉ dùng được một lần):
+{{.ConfirmURL}}
+{{if eq .Type "delete"}}
+Lưu ý: việc xóa không thể hoàn tác. Dữ liệu cá nhân được ẩn danh; các chứng từ tài chính mà pháp luật yêu cầu giữ lại sẽ được giữ.
+{{end}}
+Nếu bạn không gửi yêu cầu này, hãy bỏ qua e-mail này: sẽ không có gì xảy ra.
+
+VietGara{{end}}
+{{define "html"}}<p>Xin chào,</p>
+<p>Chúng tôi nhận được yêu cầu <strong>{{if eq .Type "delete"}}xóa{{else if eq .Type "correct"}}chỉnh sửa{{else}}xem{{end}}</strong> dữ liệu cá nhân gắn với địa chỉ e-mail này tại các gara dùng VietGara.</p>
+<p>Để xác nhận, hãy mở liên kết sau trong {{.Hours}} giờ (chỉ dùng được một lần):<br><a href="{{.ConfirmURL}}">{{.ConfirmURL}}</a></p>
+{{if eq .Type "delete"}}<p>Lưu ý: việc xóa không thể hoàn tác. Dữ liệu cá nhân được ẩn danh; các chứng từ tài chính mà pháp luật yêu cầu giữ lại sẽ được giữ.</p>{{end}}
+<p>Nếu bạn không gửi yêu cầu này, hãy bỏ qua e-mail này: sẽ không có gì xảy ra.</p>
+<p>VietGara</p>{{end}}

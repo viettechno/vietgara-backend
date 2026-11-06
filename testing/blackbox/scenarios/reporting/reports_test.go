@@ -142,7 +142,12 @@ func (k *reportKit) post(t *testing.T, order *repairorderv1.RepairOrder) {
 		}
 
 		if err == nil {
+			// The garage may post it by itself at the same moment: look again then.
 			posted, postErr := k.Owner.API.PostStockIssue(t.Context(), k.GarageID, issue.GetId())
+			if apiErr := client.AsAPIError(postErr); apiErr != nil && apiErr.Code == "STOCK_ISSUE_NOT_DRAFT" {
+				continue
+			}
+
 			require.NoError(t, postErr)
 			require.Equal(t, inventoryv1.StockIssueStatus_STOCK_ISSUE_STATUS_POSTED, posted.GetStatus())
 

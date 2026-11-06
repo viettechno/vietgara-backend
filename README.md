@@ -87,7 +87,7 @@ make run                         # loads .env when present
 ```
 
 To get into the admin pages, sign up with the e-mail set in
-`PLATFORM_ADMIN_EMAILS` (`admin@viettechno.com` in `.env_example`) and then
+`PLATFORM_ADMIN_EMAILS` (`admin@vietgara.vn` in `.env_example`) and then
 restart the backend. See [Platform admins](#platform-admins).
 
 ### Database roles
@@ -129,7 +129,7 @@ local defaults.
 | `GOOGLE_MOBILE_CLIENT_IDS` | Google sign-in from the mobile apps (`POST /api/v1/auth/google/id-token`): comma-separated OAuth client IDs the apps' ID tokens are issued to (the Android "web/server" client and the iOS client). Empty disables it |
 | `GOOGLE_AUTH_ENDPOINT`, `GOOGLE_TOKEN_ENDPOINT`, `GOOGLE_USERINFO_URL`, `GOOGLE_CERTS_URL` | Google's OAuth endpoints and the JWKS that mobile ID tokens are verified against. Default to Google's own; override them only to point the backend at a Google stub (the blackbox tests) |
 | `PLATFORM_ADMIN_EMAILS` | Comma-separated e-mails granted platform admin. See [Platform admins](#platform-admins) |
-| `APP_BASE_URL` | Public URL of the deployment, such as `https://vietgara.vn`. The owner web origin for the Google popup, the Google callback host, and the base of e-mailed links. Defaults to `http://localhost:8000` |
+| `APP_BASE_URL` | Public URL of the deployment, such as `https://app.vietgara.vn`. The owner web origin for the Google popup, the Google callback host, and the base of e-mailed links. Defaults to `http://localhost:8000` |
 | `ADMIN_APP_BASE_URL` | Public URL of the platform admin web, the base of the platform staff invitation links (`<url>/invitations/<id>`). Defaults to `http://admin.localhost:8000` |
 
 **Cache, licensing and events**
@@ -181,7 +181,7 @@ screen or API grants them.
 2. Add their e-mail to `PLATFORM_ADMIN_EMAILS` for that environment:
 
    ```bash
-   PLATFORM_ADMIN_EMAILS=admin@viettechno.com,ops@viettechno.com
+   PLATFORM_ADMIN_EMAILS=admin@vietgara.vn,ops@vietgara.vn
    ```
 
 3. Restart the backend. On startup it adds every user whose e-mail is in
@@ -207,7 +207,7 @@ Things to know:
 
   ```sql
   DELETE FROM platform_admins
-  WHERE user_id = (SELECT id FROM users WHERE lower(email) = 'ops@viettechno.com');
+  WHERE user_id = (SELECT id FROM users WHERE lower(email) = 'ops@vietgara.vn');
   ```
 
   The change takes effect when that person's current access token expires.
@@ -291,16 +291,16 @@ Never set it in production.
 ### Setting up Mailjet
 
 1. Create a Mailjet user. Under **User settings → Senders & domains**,
-   add the product's sending domain: `vietgara.vn` in production,
-   `staging.vietgara.vn` in staging. Staging has a subdomain of its own, so
-   that test mail is easy to tell apart and its bounces stay out of
-   production's reputation. The company's mailboxes are on `viettechno.com`
-   and are not touched.
+   add the product's sending domain, `vietgara.vn`, for production and
+   staging alike. Staging tells itself apart by `MAIL_FROM_NAME` ("VietGara
+   Staging") and by its own API key pair (step 3).
 2. Publish the SPF and DKIM DNS records that Mailjet shows for the domain,
    and a DMARC record (`p=none` at first). Wait until both are validated:
    mail from an unvalidated sender is rejected or lands in spam. A new domain
-   has no sending reputation, so start with a low volume. If a mailbox is
-   ever created on `vietgara.vn`, merge its MX and SPF records with Mailjet's.
+   has no sending reputation, so start with a low volume. The domain also
+   has mailboxes (`support@vietgara.vn`), so keep their MX records and put
+   Mailjet's `include:` into the domain's one SPF record; a second SPF record
+   invalidates both.
 3. Under **User settings → API key management**, create a key pair. Use a
    separate pair for each environment.
 4. Configure the backend. Keep the secret in Secret Manager, never in the

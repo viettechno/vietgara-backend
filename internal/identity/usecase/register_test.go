@@ -116,8 +116,8 @@ func TestGrantPlatformAdmins(t *testing.T) {
 
 	e := newEnv(t)
 	require.NoError(t, e.uc.GrantPlatformAdmins(t.Context(), nil))
-	require.NoError(t, e.uc.GrantPlatformAdmins(t.Context(), []string{" Admin@viettechno.com ", "bad"}))
-	assert.Equal(t, []string{"admin@viettechno.com"}, e.users.granted)
+	require.NoError(t, e.uc.GrantPlatformAdmins(t.Context(), []string{" Admin@vietgara.vn ", "bad"}))
+	assert.Equal(t, []string{"admin@vietgara.vn"}, e.users.granted)
 
 	e.users.findErr = errBoom
 	require.Error(t, e.uc.GrantPlatformAdmins(t.Context(), []string{"a@b.vn"}))
@@ -155,7 +155,7 @@ func TestPlatformAdminNeedsVerifiedEmail(t *testing.T) {
 	t.Run("another address is never granted", func(t *testing.T) {
 		t.Parallel()
 
-		e := newEnv(t, usecase.WithPlatformAdminEmails([]string{"admin@viettechno.com"}))
+		e := newEnv(t, usecase.WithPlatformAdminEmails([]string{"admin@vietgara.vn"}))
 		registered := e.register(t)
 
 		verified, err := e.uc.VerifyEmail(t.Context(), registered.User.ID, e.mailer.lastCode(t, "owner@example.com"), registered.RefreshToken)

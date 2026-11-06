@@ -70,6 +70,7 @@ func (p *payables) receipt(t *testing.T, daysAgo int, lines ...receiptLine) *inv
 	ctx := t.Context()
 
 	var out []*inventoryv1.GoodsReceiptLine
+
 	for _, l := range lines {
 		line := &inventoryv1.GoodsReceiptLine{PartId: l.part, EnteredQuantity: l.quantity, SupplierId: l.supplier.GetId()}
 		if l.cost > 0 {
@@ -330,11 +331,7 @@ func TestWrongAllocationsAreRefusedAndRemaindersAreNotShared(t *testing.T) {
 	)
 
 	for range 2 {
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			_, err := p.voucher(t, p.acme, 700_000, method, allocation(big, 700_000))
 
 			mu.Lock()
@@ -345,7 +342,7 @@ func TestWrongAllocationsAreRefusedAndRemaindersAreNotShared(t *testing.T) {
 			} else {
 				refused = append(refused, err)
 			}
-		}()
+		})
 	}
 
 	wg.Wait()

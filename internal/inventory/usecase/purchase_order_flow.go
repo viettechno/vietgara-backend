@@ -2,6 +2,8 @@ package usecase
 
 import (
 	"context"
+	"math/big"
+	"net/mail"
 	"slices"
 	"strings"
 	"time"
@@ -26,7 +28,7 @@ type OrderMail struct {
 // Notification and Document modules in cmd/server. It reports false when the
 // address could not be mailed (suppressed).
 type OrderMailer interface {
-	SendPurchaseOrder(ctx context.Context, mail OrderMail) (bool, error)
+	SendPurchaseOrder(ctx context.Context, order OrderMail) (bool, error)
 }
 
 // SetOrderMailer gives the use case the means to e-mail an order. It is set
@@ -154,7 +156,7 @@ func (uc *InventoryUseCase) SendPurchaseOrder(ctx context.Context, req SendPurch
 	}
 
 	to := strings.TrimSpace(o.SupplierEmail)
-	if to == "" || uc.mailer == nil {
+	if _, parseErr := mail.ParseAddress(to); parseErr != nil || uc.mailer == nil {
 		return nil, toAppError(op, domain.ErrSupplierEmailRequired)
 	}
 
@@ -261,8 +263,10 @@ func (uc *InventoryUseCase) ReceivePurchaseOrder(ctx context.Context, garageID, 
 			continue
 		}
 
+		quantity, unit := l.OutstandingEntered()
+
 		inputs = append(inputs, ReceiptLineInput{
-			PartID: l.PartID, UnitID: derefOr(l.UnitID), EnteredQuantity: l.OutstandingEntered(), SupplierID: o.SupplierID, UnitCost: l.UnitCost,
+			PartID: l.PartID, UnitID: derefOr(unit), EnteredQuantity: quantity, SupplierID: o.SupplierID, UnitCost: costPerEntered(l, unit),
 		})
 	}
 
@@ -339,4 +343,27 @@ func (uc *InventoryUseCase) countAgainstOrder(ctx context.Context, r *domain.Goo
 	o.UpdatedBy = r.UpdatedBy
 
 	return uc.repo.SavePurchaseOrder(ctx, o)
+}
+
+// costPerEntered is the line's cost per unit of the quantity the receipt line
+// is typed in: the cost per packaging unit when it is, else per base unit.
+func costPerEntered(l *domain.PurchaseOrderLine, unit *string) int64 {
+	if unit != nil || l.UnitID == nil {
+		return l.UnitCost
+	}
+
+	// The line is priced per packaging unit but received in the base unit.
+	entered, okEntered := new(big.Rat).SetString(l.EnteredQuantity)
+	base, okBase := new(big.Rat).SetString(l.Quantity)
+
+	if !okEntered || !okBase || base.Sign() == 0 {
+		return l.UnitCost
+	}
+
+	perBase := new(big.Rat).Mul(big.NewRat(l.UnitCost, 1), entered)
+	perBase.Quo(perBase, base)
+
+	n, _ := domain.WholeDong(perBase.FloatString(4))
+
+	return n
 }

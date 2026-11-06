@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math/big"
+	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -176,7 +177,12 @@ func (uc *InventoryUseCase) fillOrder(
 
 	if expected != "" {
 		d, err := domain.ParseDate(expected)
-		if err != nil || d.Format(time.DateOnly) < uc.localNow(timezone).Format(time.DateOnly) {
+		if err != nil {
+			return domain.ErrInvalidExpectedDate
+		}
+
+		// A date kept as stored may have passed since: only a new one must not lie in the past.
+		if expected != o.ExpectedDate && d.Format(time.DateOnly) < uc.localNow(timezone).Format(time.DateOnly) {
 			return domain.ErrInvalidExpectedDate
 		}
 
@@ -216,7 +222,7 @@ func (uc *InventoryUseCase) buildOrderLines(
 
 		seen[in.PartID] = true
 
-		line, err := uc.orderLine(ctx, garageID, in)
+		line, err := uc.orderLine(ctx, garageID, in, existing)
 		if err != nil {
 			return nil, err
 		}
@@ -237,7 +243,9 @@ func (uc *InventoryUseCase) buildOrderLines(
 }
 
 // orderLine builds the quantity side of one line and checks its part.
-func (uc *InventoryUseCase) orderLine(ctx context.Context, garageID string, in PurchaseOrderLineInput) (domain.PurchaseOrderLine, error) {
+func (uc *InventoryUseCase) orderLine(
+	ctx context.Context, garageID string, in PurchaseOrderLineInput, existing []domain.PurchaseOrderLine,
+) (domain.PurchaseOrderLine, error) {
 	if q, ok := new(big.Rat).SetString(in.EnteredQuantity); !ok || q.Sign() <= 0 {
 		return domain.PurchaseOrderLine{}, domain.ErrInvalidQuantity
 	}
@@ -261,9 +269,11 @@ func (uc *InventoryUseCase) orderLine(ctx context.Context, garageID string, in P
 		entered = *resolved.Entered
 	}
 
-	id := in.ID
-	if id == "" {
-		id = uuid.NewString()
+	// A line keeps its id only when it is one of this order's own; any other
+	// id (another order's, another garage's) is never trusted as a key.
+	id := uuid.NewString()
+	if slices.ContainsFunc(existing, func(l domain.PurchaseOrderLine) bool { return l.ID == in.ID }) {
+		id = in.ID
 	}
 
 	return domain.PurchaseOrderLine{
@@ -271,12 +281,13 @@ func (uc *InventoryUseCase) orderLine(ctx context.Context, garageID string, in P
 	}, nil
 }
 
-// storedOrderCost is the cost already stored for the line it replaces, 0 for a
-// new line or one whose part or unit changed.
+// storedOrderCost is the cost already stored for the same part (a part is on an
+// order once) in the same unit, 0 for a new line or one whose part or unit
+// changed.
 func storedOrderCost(existing []domain.PurchaseOrderLine, line *domain.PurchaseOrderLine) int64 {
 	for i := range existing {
 		old := &existing[i]
-		if old.ID == line.ID && old.PartID == line.PartID && derefOr(old.UnitID) == derefOr(line.UnitID) {
+		if old.PartID == line.PartID && derefOr(old.UnitID) == derefOr(line.UnitID) {
 			return old.UnitCost
 		}
 	}

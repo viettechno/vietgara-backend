@@ -26,24 +26,39 @@ func TestPurchaseOrderLine_Quantities(t *testing.T) {
 
 	base := domain.PurchaseOrderLine{EnteredQuantity: "10", Quantity: "10", ReceivedQuantity: "4", UnitCost: 1500}
 	assert.Equal(t, "6", base.Outstanding())
-	assert.Equal(t, "6", base.OutstandingEntered(), "a base-unit line is typed in the base unit")
 	assert.Equal(t, int64(15_000), base.Amount())
+
+	typed, unit := base.OutstandingEntered()
+	assert.Equal(t, "6", typed)
+	assert.Nil(t, unit, "a base-unit line is typed in the base unit")
 
 	over := domain.PurchaseOrderLine{Quantity: "10", ReceivedQuantity: "12"}
 	assert.Equal(t, "0", over.Outstanding(), "a line may receive more than ordered")
 
-	unit := "carton"
-	carton := domain.PurchaseOrderLine{UnitID: &unit, EnteredQuantity: "3", Quantity: "12", ReceivedQuantity: "6"}
-	assert.Equal(t, "1.5", carton.OutstandingEntered(), "6 of 12 L left of 3 cans is 1.5 cans")
+	carton := "carton"
+	cartons := domain.PurchaseOrderLine{UnitID: &carton, EnteredQuantity: "3", Quantity: "12", ReceivedQuantity: "6"}
+	typed, unit = cartons.OutstandingEntered()
+	assert.Equal(t, "1.5", typed, "6 of 12 L left of 3 cans is 1.5 cans")
+	assert.Equal(t, &carton, unit)
 
-	third := domain.PurchaseOrderLine{UnitID: &unit, EnteredQuantity: "1", Quantity: "3", ReceivedQuantity: "2"}
-	assert.Equal(t, "0.333", third.OutstandingEntered(), "rounded to three decimals")
+	third := domain.PurchaseOrderLine{UnitID: &carton, EnteredQuantity: "1", Quantity: "3", ReceivedQuantity: "2"}
+	typed, unit = third.OutstandingEntered()
+	assert.Equal(t, "1", typed, "what a unit cannot show exactly is received in the base unit")
+	assert.Nil(t, unit)
 
-	odd := domain.PurchaseOrderLine{UnitID: &unit, EnteredQuantity: "x", Quantity: "12", ReceivedQuantity: "6"}
-	assert.Equal(t, "6", odd.OutstandingEntered(), "an unreadable quantity falls back to the base amount")
+	tiny := domain.PurchaseOrderLine{UnitID: &carton, EnteredQuantity: "1", Quantity: "12", ReceivedQuantity: "11.999"}
+	typed, unit = tiny.OutstandingEntered()
+	assert.Equal(t, "0.001", typed)
+	assert.Nil(t, unit, "a tenth of a thousandth of a carton rounds to nothing")
 
-	zero := domain.PurchaseOrderLine{UnitID: &unit, EnteredQuantity: "3", Quantity: "0", ReceivedQuantity: "0"}
-	assert.Equal(t, "0", zero.OutstandingEntered())
+	odd := domain.PurchaseOrderLine{UnitID: &carton, EnteredQuantity: "x", Quantity: "12", ReceivedQuantity: "6"}
+	typed, unit = odd.OutstandingEntered()
+	assert.Equal(t, "6", typed, "an unreadable quantity falls back to the base amount")
+	assert.Nil(t, unit)
+
+	zero := domain.PurchaseOrderLine{UnitID: &carton, EnteredQuantity: "3", Quantity: "0", ReceivedQuantity: "0"}
+	typed, _ = zero.OutstandingEntered()
+	assert.Equal(t, "0", typed)
 }
 
 func TestPurchaseOrder_RecountAndTotals(t *testing.T) {

@@ -63,27 +63,39 @@ func (l *PurchaseOrderLine) Outstanding() string {
 	return Subtract(l.Quantity, l.ReceivedQuantity)
 }
 
-// OutstandingEntered is the outstanding quantity in the unit the line is
-// typed in, rounded half up to three decimals; for a line in the base unit it
-// is Outstanding.
-func (l *PurchaseOrderLine) OutstandingEntered() string {
+// OutstandingEntered is the outstanding quantity in the unit the line is typed
+// in, and that unit. When it cannot be written in that unit with three
+// decimals without changing the amount, it is the base-unit quantity and a nil
+// unit, so a receipt of it covers the line exactly. For a line in the base unit
+// it is Outstanding.
+func (l *PurchaseOrderLine) OutstandingEntered() (string, *string) {
 	outstanding := l.Outstanding()
 	if l.UnitID == nil {
-		return outstanding
+		return outstanding, nil
 	}
 
 	out, ok := new(big.Rat).SetString(outstanding)
 	entered, okEntered := new(big.Rat).SetString(l.EnteredQuantity)
 	base, okBase := new(big.Rat).SetString(l.Quantity)
 
-	if !ok || !okEntered || !okBase || base.Sign() == 0 {
-		return outstanding
+	if !ok || !okEntered || !okBase || base.Sign() == 0 || entered.Sign() == 0 {
+		return outstanding, nil
 	}
 
-	out.Mul(out, entered)
-	out.Quo(out, base)
+	typed := new(big.Rat).Mul(out, entered)
+	typed.Quo(typed, base)
 
-	return trimDecimal(out.FloatString(3)) // rounds half away from zero
+	rounded, _ := new(big.Rat).SetString(typed.FloatString(3)) // half away from zero
+
+	// Back to the base unit: it must be the outstanding amount again.
+	back := new(big.Rat).Mul(rounded, base)
+	back.Quo(back, entered)
+
+	if rounded.Sign() == 0 || back.Cmp(out) != 0 {
+		return outstanding, nil
+	}
+
+	return trimDecimal(typed.FloatString(3)), l.UnitID
 }
 
 // PurchaseOrder is a numbered order to one supplier (FR-INV-16).

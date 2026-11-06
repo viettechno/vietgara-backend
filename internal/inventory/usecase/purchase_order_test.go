@@ -1002,3 +1002,129 @@ func TestInventoryUseCase_GoodsReceiptCountsAgainstItsOrder(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
+
+func TestInventoryUseCase_UpdatePurchaseOrder_Rules(t *testing.T) {
+	t.Parallel()
+
+	update := func(t *testing.T, stored *domain.PurchaseOrder, in usecase.UpdatePurchaseOrderRequest, check func(o *domain.PurchaseOrder) bool) error {
+		t.Helper()
+
+		uc, d := orderUseCase(t)
+		d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(stored, nil).Once()
+		d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, mock.Anything, mock.Anything).Return(usecase.ResolvedQuantity{Base: "12"}, nil).Maybe()
+
+		if check != nil {
+			d.Repo.EXPECT().SavePurchaseOrder(mock.Anything, mock.MatchedBy(check)).Return(nil).Once()
+		}
+
+		_, err := uc.UpdatePurchaseOrder(t.Context(), in)
+
+		return err
+	}
+
+	req := func(date string, lines ...usecase.PurchaseOrderLineInput) usecase.UpdatePurchaseOrderRequest {
+		return usecase.UpdatePurchaseOrderRequest{
+			GarageID: garageID, OrderID: orderID, ActorID: actorID, SupplierID: supplierA, ExpectedDate: date, Lines: lines,
+		}
+	}
+
+	t.Run("a line id that is not the order's own is never used as a key", func(t *testing.T) {
+		t.Parallel()
+
+		in := req("", usecase.PurchaseOrderLineInput{ID: "another-orders-line", PartID: partID, EnteredQuantity: "12"})
+		require.NoError(t, update(t, draftOrder(), in, func(o *domain.PurchaseOrder) bool {
+			return o.Lines[0].ID != "another-orders-line" && o.Lines[0].ID != ""
+		}))
+	})
+
+	t.Run("the order's own line keeps its id", func(t *testing.T) {
+		t.Parallel()
+
+		in := req("", usecase.PurchaseOrderLineInput{ID: "ol-1", PartID: partID, EnteredQuantity: "12"})
+		require.NoError(t, update(t, draftOrder(), in, func(o *domain.PurchaseOrder) bool { return o.Lines[0].ID == "ol-1" }))
+	})
+
+	t.Run("without the cost permission lines sent without ids keep the cost of their part", func(t *testing.T) {
+		t.Parallel()
+
+		in := req("", usecase.PurchaseOrderLineInput{PartID: partID, EnteredQuantity: "12"})
+		require.NoError(t, update(t, draftOrder(), in, func(o *domain.PurchaseOrder) bool { return o.Lines[0].UnitCost == 1000 }))
+	})
+
+	t.Run("an expected date kept as stored may have passed, a new one may not", func(t *testing.T) {
+		t.Parallel()
+
+		stored := func() *domain.PurchaseOrder {
+			o := draftOrder()
+			o.ExpectedDate = "2026-10-10"
+
+			return o
+		}
+		line := usecase.PurchaseOrderLineInput{ID: "ol-1", PartID: partID, EnteredQuantity: "12"}
+
+		require.NoError(t, update(t, stored(), req("2026-10-10", line), func(o *domain.PurchaseOrder) bool { return o.ExpectedDate == "2026-10-10" }))
+
+		err := update(t, stored(), req("2026-10-11", line), nil)
+		assertAppError(t, err, apperror.CodeInvalidArgument)
+	})
+}
+
+func TestInventoryUseCase_SendPurchaseOrder_AddressMustBeValid(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+	uc.SetOrderMailer(newMailer(t))
+	d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(draftOrder(), nil).Once()
+	d.Parts.EXPECT().Parts(mock.Anything, garageID, mock.Anything).Return([]usecase.PartInfo{samplePart()}, nil).Maybe()
+	d.Directory.EXPECT().SupplierContacts(mock.Anything, garageID, mock.Anything).Return(contacts("not an address"), nil).Once()
+
+	_, err := uc.SendPurchaseOrder(t.Context(), sendRequest)
+	assertAppError(t, err, apperror.CodeInvalidArgument)
+}
+
+func TestInventoryUseCase_ReceivePurchaseOrder_ExactQuantities(t *testing.T) {
+	t.Parallel()
+
+	setup := func(t *testing.T, unitCost int64) (*usecase.InventoryUseCase, *deps) {
+		t.Helper()
+
+		uc, d := orderUseCase(t)
+		o := draftOrder()
+		o.Status = domain.PurchaseOrderPartiallyReceived
+		// 1 carton of 3 L, 2 L received: 1 L is not a whole number of thousandths of a carton.
+		o.Lines[0] = domain.PurchaseOrderLine{
+			ID: "ol-1", PartID: partID, UnitID: new(unitID), EnteredQuantity: "1", Quantity: "3", ReceivedQuantity: "2", UnitCost: unitCost,
+		}
+		d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(o, nil).Once()
+		d.Repo.EXPECT().HasDraftReceipt(mock.Anything, garageID, orderID).Return(false, nil).Once()
+		d.Sequences.EXPECT().Next(mock.Anything, garageID, "goods_receipt", mock.Anything).Return(1, nil).Once()
+		d.Repo.EXPECT().DefaultSuppliers(mock.Anything, garageID, mock.Anything).Return(nil, nil).Once()
+		d.Directory.EXPECT().SupplierNames(mock.Anything, garageID, mock.Anything).Return(supplierNames(supplierA), nil).Maybe()
+
+		return uc, d
+	}
+
+	t.Run("a quantity the unit cannot show is received in the base unit, at the cost per base unit", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := setup(t, 30_000)
+		d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, "", "1").Return(usecase.ResolvedQuantity{Base: "1"}, nil).Once()
+		d.Repo.EXPECT().CreateGoodsReceipt(mock.Anything, mock.MatchedBy(func(r *domain.GoodsReceipt) bool {
+			return r.Lines[0].UnitID == nil && r.Lines[0].Quantity == "1" && r.Lines[0].UnitCost == 10_000
+		})).Return(nil).Once()
+
+		_, err := uc.ReceivePurchaseOrder(t.Context(), garageID, orderID, actorID)
+		require.NoError(t, err)
+	})
+
+	t.Run("a line whose unit has no cost to convert", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := setup(t, 0)
+		d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, "", "1").Return(usecase.ResolvedQuantity{Base: "1"}, nil).Once()
+		d.Repo.EXPECT().CreateGoodsReceipt(mock.Anything, mock.MatchedBy(func(r *domain.GoodsReceipt) bool { return r.Lines[0].UnitCost == 0 })).Return(nil).Once()
+
+		_, err := uc.ReceivePurchaseOrder(t.Context(), garageID, orderID, actorID)
+		require.NoError(t, err)
+	})
+}

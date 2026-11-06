@@ -88,6 +88,7 @@ var noRLS = map[string]string{ //nolint:gosec // G101 matches the table name cre
 	"user_mfa_recovery_codes":      "identity: hashed codes, read at the second sign-in step",
 	"platform_admins":              "platform configuration",
 	"plans":                        "platform catalogue, the same for every garage",
+	"contact_requests":             "platform scope: requests from the public website, written without any session and read by support from the database",
 	"platform_payment_settings":    "platform configuration",
 	"platform_roles":               "platform scope, no garage: authorized by the platform_staff permissions (Release 8.1)",
 	"platform_role_permissions":    "platform scope, like platform_roles",

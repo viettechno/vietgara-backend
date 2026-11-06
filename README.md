@@ -157,6 +157,7 @@ local defaults.
 | `MAILJET_API_KEY`, `MAILJET_SECRET_KEY` | Mailjet provider |
 | `EMAIL_OPT_OUT_KEY` | Secret (16+ characters) that signs the opt-out links of customer e-mails, which must keep working as long as the e-mails are kept. Without it the key derives from `JWT_SIGNING_KEY`, and rotating that key breaks the links already sent |
 | `MAILJET_WEBHOOK_SECRET` | Credential in the path of the provider's event webhook (`POST /api/v1/webhooks/mailjet/{secret}`): hard bounces and spam complaints stop further e-mail to the address. The route is off while it is not set. See [E-mail](#e-mail) |
+| `CONTACT_REQUEST_KEY`, `CONTACT_SUPPORT_EMAIL` | The website's contact form (`POST /api/v1/public/contact-requests`, FR-WEB-04). The website's server-side function sends `CONTACT_REQUEST_KEY` (32+ random characters) in the `X-Contact-Key` header; the endpoint is off while it is not set. Requests are e-mailed to `CONTACT_SUPPORT_EMAIL` (default `support@vietgara.vn`) and stored in `contact_requests` |
 | `STORAGE_BACKEND`, `STORAGE_LOCAL_DIR`, `STORAGE_PUBLIC_BASE_URL`, `STORAGE_GCS_BUCKET`, `STORAGE_GCS_PRIVATE_BUCKET`, `STORAGE_SIGNING_KEY` | Uploaded files. See [File storage](#file-storage) |
 
 **Test users (staging only)**

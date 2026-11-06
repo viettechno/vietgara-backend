@@ -59,6 +59,7 @@ import (
 	billingHandler "github.com/viettechno/vietgara-backend/internal/billing/handler"
 	catalogueHandler "github.com/viettechno/vietgara-backend/internal/catalogue/handler"
 	catalogueRepository "github.com/viettechno/vietgara-backend/internal/catalogue/repository"
+	contactHandler "github.com/viettechno/vietgara-backend/internal/contactrequest/handler"
 	customerHandler "github.com/viettechno/vietgara-backend/internal/customer/handler"
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
 	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
@@ -520,7 +521,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	customerportalv1.RegisterCustomerPortalServiceServer(app.grpcServer, customerPortalSrv)
 	reflection.Register(app.grpcServer)
 
-	mux, err := buildGateway(ctx, app, pool, identitySrv, notification, files)
+	mux, err := buildGateway(ctx, app, pool, identitySrv, notification, buildContactRequests(pool, mailer, signingKey), files)
 	if err != nil {
 		return nil, err
 	}
@@ -605,7 +606,8 @@ func apiPolicies() middleware.Policies {
 }
 
 func buildGateway(
-	ctx context.Context, app *application, pool *platformdb.Pool, identitySrv *identityHandler.Server, notification *notificationModule, files storage.Store,
+	ctx context.Context, app *application, pool *platformdb.Pool, identitySrv *identityHandler.Server, notification *notificationModule,
+	contact *contactHandler.Server, files storage.Store,
 ) (*runtime.ServeMux, error) {
 	listener := bufconn.Listen(1 << 20)
 
@@ -655,7 +657,7 @@ func buildGateway(
 		return nil, err
 	}
 
-	if err := notification.server.RegisterHTTPRoutes(mux, notification.webhookSecret); err != nil {
+	if err := registerPublicRoutes(mux, notification, contact); err != nil {
 		return nil, err
 	}
 

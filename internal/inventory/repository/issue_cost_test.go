@@ -39,3 +39,17 @@ func TestPostgresRepository_IssueCosts(t *testing.T) {
 		require.ErrorIs(t, err, errBoom)
 	}
 }
+
+func TestPostgresRepository_IssueCosts_PostedBetweenTheQueries(t *testing.T) {
+	t.Parallel()
+
+	repo := repository.NewPostgresRepository(nil)
+
+	tx := dbtest.New(t).
+		ExpectQuery("FROM stock_issues WHERE", dbtest.NewRows(), nil).
+		ExpectQuery("FROM stock_issue_lines l", dbtest.NewRows([]any{"ro-1", "l-1", int64(5)}), nil)
+
+	got, err := repo.IssueCosts(tx.Context(t.Context()), garageID, []string{"ro-1"})
+	require.NoError(t, err)
+	assert.Equal(t, repository.IssueCost{HasIssue: true, Posted: true, ByLine: map[string]int64{"l-1": 5}}, got["ro-1"])
+}

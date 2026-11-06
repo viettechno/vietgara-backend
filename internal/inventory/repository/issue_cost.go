@@ -76,7 +76,14 @@ func (r *PostgresRepository) IssueCosts(ctx context.Context, garageID string, re
 			return nil, err
 		}
 
-		out[orderID].ByLine[lineID] = cost
+		// An issue posted between the two statements has no entry yet.
+		c, ok := out[orderID]
+		if !ok {
+			c = IssueCost{HasIssue: true, Posted: true, ByLine: map[string]int64{}}
+		}
+
+		c.ByLine[lineID] = cost
+		out[orderID] = c
 	}
 
 	return out, lines.Err()

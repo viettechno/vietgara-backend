@@ -417,7 +417,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 
 	// Document/Print (Release 1.4): quote, repair order and settlement
 	// receipt PDFs, the stock movement report as Excel.
-	reporting := buildReporting(billing.settlements, garages)
+	reporting := buildReporting(billing.settlements, garages, repairOrder.repo, inventory.repo, users, catalogue.repo)
 
 	document := buildDocument(pool, quote.quotes, repairOrder.uc, billing.uc, inventory.uc, reporting.uc, garages, files)
 

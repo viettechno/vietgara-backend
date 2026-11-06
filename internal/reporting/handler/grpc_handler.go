@@ -30,7 +30,11 @@ func Policies() middleware.Policies {
 	read := access.Requires(access.ReportRead)
 
 	return middleware.Policies{
-		reportingv1.ReportingService_GetRevenueReport_FullMethodName: middleware.GarageMethod(read),
+		reportingv1.ReportingService_GetRevenueReport_FullMethodName:    middleware.GarageMethod(read),
+		reportingv1.ReportingService_GetTechnicianReport_FullMethodName: middleware.GarageMethod(read),
+		// The profit calls also need inventory.cost.read, which their handlers check.
+		reportingv1.ReportingService_GetProfitReport_FullMethodName:      middleware.GarageMethod(read),
+		reportingv1.ReportingService_GetRepairOrderProfit_FullMethodName: middleware.GarageMethod(access.Requires(access.RepairOrderRead)),
 	}
 }
 

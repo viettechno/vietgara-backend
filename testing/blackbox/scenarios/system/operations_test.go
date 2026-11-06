@@ -118,7 +118,7 @@ func operations(t *testing.T) []operation {
 // not serve yet: the contract lists them, the gateway does not route them. Each
 // slice of the release takes its own paths out of this list.
 var pendingPhase13 = []string{
-	"/reports/technicians", "/profit", "/data-requests",
+	"/data-requests",
 }
 
 func pending(path string) bool {

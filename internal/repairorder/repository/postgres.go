@@ -143,8 +143,9 @@ func (r *PostgresRepository) insertLines(ctx context.Context, q platformdb.Queri
 		_, err := q.Exec(ctx, `
 			INSERT INTO repair_order_lines
 				(id, garage_id, repair_order_id, position, item_type, item_ref_id, description, quantity, unit_id,
-				 entered_quantity, unit_price, line_total, status, assigned_technicians, job_id, non_billable)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10::numeric, $11, $12, $13, $14, $15, $16)`,
+				 entered_quantity, unit_price, line_total, status, assigned_technicians, job_id, non_billable, started_at, completed_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10::numeric, $11, $12, $13, $14, $15, $16,
+				CASE WHEN $13::repair_order_line_status <> 'not_started' THEN now() END, CASE WHEN $13::repair_order_line_status = 'completed' THEN now() END)`,
 			line.ID, garageID, repairOrderID, line.Position, string(line.ItemType), line.ItemRefID, line.Description,
 			line.Quantity, line.UnitID, line.EnteredQuantity, line.UnitPrice, line.LineTotal, string(line.Status), technicianIDs(line.AssignedTechnicianIDs),
 			line.JobID, line.NonBillable,
@@ -239,7 +240,9 @@ func (r *PostgresRepository) Save(ctx context.Context, ro *domain.RepairOrder) e
 
 	for _, line := range ro.Lines {
 		_, err := q.Exec(ctx, `
-			UPDATE repair_order_lines SET status = $3, assigned_technicians = $4
+			UPDATE repair_order_lines SET status = $3, assigned_technicians = $4,
+				started_at = CASE WHEN started_at IS NULL AND $3::repair_order_line_status <> 'not_started' THEN now() ELSE started_at END,
+				completed_at = CASE WHEN $3::repair_order_line_status = 'completed' THEN COALESCE(completed_at, now()) END
 			WHERE garage_id = $1 AND id = $2`,
 			ro.GarageID, line.ID, string(line.Status), technicianIDs(line.AssignedTechnicianIDs))
 		if err != nil {
@@ -271,13 +274,17 @@ func (r *PostgresRepository) ReplaceLines(ctx context.Context, ro *domain.Repair
 		_, err := q.Exec(ctx, `
 			INSERT INTO repair_order_lines
 				(id, garage_id, repair_order_id, position, item_type, item_ref_id, description, quantity, unit_id,
-				 entered_quantity, unit_price, line_total, status, assigned_technicians, job_id, non_billable)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10::numeric, $11, $12, $13, $14, $15, $16)
+				 entered_quantity, unit_price, line_total, status, assigned_technicians, job_id, non_billable, started_at, completed_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10::numeric, $11, $12, $13, $14, $15, $16,
+				CASE WHEN $13::repair_order_line_status <> 'not_started' THEN now() END, CASE WHEN $13::repair_order_line_status = 'completed' THEN now() END)
 			ON CONFLICT (id) DO UPDATE SET position = EXCLUDED.position, item_type = EXCLUDED.item_type,
 				item_ref_id = EXCLUDED.item_ref_id, description = EXCLUDED.description, quantity = EXCLUDED.quantity,
 				unit_id = EXCLUDED.unit_id, entered_quantity = EXCLUDED.entered_quantity, unit_price = EXCLUDED.unit_price,
 				line_total = EXCLUDED.line_total, status = EXCLUDED.status, assigned_technicians = EXCLUDED.assigned_technicians,
-				job_id = EXCLUDED.job_id, non_billable = EXCLUDED.non_billable`,
+				job_id = EXCLUDED.job_id, non_billable = EXCLUDED.non_billable,
+				started_at = CASE WHEN repair_order_lines.started_at IS NULL AND EXCLUDED.status::text <> 'not_started'
+					THEN now() ELSE repair_order_lines.started_at END,
+				completed_at = CASE WHEN EXCLUDED.status::text = 'completed' THEN COALESCE(repair_order_lines.completed_at, now()) END`,
 			line.ID, ro.GarageID, ro.ID, line.Position, string(line.ItemType), line.ItemRefID, line.Description,
 			line.Quantity, line.UnitID, line.EnteredQuantity, line.UnitPrice, line.LineTotal, string(line.Status),
 			technicianIDs(line.AssignedTechnicianIDs), line.JobID, line.NonBillable)

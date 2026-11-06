@@ -144,7 +144,7 @@ func (c *Client) PostStockIssue(ctx context.Context, garageID, issueID string) (
 func (c *Client) GetPurchasesReport(ctx context.Context, garageID, supplierID, from, to string) (*inventoryv1.GetPurchasesReportResponse, error) {
 	query := url.Values{}
 
-	for key, value := range map[string]string{"supplierId": supplierID, "from": from, "to": to} {
+	for key, value := range map[string]string{"supplierId": supplierID, fromParam: from, "to": to} {
 		if value != "" {
 			query.Set(key, value)
 		}

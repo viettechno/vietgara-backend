@@ -81,7 +81,7 @@ func (c *Client) UpdateReceivableSettings(ctx context.Context, garageID string, 
 
 // GetReconciliation reconciles the period [from, to).
 func (c *Client) GetReconciliation(ctx context.Context, garageID, from, to string) (*receivablev1.ReconciliationReport, error) {
-	q := url.Values{"from": {from}, "to": {to}}
+	q := url.Values{fromParam: {from}, "to": {to}}
 
 	return call[receivablev1.ReconciliationReport](ctx, c, http.MethodGet, withQuery(garagePath(garageID)+"/reports/receivable-reconciliation", q), nil)
 }
@@ -97,7 +97,7 @@ func (c *Client) DownloadReceivablesExcel(ctx context.Context, garageID string, 
 
 // DownloadReconciliationExcel downloads the reconciliation of a period as a workbook.
 func (c *Client) DownloadReconciliationExcel(ctx context.Context, garageID, from, to string) (string, []byte, error) {
-	q := url.Values{"from": {from}, "to": {to}}
+	q := url.Values{fromParam: {from}, "to": {to}}
 
 	return c.DownloadRaw(ctx, http.MethodGet, withQuery(garagePath(garageID)+"/reports/receivable-reconciliation/excel", q))
 }

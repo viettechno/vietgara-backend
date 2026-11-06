@@ -88,7 +88,7 @@ func (r *PostgresVehicleRepository) Update(ctx context.Context, v *domain.Vehicl
 	row := q.QueryRow(ctx, `
 		UPDATE vehicles SET customer_id = $3, license_plate = $4, make = $5, model = $6, year = $7, vin = $8,
 			engine_number = $9, updated_by = $10
-		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL
+		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL`+ownerNotAnonymized+`
 		RETURNING updated_at`,
 		v.GarageID, v.ID, v.CustomerID, v.LicensePlate, v.Make, v.Model, v.Year, v.VIN, v.EngineNumber, v.UpdatedBy,
 	)
@@ -123,6 +123,10 @@ func (r *PostgresVehicleRepository) SoftDelete(ctx context.Context, garageID, ve
 		garageID, vehicleID, nullable(deletedBy))
 }
 
+// ownerNotAnonymized keeps a vehicle whose owner was anonymized from being
+// changed or reactivated: the erasure cannot be written back (PD-06).
+const ownerNotAnonymized = ` AND NOT EXISTS (SELECT 1 FROM customers c WHERE c.garage_id = vehicles.garage_id AND c.id = vehicles.customer_id AND c.anonymized_at IS NOT NULL)`
+
 // SoftDeleteByCustomer marks every live vehicle of a customer deleted.
 func (r *PostgresVehicleRepository) SoftDeleteByCustomer(ctx context.Context, garageID, customerID, deletedBy string) error {
 	if !isUUID(customerID) {
@@ -147,7 +151,7 @@ func (r *PostgresVehicleRepository) SetActive(ctx context.Context, garageID, veh
 
 	return execAffectingOne(ctx, platformdb.QuerierFromContext(ctx, r.pool), domain.ErrVehicleNotFound, `
 		UPDATE vehicles SET is_active = $3, updated_by = $4
-		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL`,
+		WHERE garage_id = $1 AND id = $2 AND deleted_at IS NULL`+ownerNotAnonymized,
 		garageID, vehicleID, active, nullable(updatedBy))
 }
 

@@ -68,7 +68,10 @@ func (uc *ReceivableUseCase) Sync(ctx context.Context, garageID, settlementID st
 
 	// The settlement keeps the name and plate of when it was issued; the
 	// receivable, once its customer was anonymized, does not take them back.
-	if !r.Anonymized() {
+	switch {
+	case view.CustomerAnonymized:
+		r.CustomerName, r.VehicleLicensePlate = domain.AnonymizedName, domain.AnonymizedPlate
+	case !r.Anonymized():
 		r.CustomerName, r.VehicleLicensePlate = view.CustomerName, view.VehicleLicensePlate
 	}
 

@@ -199,7 +199,7 @@ func TestPublicSubmitAndConfirm(t *testing.T) {
 
 	e := newPublicEnv(t)
 	e.confirmations.EXPECT().CountByEmail(anyArg, "binh@example.com", anyArg).Return(0, nil).Once()
-	e.confirmations.EXPECT().CountBySource(anyArg, anyArg, anyArg).Return(0, nil).Once()
+	e.confirmations.EXPECT().CountBySource(anyArg, anyArg, anyArg).Return(0, nil).Maybe()
 	e.confirmations.EXPECT().CreateConfirmation(anyArg, anyArg).Return(nil).Once()
 	e.mailer.EXPECT().Send(anyArg, anyArg).Return(nil).Once()
 

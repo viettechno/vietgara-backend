@@ -192,20 +192,20 @@ func TestRequests_AreStoredPerGarage(t *testing.T) {
 		assert.Equal(t, "my phone", got.Details)
 
 		now := time.Now().UTC()
-		got.Status, got.Outcome, got.CompletedAt, got.CompletedBy = domain.StatusCompleted, "done", &now, &w.owner
+		got.Status, got.Outcome, got.CompletedAt, got.CompletedBy = domain.StatusCompleted, "Changed phone to 0912345678", &now, &w.owner
 		require.NoError(t, w.requests.Save(ctx, got))
 
 		items, total, err := w.requests.List(ctx, w.garage, usecase.Filter{CustomerID: w.customer, Status: domain.StatusCompleted, Limit: 10})
 		require.NoError(t, err)
 		assert.Equal(t, 1, total)
-		assert.Equal(t, "done", items[0].Outcome)
+		assert.Equal(t, "Changed phone to 0912345678", items[0].Outcome)
 
 		require.NoError(t, w.requests.ClearDetails(ctx, w.garage, w.customer))
 
 		again, err := w.requests.Find(ctx, w.garage, id)
 		require.NoError(t, err)
 		assert.Empty(t, again.Details, "anonymizing clears what the person asked to correct")
-		assert.Equal(t, "done", again.Outcome)
+		assert.Equal(t, "Cleared when the customer was anonymized", again.Outcome, "a correction's outcome may repeat what was corrected")
 
 		numbers, err := w.requests.Numbers(ctx, w.garage, w.customer)
 		require.NoError(t, err)
@@ -281,4 +281,54 @@ func TestFindByEmail_ReachesEveryGarage(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, refs, 2)
 	assert.ElementsMatch(t, []string{w.garage, w.other}, []string{refs[0].GarageID, refs[1].GarageID})
+}
+
+func TestAnonymizedCustomerKeepsItsVehiclesAndProfilesLocked(t *testing.T) {
+	t.Parallel()
+
+	w := newWorld(t)
+	vehicle := w.seed(w.garage, w.customer, "an@x.test")
+	vehicles := customerRepository.NewPostgresVehicleRepository(w.pool)
+	profiles := customerRepository.NewPostgresTaxProfileRepository(w.pool)
+
+	var profileID string
+
+	w.in(w.garage, func(ctx context.Context) {
+		list, err := profiles.List(ctx, w.garage, w.customer, true)
+		require.NoError(t, err)
+		require.Len(t, list, 1)
+
+		profileID = list[0].ID
+
+		// Before: a vehicle and a profile can be changed.
+		v, err := vehicles.FindByID(ctx, w.garage, vehicle)
+		require.NoError(t, err)
+
+		v.VIN = new("NEWVIN")
+		require.NoError(t, vehicles.Update(ctx, v))
+
+		_, err = w.customers.Anonymize(ctx, w.garage, w.customer, w.owner)
+		require.NoError(t, err)
+	})
+
+	w.in(w.garage, func(ctx context.Context) {
+		v, err := vehicles.FindByID(ctx, w.garage, vehicle)
+		require.NoError(t, err)
+
+		v.VIN, v.LicensePlate = new("REAL-VIN"), "51A-999.99"
+		require.ErrorIs(t, vehicles.Update(ctx, v), customerDomain.ErrVehicleNotFound, "the erasure cannot be written back")
+		require.ErrorIs(t, vehicles.SetActive(ctx, w.garage, vehicle, true, w.owner), customerDomain.ErrVehicleNotFound)
+
+		p, err := profiles.FindByID(ctx, w.garage, w.customer, profileID)
+		require.NoError(t, err)
+
+		p.TaxID = new("0301234567")
+		require.ErrorIs(t, profiles.Update(ctx, p), customerDomain.ErrTaxProfileNotFound)
+		require.ErrorIs(t, profiles.SetActive(ctx, w.garage, w.customer, profileID, true, w.owner), customerDomain.ErrTaxProfileNotFound)
+	})
+
+	var vin *string
+
+	require.NoError(t, w.pg.Admin.QueryRowContext(t.Context(), `SELECT vin FROM vehicles WHERE id = $1`, vehicle).Scan(&vin))
+	assert.Nil(t, vin)
 }

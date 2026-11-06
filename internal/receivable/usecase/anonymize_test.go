@@ -41,6 +41,28 @@ func TestReceivableUseCase_HandleCustomerAnonymized(t *testing.T) {
 	})
 }
 
+func TestReceivableUseCase_SyncFollowsTheLiveCustomer(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newUseCase(t)
+	d.lock()
+
+	view := settlementView()
+	view.CustomerAnonymized = true
+
+	existing := openReceivable(day(2026, 11, 17))
+	existing.CustomerName, existing.VehicleLicensePlate = "", ""
+
+	d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(view, nil).Once()
+	d.Repo.EXPECT().FindBySettlement(mock.Anything, garageID, settlementID).Return(existing, nil).Once()
+	d.Repo.EXPECT().Save(mock.Anything, existing).Return(nil).Once()
+	d.Repo.EXPECT().AddEntries(mock.Anything, garageID, receivableID, mock.Anything).Return(nil).Once()
+
+	require.NoError(t, uc.Sync(t.Context(), garageID, settlementID))
+	require.Equal(t, domain.AnonymizedName, existing.CustomerName, "a receivable made after the customer was anonymized never holds the real name")
+	require.Equal(t, domain.AnonymizedPlate, existing.VehicleLicensePlate)
+}
+
 func TestReceivableUseCase_SyncKeepsAnAnonymizedName(t *testing.T) {
 	t.Parallel()
 

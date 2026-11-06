@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	customerDomain "github.com/viettechno/vietgara-backend/internal/customer/domain"
 	customerRepository "github.com/viettechno/vietgara-backend/internal/customer/repository"
 	customerUsecase "github.com/viettechno/vietgara-backend/internal/customer/usecase"
 	dataRequestHandler "github.com/viettechno/vietgara-backend/internal/datarequest/handler"
@@ -13,6 +14,7 @@ import (
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/platform/mail"
 	tenantRepo "github.com/viettechno/vietgara-backend/internal/tenant/repository"
+	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
 // dataRequestModule is the wired personal-data request module (Release 13.1,
@@ -56,9 +58,17 @@ type dataRequestCustomers struct {
 }
 
 func (c dataRequestCustomers) Check(ctx context.Context, garageID, customerID string) error {
-	_, err := c.uc.Get(ctx, garageID, customerID)
+	customer, err := c.uc.Get(ctx, garageID, customerID)
+	if err != nil {
+		return err
+	}
 
-	return err
+	if customer.IsAnonymized() {
+		return apperror.Wrap(apperror.CodeFailedPrecondition, customerDomain.ErrCustomerAnonymized.Error(), customerDomain.ErrCustomerAnonymized).
+			WithReason(customerDomain.ReasonCustomerAnonymized)
+	}
+
+	return nil
 }
 
 func (c dataRequestCustomers) Export(ctx context.Context, garageID, customerID string) (json.RawMessage, error) {

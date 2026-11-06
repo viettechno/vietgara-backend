@@ -129,10 +129,14 @@ type SettlementView struct {
 	CustomerID          string
 	CustomerName        string
 	VehicleLicensePlate string
-	TotalAmount         int64
-	PaidAmount          int64
-	CreatedAt           time.Time
-	Payments            []PaymentView
+	// CustomerAnonymized is true when the customer's personal data was erased
+	// (PD-06): the receivable then holds placeholders, not the settlement's
+	// name and plate.
+	CustomerAnonymized bool
+	TotalAmount        int64
+	PaidAmount         int64
+	CreatedAt          time.Time
+	Payments           []PaymentView
 }
 
 // SettlementReader reads a settlement; implemented by an adapter over the

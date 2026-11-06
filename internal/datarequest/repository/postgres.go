@@ -139,10 +139,13 @@ func (r *PostgresRepository) List(ctx context.Context, garageID string, f usecas
 	return items, total, rows.Err()
 }
 
-// ClearDetails empties the details of every request of the customer.
+// ClearDetails empties the details of every request of the customer and the
+// outcome of its corrections, which may repeat what was corrected.
 func (r *PostgresRepository) ClearDetails(ctx context.Context, garageID, customerID string) error {
 	_, err := platformdb.QuerierFromContext(ctx, r.pool).Exec(ctx,
-		`UPDATE customer_data_requests SET details = '' WHERE garage_id = $1 AND customer_id = $2 AND details <> ''`, garageID, customerID)
+		`UPDATE customer_data_requests SET details = '',
+			outcome = CASE WHEN type = 'correct' AND outcome <> '' THEN 'Cleared when the customer was anonymized' ELSE outcome END
+		WHERE garage_id = $1 AND customer_id = $2 AND (details <> '' OR (type = 'correct' AND outcome <> ''))`, garageID, customerID)
 
 	return err
 }

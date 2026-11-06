@@ -168,6 +168,14 @@ func TestDataRequestDeleteAnonymizesAndKeepsTheDocuments(t *testing.T) {
 	_, err = api.CreateVehicle(ctx, k.GarageID, &customerv1.Vehicle{CustomerId: k.CustomerID, LicensePlate: "51B-999.99"})
 	fixture.RequireAPIError(t, err, http.StatusConflict, "CUSTOMER_ANONYMIZED")
 
+	// The erased vehicle and tax profile cannot be given their data back.
+	_, err = api.UpdateVehicle(ctx, k.GarageID, k.VehicleID, &customerv1.Vehicle{Vin: new("REAL")}, "vin")
+	require.Error(t, err)
+
+	again, err := api.GetVehicle(ctx, k.GarageID, k.VehicleID)
+	require.NoError(t, err)
+	assert.Empty(t, again.GetVin())
+
 	// A second deletion is refused; the record of the first holds no personal data.
 	_, err = api.CreateDataRequest(ctx, k.GarageID, k.CustomerID, customerv1.DataRequestType_DATA_REQUEST_TYPE_DELETE, "")
 	fixture.RequireAPIError(t, err, http.StatusConflict, "CUSTOMER_ANONYMIZED")
@@ -230,7 +238,7 @@ func TestDataRequestCorrectionIsCompletedOrDeclined(t *testing.T) {
 	cleared, err := api.GetDataRequest(ctx, k.GarageID, first.GetId())
 	require.NoError(t, err)
 	assert.Empty(t, cleared.GetDetails())
-	assert.Equal(t, "Phone changed", cleared.GetOutcome())
+	assert.Equal(t, "Cleared when the customer was anonymized", cleared.GetOutcome(), "a correction's outcome may repeat what was corrected")
 }
 
 // publicKit is two garages whose customers share one address.

@@ -160,9 +160,14 @@ func (uc *PublicUseCase) throttle(ctx context.Context, address, source string, n
 		return toAppError("count requests", err)
 	}
 
-	bySource, err := uc.confirmations.CountBySource(ctx, source, since)
-	if err != nil {
-		return toAppError("count requests", err)
+	// A request without a known source (the gateway always sets one) is not
+	// counted against a bucket shared by every such request.
+	var bySource int
+
+	if source != "" {
+		if bySource, err = uc.confirmations.CountBySource(ctx, source, since); err != nil {
+			return toAppError("count requests", err)
+		}
 	}
 
 	if byAddress >= MaxPerAddressPerHour || bySource >= MaxPerSourcePerHour {
@@ -189,9 +194,31 @@ func (uc *PublicUseCase) Confirm(ctx context.Context, token string) (int, error)
 		return 0, toAppError(op, err)
 	}
 
+	n, err := uc.act(ctx, c)
+	if err != nil {
+		// What was done stays done (acting is idempotent: an anonymized customer
+		// no longer holds the address); the link is given back so that the
+		// person can finish the rest.
+		uc.restore(ctx, c)
+
+		return 0, toAppError(op, err)
+	}
+
+	return n, nil
+}
+
+// restore puts a consumed confirmation back after a failure.
+func (uc *PublicUseCase) restore(ctx context.Context, c *domain.Confirmation) {
+	if err := uc.confirmations.CreateConfirmation(context.WithoutCancel(ctx), c); err != nil {
+		slog.ErrorContext(ctx, "datarequest: giving the link back failed", "confirmation_id", c.ID, "error", err)
+	}
+}
+
+// act carries out a confirmed request and returns how many garages it reached.
+func (uc *PublicUseCase) act(ctx context.Context, c *domain.Confirmation) (int, error) {
 	refs, err := uc.customers.ByEmail(ctx, c.Email)
 	if err != nil {
-		return 0, toAppError(op, err)
+		return 0, err
 	}
 
 	var (
@@ -211,7 +238,7 @@ func (uc *PublicUseCase) Confirm(ctx context.Context, token string) (int, error)
 	for _, garageID := range garages {
 		section, err := uc.actInGarage(ctx, c, garageID, byGarge[garageID])
 		if err != nil {
-			return 0, toAppError(op, err)
+			return 0, err
 		}
 
 		views = append(views, section...)
@@ -219,7 +246,7 @@ func (uc *PublicUseCase) Confirm(ctx context.Context, token string) (int, error)
 
 	if c.Type == domain.TypeView && len(views) > 0 {
 		if err := uc.mailView(ctx, c, views); err != nil {
-			return 0, toAppError(op, err)
+			return 0, err
 		}
 	}
 
@@ -237,6 +264,7 @@ func (uc *PublicUseCase) actInGarage(ctx context.Context, c *domain.Confirmation
 
 	err := uc.tx.InGarage(ctx, garageID, func(ctx context.Context) error {
 		now := uc.now().UTC()
+		garageName := ""
 
 		for _, ref := range refs {
 			r := &domain.Request{
@@ -254,12 +282,16 @@ func (uc *PublicUseCase) actInGarage(ctx context.Context, c *domain.Confirmation
 
 			switch c.Type {
 			case domain.TypeView:
-				name, err := uc.names.GarageName(ctx, garageID)
-				if err != nil {
-					return err
+				if garageName == "" {
+					name, err := uc.names.GarageName(ctx, garageID)
+					if err != nil {
+						return err
+					}
+
+					garageName = name
 				}
 
-				sections = append(sections, viewSection{Garage: name, Data: r.ExportJSON})
+				sections = append(sections, viewSection{Garage: garageName, Data: r.ExportJSON})
 			case domain.TypeDelete:
 				if err := uc.repo.ClearDetails(ctx, garageID, ref.ID); err != nil {
 					return err
@@ -331,6 +363,10 @@ func hashToken(token string) string {
 // hashSource is a keyed hash of the source address; an IPv6 address counts by
 // its /64.
 func (uc *PublicUseCase) hashSource(ip string) string {
+	if strings.TrimSpace(ip) == "" {
+		return ""
+	}
+
 	if addr, err := netip.ParseAddr(ip); err == nil {
 		addr = addr.Unmap()
 		if addr.Is6() {

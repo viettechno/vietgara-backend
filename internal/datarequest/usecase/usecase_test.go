@@ -382,6 +382,11 @@ func newPublic(t *testing.T) (*usecase.PublicUseCase, *publicDeps) {
 	return uc, d
 }
 
+// restored expects the consumed link to be given back.
+func (d *publicDeps) restored() {
+	d.Confirmations.EXPECT().CreateConfirmation(mock.Anything, mock.Anything).Return(nil).Once()
+}
+
 func (d *publicDeps) quiet(count int) {
 	d.Confirmations.EXPECT().CountByEmail(mock.Anything, mock.Anything, mock.Anything).Return(count, nil).Maybe()
 	d.Confirmations.EXPECT().CountBySource(mock.Anything, mock.Anything, mock.Anything).Return(count, nil).Maybe()
@@ -634,6 +639,7 @@ func TestPublicUseCase_ConfirmFailures(t *testing.T) {
 		"looking the address up": func(d *publicDeps) domain.Type {
 			d.Confirmations.EXPECT().Consume(mock.Anything, mock.Anything, now).Return(confirmation(domain.TypeDelete), nil).Once()
 			d.Customers.EXPECT().ByEmail(mock.Anything, mock.Anything).Return(nil, errBoom).Once()
+			d.restored()
 
 			return domain.TypeDelete
 		},
@@ -641,6 +647,7 @@ func TestPublicUseCase_ConfirmFailures(t *testing.T) {
 			d.Confirmations.EXPECT().Consume(mock.Anything, mock.Anything, now).Return(confirmation(domain.TypeDelete), nil).Once()
 			d.Customers.EXPECT().ByEmail(mock.Anything, mock.Anything).Return([]usecase.CustomerRef{{ID: customerID, GarageID: garageID}}, nil).Once()
 			d.Customers.EXPECT().Anonymize(mock.Anything, garageID, customerID, "").Return(usecase.Counts{}, errBoom).Once()
+			d.restored()
 
 			return domain.TypeDelete
 		},
@@ -648,6 +655,7 @@ func TestPublicUseCase_ConfirmFailures(t *testing.T) {
 			d.Confirmations.EXPECT().Consume(mock.Anything, mock.Anything, now).Return(confirmation(domain.TypeCorrect), nil).Once()
 			d.Customers.EXPECT().ByEmail(mock.Anything, mock.Anything).Return([]usecase.CustomerRef{{ID: customerID, GarageID: garageID}}, nil).Once()
 			d.Repo.EXPECT().Create(mock.Anything, mock.Anything).Return(errBoom).Once()
+			d.restored()
 
 			return domain.TypeCorrect
 		},
@@ -657,6 +665,7 @@ func TestPublicUseCase_ConfirmFailures(t *testing.T) {
 			d.Customers.EXPECT().Anonymize(mock.Anything, garageID, customerID, "").Return(usecase.Counts{Customers: 1}, nil).Once()
 			d.Repo.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
 			d.Repo.EXPECT().ClearDetails(mock.Anything, garageID, customerID).Return(errBoom).Once()
+			d.restored()
 
 			return domain.TypeDelete
 		},
@@ -667,6 +676,7 @@ func TestPublicUseCase_ConfirmFailures(t *testing.T) {
 			d.Documents.EXPECT().Numbers(mock.Anything, mock.Anything, mock.Anything).Return(usecase.DocumentNumbers{}, nil).Once()
 			d.Repo.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
 			d.Names.EXPECT().GarageName(mock.Anything, garageID).Return("", errBoom).Once()
+			d.restored()
 
 			return domain.TypeView
 		},
@@ -678,6 +688,7 @@ func TestPublicUseCase_ConfirmFailures(t *testing.T) {
 			d.Repo.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
 			d.Names.EXPECT().GarageName(mock.Anything, garageID).Return("Gara", nil).Once()
 			d.Mailer.EXPECT().Send(mock.Anything, mock.Anything).Return(errBoom).Once()
+			d.restored()
 
 			return domain.TypeView
 		},
@@ -724,4 +735,45 @@ func TestPublicUseCase_PurgeAndSchedule(t *testing.T) {
 	d.Confirmations.EXPECT().PurgeBefore(mock.Anything, mock.Anything).Run(func(context.Context, time.Time) { cancel() }).Return(0, errBoom).Once()
 
 	uc.Schedule(ctx, time.Hour)
+}
+
+func TestPublicUseCase_ConfirmGivesTheLinkBackEvenWhenThatFails(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newPublic(t)
+	c := confirmation(domain.TypeDelete)
+	d.Confirmations.EXPECT().Consume(mock.Anything, mock.Anything, now).Return(c, nil).Once()
+	d.Customers.EXPECT().ByEmail(mock.Anything, mock.Anything).Return(nil, errBoom).Once()
+	d.Confirmations.EXPECT().CreateConfirmation(mock.Anything, c).Return(errBoom).Once()
+
+	_, err := uc.Confirm(t.Context(), "token")
+	assertAppError(t, err, apperror.CodeInternal)
+}
+
+func TestPublicUseCase_SubmitWithoutASourceIsNotCountedAgainstAnyBucket(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newPublic(t)
+	d.Confirmations.EXPECT().CountByEmail(mock.Anything, mock.Anything, mock.Anything).Return(0, nil).Once()
+	d.Confirmations.EXPECT().CreateConfirmation(mock.Anything, mock.MatchedBy(func(c *domain.Confirmation) bool { return c.SourceHash == "" })).Return(nil).Once()
+	d.Mailer.EXPECT().Send(mock.Anything, mock.Anything).Return(nil).Once()
+
+	require.NoError(t, uc.Submit(t.Context(), usecase.SubmitRequest{Email: "a@b.vn", Type: domain.TypeView}))
+}
+
+func TestPublicUseCase_ConfirmNamesAGarageOnce(t *testing.T) {
+	t.Parallel()
+
+	uc, d := newPublic(t)
+	d.Confirmations.EXPECT().Consume(mock.Anything, mock.Anything, now).Return(confirmation(domain.TypeView), nil).Once()
+	d.Customers.EXPECT().ByEmail(mock.Anything, mock.Anything).Return([]usecase.CustomerRef{{ID: customerID, GarageID: garageID}, {ID: otherID, GarageID: garageID}}, nil).Once()
+	d.Customers.EXPECT().Export(mock.Anything, mock.Anything, mock.Anything).Return(json.RawMessage(`{}`), nil).Twice()
+	d.Documents.EXPECT().Numbers(mock.Anything, mock.Anything, mock.Anything).Return(usecase.DocumentNumbers{}, nil).Twice()
+	d.Repo.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Twice()
+	d.Names.EXPECT().GarageName(mock.Anything, garageID).Return("Gara An", nil).Once()
+	d.Mailer.EXPECT().Send(mock.Anything, mock.Anything).Return(nil).Once()
+
+	n, err := uc.Confirm(t.Context(), "token")
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
 }

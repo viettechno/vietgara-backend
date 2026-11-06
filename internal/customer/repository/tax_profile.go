@@ -78,7 +78,7 @@ func (r *PostgresTaxProfileRepository) Update(ctx context.Context, p *domain.Tax
 	row := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
 		UPDATE customer_tax_profiles
 		SET legal_name = $4, tax_id = $5, address = $6, invoice_email = $7, is_default = $8, updated_by = $9
-		WHERE garage_id = $1 AND customer_id = $2 AND id = $3 AND deleted_at IS NULL
+		WHERE garage_id = $1 AND customer_id = $2 AND id = $3 AND deleted_at IS NULL`+profileOwnerNotAnonymized+`
 		RETURNING updated_at`,
 		p.GarageID, p.CustomerID, p.ID, p.LegalName, p.TaxID, p.Address, p.InvoiceEmail, p.IsDefault, p.UpdatedBy)
 
@@ -116,6 +116,10 @@ func (r *PostgresTaxProfileRepository) List(
 	return items, rows.Err()
 }
 
+// profileOwnerNotAnonymized keeps a tax profile whose customer was anonymized
+// from being changed or reactivated (PD-06).
+const profileOwnerNotAnonymized = ` AND NOT EXISTS (SELECT 1 FROM customers c WHERE c.garage_id = customer_tax_profiles.garage_id AND c.id = customer_tax_profiles.customer_id AND c.anonymized_at IS NOT NULL)`
+
 // ClearDefault removes the default mark of the customer's profiles but
 // exceptID's.
 func (r *PostgresTaxProfileRepository) ClearDefault(ctx context.Context, garageID, customerID, exceptID string) error {
@@ -151,6 +155,6 @@ func (r *PostgresTaxProfileRepository) SetActive(
 
 	return execAffectingOne(ctx, platformdb.QuerierFromContext(ctx, r.pool), domain.ErrTaxProfileNotFound, `
 		UPDATE customer_tax_profiles SET is_active = $4, is_default = is_default AND $4, updated_by = $5
-		WHERE garage_id = $1 AND customer_id = $2 AND id = $3 AND deleted_at IS NULL`,
+		WHERE garage_id = $1 AND customer_id = $2 AND id = $3 AND deleted_at IS NULL`+profileOwnerNotAnonymized,
 		garageID, customerID, profileID, active, nullable(updatedBy))
 }

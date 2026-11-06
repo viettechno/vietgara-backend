@@ -2,6 +2,7 @@ package usecase_test
 
 import (
 	"context"
+	"math"
 	"strings"
 	"testing"
 
@@ -126,6 +127,9 @@ func TestPayableUseCase_CreateVoucher_Refused(t *testing.T) {
 				r.Allocations = []usecase.AllocationInput{{PayableID: payableID}}
 			}, apperror.CodeInvalidArgument, usecase.ReasonInvalidAllocation},
 			"payable twice": {func(r *usecase.CreateVoucherRequest) { r.Allocations = []usecase.AllocationInput{one, one} }, apperror.CodeInvalidArgument, usecase.ReasonInvalidAllocation},
+			"allocations overflow": {func(r *usecase.CreateVoucherRequest) {
+				r.Allocations = []usecase.AllocationInput{{PayableID: payableID, Amount: math.MaxInt64}, {PayableID: payableTwoID, Amount: 1}}
+			}, apperror.CodeInvalidArgument, usecase.ReasonInvalidAllocation},
 			"payable twice in another case": {func(r *usecase.CreateVoucherRequest) {
 				r.Allocations = []usecase.AllocationInput{one, {PayableID: strings.ToUpper(payableID), Amount: 1}}
 			}, apperror.CodeInvalidArgument, usecase.ReasonInvalidAllocation},

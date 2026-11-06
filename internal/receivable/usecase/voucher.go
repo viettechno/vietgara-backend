@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"math"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -121,19 +122,9 @@ func validateVoucher(req *CreateVoucherRequest) error {
 		return domain.ErrInvalidPaymentOutVoucher
 	}
 
-	var sum int64
-
-	seen := map[string]bool{}
-
-	for i, a := range req.Allocations {
-		payableID, err := uuid.Parse(a.PayableID)
-		if err != nil || a.Amount <= 0 || seen[payableID.String()] {
-			return domain.ErrInvalidAllocation
-		}
-
-		req.Allocations[i].PayableID = payableID.String()
-		seen[payableID.String()] = true
-		sum += a.Amount
+	sum, err := canonicalAllocations(req.Allocations)
+	if err != nil {
+		return err
 	}
 
 	if req.Amount <= 0 || sum > req.Amount {
@@ -141,6 +132,27 @@ func validateVoucher(req *CreateVoucherRequest) error {
 	}
 
 	return nil
+}
+
+// canonicalAllocations checks the allocations of a voucher, puts their payable
+// ids in canonical form and returns their sum.
+func canonicalAllocations(allocations []AllocationInput) (int64, error) {
+	var sum int64
+
+	seen := map[string]bool{}
+
+	for i, a := range allocations {
+		payableID, err := uuid.Parse(a.PayableID)
+		if err != nil || a.Amount <= 0 || a.Amount > math.MaxInt64-sum || seen[payableID.String()] {
+			return 0, domain.ErrInvalidAllocation
+		}
+
+		allocations[i].PayableID = payableID.String()
+		seen[payableID.String()] = true
+		sum += a.Amount
+	}
+
+	return sum, nil
 }
 
 // lockAllocated locks the payables the allocations go to and checks each

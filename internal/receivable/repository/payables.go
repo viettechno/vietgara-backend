@@ -48,11 +48,15 @@ func (r *PostgresRepository) AddPayable(ctx context.Context, p *domain.Payable) 
 	return nil
 }
 
-// CancelPayables marks the payables of a goods receipt cancelled.
+// CancelPayables marks the payables of a goods receipt cancelled. It locks
+// them in id order, as vouchers do, so the two cannot deadlock.
 func (r *PostgresRepository) CancelPayables(ctx context.Context, garageID, goodsReceiptID string) error {
 	_, err := r.q(ctx).Exec(ctx, `
-		UPDATE supplier_payables SET status = 'cancelled'
-		WHERE garage_id = $1 AND goods_receipt_id = $2 AND status <> 'cancelled'`, garageID, goodsReceiptID)
+		WITH locked AS (
+			SELECT id FROM supplier_payables
+			WHERE garage_id = $1 AND goods_receipt_id = $2 AND status <> 'cancelled'
+			ORDER BY id FOR UPDATE)
+		UPDATE supplier_payables p SET status = 'cancelled' FROM locked WHERE p.id = locked.id`, garageID, goodsReceiptID)
 	if err != nil {
 		return fmt.Errorf("cancel supplier payables: %w", err)
 	}

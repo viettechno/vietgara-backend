@@ -46,10 +46,10 @@ func TestPayables_AddAndCancel(t *testing.T) {
 	tx = dbtest.New(t).ExpectExec("INSERT INTO supplier_payables", dbtest.Tag(0), errBoom)
 	require.ErrorIs(t, repo().AddPayable(tx.Context(t.Context()), p), errBoom)
 
-	tx = dbtest.New(t).ExpectExec("UPDATE supplier_payables SET status = 'cancelled'", dbtest.Tag(2), nil)
+	tx = dbtest.New(t).ExpectExec("UPDATE supplier_payables p SET status = 'cancelled'", dbtest.Tag(2), nil)
 	require.NoError(t, repo().CancelPayables(tx.Context(t.Context()), garageID, "gr-1"))
 
-	tx = dbtest.New(t).ExpectExec("UPDATE supplier_payables SET status = 'cancelled'", dbtest.Tag(0), errBoom)
+	tx = dbtest.New(t).ExpectExec("UPDATE supplier_payables p SET status = 'cancelled'", dbtest.Tag(0), errBoom)
 	require.ErrorIs(t, repo().CancelPayables(tx.Context(t.Context()), garageID, "gr-1"), errBoom)
 }
 

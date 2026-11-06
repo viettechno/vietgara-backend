@@ -67,34 +67,37 @@ var voucherRoles = [...]string{"Giám đốc", "Kế toán trưởng", "Người
 func writeSignatures(pdf *fpdf.Fpdf, lay layout, roles []string, name, nameRole string) {
 	// The blocks are kept together: when they do not fit what is left of the
 	// page they all go to the next one.
-	const blockHeight = 41
+	const (
+		gap, row, space = 8, 5, 18
+		blockHeight     = gap + 3*row + space // the Ln(gap), three rows and the space for the signatures below
+	)
 
 	_, pageHeight := pdf.GetPageSize()
 	_, bottom := pdf.GetAutoPageBreak()
 
 	if pdf.GetY()+blockHeight > pageHeight-bottom {
 		pdf.AddPage()
+	} else {
+		pdf.Ln(gap)
 	}
-
-	pdf.Ln(8)
 
 	width := lay.content / float64(len(roles))
 
 	pdf.SetFont(fontFamily, "B", lay.signature)
 
 	for _, role := range roles {
-		pdf.CellFormat(width, 5, role, "", 0, "C", false, 0, "")
+		pdf.CellFormat(width, row, role, "", 0, "C", false, 0, "")
 	}
 
 	pdf.Ln(-1)
 	pdf.SetFont(fontFamily, "", lay.signatureNote)
 
 	for range roles {
-		pdf.CellFormat(width, 5, "(Ký, họ tên)", "", 0, "C", false, 0, "")
+		pdf.CellFormat(width, row, "(Ký, họ tên)", "", 0, "C", false, 0, "")
 	}
 
 	pdf.Ln(-1)
-	pdf.Ln(18)
+	pdf.Ln(space)
 
 	pdf.SetFont(fontFamily, "", lay.signature)
 
@@ -104,7 +107,7 @@ func writeSignatures(pdf *fpdf.Fpdf, lay layout, roles []string, name, nameRole 
 			printed = name
 		}
 
-		pdf.CellFormat(width, 5, printed, "", 0, "C", false, 0, "")
+		pdf.CellFormat(width, row, printed, "", 0, "C", false, 0, "")
 	}
 
 	pdf.Ln(-1)

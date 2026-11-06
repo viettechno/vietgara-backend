@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"time"
 
 	billingDomain "github.com/viettechno/vietgara-backend/internal/billing/domain"
@@ -291,9 +292,13 @@ func (a documentPayables) PaymentOutVoucher(ctx context.Context, garageID, vouch
 		return documentUsecase.PaymentOutInfo{}, err
 	}
 
+	// A snapshot that cannot be read leaves the letterhead to the garage's
+	// profile, as a voucher without one does.
 	var legal issuer.Issuer
 	if err := json.Unmarshal(v.Issuer, &legal); err != nil {
-		return documentUsecase.PaymentOutInfo{}, apperror.Internal("read voucher issuer", err)
+		slog.Warn("receivable: unreadable voucher issuer snapshot", "voucher_id", v.ID, "error", err)
+
+		legal = issuer.Issuer{}
 	}
 
 	info := documentUsecase.PaymentOutInfo{

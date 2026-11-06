@@ -613,7 +613,7 @@ func TestVoucherPDFAndPayablesWorkbook(t *testing.T) {
 
 	_, second, err := api.PrintPaymentOutVoucherPDF(ctx, p.GarageID, v.GetId())
 	require.NoError(t, err)
-	assert.Contains(t, string(second), "/MediaBox [0 0 420.94 595.28]", "a reprint of A5 keeps the size of the first print's paper setting")
+	assert.Contains(t, string(second), "/MediaBox [0 0 420.94 595.28]", "a reprint follows the paper setting changed since the first print")
 	assert.Contains(t, fixture.PDFText(t, second), "BẢN SAO")
 
 	settings, err := api.GetPrintSettings(ctx, p.GarageID)

@@ -19,15 +19,16 @@ type IssueCost struct {
 }
 
 // IssueCosts returns the cost of the posted stock issues of the repair orders
-// (FR-RPT-05): quantity times the unit cost snapshot, summed per repair order
-// line and rounded half up to whole VND. An order with no entry has no issue.
+// (FR-RPT-05): quantity times the unit cost snapshot, less the unused parts
+// returned to stock at their snapshot, summed per repair order line and
+// rounded half up to whole VND. Cancelled issues do not count. An order with no entry has no issue.
 func (r *PostgresRepository) IssueCosts(ctx context.Context, garageID string, repairOrderIDs []string) (map[string]IssueCost, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 	out := map[string]IssueCost{}
 
 	rows, err := q.Query(ctx, `
 		SELECT repair_order_id::text, bool_or(status = 'posted')
-		FROM stock_issues WHERE garage_id = $1 AND repair_order_id = ANY($2::uuid[]) GROUP BY repair_order_id`, garageID, repairOrderIDs)
+		FROM stock_issues WHERE garage_id = $1 AND repair_order_id = ANY($2::uuid[]) AND status <> 'cancelled' GROUP BY repair_order_id`, garageID, repairOrderIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +55,9 @@ func (r *PostgresRepository) IssueCosts(ctx context.Context, garageID string, re
 	}
 
 	lines, err := q.Query(ctx, `
-		SELECT si.repair_order_id::text, l.repair_order_line_id::text, round(sum(l.quantity * COALESCE(l.unit_cost, 0)))::bigint
+		SELECT si.repair_order_id::text, l.repair_order_line_id::text, round(sum(l.quantity * COALESCE(l.unit_cost, 0) - COALESCE((
+			SELECT sum(r.quantity * COALESCE(r.unit_cost, 0)) FROM repair_order_part_returns r
+			WHERE r.garage_id = l.garage_id AND r.stock_issue_line_id = l.id), 0)))::bigint
 		FROM stock_issue_lines l JOIN stock_issues si ON si.garage_id = l.garage_id AND si.id = l.stock_issue_id
 		WHERE l.garage_id = $1 AND si.repair_order_id = ANY($2::uuid[]) AND si.status = 'posted'
 		GROUP BY si.repair_order_id, l.repair_order_line_id`, garageID, repairOrderIDs)

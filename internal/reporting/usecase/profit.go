@@ -140,30 +140,24 @@ func (uc *ReportingUseCase) GetRepairOrderProfit(ctx context.Context, garageID, 
 func (uc *ReportingUseCase) labels(ctx context.Context, garageID string, groupBy ProfitGroupBy, lines []ProfitLine) (map[string]string, error) {
 	switch groupBy {
 	case GroupByJob:
-		var ids []string
-
+		var raw []string
 		for i := range lines {
-			if lines[i].JobID != "" && !slices.Contains(ids, lines[i].JobID) {
-				ids = append(ids, lines[i].JobID)
-			}
+			raw = append(raw, lines[i].JobID)
 		}
 
+		ids := distinct(raw)
 		if len(ids) == 0 {
 			return map[string]string{}, nil
 		}
 
 		return uc.Names.JobNames(ctx, garageID, ids)
 	case GroupByTechnician:
-		var ids []string
-
+		var raw []string
 		for i := range lines {
-			for _, id := range lines[i].TechnicianIDs {
-				if !slices.Contains(ids, id) {
-					ids = append(ids, id)
-				}
-			}
+			raw = append(raw, lines[i].TechnicianIDs...)
 		}
 
+		ids := distinct(raw)
 		if len(ids) == 0 {
 			return map[string]string{}, nil
 		}
@@ -177,15 +171,34 @@ func (uc *ReportingUseCase) labels(ctx context.Context, garageID string, groupBy
 }
 
 func orderIDs(lines []ProfitLine) []string {
-	var ids []string
+	var (
+		ids  []string
+		seen = map[string]bool{}
+	)
 
 	for i := range lines {
-		if !slices.Contains(ids, lines[i].RepairOrderID) {
+		if !seen[lines[i].RepairOrderID] {
+			seen[lines[i].RepairOrderID] = true
 			ids = append(ids, lines[i].RepairOrderID)
 		}
 	}
 
 	return ids
+}
+
+// distinct returns ids without repeats or blanks, in order of appearance.
+func distinct(ids []string) []string {
+	seen := make(map[string]bool, len(ids))
+	out := make([]string, 0, len(ids))
+
+	for _, id := range ids {
+		if id != "" && !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+
+	return out
 }
 
 // costKnown tells whether the cost of an order is known: its stock issue is
@@ -285,7 +298,9 @@ func buildProfit(groupBy ProfitGroupBy, lines []ProfitLine, costs map[string]Iss
 // sharesOf turns one line into the shares of the rows it belongs to; a line
 // that earned and cost nothing makes none.
 func sharesOf(groupBy ProfitGroupBy, l ProfitLine, cost int64, labels map[string]string) []share {
-	if l.Revenue == 0 && cost == 0 {
+	// Grouped by repair order every closed order has a row; the other groupings
+	// skip a line that earned and cost nothing.
+	if l.Revenue == 0 && cost == 0 && groupBy != GroupByRepairOrder {
 		return nil
 	}
 

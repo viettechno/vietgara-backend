@@ -247,6 +247,29 @@ func TestReportingUseCase_GetProfitReport(t *testing.T) {
 		assert.Equal(t, 1, got.OrdersWithoutCost)
 	})
 
+	t.Run("every closed order has a row by order, even one that earned and cost nothing", func(t *testing.T) {
+		t.Parallel()
+
+		zero := []usecase.ProfitLine{{RepairOrderID: order1, RepairOrderNumber: "LSC-1", LineID: "l1"}}
+
+		uc, d := newReportUseCase(t)
+		d.Orders.EXPECT().ClosedLines(mock.Anything, garageID, hcm, mock.Anything, mock.Anything).Return(zero, nil).Once()
+		d.Costs.EXPECT().IssueCosts(mock.Anything, garageID, []string{order1}).Return(nil, nil).Once()
+
+		got, err := uc.GetProfitReport(t.Context(), req(usecase.GroupByRepairOrder))
+		require.NoError(t, err)
+		require.Len(t, got.Rows, 1)
+		assert.Equal(t, 1, got.Rows[0].RepairOrders)
+
+		uc, d = newReportUseCase(t)
+		d.Orders.EXPECT().ClosedLines(mock.Anything, garageID, hcm, mock.Anything, mock.Anything).Return(zero, nil).Once()
+		d.Costs.EXPECT().IssueCosts(mock.Anything, garageID, []string{order1}).Return(nil, nil).Once()
+
+		got, err = uc.GetProfitReport(t.Context(), req(usecase.GroupByJob))
+		require.NoError(t, err)
+		assert.Empty(t, got.Rows, "the other groupings skip a line with nothing in it")
+	})
+
 	t.Run("an empty period has no rows", func(t *testing.T) {
 		t.Parallel()
 

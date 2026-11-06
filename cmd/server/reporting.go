@@ -6,6 +6,7 @@ import (
 	"time"
 
 	billingRepository "github.com/viettechno/vietgara-backend/internal/billing/repository"
+	catalogueDomain "github.com/viettechno/vietgara-backend/internal/catalogue/domain"
 	catalogueRepository "github.com/viettechno/vietgara-backend/internal/catalogue/repository"
 	identityRepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
 	inventoryRepository "github.com/viettechno/vietgara-backend/internal/inventory/repository"
@@ -132,8 +133,12 @@ func (n reportingNames) JobNames(ctx context.Context, garageID string, ids []str
 
 	for _, id := range ids {
 		job, err := n.jobs.FindJob(ctx, garageID, id)
-		if err != nil {
+		if errors.Is(err, catalogueDomain.ErrJobNotFound) {
 			continue // a deleted job keeps its row, unnamed
+		}
+
+		if err != nil {
+			return nil, err
 		}
 
 		names[id] = job.Name

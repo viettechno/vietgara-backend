@@ -8,4 +8,8 @@ import (
 
 type mocksMailer = mocks.MockOrderMailer
 
-func newMailer(t *testing.T) *mocksMailer { return mocks.NewMockOrderMailer(t) }
+func newMailer(t *testing.T) *mocksMailer {
+	t.Helper()
+
+	return mocks.NewMockOrderMailer(t)
+}

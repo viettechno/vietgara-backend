@@ -171,6 +171,7 @@ func TestInventoryUseCase_CreatePurchaseOrder(t *testing.T) {
 		uc, d := newUseCase(t)
 		inactive := samplePart()
 		inactive.IsActive = false
+
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(garageSettings("on_close"), nil).Once()
 		d.Directory.EXPECT().SupplierContacts(mock.Anything, garageID, mock.Anything).Return(contacts(""), nil).Once()
 		d.Parts.EXPECT().Parts(mock.Anything, garageID, []string{partID}).Return([]usecase.PartInfo{inactive}, nil).Once()
@@ -487,7 +488,9 @@ func TestInventoryUseCase_CreatePurchaseOrdersFromLowStock(t *testing.T) {
 	})
 
 	failures := map[string]func(d *deps){
-		"on order": func(d *deps) { d.Repo.EXPECT().OnOrder(mock.Anything, garageID, mock.Anything).Return(nil, errBoom).Once() },
+		"on order": func(d *deps) {
+			d.Repo.EXPECT().OnOrder(mock.Anything, garageID, mock.Anything).Return(nil, errBoom).Once()
+		},
 		"default suppliers": func(d *deps) {
 			d.Repo.EXPECT().OnOrder(mock.Anything, garageID, mock.Anything).Return(nil, nil).Once()
 			d.Repo.EXPECT().DefaultSuppliers(mock.Anything, garageID, mock.Anything).Return(nil, errBoom).Once()
@@ -522,35 +525,36 @@ func TestInventoryUseCase_CreatePurchaseOrdersFromLowStock(t *testing.T) {
 	})
 }
 
+var sendRequest = usecase.SendPurchaseOrderRequest{GarageID: garageID, OrderID: orderID, ActorID: actorID, Message: "please confirm"}
+
+var sendMail = usecase.OrderMail{
+	GarageID: garageID, OrderID: orderID, Number: "DH-2026-00001", SupplierName: "Supplier 1", To: "sao@mai.test", Message: "please confirm",
+}
+
+func mailerUseCase(t *testing.T) (*usecase.InventoryUseCase, *deps, *mocksMailer) {
+	t.Helper()
+
+	uc, d := orderUseCase(t)
+	m := newMailer(t)
+	uc.SetOrderMailer(m)
+
+	return uc, d, m
+}
+
 func TestInventoryUseCase_SendPurchaseOrder(t *testing.T) {
 	t.Parallel()
-
-	req := usecase.SendPurchaseOrderRequest{GarageID: garageID, OrderID: orderID, ActorID: actorID, Message: "please confirm"}
-	mail := usecase.OrderMail{
-		GarageID: garageID, OrderID: orderID, Number: "DH-2026-00001", SupplierName: "Supplier 1", To: "sao@mai.test", Message: "please confirm",
-	}
-
-	withMailer := func(t *testing.T) (*usecase.InventoryUseCase, *deps, *mocksMailer) {
-		t.Helper()
-
-		uc, d := orderUseCase(t)
-		m := newMailer(t)
-		uc.SetOrderMailer(m)
-
-		return uc, d, m
-	}
 
 	t.Run("e-mails the supplier and marks a draft sent", func(t *testing.T) {
 		t.Parallel()
 
-		uc, d, m := withMailer(t)
+		uc, d, m := mailerUseCase(t)
 		d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(draftOrder(), nil).Once()
-		m.EXPECT().SendPurchaseOrder(mock.Anything, mail).Return(true, nil).Once()
+		m.EXPECT().SendPurchaseOrder(mock.Anything, sendMail).Return(true, nil).Once()
 		d.Repo.EXPECT().SavePurchaseOrder(mock.Anything, mock.MatchedBy(func(o *domain.PurchaseOrder) bool {
 			return o.Status == domain.PurchaseOrderSent && o.SentTo == "sao@mai.test" && o.SentAt != nil && o.SentAt.Equal(now)
 		})).Return(nil).Once()
 
-		got, err := uc.SendPurchaseOrder(t.Context(), req)
+		got, err := uc.SendPurchaseOrder(t.Context(), sendRequest)
 		require.NoError(t, err)
 		assert.Equal(t, domain.PurchaseOrderSent, got.Status)
 	})
@@ -558,14 +562,14 @@ func TestInventoryUseCase_SendPurchaseOrder(t *testing.T) {
 	t.Run("a sent order may be sent again", func(t *testing.T) {
 		t.Parallel()
 
-		uc, d, m := withMailer(t)
+		uc, d, m := mailerUseCase(t)
 		sent := draftOrder()
 		sent.Status, sent.SentAt = domain.PurchaseOrderSent, new(now.Add(-time.Hour))
 		d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(sent, nil).Once()
-		m.EXPECT().SendPurchaseOrder(mock.Anything, mail).Return(true, nil).Once()
+		m.EXPECT().SendPurchaseOrder(mock.Anything, sendMail).Return(true, nil).Once()
 		d.Repo.EXPECT().SavePurchaseOrder(mock.Anything, mock.Anything).Return(nil).Once()
 
-		got, err := uc.SendPurchaseOrder(t.Context(), req)
+		got, err := uc.SendPurchaseOrder(t.Context(), sendRequest)
 		require.NoError(t, err)
 		assert.True(t, got.SentAt.Equal(now))
 	})
@@ -574,12 +578,12 @@ func TestInventoryUseCase_SendPurchaseOrder(t *testing.T) {
 		t.Parallel()
 
 		for _, status := range []domain.PurchaseOrderStatus{domain.PurchaseOrderCancelled, domain.PurchaseOrderReceived, domain.PurchaseOrderPartiallyReceived} {
-			uc, d, _ := withMailer(t)
+			uc, d, _ := mailerUseCase(t)
 			o := draftOrder()
 			o.Status = status
 			d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(o, nil).Once()
 
-			_, err := uc.SendPurchaseOrder(t.Context(), req)
+			_, err := uc.SendPurchaseOrder(t.Context(), sendRequest)
 			assertAppError(t, err, apperror.CodeFailedPrecondition)
 		}
 	})
@@ -587,10 +591,10 @@ func TestInventoryUseCase_SendPurchaseOrder(t *testing.T) {
 	t.Run("a message over the limit, a supplier without an address, or an address that cannot be mailed are refused", func(t *testing.T) {
 		t.Parallel()
 
-		uc, d, _ := withMailer(t)
+		uc, d, _ := mailerUseCase(t)
 		d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(draftOrder(), nil).Once()
 
-		long := req
+		long := sendRequest
 		long.Message = strings.Repeat("m", domain.MaxOrderMessageLength+1)
 
 		_, err := uc.SendPurchaseOrder(t.Context(), long)
@@ -602,17 +606,17 @@ func TestInventoryUseCase_SendPurchaseOrder(t *testing.T) {
 		d.Parts.EXPECT().Parts(mock.Anything, garageID, mock.Anything).Return([]usecase.PartInfo{samplePart()}, nil).Maybe()
 		d.Directory.EXPECT().SupplierContacts(mock.Anything, garageID, mock.Anything).Return(contacts("  "), nil).Once()
 
-		_, err = uc.SendPurchaseOrder(t.Context(), req)
+		_, err = uc.SendPurchaseOrder(t.Context(), sendRequest)
 		assertAppError(t, err, apperror.CodeInvalidArgument)
 
 		appErr, _ := apperror.As(err)
 		assert.Equal(t, usecase.ReasonSupplierEmailRequired, appErr.Reason)
 
-		uc, d, m := withMailer(t)
+		uc, d, m := mailerUseCase(t)
 		d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(draftOrder(), nil).Once()
-		m.EXPECT().SendPurchaseOrder(mock.Anything, mail).Return(false, nil).Once()
+		m.EXPECT().SendPurchaseOrder(mock.Anything, sendMail).Return(false, nil).Once()
 
-		_, err = uc.SendPurchaseOrder(t.Context(), req)
+		_, err = uc.SendPurchaseOrder(t.Context(), sendRequest)
 		assertAppError(t, err, apperror.CodeInvalidArgument)
 	})
 
@@ -622,9 +626,13 @@ func TestInventoryUseCase_SendPurchaseOrder(t *testing.T) {
 		uc, d := orderUseCase(t)
 		d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(draftOrder(), nil).Once()
 
-		_, err := uc.SendPurchaseOrder(t.Context(), req)
+		_, err := uc.SendPurchaseOrder(t.Context(), sendRequest)
 		assertAppError(t, err, apperror.CodeInvalidArgument)
 	})
+}
+
+func TestInventoryUseCase_SendPurchaseOrder_Failures(t *testing.T) {
+	t.Parallel()
 
 	failures := map[string]func(d *deps, m *mocksMailer){
 		"unknown order": func(d *deps, _ *mocksMailer) {
@@ -637,16 +645,16 @@ func TestInventoryUseCase_SendPurchaseOrder(t *testing.T) {
 		},
 		"mailer": func(d *deps, m *mocksMailer) {
 			d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(draftOrder(), nil).Once()
-			m.EXPECT().SendPurchaseOrder(mock.Anything, mail).Return(false, errBoom).Once()
+			m.EXPECT().SendPurchaseOrder(mock.Anything, sendMail).Return(false, errBoom).Once()
 		},
 		"save": func(d *deps, m *mocksMailer) {
 			d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(draftOrder(), nil).Once()
-			m.EXPECT().SendPurchaseOrder(mock.Anything, mail).Return(true, nil).Once()
+			m.EXPECT().SendPurchaseOrder(mock.Anything, sendMail).Return(true, nil).Once()
 			d.Repo.EXPECT().SavePurchaseOrder(mock.Anything, mock.Anything).Return(errBoom).Once()
 		},
 		"audit": func(d *deps, m *mocksMailer) {
 			d.Repo.EXPECT().FindPurchaseOrder(mock.Anything, garageID, orderID, true).Return(draftOrder(), nil).Once()
-			m.EXPECT().SendPurchaseOrder(mock.Anything, mail).Return(true, nil).Once()
+			m.EXPECT().SendPurchaseOrder(mock.Anything, sendMail).Return(true, nil).Once()
 			d.Repo.EXPECT().SavePurchaseOrder(mock.Anything, mock.Anything).Return(nil).Once()
 			d.Audit.ExpectedCalls = nil
 			d.Audit.EXPECT().Record(mock.Anything, mock.Anything).Return(errBoom).Once()
@@ -657,10 +665,10 @@ func TestInventoryUseCase_SendPurchaseOrder(t *testing.T) {
 		t.Run("fails on "+name, func(t *testing.T) {
 			t.Parallel()
 
-			uc, d, m := withMailer(t)
+			uc, d, m := mailerUseCase(t)
 			arrange(d, m)
 
-			_, err := uc.SendPurchaseOrder(t.Context(), req)
+			_, err := uc.SendPurchaseOrder(t.Context(), sendRequest)
 			require.Error(t, err)
 		})
 	}
@@ -994,4 +1002,3 @@ func TestInventoryUseCase_GoodsReceiptCountsAgainstItsOrder(t *testing.T) {
 		require.NoError(t, err)
 	})
 }
-

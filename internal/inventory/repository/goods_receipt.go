@@ -75,6 +75,8 @@ func (r *PostgresRepository) insertReceiptLines(ctx context.Context, receipt *do
 }
 
 // FindGoodsReceipt returns the receipt with its lines in order.
+//
+//nolint:dupl // each document has its own tables and filters
 func (r *PostgresRepository) FindGoodsReceipt(ctx context.Context, garageID, receiptID string, forUpdate bool) (*domain.GoodsReceipt, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 

@@ -321,6 +321,8 @@ type ListPurchaseOrdersRequest struct {
 }
 
 // ListPurchaseOrders returns one page of orders, newest first, without lines.
+//
+//nolint:dupl // each document is described with its own derived names
 func (uc *InventoryUseCase) ListPurchaseOrders(ctx context.Context, req ListPurchaseOrdersRequest) (*Page[*domain.PurchaseOrder], error) {
 	const op = "list purchase orders"
 

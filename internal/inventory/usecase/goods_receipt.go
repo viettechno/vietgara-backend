@@ -247,18 +247,8 @@ func (uc *InventoryUseCase) CompleteGoodsReceipt(ctx context.Context, garageID, 
 		return nil, toAppError(op, err)
 	}
 
-	if r.Status != domain.GoodsReceiptDraft {
-		return nil, toAppError(op, domain.ErrGoodsReceiptNotDraft)
-	}
-
-	if len(r.Lines) == 0 {
-		return nil, toAppError(op, domain.ErrNoLines)
-	}
-
-	for i := range r.Lines {
-		if r.Lines[i].SupplierID == nil {
-			return nil, toAppError(op, domain.ErrSupplierRequired)
-		}
+	if err := completable(r); err != nil {
+		return nil, toAppError(op, err)
 	}
 
 	if err := uc.activeParts(ctx, garageID, r); err != nil {
@@ -297,6 +287,26 @@ func (uc *InventoryUseCase) CompleteGoodsReceipt(ctx context.Context, garageID, 
 	}
 
 	return r, nil
+}
+
+// completable checks that a receipt is a draft with lines that all have a
+// supplier.
+func completable(r *domain.GoodsReceipt) error {
+	if r.Status != domain.GoodsReceiptDraft {
+		return domain.ErrGoodsReceiptNotDraft
+	}
+
+	if len(r.Lines) == 0 {
+		return domain.ErrNoLines
+	}
+
+	for i := range r.Lines {
+		if r.Lines[i].SupplierID == nil {
+			return domain.ErrSupplierRequired
+		}
+	}
+
+	return nil
 }
 
 // Events of a goods receipt (Release 13.0): the Receivables module makes a

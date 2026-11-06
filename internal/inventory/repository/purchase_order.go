@@ -21,8 +21,10 @@ func scanOrder(row pgx.Row, extra ...any) (*domain.PurchaseOrder, error) {
 		status string
 	)
 
-	dest := append([]any{&o.ID, &o.GarageID, &o.Number, &status, &o.SupplierID, &o.OrderDate, &o.ExpectedDate, &o.Notes,
-		&o.SentAt, &o.SentTo, &o.CancelledAt, &o.CreatedBy, &o.UpdatedBy, &o.CreatedAt, &o.UpdatedAt}, extra...)
+	dest := append([]any{
+		&o.ID, &o.GarageID, &o.Number, &status, &o.SupplierID, &o.OrderDate, &o.ExpectedDate, &o.Notes,
+		&o.SentAt, &o.SentTo, &o.CancelledAt, &o.CreatedBy, &o.UpdatedBy, &o.CreatedAt, &o.UpdatedAt,
+	}, extra...)
 
 	if err := row.Scan(dest...); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -83,6 +85,8 @@ func orZero(s string) string {
 }
 
 // FindPurchaseOrder returns the order with its lines in order.
+//
+//nolint:dupl // each document has its own tables and filters
 func (r *PostgresRepository) FindPurchaseOrder(ctx context.Context, garageID, orderID string, forUpdate bool) (*domain.PurchaseOrder, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
@@ -146,6 +150,8 @@ func (r *PostgresRepository) SavePurchaseOrder(ctx context.Context, o *domain.Pu
 
 // ListPurchaseOrders returns one page of orders, newest first, with the total
 // of their lines and the supplier's name.
+//
+//nolint:dupl // each document has its own tables and filters
 func (r *PostgresRepository) ListPurchaseOrders(ctx context.Context, garageID string, f usecase.PurchaseOrderFilter) ([]*domain.PurchaseOrder, int, error) {
 	q := platformdb.QuerierFromContext(ctx, r.pool)
 
@@ -200,7 +206,7 @@ func (r *PostgresRepository) OnOrder(ctx context.Context, garageID string, partI
 		SELECT l.part_id, trim_scale(sum(GREATEST(l.quantity - l.received_quantity, 0)))::text
 		FROM purchase_order_lines l JOIN purchase_orders o ON o.garage_id = l.garage_id AND o.id = l.purchase_order_id
 		WHERE l.garage_id = $1 AND l.part_id = ANY($2::uuid[]) AND o.status IN ('draft', 'sent', 'partially_received')
-		GROUP BY l.part_id`, garageID, partIDs)
+		GROUP BY l.part_id HAVING sum(GREATEST(l.quantity - l.received_quantity, 0)) > 0`, garageID, partIDs)
 	if err != nil {
 		return nil, err
 	}

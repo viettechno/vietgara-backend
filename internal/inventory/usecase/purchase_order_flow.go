@@ -324,11 +324,12 @@ func (uc *InventoryUseCase) countAgainstOrder(ctx context.Context, r *domain.Goo
 				continue
 			}
 
-			if sign > 0 {
+			switch {
+			case sign > 0:
 				l.ReceivedQuantity = domain.Add(l.ReceivedQuantity, rl.Quantity)
-			} else if domain.Less(l.ReceivedQuantity, rl.Quantity) {
+			case domain.Less(l.ReceivedQuantity, rl.Quantity):
 				l.ReceivedQuantity = "0"
-			} else {
+			default:
 				l.ReceivedQuantity = domain.Subtract(l.ReceivedQuantity, rl.Quantity)
 			}
 		}

@@ -12,6 +12,7 @@ import (
 
 	"github.com/viettechno/vietgara-backend/internal/inventory/domain"
 	"github.com/viettechno/vietgara-backend/internal/inventory/usecase"
+	dbpkg "github.com/viettechno/vietgara-backend/internal/platform/db"
 )
 
 func (f *fixture) order(number string, status domain.PurchaseOrderStatus, lines ...domain.PurchaseOrderLine) *domain.PurchaseOrder {
@@ -41,11 +42,15 @@ func TestPurchaseOrders_Lifecycle(t *testing.T) {
 		require.Len(t, got.Lines, 2)
 		assert.Equal(t, "0", got.Lines[0].ReceivedQuantity)
 		assert.Equal(t, int64(10_000), got.Total())
-
-		// A part may be on an order once.
-		dup := f.order("DH-2026-00002", domain.PurchaseOrderDraft, line(f.part, "1", "", 0), line(f.part, "2", "", 0))
-		require.Error(t, f.repo.CreatePurchaseOrder(ctx, dup))
 	})
+
+	// A part may be on an order once.
+	err := f.txm.WithTransaction(t.Context(), dbpkg.GarageScope(f.garage), func(ctx context.Context) error {
+		dup := f.order("DH-2026-00002", domain.PurchaseOrderDraft, line(f.part, "1", "", 0), line(f.part, "2", "", 0))
+
+		return f.repo.CreatePurchaseOrder(ctx, dup)
+	})
+	require.Error(t, err)
 
 	f.in(f.garage, func(ctx context.Context) {
 		o := f.order("DH-2026-00003", domain.PurchaseOrderSent, line(f.part, "10", "4", 1000))

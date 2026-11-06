@@ -43,6 +43,8 @@ func PurchaseOrderPolicies() middleware.Policies {
 }
 
 // ListPurchaseOrders lists the garage's orders, newest first.
+//
+//nolint:dupl // one list RPC per document, each with its own request and response types
 func (s *PurchaseOrderServer) ListPurchaseOrders(ctx context.Context, req *inventoryv1.ListPurchaseOrdersRequest) (*inventoryv1.ListPurchaseOrdersResponse, error) {
 	return run(ctx, func(string) (*inventoryv1.ListPurchaseOrdersResponse, error) {
 		page, err := s.uc.ListPurchaseOrders(ctx, usecase.ListPurchaseOrdersRequest{

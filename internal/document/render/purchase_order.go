@@ -8,22 +8,22 @@ import (
 // Prices are printed only when the model says so.
 func purchaseOrderTemplate(data printmodel.PurchaseOrder, o Options) ([]byte, error) {
 	lay := layoutFor(o.Paper)
-	pdf := newPDF(lay, copyLabel(o, "COPY"))
-	writeHeader(pdf, lay, data.Garage, "PURCHASE ORDER", data.Number)
+	pdf := newPDF(lay, copyLabel(o, "BẢN SAO"))
+	writeHeader(pdf, lay, data.Garage, "ĐƠN ĐẶT HÀNG", data.Number)
 
-	writeKeyValue(pdf, "Supplier", data.SupplierName)
-	writeKeyValue(pdf, "Date", data.Date)
+	writeKeyValue(pdf, "Nhà cung cấp", data.SupplierName)
+	writeKeyValue(pdf, "Ngày", data.Date)
 
 	if data.ExpectedDate != "" {
-		writeKeyValue(pdf, "Expected", data.ExpectedDate)
+		writeKeyValue(pdf, "Ngày giao dự kiến", data.ExpectedDate)
 	}
 
 	if data.Notes != "" {
-		writeKeyValue(pdf, "Notes", data.Notes)
+		writeKeyValue(pdf, "Ghi chú", data.Notes)
 	}
 
 	widths := lay.order
-	headers := [5]string{headingSKU, headingPart, "Qty", "Unit cost", "Amount"}
+	headers := [5]string{"SKU", "Phụ tùng", "SL", "Đơn giá", "Thành tiền"}
 	count := len(widths)
 
 	if !data.ShowCost {
@@ -58,7 +58,7 @@ func purchaseOrderTemplate(data printmodel.PurchaseOrder, o Options) ([]byte, er
 
 	if data.ShowCost {
 		pdf.SetFont(fontFamily, "B", 10)
-		pdf.CellFormat(widths[0]+widths[1]+widths[2]+widths[3], 8, labelTotal, "1", 0, "R", false, 0, "")
+		pdf.CellFormat(widths[0]+widths[1]+widths[2]+widths[3], 8, "Tổng cộng", "1", 0, "R", false, 0, "")
 		pdf.CellFormat(widths[4], 8, formatVND(data.TotalAmount), "1", 0, "R", false, 0, "")
 		pdf.Ln(-1)
 	}

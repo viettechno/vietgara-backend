@@ -455,3 +455,28 @@ contract changes. Pushing uncommitted work is refused unless `ALLOW_DIRTY=1`.
 Staging runs the published images on a VM. The Compose file, settings template
 and step-by-step guide are in the `vietgara-infra` repository
 (`staging/README.md`).
+
+## CI secrets and variables (staging workflows)
+
+The **Blackbox tests (staging)** and **Load test (staging)** workflows run against the deployed staging, so they need its addresses and passwords. None is in the repository: set them once as **repository secrets** (Settings, Secrets and variables, Actions, tab *Secrets*), and set them again when staging's host or Mailpit password changes. Without them the workflow fails at its first step.
+
+| Secret | Value | Used by |
+| --- | --- | --- |
+| `BLACKBOX_STAGING_API_URL` | The API host: `https://api-staging.vietgara.vn` (`API_ADDRESS` in staging's `.env`) | both |
+| `BLACKBOX_STAGING_EMAIL_DOMAIN` | Staging's `TEST_USERS_EMAIL_DOMAIN`: `blackbox.vietgara.test` | both |
+| `BLACKBOX_STAGING_MAILPIT_URL` | The test inbox with its login: `https://blackbox:<MAILPIT_PASSWORD>@mailpit-staging.vietgara.vn` | both |
+| `TEST_PASSWORD` | The password of the users the suite signs up: any strong value | both |
+| `ADMIN_PASSWORD` | The password of `admin@<email domain>`, the platform admin the suites share. Use the **same value in `vietgara-e2e`**: it is one user on staging | both |
+
+The first three are the `BLACKBOX_API_URL`, `BLACKBOX_EMAIL_DOMAIN` and `BLACKBOX_MAILPIT_URL` that `make blackbox-env` prints on the staging VM (`vietgara-infra`, `staging/README.md` §7.5). To set them without showing the Mailpit password:
+
+```bash
+run() { ssh <user>@<vm> 'cd ~/vietgara-infra/staging && make -s blackbox-env'; }
+run | sed -n 's/^export BLACKBOX_API_URL=//p'     | gh secret set BLACKBOX_STAGING_API_URL
+run | sed -n 's/^export BLACKBOX_EMAIL_DOMAIN=//p' | gh secret set BLACKBOX_STAGING_EMAIL_DOMAIN
+run | sed -n 's/^export BLACKBOX_MAILPIT_URL=//p' | gh secret set BLACKBOX_STAGING_MAILPIT_URL
+gh secret set TEST_PASSWORD     # prompts for the value
+gh secret set ADMIN_PASSWORD
+```
+
+`make blackbox-staging` on your machine reads the same values from your shell instead ([`testing/blackbox/README.md`](testing/blackbox/README.md)). The end-to-end suite has its own list of secrets and variables in the `vietgara-e2e` README.

@@ -96,8 +96,9 @@ run as separate processes: the one that finds the address taken waits for
 the other to finish.
 
 Or run the **Blackbox tests (staging)** workflow in GitHub Actions, which
-reads the same values from repository secrets (see
-`.github/workflows/blackbox-staging.yml`).
+reads the same values from repository secrets: which ones, and how to set them,
+is in the [README](../../README.md#ci-secrets-and-variables-staging-workflows)
+(workflow: `.github/workflows/blackbox-staging.yml`).
 
 Staging uses the real Mailjet and Google, except for **test users**.
 Every user the suite signs up is on `BLACKBOX_EMAIL_DOMAIN`, which must

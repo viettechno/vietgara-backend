@@ -34,6 +34,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
+      # Fails here, with the names, instead of deep in a step that sees an empty value.
+      - name: Check the repository secrets
+        env:
+          BLACKBOX_STAGING_API_URL: ${{ secrets.BLACKBOX_STAGING_API_URL }}
+          BLACKBOX_STAGING_EMAIL_DOMAIN: ${{ secrets.BLACKBOX_STAGING_EMAIL_DOMAIN }}
+          BLACKBOX_STAGING_MAILPIT_URL: ${{ secrets.BLACKBOX_STAGING_MAILPIT_URL }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          missing=""
+          for name in BLACKBOX_STAGING_API_URL BLACKBOX_STAGING_EMAIL_DOMAIN BLACKBOX_STAGING_MAILPIT_URL TEST_PASSWORD ADMIN_PASSWORD; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error title=Repository secrets not set::Not set:$missing. What each one holds and how to set it: https://github.com/viettechno/vietgara-backend#ci-secrets-and-variables-staging-workflows"
+            exit 1
+          fi
       - name: Checkout
         uses: actions/checkout@v4
 

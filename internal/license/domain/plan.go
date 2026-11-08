@@ -12,6 +12,10 @@ import (
 // TrialPlanCode is the plan every new owner starts on (FR-LIC-01).
 const TrialPlanCode = "trial"
 
+// MaxTrialDays bounds the trial length an admin may set (ten years): a larger
+// value would push the trial's end past what the database can store.
+const MaxTrialDays = 3650
+
 // TransactionKind is a kind of business document a plan may count against
 // its daily transaction limit (the Postgres transaction_kind enum). A new
 // module that should count adds a value here and one call in its use case.
@@ -171,7 +175,7 @@ func (p *Plan) Validate() error {
 // validateTrialAndKinds checks the trial length (only the trial plan has one)
 // and the counted transaction kinds.
 func (p *Plan) validateTrialAndKinds() error {
-	if p.Code == TrialPlanCode && p.TrialDays < 1 || p.Code != TrialPlanCode && p.TrialDays != 0 {
+	if p.Code == TrialPlanCode && (p.TrialDays < 1 || p.TrialDays > MaxTrialDays) || p.Code != TrialPlanCode && p.TrialDays != 0 {
 		return InvalidPlanError("trialDays")
 	}
 

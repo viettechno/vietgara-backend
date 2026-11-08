@@ -38,6 +38,7 @@ func buildDataRequest(
 	public := dataRequestUsecase.NewPublicUseCase(dataRequestUsecase.PublicDeps{
 		Confirmations: repo, Customers: adapter, Documents: repo, Repo: repo, Names: names, Tx: transactor, Mailer: mailer,
 		BaseURL: appBaseURL(), SourceKey: dataRequestKey(signingKey),
+		MaxPerSource: envInt("DATA_REQUEST_SOURCE_LIMIT_PER_HOUR", dataRequestUsecase.MaxPerSourcePerHour),
 	})
 
 	return &dataRequestModule{

@@ -20,6 +20,7 @@ import (
 	tenantv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/tenant/v1"
 
 	"github.com/viettechno/vietgara-backend/testing/blackbox/client"
+	"github.com/viettechno/vietgara-backend/testing/blackbox/env"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 	"github.com/viettechno/vietgara-backend/testing/blackbox/timeshift"
 )
@@ -464,6 +465,10 @@ func TestPublicRequestsAreThrottled(t *testing.T) {
 	assert.LessOrEqual(t, count, 3, "no e-mail goes out for a refused request")
 
 	// Per source: one source asking for many addresses is stopped after ten.
+	// Staging does not trust the forwarded address and raises the limit,
+	// because every call of the suite comes from one address there.
+	env.RequireStubbed(t, "pins the client address through a trusted forwarding header")
+
 	source := fixture.Anonymous(t).WithClientIP("203.0.113." + string(rune('1'+time.Now().Second()%8)))
 
 	var refused bool

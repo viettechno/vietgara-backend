@@ -345,7 +345,7 @@ func TestPlanValidateTrialDaysAndKinds(t *testing.T) {
 	require.NoError(t, valid(func(*domain.Plan) {}))
 	require.NoError(t, valid(func(p *domain.Plan) { p.Code, p.TrialDays = domain.TrialPlanCode, 60 }), "the trial plan has trial days")
 	require.Error(t, valid(func(p *domain.Plan) { p.Code = domain.TrialPlanCode }), "the trial plan needs trial days")
-	require.Error(t, valid(func(p *domain.Plan) { p.Code, p.TrialDays = domain.TrialPlanCode, domain.MaxTrialDays + 1 }), "too long a trial")
+	require.Error(t, valid(func(p *domain.Plan) { p.Code, p.TrialDays = domain.TrialPlanCode, domain.MaxTrialDays+1 }), "too long a trial")
 	require.Error(t, valid(func(p *domain.Plan) { p.TrialDays = 14 }), "only the trial plan has trial days")
 	require.Error(t, valid(func(p *domain.Plan) { p.CountedKinds = []domain.TransactionKind{"invoice"} }), "an unknown kind")
 	require.NoError(t, valid(func(p *domain.Plan) { p.CountedKinds = nil }), "a plan may count nothing")

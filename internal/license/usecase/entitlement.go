@@ -41,7 +41,9 @@ func (uc *EntitlementUseCase) Get(ctx context.Context, userID string) (*domain.E
 		slog.Warn("license: reading the entitlement cache failed", "user_id", userID, "error", err)
 	}
 
-	if cached != nil {
+	// An entry cached before CountedKinds existed lacks it (nil; a plan that
+	// counts nothing caches an empty list): read the database instead.
+	if cached != nil && cached.CountedKinds != nil {
 		return cached, nil
 	}
 

@@ -365,7 +365,7 @@ type Declaration struct {
 
 // normalizeDeclaration returns the payment method of d (a bank transfer by
 // default) and drops what a cash payment does not have: bank details and
-// evidence. A bank transfer of an amount due needs its evidence.
+// evidence; cash needs its date. A bank transfer of an amount due needs its evidence.
 func normalizeDeclaration(d *Declaration, amountDue int64) (domain.PaymentMethod, error) {
 	method := d.Method
 	if method == "" {
@@ -375,6 +375,8 @@ func normalizeDeclaration(d *Declaration, amountDue int64) (domain.PaymentMethod
 	switch {
 	case !method.IsValid():
 		return "", domain.ErrInvalidDeclaration
+	case method == domain.PaymentCash && d.PaidAt == nil:
+		return "", domain.ErrInvalidDeclaration // a cash payment needs the date it was handed over
 	case method == domain.PaymentCash:
 		d.PayerBank, d.PayerAccount, d.BankTransactionRef, d.Evidence = "", "", "", nil
 	case amountDue > 0 && len(d.Evidence) == 0:

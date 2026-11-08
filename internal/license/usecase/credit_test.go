@@ -143,8 +143,14 @@ func TestCashPayment(t *testing.T) {
 	})
 	require.Error(t, err, "an unknown method")
 
+	_, err = e.Payments.Submit(ctx, "user-1", v.Request.ID, usecase.Declaration{
+		Method: domain.PaymentCash, PayerName: "Nguyen Van A", TransferredAmount: v.Request.AmountDue,
+	})
+	require.Error(t, err, "cash needs the date it was handed over")
+
+	paid := e.Now
 	submitted, err := e.Payments.Submit(ctx, "user-1", v.Request.ID, usecase.Declaration{
-		Method: domain.PaymentCash, PayerName: "Nguyen Van A", PayerBank: "ignored", TransferredAmount: v.Request.AmountDue,
+		Method: domain.PaymentCash, PayerName: "Nguyen Van A", PayerBank: "ignored", TransferredAmount: v.Request.AmountDue, PaidAt: &paid,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, domain.PaymentCash, submitted.Request.PaymentMethod)
@@ -273,4 +279,20 @@ func TestSupportContactDetails(t *testing.T) {
 	long := "0900000000000000000000000000000000000000000000000000000"
 	_, err = e.Payments.UpdateSettings(ctx, "admin", usecase.SettingsFields{SupportPhone: &long})
 	require.Error(t, err, "longer than the column")
+}
+
+// An entitlement cached before the counted kinds existed is read again from
+// the database instead of letting every kind through.
+func TestStaleCachedEntitlementsAreReloaded(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	e := licensetest.NewEnv()
+	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "owner"))
+
+	require.NoError(t, e.Cache.Set(ctx, &domain.Entitlements{UserID: "owner", Status: domain.StatusTrial, MaxTransactionsPerDay: 1}))
+
+	got, err := e.Entitlements.Get(ctx, "owner")
+	require.NoError(t, err)
+	assert.Equal(t, domain.AllTransactionKinds, got.CountedKinds, "the stale entry was replaced")
 }

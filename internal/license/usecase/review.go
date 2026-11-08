@@ -490,7 +490,8 @@ func (uc *PaymentUseCase) UpdateSettings(ctx context.Context, adminID string, f 
 		*dst = value
 	}
 
-	if len(s.SupportPhone) > maxSupportPhoneLength || len(s.SupportEmail) > maxSupportEmailLength || len(s.SupportZalo) > maxSupportZaloLength {
+	if utf8.RuneCountInString(s.SupportPhone) > maxSupportPhoneLength || utf8.RuneCountInString(s.SupportEmail) > maxSupportEmailLength ||
+		utf8.RuneCountInString(s.SupportZalo) > maxSupportZaloLength {
 		return SettingsView{}, toAppError("update payment settings", domain.ErrInvalidDeclaration)
 	}
 

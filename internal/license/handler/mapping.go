@@ -107,23 +107,26 @@ func transactionKindsToProto(in []domain.TransactionKind) []licensev1.Transactio
 	return out
 }
 
+// transactionKindsByProto is transactionKinds the other way round.
+var transactionKindsByProto = func() map[licensev1.TransactionKind]domain.TransactionKind {
+	out := make(map[licensev1.TransactionKind]domain.TransactionKind, len(transactionKinds))
+	for k, v := range transactionKinds {
+		out[v] = k
+	}
+
+	return out
+}()
+
 func transactionKindsFromProto(in []licensev1.TransactionKind) ([]domain.TransactionKind, bool) {
 	out := make([]domain.TransactionKind, 0, len(in))
 
 	for _, p := range in {
-		found := false
-
-		for k, v := range transactionKinds {
-			if v == p {
-				out, found = append(out, k), true
-
-				break
-			}
-		}
-
-		if !found {
+		k, ok := transactionKindsByProto[p]
+		if !ok {
 			return nil, false
 		}
+
+		out = append(out, k)
 	}
 
 	return out, true

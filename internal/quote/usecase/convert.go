@@ -37,7 +37,7 @@ func (uc *QuoteUseCase) Convert(ctx context.Context, garageID, quoteID, actorID 
 		return ConvertQuoteResult{}, err
 	}
 
-	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID); err != nil {
+	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionRepairOrder); err != nil {
 		return ConvertQuoteResult{}, err
 	}
 

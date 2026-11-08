@@ -119,7 +119,11 @@ func (uc *PaymentUseCase) Approve(ctx context.Context, adminID, requestID, note 
 	before, from, fromPlan := *sub, sub.Status, sub.PlanID
 	now := uc.opts.now().UTC()
 
-	if err := uc.applyCredit(ctx, sub, req, adminID); err != nil {
+	if err := uc.checkCredit(ctx, req, now); err != nil {
+		return nil, err
+	}
+
+	if err := uc.applyCredit(ctx, sub, req, adminID, now); err != nil {
 		return nil, err
 	}
 
@@ -166,17 +170,85 @@ func approvalNote(req *domain.PlanPaymentRequest, note string) (string, error) {
 	return note, nil
 }
 
+// checkCredit refuses an approval whose quoted credit has lapsed since the
+// quote (FR-LIC-08): the unexpired credit plus the unused value this approval
+// earns must still cover the credit applied.
+func (uc *PaymentUseCase) checkCredit(ctx context.Context, req *domain.PlanPaymentRequest, now time.Time) error {
+	need := max(req.CreditApplied-req.UnusedCredit, 0)
+	if need == 0 {
+		return nil
+	}
+
+	available, err := uc.payments.AvailableCredit(ctx, req.UserID, now)
+	if err != nil {
+		return toAppError("read credit", err)
+	}
+
+	if available < need {
+		return toAppError("approve payment", domain.ErrCreditExpired)
+	}
+
+	return nil
+}
+
+// lapseCredit expires the credit of sub's owner that lapsed at now (FR-LIC-09).
+func (uc *PaymentUseCase) lapseCredit(ctx context.Context, sub *domain.Subscription, now time.Time) error {
+	return lapseCredit(ctx, uc.payments, uc.events, sub, now)
+}
+
+// lapseCredit zeroes the credit of sub's owner that lapsed at now: its ledger
+// entry is written, the balance lowered (the caller saves the subscription)
+// and the change published.
+func lapseCredit(ctx context.Context, payments PaymentRepository, events EventPublisher, sub *domain.Subscription, now time.Time) error {
+	lapsed, err := payments.LapseCredit(ctx, sub.UserID, now)
+	if err != nil {
+		return toAppError("lapse credit", err)
+	}
+
+	if lapsed == 0 {
+		return nil
+	}
+
+	sub.CreditBalance = max(sub.CreditBalance-lapsed, 0)
+
+	err = payments.AddCreditEntry(ctx, &domain.CreditEntry{
+		UserID: sub.UserID, Kind: domain.CreditExpired, Amount: -lapsed, BalanceAfter: sub.CreditBalance,
+		Note: "credit lapsed one year after it was earned",
+	})
+	if err != nil {
+		return toAppError("record credit", err)
+	}
+
+	err = events.Publish(ctx, EventCreditChanged, "", sub.UserID, map[string]any{
+		keyUserID: sub.UserID, "balance": sub.CreditBalance, "expired": lapsed,
+	})
+	if err != nil {
+		return toAppError("publish credit changed", err)
+	}
+
+	return nil
+}
+
 // applyCredit records the credit a payment earned and used and sets the
-// balance: the unused value of the period was earned at the quote, and the
-// credit applied is what the payment used of it and of the balance.
-func (uc *PaymentUseCase) applyCredit(ctx context.Context, sub *domain.Subscription, req *domain.PlanPaymentRequest, adminID string) error {
+// balance: lapsed credit expires first, the unused value of the period was
+// earned at the quote (it lapses in a year), and the credit applied is what
+// the payment used of it and of the balance, the earliest expiry first.
+func (uc *PaymentUseCase) applyCredit(
+	ctx context.Context, sub *domain.Subscription, req *domain.PlanPaymentRequest, adminID string, now time.Time,
+) error {
+	if err := uc.lapseCredit(ctx, sub, now); err != nil {
+		return err
+	}
+
 	balance := sub.CreditBalance
 
 	if req.UnusedCredit > 0 {
 		balance += req.UnusedCredit
+		expires := domain.CreditExpiry(now)
 
 		err := uc.payments.AddCreditEntry(ctx, &domain.CreditEntry{
 			UserID: req.UserID, Kind: domain.CreditEarned, Amount: req.UnusedCredit, BalanceAfter: balance,
+			ExpiresAt: &expires, Remaining: req.UnusedCredit,
 			PlanPaymentRequestID: req.ID, Note: "unused value of the previous period", CreatedBy: adminID,
 		})
 		if err != nil {
@@ -185,6 +257,10 @@ func (uc *PaymentUseCase) applyCredit(ctx context.Context, sub *domain.Subscript
 	}
 
 	if used := min(req.CreditApplied, balance); used > 0 {
+		if err := uc.payments.TakeCredit(ctx, req.UserID, used, now); err != nil {
+			return toAppError("use credit", err)
+		}
+
 		balance -= used
 
 		err := uc.payments.AddCreditEntry(ctx, &domain.CreditEntry{
@@ -296,6 +372,13 @@ func (uc *PaymentUseCase) AdjustCredit(ctx context.Context, adminID, subscriptio
 		return nil, toAppError("adjust credit", err)
 	}
 
+	now := uc.opts.now().UTC()
+	before := sub.CreditBalance
+
+	if err := uc.lapseCredit(ctx, sub, now); err != nil {
+		return nil, err
+	}
+
 	balance := max(sub.CreditBalance+amount, 0)
 	entry := &domain.CreditEntry{
 		UserID: sub.UserID, Kind: domain.CreditAdjustment, Amount: balance - sub.CreditBalance, BalanceAfter: balance,
@@ -306,7 +389,13 @@ func (uc *PaymentUseCase) AdjustCredit(ctx context.Context, adminID, subscriptio
 		return nil, toAppError("adjust credit", domain.ErrInvalidAdjustment)
 	}
 
-	before := sub.CreditBalance
+	if entry.Amount > 0 {
+		expires := domain.CreditExpiry(now)
+		entry.ExpiresAt, entry.Remaining = &expires, entry.Amount
+	} else if err := uc.payments.TakeCredit(ctx, sub.UserID, -entry.Amount, now); err != nil {
+		return nil, toAppError("use credit", err)
+	}
+
 	sub.CreditBalance = balance
 
 	if err := uc.subscriptions.Update(ctx, sub); err != nil {
@@ -344,6 +433,9 @@ type SettingsFields struct {
 	AccountHolder        *string
 	Branch               *string
 	TransferInstructions *string
+	SupportPhone         *string
+	SupportEmail         *string
+	SupportZalo          *string
 }
 
 // SettingsView is the platform's payment details with the QR code's URL.
@@ -383,7 +475,8 @@ func (uc *PaymentUseCase) UpdateSettings(ctx context.Context, adminID string, f 
 
 	for dst, src := range map[*string]*string{
 		&s.BankName: f.BankName, &s.AccountNumber: f.AccountNumber, &s.AccountHolder: f.AccountHolder, &s.Branch: f.Branch,
-		&s.TransferInstructions: f.TransferInstructions,
+		&s.TransferInstructions: f.TransferInstructions, &s.SupportPhone: f.SupportPhone, &s.SupportEmail: f.SupportEmail,
+		&s.SupportZalo: f.SupportZalo,
 	} {
 		if src == nil {
 			continue
@@ -395,6 +488,10 @@ func (uc *PaymentUseCase) UpdateSettings(ctx context.Context, adminID string, f 
 		}
 
 		*dst = value
+	}
+
+	if len(s.SupportPhone) > maxSupportPhoneLength || len(s.SupportEmail) > maxSupportEmailLength || len(s.SupportZalo) > maxSupportZaloLength {
+		return SettingsView{}, toAppError("update payment settings", domain.ErrInvalidDeclaration)
 	}
 
 	return uc.saveSettings(ctx, adminID, s, before)
@@ -438,7 +535,8 @@ func (uc *PaymentUseCase) saveSettings(ctx context.Context, adminID string, s *d
 func settingsAudit(s *domain.PaymentSettings) map[string]any {
 	return map[string]any{
 		"bank_name": s.BankName, "account_number": s.AccountNumber, "account_holder": s.AccountHolder, "branch": s.Branch,
-		"transfer_instructions": s.TransferInstructions, "qr_file_id": s.QRFileID,
+		"transfer_instructions": s.TransferInstructions, "qr_file_id": s.QRFileID, "support_phone": s.SupportPhone,
+		"support_email": s.SupportEmail, "support_zalo": s.SupportZalo,
 	}
 }
 

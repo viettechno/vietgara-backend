@@ -21,6 +21,9 @@ import (
 
 var errBoom = errors.New("boom")
 
+// trialLength is the length of the trial in the fake catalogue (60 days).
+const trialLength = 60 * 24 * time.Hour
+
 func requireReason(t *testing.T, err error, reason string) {
 	t.Helper()
 	require.Error(t, err)
@@ -70,7 +73,7 @@ func TestDailyLimitFollowsTheVietnameseDay(t *testing.T) {
 	consume := func(at time.Time) error {
 		e.Now = at
 
-		return e.Entitlements.ConsumeTransaction(ctx, "owner")
+		return e.Entitlements.ConsumeTransaction(ctx, "owner", "quote")
 	}
 
 	// The trial allows two a day. 23:59:59 on 1 Nov in Vietnam is still that day.
@@ -147,9 +150,9 @@ func TestEntitlements(t *testing.T) {
 	requireReason(t, e.Entitlements.CheckLimit(ctx, "owner", "max_bays", 0), apperror.ReasonInternal)
 	require.NoError(t, e.Entitlements.CheckLimit(ctx, "other", domain.LimitStaff, 0), "starts the trial")
 
-	require.NoError(t, e.Entitlements.ConsumeTransaction(ctx, "owner"))
-	require.NoError(t, e.Entitlements.ConsumeTransaction(ctx, "owner"))
-	requireReason(t, e.Entitlements.ConsumeTransaction(ctx, "owner"), domain.ReasonPlanLimitReached)
+	require.NoError(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "quote"))
+	require.NoError(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "quote"))
+	requireReason(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "quote"), domain.ReasonPlanLimitReached)
 
 	_, usage, err := e.Subscriptions.GetMine(ctx, "owner")
 	require.NoError(t, err)
@@ -166,7 +169,7 @@ func TestEntitlements(t *testing.T) {
 
 	e.Store.Fail["plans.code"] = errBoom
 	require.Error(t, e.Entitlements.CheckLimit(ctx, "brand-new", domain.LimitStaff, 0))
-	require.Error(t, e.Entitlements.ConsumeTransaction(ctx, "brand-new"))
+	require.Error(t, e.Entitlements.ConsumeTransaction(ctx, "brand-new", "quote"))
 }
 
 func TestLicenseMode(t *testing.T) {
@@ -188,7 +191,7 @@ func TestLicenseMode(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, middleware.LicenseFull, mode)
 
-	e.Now = e.Now.Add(domain.TrialPeriod + time.Hour)
+	e.Now = e.Now.Add(trialLength + time.Hour)
 	require.NoError(t, e.Expiry.Run(ctx))
 	mode, err = e.Entitlements.LicenseMode(ctx, "g-1")
 	require.NoError(t, err)
@@ -217,7 +220,7 @@ func TestExpiryJobAnnouncesALapse(t *testing.T) {
 	lapsed := func() *licensetest.Env {
 		e := licensetest.NewEnv()
 		require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "a"))
-		e.Now = e.Now.Add(domain.TrialPeriod + time.Hour)
+		e.Now = e.Now.Add(trialLength + time.Hour)
 
 		return e
 	}
@@ -240,7 +243,7 @@ func TestExpiryJob(t *testing.T) {
 	ctx := t.Context()
 	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "a"))
 
-	e.Now = e.Now.Add(domain.TrialPeriod - 6*24*time.Hour)
+	e.Now = e.Now.Add(trialLength - 6*24*time.Hour)
 	require.NoError(t, e.Expiry.Run(ctx))
 	assert.Contains(t, e.Store.Events, usecase.EventSubscriptionExpiringSoon)
 
@@ -321,7 +324,7 @@ func TestAdmin(t *testing.T) {
 
 	extended, err := e.Subscriptions.ExtendSubscription(ctx, page.Items[0].Subscription.ID, 30)
 	require.NoError(t, err)
-	assert.Equal(t, e.Now.Add(domain.TrialPeriod+30*24*time.Hour), extended.CurrentPeriodEnd)
+	assert.Equal(t, e.Now.Add(trialLength+30*24*time.Hour), extended.CurrentPeriodEnd)
 	assert.Contains(t, e.Store.Audits, "subscription.extended")
 
 	_, err = e.Subscriptions.ExtendSubscription(ctx, extended.ID, 0)

@@ -6,6 +6,7 @@ package handler
 
 import (
 	"context"
+	"slices"
 
 	licensev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/license/v1"
 
@@ -129,7 +130,13 @@ func (s *Server) ListAllPlans(ctx context.Context, _ *licensev1.ListAllPlansRequ
 
 // CreatePlan adds a plan; answers 201.
 func (s *Server) CreatePlan(ctx context.Context, req *licensev1.CreatePlanRequest) (*licensev1.CreatePlanResponse, error) {
-	fields, err := planFields(req.GetPlan(), planSettable)
+	paths := planSettable
+	if len(req.GetPlan().GetCountedTransactionKinds()) == 0 {
+		// Left out, the counted kinds default to repair orders.
+		paths = slices.DeleteFunc(slices.Clone(planSettable), func(p string) bool { return p == "counted_transaction_kinds" })
+	}
+
+	fields, err := planFields(req.GetPlan(), paths)
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}

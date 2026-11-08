@@ -106,7 +106,7 @@ func (uc *SettlementUseCase) Create(ctx context.Context, req CreateSettlementReq
 		return nil, err
 	}
 
-	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID); err != nil {
+	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionSettlement); err != nil {
 		return nil, err
 	}
 

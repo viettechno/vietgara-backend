@@ -20,6 +20,8 @@ type PlanFields struct {
 	MaxGarages            *int
 	MaxStaff              *int
 	MaxTransactionsPerDay *int
+	CountedKinds          *[]domain.TransactionKind
+	TrialDays             *int
 	Features              *[]domain.Feature
 	Public                *bool
 	Active                *bool
@@ -38,7 +40,10 @@ func (uc *SubscriptionUseCase) ListAllPlans(ctx context.Context) ([]*domain.Plan
 
 // CreatePlan adds a plan to the catalogue (FR-LIC-05).
 func (uc *SubscriptionUseCase) CreatePlan(ctx context.Context, fields PlanFields) (*domain.Plan, error) {
-	plan := &domain.Plan{Currency: "VND", BillingCycle: domain.BillingCycleMonthly, Active: true, Features: []domain.Feature{}}
+	plan := &domain.Plan{
+		Currency: "VND", BillingCycle: domain.BillingCycleYearly, Active: true, Features: []domain.Feature{},
+		CountedKinds: []domain.TransactionKind{domain.TransactionRepairOrder},
+	}
 	applyPlanFields(plan, fields)
 
 	if err := plan.Validate(); err != nil {
@@ -62,6 +67,17 @@ func (uc *SubscriptionUseCase) UpdatePlan(ctx context.Context, planID string, fi
 	plan, err := uc.plans.FindByID(ctx, planID)
 	if err != nil {
 		return nil, toAppError("update plan", err)
+	}
+
+	if fields.BillingCycle != nil && *fields.BillingCycle != plan.BillingCycle {
+		subscribers, err := uc.plans.CountSubscribers(ctx, plan.ID)
+		if err != nil {
+			return nil, toAppError("update plan", err)
+		}
+
+		if subscribers > 0 {
+			return nil, toAppError("update plan", domain.ErrPlanHasSubscribers)
+		}
 	}
 
 	before := *plan
@@ -160,6 +176,11 @@ func applyPlanFields(p *domain.Plan, f PlanFields) {
 	setInt(&p.MaxStaff, f.MaxStaff)
 	setInt(&p.MaxTransactionsPerDay, f.MaxTransactionsPerDay)
 	setInt(&p.SortOrder, f.SortOrder)
+	setInt(&p.TrialDays, f.TrialDays)
+
+	if f.CountedKinds != nil {
+		p.CountedKinds = domain.NormalizeTransactionKinds(*f.CountedKinds)
+	}
 
 	if f.Features != nil {
 		p.Features = domain.NormalizeFeatures(*f.Features)

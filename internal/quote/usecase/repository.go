@@ -83,9 +83,10 @@ type GarageReader interface {
 
 // TransactionLimiter enforces the plan's daily transaction limit
 // (FR-LIC-02); implemented directly by the License module's
-// EntitlementUseCase.
+// EntitlementUseCase. kind names the document being created ("quote",
+// "repair_order" or "settlement"): the plan counts only the kinds it lists.
 type TransactionLimiter interface {
-	ConsumeTransaction(ctx context.Context, ownerUserID string) error
+	ConsumeTransaction(ctx context.Context, ownerUserID, kind string) error
 }
 
 // Sequencer hands out document sequence numbers (FR-TEN-05); implemented
@@ -183,3 +184,9 @@ type Transactor interface {
 
 // clock is a source of the current time, replaced in tests.
 type clock func() time.Time
+
+// Kinds of document counted against the plan's daily transaction limit.
+const (
+	transactionQuote       = "quote"
+	transactionRepairOrder = "repair_order"
+)

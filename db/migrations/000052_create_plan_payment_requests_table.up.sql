@@ -27,6 +27,8 @@ CREATE TABLE public.plan_payment_requests (
     period_days integer NOT NULL,
     unused_days integer NOT NULL,
     instructions jsonb DEFAULT '{}'::jsonb NOT NULL,
+    -- bank_transfer or cash (the enum of settlement payments, migration 44).
+    payment_method public.payment_method,
     payer_name character varying(255),
     payer_bank character varying(255),
     payer_account character varying(100),

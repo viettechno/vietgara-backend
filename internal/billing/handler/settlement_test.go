@@ -60,7 +60,7 @@ func TestCreateSettlement(t *testing.T) {
 		CustomerName: "An Nguyen", VehicleLicensePlate: "51F-123.45", TotalAmount: 1_000_000, Closed: true,
 	}, nil).Once()
 	e.garages.EXPECT().Get(anyArg, garageID).Return(defaultGarage(), nil).Once()
-	e.limits.EXPECT().ConsumeTransaction(anyArg, ownerID).Return(nil).Once()
+	e.limits.EXPECT().ConsumeTransaction(anyArg, ownerID, "settlement").Return(nil).Once()
 	e.sequences.EXPECT().Next(anyArg, garageID, "settlement", "QT-{SEQ:4}").Return(1, nil).Once()
 	e.settlements.EXPECT().Create(anyArg, anyArg).Return(nil).Once()
 	e.events.EXPECT().Publish(anyArg, usecase.EventSettlementCreated, garageID, "", anyArg).Return(nil).Once()

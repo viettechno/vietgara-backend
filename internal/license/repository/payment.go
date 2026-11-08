@@ -18,7 +18,7 @@ import (
 
 const requestColumns = `r.id, r.user_id, r.subscription_id, r.kind::text, r.plan_id, r.status::text, r.reference,
 	r.quoted_amount, r.credit_applied, r.amount_due, r.credit_surplus, r.unused_credit, r.period_days, r.unused_days, r.instructions,
-	r.payer_name, r.payer_bank, r.payer_account, r.transferred_amount, r.bank_transaction_ref, r.paid_at,
+	r.payment_method::text, r.payer_name, r.payer_bank, r.payer_account, r.transferred_amount, r.bank_transaction_ref, r.paid_at,
 	r.evidence_file_id::text, r.amount_mismatch, r.review_note, r.rejection_reason, r.reviewed_by::text, r.reviewed_at,
 	r.submitted_at, r.created_at, ` + planColumns
 
@@ -42,13 +42,14 @@ func scanRequest(row pgx.Row) (*domain.PlanPaymentRequest, error) {
 		kind, status                                                                     string
 		instructions                                                                     []byte
 		payerName, payerBank, payerAccount, txRef, evidence, note, rejection, reviewedBy *string
+		method                                                                           *string
 	)
 
 	planFields, finish := planDest(&plan)
 	dest := append([]any{
 		&r.ID, &r.UserID, &r.SubscriptionID, &kind, &r.PlanID, &status, &r.Reference,
 		&r.QuotedAmount, &r.CreditApplied, &r.AmountDue, &r.CreditSurplus, &r.UnusedCredit, &r.PeriodDays, &r.UnusedDays, &instructions,
-		&payerName, &payerBank, &payerAccount, &r.TransferredAmount, &txRef, &r.PaidAt,
+		&method, &payerName, &payerBank, &payerAccount, &r.TransferredAmount, &txRef, &r.PaidAt,
 		&evidence, &r.AmountMismatch, &note, &rejection, &reviewedBy, &r.ReviewedAt,
 		&r.SubmittedAt, &r.CreatedAt,
 	}, planFields...)
@@ -70,6 +71,7 @@ func scanRequest(row pgx.Row) (*domain.PlanPaymentRequest, error) {
 	}
 
 	r.Kind, r.Status, r.Plan = domain.PaymentKind(kind), domain.PaymentStatus(status), &plan
+	r.PaymentMethod = domain.PaymentMethod(nullableText{method}.String())
 	r.PayerName, r.PayerBank, r.PayerAccount = nullableText{payerName}.String(), nullableText{payerBank}.String(), nullableText{payerAccount}.String()
 	r.BankTransactionRef, r.EvidenceFileID = nullableText{txRef}.String(), nullableText{evidence}.String()
 	r.ReviewNote, r.RejectionReason, r.ReviewedBy = nullableText{note}.String(), nullableText{rejection}.String(), nullableText{reviewedBy}.String()
@@ -135,7 +137,7 @@ func (r *PostgresRepository) FindOpenRequest(ctx context.Context, userID string)
 // SaveRequest persists the status, declaration and review fields.
 func (r *PostgresRepository) SaveRequest(ctx context.Context, req *domain.PlanPaymentRequest) error {
 	tag, err := platformdb.QuerierFromContext(ctx, r.pool).Exec(ctx, `
-		UPDATE plan_payment_requests SET status = $2::plan_payment_status, payer_name = $3, payer_bank = $4,
+		UPDATE plan_payment_requests SET status = $2::plan_payment_status, payment_method = $16::payment_method, payer_name = $3, payer_bank = $4,
 			payer_account = $5, transferred_amount = $6, bank_transaction_ref = $7, paid_at = $8,
 			evidence_file_id = $9::uuid, amount_mismatch = $10, review_note = $11, rejection_reason = $12,
 			reviewed_by = $13::uuid, reviewed_at = $14, submitted_at = $15
@@ -143,7 +145,8 @@ func (r *PostgresRepository) SaveRequest(ctx context.Context, req *domain.PlanPa
 		req.ID, string(req.Status), nullableString(req.PayerName), nullableString(req.PayerBank),
 		nullableString(req.PayerAccount), req.TransferredAmount, nullableString(req.BankTransactionRef), req.PaidAt,
 		nullableString(req.EvidenceFileID), req.AmountMismatch, nullableString(req.ReviewNote),
-		nullableString(req.RejectionReason), nullableString(req.ReviewedBy), req.ReviewedAt, req.SubmittedAt)
+		nullableString(req.RejectionReason), nullableString(req.ReviewedBy), req.ReviewedAt, req.SubmittedAt,
+		nullableString(string(req.PaymentMethod)))
 	if err != nil {
 		return err
 	}
@@ -273,18 +276,20 @@ func (r *PostgresRepository) WaitingForReview(ctx context.Context) (int, time.Ti
 // AddCreditEntry appends to the ledger.
 func (r *PostgresRepository) AddCreditEntry(ctx context.Context, e *domain.CreditEntry) error {
 	return platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
-		INSERT INTO credit_ledger (user_id, kind, amount, balance_after, plan_payment_request_id, note, created_by)
-		VALUES ($1, $2::credit_entry_kind, $3, $4, $5::uuid, $6, $7::uuid)
+		INSERT INTO credit_ledger (user_id, kind, amount, balance_after, plan_payment_request_id, note, created_by,
+			expires_at, remaining)
+		VALUES ($1, $2::credit_entry_kind, $3, $4, $5::uuid, $6, $7::uuid, $8, $9)
 		RETURNING id, created_at`,
 		e.UserID, string(e.Kind), e.Amount, e.BalanceAfter, nullableString(e.PlanPaymentRequestID), nullableString(e.Note),
-		nullableString(e.CreatedBy),
+		nullableString(e.CreatedBy), e.ExpiresAt, e.Remaining,
 	).Scan(&e.ID, &e.CreatedAt)
 }
 
 // ListCredit returns the owner's ledger, newest first.
 func (r *PostgresRepository) ListCredit(ctx context.Context, userID string) ([]*domain.CreditEntry, error) {
 	rows, err := platformdb.QuerierFromContext(ctx, r.pool).Query(ctx, `
-		SELECT id, user_id, kind::text, amount, balance_after, plan_payment_request_id::text, note, created_by::text, created_at
+		SELECT id, user_id, kind::text, amount, balance_after, plan_payment_request_id::text, note, created_by::text, created_at,
+			expires_at, remaining
 		FROM credit_ledger WHERE user_id = $1 ORDER BY seq DESC`, userID)
 	if err != nil {
 		return nil, err
@@ -300,7 +305,7 @@ func (r *PostgresRepository) ListCredit(ctx context.Context, userID string) ([]*
 			requestID, note, by *string
 		)
 
-		if err := rows.Scan(&e.ID, &e.UserID, &kind, &e.Amount, &e.BalanceAfter, &requestID, &note, &by, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.UserID, &kind, &e.Amount, &e.BalanceAfter, &requestID, &note, &by, &e.CreatedAt, &e.ExpiresAt, &e.Remaining); err != nil {
 			return nil, err
 		}
 
@@ -320,9 +325,10 @@ func (r *PostgresRepository) Settings(ctx context.Context) (*domain.PaymentSetti
 	)
 
 	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
-		SELECT bank_name, account_number, account_holder, branch, instructions, qr_file_id::text, updated_at
+		SELECT bank_name, account_number, account_holder, branch, instructions, support_phone, support_email,
+			support_zalo, qr_file_id::text, updated_at
 		FROM platform_payment_settings WHERE id = 1`).
-		Scan(&s.BankName, &s.AccountNumber, &s.AccountHolder, &s.Branch, &s.TransferInstructions, &qr, &s.UpdatedAt)
+		Scan(&s.BankName, &s.AccountNumber, &s.AccountHolder, &s.Branch, &s.TransferInstructions, &s.SupportPhone, &s.SupportEmail, &s.SupportZalo, &qr, &s.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -336,11 +342,12 @@ func (r *PostgresRepository) Settings(ctx context.Context) (*domain.PaymentSetti
 func (r *PostgresRepository) SaveSettings(ctx context.Context, s *domain.PaymentSettings, updatedBy string) error {
 	return platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
 		UPDATE platform_payment_settings SET bank_name = $1, account_number = $2, account_holder = $3, branch = $4,
-			instructions = $5, qr_file_id = $6::uuid, updated_by = $7::uuid
+			instructions = $5, qr_file_id = $6::uuid, updated_by = $7::uuid, support_phone = $8, support_email = $9,
+			support_zalo = $10
 		WHERE id = 1
 		RETURNING updated_at`,
 		s.BankName, s.AccountNumber, s.AccountHolder, s.Branch, s.TransferInstructions, nullableString(s.QRFileID),
-		nullableString(updatedBy)).Scan(&s.UpdatedAt)
+		nullableString(updatedBy), s.SupportPhone, s.SupportEmail, s.SupportZalo).Scan(&s.UpdatedAt)
 }
 
 // ClaimReviewReminder reports whether the admins are due a reminder and, if
@@ -382,4 +389,134 @@ func (r *PostgresRepository) OpenRequests(ctx context.Context, subscriptionIDs [
 	}
 
 	return out, rows.Err()
+}
+
+// AvailableCredit sums the credit of the user that has not lapsed at now.
+func (r *PostgresRepository) AvailableCredit(ctx context.Context, userID string, now time.Time) (int64, error) {
+	var total int64
+
+	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
+		SELECT COALESCE(SUM(remaining), 0) FROM credit_ledger
+		WHERE user_id = $1 AND remaining > 0 AND expires_at > $2`, userID, now).Scan(&total)
+
+	return total, err
+}
+
+// NextCreditExpiry returns when the earliest unused credit of the user
+// lapses, nil when there is none.
+func (r *PostgresRepository) NextCreditExpiry(ctx context.Context, userID string, now time.Time) (*time.Time, error) {
+	var next *time.Time
+
+	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
+		SELECT MIN(expires_at) FROM credit_ledger
+		WHERE user_id = $1 AND remaining > 0 AND expires_at > $2`, userID, now).Scan(&next)
+
+	return next, err
+}
+
+// TakeCredit lowers the remaining of the user's unexpired credit by amount in
+// total, the earliest expiry first. It returns domain.ErrCreditExpired when
+// the unexpired credit is less than amount (nothing is lowered).
+func (r *PostgresRepository) TakeCredit(ctx context.Context, userID string, amount int64, now time.Time) error {
+	q := platformdb.QuerierFromContext(ctx, r.pool)
+
+	rows, err := q.Query(ctx, `
+		SELECT id, remaining FROM credit_ledger
+		WHERE user_id = $1 AND remaining > 0 AND expires_at > $2
+		ORDER BY expires_at, seq FOR UPDATE`, userID, now)
+	if err != nil {
+		return err
+	}
+
+	type lot struct {
+		id        string
+		remaining int64
+	}
+
+	var lots []lot
+
+	for rows.Next() {
+		var l lot
+		if err := rows.Scan(&l.id, &l.remaining); err != nil {
+			rows.Close()
+
+			return err
+		}
+
+		lots = append(lots, l)
+	}
+
+	rows.Close()
+
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	var total int64
+	for _, l := range lots {
+		total += l.remaining
+	}
+
+	if total < amount {
+		return domain.ErrCreditExpired
+	}
+
+	left := amount
+
+	for _, l := range lots {
+		if left == 0 {
+			break
+		}
+
+		take := min(left, l.remaining)
+
+		if _, err := q.Exec(ctx, `UPDATE credit_ledger SET remaining = remaining - $2 WHERE id = $1`, l.id, take); err != nil {
+			return err
+		}
+
+		left -= take
+	}
+
+	return nil
+}
+
+// LapseCredit zeroes the user's credit that lapsed at now and returns the
+// amount that was left in it.
+func (r *PostgresRepository) LapseCredit(ctx context.Context, userID string, now time.Time) (int64, error) {
+	var lapsed int64
+
+	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
+		WITH l AS (
+			SELECT id, remaining FROM credit_ledger
+			WHERE user_id = $1 AND remaining > 0 AND expires_at <= $2 FOR UPDATE
+		), u AS (
+			UPDATE credit_ledger c SET remaining = 0 FROM l WHERE c.id = l.id RETURNING l.remaining
+		)
+		SELECT COALESCE(SUM(remaining), 0) FROM u`, userID, now).Scan(&lapsed)
+
+	return lapsed, err
+}
+
+// UsersWithLapsedCredit lists up to limit users who have credit that lapsed at now.
+func (r *PostgresRepository) UsersWithLapsedCredit(ctx context.Context, now time.Time, limit int) ([]string, error) {
+	rows, err := platformdb.QuerierFromContext(ctx, r.pool).Query(ctx, `
+		SELECT DISTINCT user_id::text FROM credit_ledger
+		WHERE remaining > 0 AND expires_at <= $1 LIMIT $2`, now, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+
+		ids = append(ids, id)
+	}
+
+	return ids, rows.Err()
 }

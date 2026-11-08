@@ -167,7 +167,7 @@ func TestQuoteUseCase_HiddenConsumables(t *testing.T) {
 	prime := func(d *deps) {
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Maybe()
 		d.Vehicles.EXPECT().Find(mock.Anything, garageID, customerID, vehicleID).Return("An", "51F", nil).Maybe()
-		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Maybe()
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, mock.Anything).Return(nil).Maybe()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, mock.Anything, mock.Anything).Return(1, nil).Maybe()
 		d.Quotes.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Maybe()
 	}

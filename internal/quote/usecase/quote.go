@@ -123,7 +123,7 @@ func (uc *QuoteUseCase) Create(ctx context.Context, req CreateQuoteRequest) (*do
 		return nil, toAppError("create quote", err)
 	}
 
-	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID); err != nil {
+	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionQuote); err != nil {
 		return nil, err
 	}
 

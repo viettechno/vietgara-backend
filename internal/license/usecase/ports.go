@@ -48,6 +48,8 @@ type PlanRepository interface {
 	// Create inserts p; a duplicate code yields domain.ErrPlanCodeTaken.
 	Create(ctx context.Context, p *domain.Plan) error
 	Update(ctx context.Context, p *domain.Plan) error
+	// CountSubscribers returns how many subscriptions are on the plan.
+	CountSubscribers(ctx context.Context, planID string) (int, error)
 }
 
 // SubscriptionPage is one page of the admin subscription list.
@@ -90,6 +92,9 @@ type SubscriptionRepository interface {
 	ListUserIDsDueBefore(ctx context.Context, t time.Time) ([]string, error)
 	// Search lists subscriptions for platform admins.
 	Search(ctx context.Context, filter SubscriptionFilter) (*SubscriptionPage, error)
+	// NextCreditExpiry is when the user's earliest unused credit lapses, nil
+	// when there is none.
+	NextCreditExpiry(ctx context.Context, userID string, now time.Time) (*time.Time, error)
 }
 
 // EntitlementRepository persists the per-user feature switches.
@@ -227,6 +232,8 @@ var paymentErrors = []paymentError{
 	{domain.ErrEvidenceRequired, apperror.CodeInvalidArgument, domain.ReasonEvidenceRequired},
 	{domain.ErrMismatchNoteRequired, apperror.CodeInvalidArgument, domain.ReasonMismatchNoteRequired},
 	{domain.ErrInvalidDeclaration, apperror.CodeInvalidArgument, ""},
+	{domain.ErrCreditExpired, apperror.CodeInvalidArgument, domain.ReasonCreditExpired},
+	{domain.ErrPlanHasSubscribers, apperror.CodeInvalidArgument, domain.ReasonPlanHasSubscribers},
 	{domain.ErrInvalidAdjustment, apperror.CodeInvalidArgument, ""},
 	{domain.ErrInvalidEvidence, apperror.CodeInvalidArgument, ""},
 	{domain.ErrInvalidQR, apperror.CodeInvalidArgument, ""},

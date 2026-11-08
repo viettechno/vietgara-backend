@@ -22,7 +22,7 @@ func TestRepairOrderUseCase_Create(t *testing.T) {
 		uc, d := newUseCase(t)
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Vehicles.EXPECT().Find(mock.Anything, garageID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
-		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
 		d.RepairOrders.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
 		d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderCreated, garageID, "", mock.Anything).Return(nil).Once()
@@ -69,7 +69,7 @@ func TestRepairOrderUseCase_Create(t *testing.T) {
 		d.Vehicles.EXPECT().Find(mock.Anything, garageID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
 
 		planLimit := apperror.New(apperror.CodeFailedPrecondition, "limit reached")
-		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(planLimit).Once()
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(planLimit).Once()
 
 		_, err := uc.Create(t.Context(), usecase.CreateRepairOrderRequest{
 			GarageID: garageID, VehicleID: vehicleID, Lines: oneLine(),
@@ -95,7 +95,7 @@ func TestRepairOrderUseCase_Create(t *testing.T) {
 		uc, d := newUseCase(t)
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Vehicles.EXPECT().Find(mock.Anything, garageID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
-		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
 		d.RepairOrders.EXPECT().Create(mock.Anything, mock.Anything).Return(errBoom).Once()
 
@@ -224,7 +224,7 @@ func TestRepairOrderUseCase_Create_PartLineInPackagingUnit(t *testing.T) {
 		d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, partID, unitID, "2").
 			Return(partquantity.Resolved{Base: "48", UnitID: &unit, Entered: &entered}, nil).Once()
 		d.Vehicles.EXPECT().Find(mock.Anything, garageID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
-		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
 		d.RepairOrders.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
 		d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderCreated, garageID, "", mock.Anything).Return(nil).Once()
@@ -257,7 +257,7 @@ func TestRepairOrderUseCase_Create_EventPayload(t *testing.T) {
 	uc, d := newUseCase(t)
 	d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 	d.Vehicles.EXPECT().Find(mock.Anything, garageID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
-	d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
+	d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil).Once()
 	d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
 	d.Parts.EXPECT().ResolveQuantity(mock.Anything, garageID, "part-1", "unit-1", "2").
 		Return(partquantity.Resolved{Base: "48", UnitID: new("unit-1"), Entered: new("2")}, nil).Once()
@@ -299,7 +299,7 @@ func TestRepairOrderUseCase_Create_PublishFailure(t *testing.T) {
 	uc, d := newUseCase(t)
 	d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 	d.Vehicles.EXPECT().Find(mock.Anything, garageID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
-	d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
+	d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil).Once()
 	d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
 	d.RepairOrders.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
 	d.Events.EXPECT().Publish(mock.Anything, usecase.EventRepairOrderCreated, garageID, "", mock.Anything).Return(errBoom).Once()

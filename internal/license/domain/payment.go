@@ -21,6 +21,20 @@ const (
 // IsValid reports whether k is a defined kind.
 func (k PaymentKind) IsValid() bool { return k == PaymentChange || k == PaymentRenew }
 
+// PaymentMethod is how the owner paid the amount due (FR-LIC-07).
+type PaymentMethod string
+
+// Valid PaymentMethod values.
+const (
+	// PaymentBankTransfer: a transfer with the payer's bank details and evidence.
+	PaymentBankTransfer PaymentMethod = "bank_transfer"
+	// PaymentCash: money handed to the platform; the admin confirms it on approval.
+	PaymentCash PaymentMethod = "cash"
+)
+
+// IsValid reports whether m is a defined method.
+func (m PaymentMethod) IsValid() bool { return m == PaymentBankTransfer || m == PaymentCash }
+
 // PaymentStatus is the state of a payment request (LLD 3.3).
 type PaymentStatus string
 
@@ -48,6 +62,10 @@ type PaymentInstructions struct {
 	TransferInstructions string `json:"transfer_instructions"`
 	// QRFileID is the QR code's file; the URL is signed when read.
 	QRFileID string `json:"qr_file_id,omitempty"`
+	// How owners reach the platform about needs beyond the plans.
+	SupportPhone string `json:"support_phone,omitempty"`
+	SupportEmail string `json:"support_email,omitempty"`
+	SupportZalo  string `json:"support_zalo,omitempty"`
 }
 
 // PlanPaymentRequest is an owner's request to switch plan or renew, paid by
@@ -74,6 +92,7 @@ type PlanPaymentRequest struct {
 	UnusedDays   int
 	Instructions PaymentInstructions
 	// The owner's declaration, set when submitted.
+	PaymentMethod      PaymentMethod
 	PayerName          string
 	PayerBank          string
 	PayerAccount       string
@@ -101,15 +120,21 @@ const (
 	CreditApplied CreditEntryKind = "applied"
 	// CreditAdjustment: a correction by a platform admin.
 	CreditAdjustment CreditEntryKind = "adjustment"
+	// CreditExpired: credit that lapsed unused one year after it was earned.
+	CreditExpired CreditEntryKind = "expired"
 )
 
 // CreditEntry is one change of an owner's account credit.
 type CreditEntry struct {
-	ID                   string
-	UserID               string
-	Kind                 CreditEntryKind
-	Amount               int64
-	BalanceAfter         int64
+	ID           string
+	UserID       string
+	Kind         CreditEntryKind
+	Amount       int64
+	BalanceAfter int64
+	// ExpiresAt and Remaining describe a lot: an entry that adds credit
+	// lapses at ExpiresAt, and Remaining is what is left of its amount.
+	ExpiresAt            *time.Time
+	Remaining            int64
 	PlanPaymentRequestID string
 	Note                 string
 	CreatedBy            string
@@ -124,6 +149,9 @@ type PaymentSettings struct {
 	Branch               string
 	TransferInstructions string
 	QRFileID             string
+	SupportPhone         string
+	SupportEmail         string
+	SupportZalo          string
 	UpdatedAt            time.Time
 }
 
@@ -132,6 +160,7 @@ func (s PaymentSettings) Instructions() PaymentInstructions {
 	return PaymentInstructions{
 		BankName: s.BankName, AccountNumber: s.AccountNumber, AccountHolder: s.AccountHolder, Branch: s.Branch,
 		TransferInstructions: s.TransferInstructions, QRFileID: s.QRFileID,
+		SupportPhone: s.SupportPhone, SupportEmail: s.SupportEmail, SupportZalo: s.SupportZalo,
 	}
 }
 
@@ -150,18 +179,19 @@ type Quote struct {
 
 const day = 24 * time.Hour
 
-// QuotePayment prices a plan change or a renewal at now (FR-LIC-09):
+// QuotePayment prices a plan change or a renewal at now (FR-LIC-09). credit
+// is the account credit that has not lapsed at now:
 //
 //	periodDays    = days of the current period
 //	unusedDays    = whole days left in it (0 once it ended)
 //	unusedCredit  = floor(unusedDays / periodDays * period_paid_amount)  // a change only
-//	creditApplied = min(unusedCredit + credit_balance, plan.price)
+//	creditApplied = min(unusedCredit + credit, plan.price)
 //	amountDue     = plan.price - creditApplied
-//	creditSurplus = max(unusedCredit + credit_balance - plan.price, 0)
+//	creditSurplus = max(unusedCredit + credit - plan.price, 0)
 //
 // A renewal does not cut the running period short, so it carries no unused
 // credit; only the account balance is applied. The trial paid 0.
-func QuotePayment(sub *Subscription, plan *Plan, kind PaymentKind, now time.Time) Quote {
+func QuotePayment(sub *Subscription, plan *Plan, kind PaymentKind, credit int64, now time.Time) Quote {
 	q := Quote{QuotedAmount: plan.Price}
 
 	periodDays := max(int(sub.CurrentPeriodEnd.Sub(sub.CurrentPeriodStart).Round(day)/day), 1)
@@ -176,7 +206,7 @@ func QuotePayment(sub *Subscription, plan *Plan, kind PaymentKind, now time.Time
 		q.UnusedCredit = int64(q.UnusedDays) * sub.PeriodPaidAmount / int64(periodDays)
 	}
 
-	available := q.UnusedCredit + sub.CreditBalance
+	available := q.UnusedCredit + credit
 	q.CreditApplied = min(available, plan.Price)
 	q.AmountDue = plan.Price - q.CreditApplied
 	q.CreditSurplus = max(available-plan.Price, 0)
@@ -231,6 +261,7 @@ var (
 	ErrRequestNotOpen         = errors.New("the payment request is not open")
 	ErrMismatchNoteRequired   = errors.New("the transferred amount differs from the amount due: a note is required")
 	ErrInvalidDeclaration     = errors.New("the transfer declaration is incomplete")
+	ErrCreditExpired          = errors.New("the credit of the quote has lapsed: ask for a new quote")
 	ErrInvalidAdjustment      = errors.New("the credit adjustment needs a non-zero amount and a note")
 	ErrReferenceTaken         = errors.New("the transfer reference is taken")
 	ErrInvalidEvidence        = errors.New("the evidence must be a PNG, JPEG, WebP or PDF file of at most 5 MB")
@@ -243,5 +274,9 @@ const (
 	ReasonRequestAlreadyOpen   = "REQUEST_ALREADY_OPEN"
 	ReasonEvidenceRequired     = "EVIDENCE_REQUIRED"
 	ReasonRequestNotOpen       = "REQUEST_NOT_OPEN"
+	ReasonCreditExpired        = "CREDIT_EXPIRED"
 	ReasonMismatchNoteRequired = "AMOUNT_MISMATCH_NOTE_REQUIRED"
 )
+
+// CreditExpiry is when credit earned at from lapses (FR-LIC-09): one year later.
+func CreditExpiry(from time.Time) time.Time { return from.AddDate(1, 0, 0) }

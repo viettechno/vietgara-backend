@@ -87,7 +87,7 @@ func TestConvertQuote(t *testing.T) {
 
 	e.quotes.EXPECT().FindByID(anyArg, garageID, quoteID).Return(q, nil).Once()
 	e.garages.EXPECT().Get(anyArg, garageID).Return(garageInfoWithRepairOrderTemplate(), nil).Once()
-	e.limits.EXPECT().ConsumeTransaction(anyArg, ownerID).Return(nil).Once()
+	e.limits.EXPECT().ConsumeTransaction(anyArg, ownerID, anyArg).Return(nil).Once()
 	e.sequences.EXPECT().Next(anyArg, garageID, "repair_order", "LSC-{SEQ:4}").Return(1, nil).Once()
 	e.repairs.EXPECT().
 		Create(anyArg, garageID, quoteID, vehicleID, "An Nguyen", "51F-123.45", "LSC-0001", actorID, anyArg, anyArg).

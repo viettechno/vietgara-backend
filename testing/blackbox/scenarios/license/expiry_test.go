@@ -167,8 +167,8 @@ func TestSubscriptionExpiryLifecycle(t *testing.T) {
 
 	renewed := fixture.SwitchPlan(t, owner, "starter")
 	assert.Equal(t, licensev1.SubscriptionStatus_SUBSCRIPTION_STATUS_ACTIVE, renewed.GetStatus())
-	assert.True(t, renewed.GetCurrentPeriodEnd().AsTime().After(time.Now().Add(20*24*time.Hour)),
-		"valid for about another month")
+	assert.True(t, renewed.GetCurrentPeriodEnd().AsTime().After(time.Now().Add(360*24*time.Hour)),
+		"valid for about another year")
 
 	_, err = owner.API.UpdateCustomer(ctx, garage.GetId(), em.GetId(), &customerv1.Customer{Address: &address}, "address")
 	require.NoError(t, err, "editing is allowed again")

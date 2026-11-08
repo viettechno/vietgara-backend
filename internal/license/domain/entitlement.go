@@ -31,7 +31,9 @@ type Entitlements struct {
 	MaxGarages            int       `json:"max_garages"`
 	MaxStaff              int       `json:"max_staff"`
 	MaxTransactionsPerDay int       `json:"max_transactions_per_day"`
-	CurrentPeriodEnd      time.Time `json:"current_period_end"`
+	// CountedKinds are the document kinds counted against the daily limit.
+	CountedKinds     []TransactionKind `json:"counted_kinds"`
+	CurrentPeriodEnd time.Time         `json:"current_period_end"`
 }
 
 // NewEntitlements derives an owner's entitlements from the subscription:
@@ -45,6 +47,7 @@ func NewEntitlements(s *Subscription) *Entitlements {
 		MaxGarages:            s.Plan.MaxGarages,
 		MaxStaff:              s.Plan.MaxStaff,
 		MaxTransactionsPerDay: s.Plan.MaxTransactionsPerDay,
+		CountedKinds:          NormalizeTransactionKinds(s.Plan.CountedKinds),
 		CurrentPeriodEnd:      s.CurrentPeriodEnd,
 	}
 
@@ -53,6 +56,12 @@ func NewEntitlements(s *Subscription) *Entitlements {
 	}
 
 	return e
+}
+
+// CountsTransaction reports whether a document of kind counts against the
+// daily transaction limit.
+func (e *Entitlements) CountsTransaction(kind TransactionKind) bool {
+	return slices.Contains(e.CountedKinds, kind)
 }
 
 // ReadOnly reports whether writes are blocked.

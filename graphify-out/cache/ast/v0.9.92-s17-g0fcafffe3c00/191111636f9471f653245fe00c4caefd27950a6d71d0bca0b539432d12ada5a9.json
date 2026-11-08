@@ -1,0 +1,1 @@
+{"nodes": [{"id": "$graphify-root$_internal_customer_handler_http_go", "label": "http.go", "file_type": "code", "source_file": "internal/customer/handler/http.go", "source_location": "L1"}], "edges": [], "raw_calls": [], "go_imports": {}, "go_type_table": {"path": "$graphify-root$/internal/customer/handler/http.go", "table": {}}}

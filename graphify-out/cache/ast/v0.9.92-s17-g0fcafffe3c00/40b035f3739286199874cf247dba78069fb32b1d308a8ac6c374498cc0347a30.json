@@ -1,0 +1,1 @@
+{"nodes": [{"id": "$graphify-root$_internal_platform_outbox_relay_test_go", "label": "relay_test.go", "file_type": "code", "source_file": "internal/platform/outbox/relay_test.go", "source_location": "L1"}], "edges": [], "raw_calls": [], "go_imports": {}, "go_type_table": {"path": "$graphify-root$/internal/platform/outbox/relay_test.go", "table": {}}}

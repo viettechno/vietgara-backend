@@ -38,12 +38,16 @@ func TestLicenseRepositoriesOnPostgres(t *testing.T) {
 	public, err := plans.ListPublic(ctx)
 	require.NoError(t, err)
 	require.Len(t, public, 3, "seeded starter, professional and chain")
-	assert.Equal(t, 2, public[1].MaxGarages)
+	assert.Equal(t, 3, public[1].MaxGarages)
+	assert.Equal(t, domain.BillingCycleYearly, public[1].BillingCycle)
+	assert.ElementsMatch(t, domain.AllFeatures, public[0].Features, "every plan has every feature")
+	assert.Equal(t, []domain.TransactionKind{domain.TransactionRepairOrder}, public[1].CountedKinds)
 
 	plan := &domain.Plan{
 		Code: "garage-plus", Name: "Garage+", Currency: "VND", BillingCycle: domain.BillingCycleYearly,
-		MaxGarages: 3, MaxStaff: 10, MaxTransactionsPerDay: 200, Features: []domain.Feature{domain.FeatureQuotes, domain.FeatureReports},
-		Public: true, Active: true,
+		MaxGarages: 3, MaxStaff: 10, MaxTransactionsPerDay: 200, CountedKinds: []domain.TransactionKind{domain.TransactionQuote},
+		Features: []domain.Feature{domain.FeatureQuotes, domain.FeatureReports},
+		Public:   true, Active: true,
 	}
 	require.NoError(t, plans.Create(ctx, plan))
 	require.ErrorIs(t, plans.Create(ctx, plan), domain.ErrPlanCodeTaken)
@@ -55,10 +59,17 @@ func TestLicenseRepositoriesOnPostgres(t *testing.T) {
 	stored, err := plans.FindByCode(ctx, "garage-plus")
 	require.NoError(t, err)
 	assert.False(t, stored.Active)
+	assert.Equal(t, []domain.TransactionKind{domain.TransactionQuote}, stored.CountedKinds)
+	assert.Zero(t, stored.TrialDays)
 	assert.Equal(t, []domain.Feature{domain.FeatureInventory}, stored.Features)
 
 	trial, err := plans.FindByCode(ctx, domain.TrialPlanCode)
 	require.NoError(t, err)
+	assert.Equal(t, 60, trial.TrialDays, "the trial lasts two months")
+
+	subscribers, err := plans.CountSubscribers(ctx, trial.ID)
+	require.NoError(t, err)
+	assert.Zero(t, subscribers)
 
 	userID := uuid.NewString()
 	_, err = admin.ExecContext(ctx, `INSERT INTO users (id, email, full_name) VALUES ($1, 'Owner@Example.com', 'Minh')`, userID)
@@ -68,6 +79,11 @@ func TestLicenseRepositoriesOnPostgres(t *testing.T) {
 	inserted, err := subs.CreateIfAbsent(ctx, sub)
 	require.NoError(t, err)
 	require.True(t, inserted)
+	assert.Equal(t, 60*24*time.Hour, sub.TrialEndAt.Sub(sub.CurrentPeriodStart))
+
+	subscribers, err = plans.CountSubscribers(ctx, trial.ID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, subscribers)
 
 	inserted, err = subs.CreateIfAbsent(ctx, domain.NewTrial(userID, trial, time.Now().UTC()))
 	require.NoError(t, err)
@@ -81,7 +97,7 @@ func TestLicenseRepositoriesOnPostgres(t *testing.T) {
 	require.NoError(t, locked.Extend(5, time.Now().UTC()))
 	require.NoError(t, subs.Update(ctx, locked))
 
-	due, err := subs.ListUserIDsDueBefore(ctx, time.Now().Add(30*24*time.Hour))
+	due, err := subs.ListUserIDsDueBefore(ctx, time.Now().Add(90*24*time.Hour))
 	require.NoError(t, err)
 	assert.Contains(t, due, userID)
 
@@ -218,4 +234,84 @@ func TestPaymentRepositoryOnPostgres(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, claimed)
 	})
+}
+
+func TestCreditLotsOnPostgres(t *testing.T) {
+	pool, admin := startLicenseDB(t)
+	ctx := t.Context()
+	subs := repository.NewPostgresRepository(pool)
+
+	lotUser := uuid.NewString()
+	_, err := admin.ExecContext(ctx, `INSERT INTO users (id, email, full_name) VALUES ($1, 'lots@example.com', 'Lots')`, lotUser)
+	require.NoError(t, err)
+
+	now := time.Now().UTC()
+	lot := func(amount int64, expires time.Time) {
+		require.NoError(t, subs.AddCreditEntry(ctx, &domain.CreditEntry{
+			UserID: lotUser, Kind: domain.CreditEarned, Amount: amount, BalanceAfter: amount,
+			ExpiresAt: &expires, Remaining: amount,
+		}))
+	}
+
+	lot(300000, now.AddDate(0, 6, 0)) // later
+	lot(500000, now.AddDate(0, 2, 0)) // sooner, written second
+	lot(100000, now.Add(-time.Hour))  // already lapsed
+
+	available, err := subs.AvailableCredit(ctx, lotUser, now)
+	require.NoError(t, err)
+	assert.Equal(t, int64(800000), available, "the lapsed lot does not count")
+
+	next, err := subs.NextCreditExpiry(ctx, lotUser, now)
+	require.NoError(t, err)
+	require.NotNil(t, next)
+	assert.WithinDuration(t, now.AddDate(0, 2, 0), *next, time.Second)
+
+	require.ErrorIs(t, subs.TakeCredit(ctx, lotUser, 900000, now), domain.ErrCreditExpired)
+
+	after, err := subs.AvailableCredit(ctx, lotUser, now)
+	require.NoError(t, err)
+	assert.Equal(t, int64(800000), after, "a refused take changes nothing")
+
+	require.NoError(t, subs.TakeCredit(ctx, lotUser, 600000, now))
+
+	var sooner, later int64
+	require.NoError(t, admin.QueryRowContext(ctx, `SELECT remaining FROM credit_ledger WHERE user_id = $1 AND amount = 500000`, lotUser).Scan(&sooner))
+	require.NoError(t, admin.QueryRowContext(ctx, `SELECT remaining FROM credit_ledger WHERE user_id = $1 AND amount = 300000`, lotUser).Scan(&later))
+	assert.Zero(t, sooner, "the sooner lot is used first")
+	assert.Equal(t, int64(200000), later)
+
+	users, err := subs.UsersWithLapsedCredit(ctx, now, 10)
+	require.NoError(t, err)
+	assert.Equal(t, []string{lotUser}, users)
+
+	lapsed, err := subs.LapseCredit(ctx, lotUser, now)
+	require.NoError(t, err)
+	assert.Equal(t, int64(100000), lapsed)
+
+	lapsed, err = subs.LapseCredit(ctx, lotUser, now)
+	require.NoError(t, err)
+	assert.Zero(t, lapsed, "lapsing is done once")
+
+	users, err = subs.UsersWithLapsedCredit(ctx, now, 10)
+	require.NoError(t, err)
+	assert.Empty(t, users)
+}
+
+func TestSupportContactOnPostgres(t *testing.T) {
+	pool, _ := startLicenseDB(t)
+	ctx := t.Context()
+	subs := repository.NewPostgresRepository(pool)
+
+	settings, err := subs.Settings(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, settings.SupportPhone, "nothing is set at first")
+
+	settings.SupportPhone, settings.SupportEmail, settings.SupportZalo = "0900000000", "help@vietgara.vn", "0900000001"
+	require.NoError(t, subs.SaveSettings(ctx, settings, ""))
+
+	settings, err = subs.Settings(ctx)
+	require.NoError(t, err)
+	assert.Equal(t, "0900000000", settings.SupportPhone)
+	assert.Equal(t, "help@vietgara.vn", settings.SupportEmail)
+	assert.Equal(t, "0900000001", settings.SupportZalo)
 }

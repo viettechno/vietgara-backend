@@ -147,7 +147,7 @@ func TestCreateRepairOrderPartLine(t *testing.T) {
 	e := newEnv(t)
 	e.garages.EXPECT().Get(anyArg, garageID).Return(defaultGarage(), nil).Once()
 	e.vehicles.EXPECT().Find(anyArg, garageID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
-	e.limits.EXPECT().ConsumeTransaction(anyArg, ownerID).Return(nil).Once()
+	e.limits.EXPECT().ConsumeTransaction(anyArg, ownerID, "repair_order").Return(nil).Once()
 	e.sequences.EXPECT().Next(anyArg, garageID, "repair_order", "LSC-{SEQ:4}").Return(2, nil).Once()
 	e.repairOrders.EXPECT().Create(anyArg, anyArg).Return(nil).Once()
 	e.events.EXPECT().Publish(anyArg, anyArg, anyArg, anyArg, anyArg).Return(nil).Once()

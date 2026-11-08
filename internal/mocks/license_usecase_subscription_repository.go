@@ -242,6 +242,74 @@ func (_c *MockSubscriptionRepository_ListUserIDsDueBefore_Call) RunAndReturn(run
 	return _c
 }
 
+// LockByID provides a mock function for the type MockSubscriptionRepository
+func (_mock *MockSubscriptionRepository) LockByID(ctx context.Context, id string) (*domain.Subscription, error) {
+	ret := _mock.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for LockByID")
+	}
+
+	var r0 *domain.Subscription
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (*domain.Subscription, error)); ok {
+		return returnFunc(ctx, id)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) *domain.Subscription); ok {
+		r0 = returnFunc(ctx, id)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*domain.Subscription)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, id)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockSubscriptionRepository_LockByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LockByID'
+type MockSubscriptionRepository_LockByID_Call struct {
+	*mock.Call
+}
+
+// LockByID is a helper method to define mock.On call
+//   - ctx context.Context
+//   - id string
+func (_e *MockSubscriptionRepository_Expecter) LockByID(ctx any, id any) *MockSubscriptionRepository_LockByID_Call {
+	return &MockSubscriptionRepository_LockByID_Call{Call: _e.mock.On("LockByID", ctx, id)}
+}
+
+func (_c *MockSubscriptionRepository_LockByID_Call) Run(run func(ctx context.Context, id string)) *MockSubscriptionRepository_LockByID_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSubscriptionRepository_LockByID_Call) Return(subscription *domain.Subscription, err error) *MockSubscriptionRepository_LockByID_Call {
+	_c.Call.Return(subscription, err)
+	return _c
+}
+
+func (_c *MockSubscriptionRepository_LockByID_Call) RunAndReturn(run func(ctx context.Context, id string) (*domain.Subscription, error)) *MockSubscriptionRepository_LockByID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // LockByUserID provides a mock function for the type MockSubscriptionRepository
 func (_mock *MockSubscriptionRepository) LockByUserID(ctx context.Context, userID string) (*domain.Subscription, error) {
 	ret := _mock.Called(ctx, userID)
@@ -310,47 +378,48 @@ func (_c *MockSubscriptionRepository_LockByUserID_Call) RunAndReturn(run func(ct
 	return _c
 }
 
-// LockByID provides a mock function for the type MockSubscriptionRepository
-func (_mock *MockSubscriptionRepository) LockByID(ctx context.Context, id string) (*domain.Subscription, error) {
-	ret := _mock.Called(ctx, id)
+// NextCreditExpiry provides a mock function for the type MockSubscriptionRepository
+func (_mock *MockSubscriptionRepository) NextCreditExpiry(ctx context.Context, userID string, now time.Time) (*time.Time, error) {
+	ret := _mock.Called(ctx, userID, now)
 
 	if len(ret) == 0 {
-		panic("no return value specified for LockByID")
+		panic("no return value specified for NextCreditExpiry")
 	}
 
-	var r0 *domain.Subscription
+	var r0 *time.Time
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (*domain.Subscription, error)); ok {
-		return returnFunc(ctx, id)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Time) (*time.Time, error)); ok {
+		return returnFunc(ctx, userID, now)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) *domain.Subscription); ok {
-		r0 = returnFunc(ctx, id)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, time.Time) *time.Time); ok {
+		r0 = returnFunc(ctx, userID, now)
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*domain.Subscription)
+			r0 = ret.Get(0).(*time.Time)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, id)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, time.Time) error); ok {
+		r1 = returnFunc(ctx, userID, now)
 	} else {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
 }
 
-// MockSubscriptionRepository_LockByID_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'LockByID'
-type MockSubscriptionRepository_LockByID_Call struct {
+// MockSubscriptionRepository_NextCreditExpiry_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'NextCreditExpiry'
+type MockSubscriptionRepository_NextCreditExpiry_Call struct {
 	*mock.Call
 }
 
-// LockByID is a helper method to define mock.On call
+// NextCreditExpiry is a helper method to define mock.On call
 //   - ctx context.Context
-//   - id string
-func (_e *MockSubscriptionRepository_Expecter) LockByID(ctx any, id any) *MockSubscriptionRepository_LockByID_Call {
-	return &MockSubscriptionRepository_LockByID_Call{Call: _e.mock.On("LockByID", ctx, id)}
+//   - userID string
+//   - now time.Time
+func (_e *MockSubscriptionRepository_Expecter) NextCreditExpiry(ctx any, userID any, now any) *MockSubscriptionRepository_NextCreditExpiry_Call {
+	return &MockSubscriptionRepository_NextCreditExpiry_Call{Call: _e.mock.On("NextCreditExpiry", ctx, userID, now)}
 }
 
-func (_c *MockSubscriptionRepository_LockByID_Call) Run(run func(ctx context.Context, id string)) *MockSubscriptionRepository_LockByID_Call {
+func (_c *MockSubscriptionRepository_NextCreditExpiry_Call) Run(run func(ctx context.Context, userID string, now time.Time)) *MockSubscriptionRepository_NextCreditExpiry_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -360,20 +429,25 @@ func (_c *MockSubscriptionRepository_LockByID_Call) Run(run func(ctx context.Con
 		if args[1] != nil {
 			arg1 = args[1].(string)
 		}
+		var arg2 time.Time
+		if args[2] != nil {
+			arg2 = args[2].(time.Time)
+		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
 }
 
-func (_c *MockSubscriptionRepository_LockByID_Call) Return(subscription *domain.Subscription, err error) *MockSubscriptionRepository_LockByID_Call {
-	_c.Call.Return(subscription, err)
+func (_c *MockSubscriptionRepository_NextCreditExpiry_Call) Return(time1 *time.Time, err error) *MockSubscriptionRepository_NextCreditExpiry_Call {
+	_c.Call.Return(time1, err)
 	return _c
 }
 
-func (_c *MockSubscriptionRepository_LockByID_Call) RunAndReturn(run func(ctx context.Context, id string) (*domain.Subscription, error)) *MockSubscriptionRepository_LockByID_Call {
+func (_c *MockSubscriptionRepository_NextCreditExpiry_Call) RunAndReturn(run func(ctx context.Context, userID string, now time.Time) (*time.Time, error)) *MockSubscriptionRepository_NextCreditExpiry_Call {
 	_c.Call.Return(run)
 	return _c
 }

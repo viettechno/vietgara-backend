@@ -12,6 +12,37 @@ import (
 // TrialPlanCode is the plan every new owner starts on (FR-LIC-01).
 const TrialPlanCode = "trial"
 
+// TransactionKind is a kind of business document a plan may count against
+// its daily transaction limit (the Postgres transaction_kind enum). A new
+// module that should count adds a value here and one call in its use case.
+type TransactionKind string
+
+// Valid TransactionKind values.
+const (
+	TransactionRepairOrder TransactionKind = "repair_order"
+	TransactionQuote       TransactionKind = "quote"
+	TransactionSettlement  TransactionKind = "settlement"
+)
+
+// AllTransactionKinds lists every kind in display order.
+var AllTransactionKinds = []TransactionKind{TransactionRepairOrder, TransactionQuote, TransactionSettlement}
+
+// IsValid reports whether k is a defined kind.
+func (k TransactionKind) IsValid() bool { return slices.Contains(AllTransactionKinds, k) }
+
+// NormalizeTransactionKinds de-duplicates kinds in display order.
+func NormalizeTransactionKinds(kinds []TransactionKind) []TransactionKind {
+	out := make([]TransactionKind, 0, len(kinds))
+
+	for _, k := range AllTransactionKinds {
+		if slices.Contains(kinds, k) {
+			out = append(out, k)
+		}
+	}
+
+	return out
+}
+
 // BillingCycle is how often a plan is billed.
 type BillingCycle string
 
@@ -71,7 +102,13 @@ type Plan struct {
 	MaxGarages            int
 	MaxStaff              int
 	MaxTransactionsPerDay int
-	Features              []Feature
+	// CountedKinds are the document kinds that count against
+	// MaxTransactionsPerDay; other kinds are neither counted nor limited.
+	CountedKinds []TransactionKind
+	// TrialDays is the length of the trial in days; only the trial plan has
+	// it, and it applies to trials started afterwards.
+	TrialDays int
+	Features  []Feature
 	// Public plans are offered to owners; the trial is not.
 	Public bool
 	// Inactive plans cannot be chosen; subscribers keep them.
@@ -84,6 +121,12 @@ type Plan struct {
 // Selectable reports whether owners may switch to the plan.
 func (p *Plan) Selectable() bool {
 	return p.Public && p.Active && p.Code != TrialPlanCode
+}
+
+// CountsTransaction reports whether a document of kind counts against the
+// plan's daily transaction limit.
+func (p *Plan) CountsTransaction(kind TransactionKind) bool {
+	return slices.Contains(p.CountedKinds, kind)
 }
 
 // HasFeature reports whether the plan includes f.
@@ -112,9 +155,29 @@ func (p *Plan) Validate() error {
 		return InvalidPlanError("limits.maxTransactionsPerDay")
 	}
 
+	if err := p.validateTrialAndKinds(); err != nil {
+		return err
+	}
+
 	for _, f := range p.Features {
 		if !f.IsValid() {
 			return InvalidPlanError("features")
+		}
+	}
+
+	return nil
+}
+
+// validateTrialAndKinds checks the trial length (only the trial plan has one)
+// and the counted transaction kinds.
+func (p *Plan) validateTrialAndKinds() error {
+	if p.Code == TrialPlanCode && p.TrialDays < 1 || p.Code != TrialPlanCode && p.TrialDays != 0 {
+		return InvalidPlanError("trialDays")
+	}
+
+	for _, k := range p.CountedKinds {
+		if !k.IsValid() {
+			return InvalidPlanError("countedTransactionKinds")
 		}
 	}
 

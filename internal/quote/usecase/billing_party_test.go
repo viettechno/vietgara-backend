@@ -26,7 +26,7 @@ func TestQuoteUseCase_Create_BillingParty(t *testing.T) {
 		d.party = func(string, *string) (billingparty.Party, error) { return companyParty, nil }
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Vehicles.EXPECT().Find(mock.Anything, garageID, customerID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
-		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, mock.Anything).Return(nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "quote", "BG-202609-{SEQ:4}").Return(1, nil).Once()
 		d.Quotes.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
 

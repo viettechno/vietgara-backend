@@ -147,14 +147,19 @@ func (uc *EntitlementUseCase) CheckLimit(ctx context.Context, ownerID string, li
 	return nil
 }
 
-// ConsumeTransaction counts one business document (quote, repair order,
-// settlement) created by the owner's garages today and refuses it once the
-// plan's daily limit is reached. Called by the document modules from
-// Release 1.2.
-func (uc *EntitlementUseCase) ConsumeTransaction(ctx context.Context, ownerID string) error {
+// ConsumeTransaction counts one business document of kind (quote,
+// repair_order or settlement) created by the owner's garages today and
+// refuses it once the plan's daily limit is reached. A kind the plan does not
+// count is neither counted nor limited (FR-LIC-02). Called by the document
+// modules.
+func (uc *EntitlementUseCase) ConsumeTransaction(ctx context.Context, ownerID, kind string) error {
 	e, err := uc.getOrStartTrial(ctx, ownerID)
 	if err != nil {
 		return err
+	}
+
+	if !e.CountsTransaction(domain.TransactionKind(kind)) {
+		return nil
 	}
 
 	count, err := uc.counter.Increment(ctx, ownerID, uc.opts.today())

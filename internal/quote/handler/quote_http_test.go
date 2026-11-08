@@ -45,7 +45,7 @@ func TestCreateQuote(t *testing.T) {
 		DefaultQuoteApprovalMode: domain.ApprovalModeLink,
 	}, nil).Once()
 	e.vehicles.EXPECT().Find(anyArg, garageID, customerID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
-	e.limits.EXPECT().ConsumeTransaction(anyArg, ownerID).Return(nil).Once()
+	e.limits.EXPECT().ConsumeTransaction(anyArg, ownerID, "quote").Return(nil).Once()
 	e.sequences.EXPECT().Next(anyArg, garageID, "quote", "BG-{SEQ:4}").Return(1, nil).Once()
 	e.quotes.EXPECT().Create(anyArg, anyArg).Return(nil).Once()
 
@@ -179,7 +179,7 @@ func TestCreateQuote_PartLineAndManualMode(t *testing.T) {
 		DefaultQuoteApprovalMode: domain.ApprovalModeLink,
 	}, nil).Once()
 	e.vehicles.EXPECT().Find(anyArg, garageID, customerID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
-	e.limits.EXPECT().ConsumeTransaction(anyArg, ownerID).Return(nil).Once()
+	e.limits.EXPECT().ConsumeTransaction(anyArg, ownerID, "quote").Return(nil).Once()
 	e.sequences.EXPECT().Next(anyArg, garageID, "quote", "BG-{SEQ:4}").Return(1, nil).Once()
 	e.quotes.EXPECT().Create(anyArg, anyArg).Return(nil).Once()
 

@@ -23,7 +23,7 @@ func TestQuoteUseCase_ConvertCarriesTheConsumablesOfApprovedJobs(t *testing.T) {
 
 	d.Quotes.EXPECT().FindByID(mock.Anything, garageID, quoteID).Return(q, nil).Once()
 	d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
-	d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
+	d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil).Once()
 	d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
 	d.RepairOrders.EXPECT().Create(mock.Anything, garageID, quoteID, vehicleID, "An Nguyen", "51F-123.45", "LSC-202609-0001", actorID,
 		billingparty.Party{}, mock.MatchedBy(func(lines []domain.Line) bool {

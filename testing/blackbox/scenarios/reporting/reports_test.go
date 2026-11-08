@@ -414,6 +414,10 @@ func joinGroup(t *testing.T, k *reportKit, name string) *fixture.Actor {
 
 // Scenario: E2E-RPT-005: the profit on a repair order is known once its issue
 // is posted; the advisor, who may read repair orders but not costs, is refused.
+//
+// The order without a posted issue stays open: closing an order posts its issue
+// at once, so a closed order without one is only a passing state that a test
+// cannot hold still. An open order keeps its parts reserved in a draft issue.
 func TestRepairOrderProfit(t *testing.T) {
 	t.Parallel()
 
@@ -425,7 +429,6 @@ func TestRepairOrderProfit(t *testing.T) {
 	k.post(t, known)
 
 	unknown := k.create(t, labor("Filter change", 300_000), part(k.filter, "2", 120_000))
-	k.finish(t, unknown)
 
 	profit, err := k.Owner.API.GetRepairOrderProfit(ctx, k.GarageID, known.GetId())
 	require.NoError(t, err)

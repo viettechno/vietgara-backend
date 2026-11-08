@@ -24,7 +24,8 @@ import (
 // bound what is stored and e-mailed per address and per source.
 const (
 	MaxPerAddressPerHour = 3
-	MaxPerSourcePerHour  = 10
+	// MaxPerSourcePerHour is the default for PublicDeps.MaxPerSource.
+	MaxPerSourcePerHour = 10
 	// LinkValidity is how long the e-mailed link works.
 	LinkValidity = 24 * time.Hour
 
@@ -45,6 +46,7 @@ type PublicUseCase struct {
 	mailer        Mailer
 	baseURL       string
 	sourceKey     []byte
+	maxPerSource  int
 	now           func() time.Time
 }
 
@@ -61,13 +63,21 @@ type PublicDeps struct {
 	BaseURL string
 	// SourceKey keys the hash of a request's source address.
 	SourceKey []byte
+	// MaxPerSource is how many requests one source may make an hour; zero
+	// means MaxPerSourcePerHour. A test environment whose callers all share
+	// one address raises it.
+	MaxPerSource int
 }
 
 // NewPublicUseCase wires the use case.
 func NewPublicUseCase(d PublicDeps) *PublicUseCase {
+	if d.MaxPerSource <= 0 {
+		d.MaxPerSource = MaxPerSourcePerHour
+	}
+
 	return &PublicUseCase{
 		confirmations: d.Confirmations, customers: d.Customers, documents: d.Documents, repo: d.Repo, names: d.Names, tx: d.Tx,
-		mailer: d.Mailer, baseURL: strings.TrimSuffix(d.BaseURL, "/"), sourceKey: d.SourceKey, now: time.Now,
+		mailer: d.Mailer, baseURL: strings.TrimSuffix(d.BaseURL, "/"), sourceKey: d.SourceKey, maxPerSource: d.MaxPerSource, now: time.Now,
 	}
 }
 
@@ -163,7 +173,7 @@ func (uc *PublicUseCase) throttle(ctx context.Context, address, source string, n
 		}
 	}
 
-	if byAddress >= MaxPerAddressPerHour || bySource >= MaxPerSourcePerHour {
+	if byAddress >= MaxPerAddressPerHour || bySource >= uc.maxPerSource {
 		return toAppError("throttle", domain.ErrTooManyRequests)
 	}
 

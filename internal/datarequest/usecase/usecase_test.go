@@ -365,6 +365,13 @@ type publicDeps struct {
 func newPublic(t *testing.T) (*usecase.PublicUseCase, *publicDeps) {
 	t.Helper()
 
+	return newPublicLimit(t, 0)
+}
+
+// newPublicLimit is newPublic with a limit of requests per source; zero is the default.
+func newPublicLimit(t *testing.T, perSource int) (*usecase.PublicUseCase, *publicDeps) {
+	t.Helper()
+
 	d := &publicDeps{
 		Confirmations: mocks.NewMockDataRequestConfirmations(t), Customers: mocks.NewMockDataRequestCustomers(t),
 		Documents: mocks.NewMockDataRequestDocuments(t), Repo: mocks.NewMockDataRequestRepository(t), Names: mocks.NewMockDataRequestNames(t),
@@ -375,11 +382,32 @@ func newPublic(t *testing.T) (*usecase.PublicUseCase, *publicDeps) {
 
 	uc := usecase.NewPublicUseCase(usecase.PublicDeps{
 		Confirmations: d.Confirmations, Customers: d.Customers, Documents: d.Documents, Repo: d.Repo, Names: d.Names, Tx: d.Tx,
-		Mailer: d.Mailer, BaseURL: "https://app.example.com/", SourceKey: []byte("key"),
+		Mailer: d.Mailer, BaseURL: "https://app.example.com/", SourceKey: []byte("key"), MaxPerSource: perSource,
 	})
 	usecase.SetClock(uc, func() time.Time { return now })
 
 	return uc, d
+}
+
+// The limit of requests per source is a setting, so an environment whose callers share one address can raise it.
+func TestPublicUseCase_SourceLimitCanBeRaised(t *testing.T) {
+	t.Parallel()
+
+	req := usecase.SubmitRequest{Email: "binh@example.com", Type: domain.TypeDelete, SourceIP: "203.0.113.5", Locale: "en"}
+
+	uc, d := newPublicLimit(t, 50)
+	d.Confirmations.EXPECT().CountByEmail(mock.Anything, mock.Anything, mock.Anything).Return(0, nil).Once()
+	d.Confirmations.EXPECT().CountBySource(mock.Anything, mock.Anything, mock.Anything).Return(50, nil).Once()
+
+	assertAppError(t, uc.Submit(t.Context(), req), apperror.CodeResourceExhausted)
+
+	uc, d = newPublicLimit(t, 50)
+	d.Confirmations.EXPECT().CountByEmail(mock.Anything, mock.Anything, mock.Anything).Return(0, nil).Once()
+	d.Confirmations.EXPECT().CountBySource(mock.Anything, mock.Anything, mock.Anything).Return(usecase.MaxPerSourcePerHour, nil).Once()
+	d.Confirmations.EXPECT().CreateConfirmation(mock.Anything, mock.Anything).Return(nil).Once()
+	d.Mailer.EXPECT().Send(mock.Anything, mock.Anything).Return(nil).Once()
+
+	require.NoError(t, uc.Submit(t.Context(), req))
 }
 
 // restored expects the consumed link to be given back.

@@ -128,6 +128,16 @@ func (k *reportKit) finish(t *testing.T, order *repairorderv1.RepairOrder) {
 	require.NoError(t, err)
 }
 
+// issuePosted tells whether the stock issue of the order is posted. An order
+// with no issue yet counts as not posted: the report treats both alike.
+func (k *reportKit) issuePosted(t *testing.T, order *repairorderv1.RepairOrder) bool {
+	t.Helper()
+
+	issue, err := k.Owner.API.GetRepairOrderStockIssue(t.Context(), k.GarageID, order.GetId())
+
+	return err == nil && issue.GetStatus() == inventoryv1.StockIssueStatus_STOCK_ISSUE_STATUS_POSTED
+}
+
 // post waits for the draft stock issue of the order and posts it, which takes
 // the cost snapshot.
 func (k *reportKit) post(t *testing.T, order *repairorderv1.RepairOrder) {
@@ -222,6 +232,12 @@ func TestTechnicianReport(t *testing.T) {
 // snapshot of the stock issue; an order whose issue is not posted counts with
 // zero cost and is reported; a later change of the average cost leaves the
 // first order alone.
+//
+// Closing an order posts its issue through a consumer, even when the part is
+// out of stock, so the second order may or may not be posted when the report
+// is read. Its cost is zero either way (the filter has no stock to cost); only
+// whether the report counts it as without cost depends on the timing, and the
+// test checks that against the issue read before and after the report.
 func TestProfitPerRepairOrder(t *testing.T) {
 	t.Parallel()
 
@@ -232,12 +248,15 @@ func TestProfitPerRepairOrder(t *testing.T) {
 	k.finish(t, posted)
 	k.post(t, posted)
 
-	// The filter is out of stock: the issue cannot be posted.
 	waiting := k.create(t, labor("Filter change", 300_000), part(k.filter, "2", 120_000))
 	k.finish(t, waiting)
 
+	postedBefore := k.issuePosted(t, waiting)
+
 	report, err := k.Owner.API.GetProfitReport(ctx, k.GarageID, "REPAIR_ORDER", k.from, k.to)
 	require.NoError(t, err)
+
+	postedAfter := k.issuePosted(t, waiting)
 
 	rows := rowsByKey(report.GetRows())
 	require.Len(t, rows, 2)
@@ -247,7 +266,16 @@ func TestProfitPerRepairOrder(t *testing.T) {
 	assert.Equal(t, int64(380_000), rows[posted.GetId()].GetProfit())
 	assert.Equal(t, int64(540_000), rows[waiting.GetId()].GetRevenue())
 	assert.Zero(t, rows[waiting.GetId()].GetCost())
-	assert.EqualValues(t, 1, report.GetOrdersWithoutCost())
+
+	switch {
+	case !postedAfter:
+		assert.EqualValues(t, 1, report.GetOrdersWithoutCost(), "the issue was still not posted after the report")
+	case postedBefore:
+		assert.Zero(t, report.GetOrdersWithoutCost(), "the issue was already posted before the report")
+	default:
+		assert.Contains(t, []int32{0, 1}, report.GetOrdersWithoutCost(), "the issue was posted while the report was read")
+	}
+
 	assert.Equal(t, int64(1_080_000), report.GetTotalRevenue())
 	assert.Equal(t, int64(160_000), report.GetTotalCost())
 	assert.Equal(t, int64(920_000), report.GetTotalProfit())

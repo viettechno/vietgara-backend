@@ -30,7 +30,9 @@ func laborQuote(customerID, vehicleID string) *quotev1.Quote {
 }
 
 // newestOTPAfter waits for an e-mail to address beyond the before that were
-// there already, and returns the code in it.
+// there already, and returns the code in the newest of them that has one. The
+// welcome e-mail goes out through a consumer, so it can still arrive after the
+// code e-mail and be the newest of all.
 func newestOTPAfter(t *testing.T, address string, before int) string {
 	t.Helper()
 
@@ -44,10 +46,15 @@ func newestOTPAfter(t *testing.T, address string, before int) string {
 			return false
 		}
 
-		otp, otpErr := messages[0].OTP()
-		code = otp
+		for _, message := range messages[:len(messages)-before] {
+			if otp, otpErr := message.OTP(); otpErr == nil {
+				code = otp
 
-		return otpErr == nil
+				return true
+			}
+		}
+
+		return false
 	}, 20*time.Second, 300*time.Millisecond, "a code arrives for %s", address)
 
 	return code

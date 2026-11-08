@@ -1,1 +1,0 @@
-{"nodes": [{"id": "$graphify-root$_internal_quote_usecase_event_go", "label": "event.go", "file_type": "code", "source_file": "internal/quote/usecase/event.go", "source_location": "L1"}], "edges": [], "raw_calls": [], "go_imports": {}, "go_type_table": {"path": "$graphify-root$/internal/quote/usecase/event.go", "table": {}}}

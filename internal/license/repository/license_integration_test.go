@@ -359,3 +359,58 @@ func TestCashNoteOnPostgres(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "received at the counter", stored.CashNote)
 }
+
+// The expiry job pages through lapsed owners by uuid: every owner appears
+// once, in uuid order, whatever the database collation.
+func TestLapsedCreditPagingOnPostgres(t *testing.T) {
+	pool, admin := startLicenseDB(t)
+	ctx := t.Context()
+	subs := repository.NewPostgresRepository(pool)
+	now := time.Now().UTC()
+
+	for i := range 5 {
+		id := uuid.NewString()
+		_, err := admin.ExecContext(ctx, `INSERT INTO users (id, email, full_name) VALUES ($1, $2, 'Lapsed')`, id, id+"@example.test")
+		require.NoError(t, err)
+		_, err = admin.ExecContext(ctx, `INSERT INTO credit_ledger (user_id, kind, amount, balance_after, expires_at, remaining)
+			VALUES ($1, 'earned', $2, $2, $3, $2)`, id, int64(1000+i), now.Add(-time.Hour))
+		require.NoError(t, err)
+	}
+
+	// The expected order is the database's own order of the uuid column.
+	rows, err := admin.QueryContext(ctx, `SELECT user_id::text FROM credit_ledger ORDER BY user_id`)
+	require.NoError(t, err)
+
+	defer rows.Close()
+
+	var want []string
+
+	for rows.Next() {
+		var id string
+		require.NoError(t, rows.Scan(&id))
+
+		want = append(want, id)
+	}
+
+	require.NoError(t, rows.Err())
+	require.Len(t, want, 5)
+
+	var got []string
+
+	after := ""
+
+	for {
+		page, err := subs.UsersWithLapsedCredit(ctx, now, after, 2)
+		require.NoError(t, err)
+
+		got = append(got, page...)
+
+		if len(page) < 2 {
+			break
+		}
+
+		after = page[len(page)-1]
+	}
+
+	assert.Equal(t, want, got, "each owner once, in uuid order")
+}

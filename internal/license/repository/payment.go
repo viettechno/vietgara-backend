@@ -503,10 +503,12 @@ func (r *PostgresRepository) LapseCredit(ctx context.Context, userID string, now
 // cursor is a uuid, compared as one.
 func (r *PostgresRepository) UsersWithLapsedCredit(ctx context.Context, now time.Time, after string, limit int) ([]string, error) {
 	rows, err := platformdb.QuerierFromContext(ctx, r.pool).Query(ctx, `
-		SELECT DISTINCT user_id::text FROM credit_ledger
-		WHERE remaining > 0 AND expires_at <= $1
-		  AND user_id > COALESCE(NULLIF($2, '')::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
-		ORDER BY user_id LIMIT $3`, now, after, limit)
+		SELECT user_id::text FROM (
+			SELECT DISTINCT user_id FROM credit_ledger
+			WHERE remaining > 0 AND expires_at <= $1
+			  AND user_id > COALESCE(NULLIF($2, '')::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+			ORDER BY user_id LIMIT $3
+		) page ORDER BY user_id`, now, after, limit)
 	if err != nil {
 		return nil, err
 	}

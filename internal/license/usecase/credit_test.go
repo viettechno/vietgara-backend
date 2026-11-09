@@ -215,35 +215,60 @@ func TestOnlyCountedKindsUseTheDailyLimit(t *testing.T) {
 	requireReason(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "quote"), domain.ReasonPlanLimitReached)
 }
 
-func TestPlanCycleIsLockedWhileSubscribed(t *testing.T) {
+// While subscriptions use a plan its commercial terms are locked: a change
+// means a new plan. The name, visibility and availability stay editable, the
+// terms of a plan nobody uses stay editable, and so do those of the trial plan.
+func TestSubscribedPlanTermsAreLocked(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()
-	e := licensetest.NewEnv()
+	e := trialOwner(t)
 
 	plan, err := e.Subscriptions.CreatePlan(ctx, usecase.PlanFields{
-		Code: new("enterprise"), Name: new("Enterprise"), MaxGarages: new(20), MaxStaff: new(200), MaxTransactionsPerDay: new(2000),
+		Code: new("enterprise"), Name: new("Enterprise"), Price: new(int64(900000)), MaxGarages: new(20), MaxStaff: new(200),
+		MaxTransactionsPerDay: new(2000), Public: new(true),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, domain.BillingCycleYearly, plan.BillingCycle, "plans are yearly by default")
 	assert.Equal(t, []domain.TransactionKind{domain.TransactionRepairOrder}, plan.CountedKinds, "repair orders count by default")
 
 	monthly := domain.BillingCycleMonthly
-	changed, err := e.Subscriptions.UpdatePlan(ctx, plan.ID, usecase.PlanFields{BillingCycle: &monthly})
-	require.NoError(t, err, "nobody uses the plan")
+	changed, err := e.Subscriptions.UpdatePlan(ctx, plan.ID, usecase.PlanFields{BillingCycle: &monthly, Price: new(int64(950000))})
+	require.NoError(t, err, "nobody uses the plan yet")
 	assert.Equal(t, domain.BillingCycleMonthly, changed.BillingCycle)
 
-	// The trial plan has a subscriber now.
-	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "user-1"))
+	payNow(t, e, plan.ID, domain.PaymentChange)
 
-	yearly := domain.BillingCycleYearly
-	_, err = e.Subscriptions.UpdatePlan(ctx, "p-trial", usecase.PlanFields{BillingCycle: &yearly})
-	requireReason(t, err, domain.ReasonPlanHasSubscribers)
+	locked := map[string]usecase.PlanFields{
+		"price":        {Price: new(int64(1))},
+		"cycle":        {BillingCycle: new(domain.BillingCycleYearly)},
+		"garages":      {MaxGarages: new(21)},
+		"staff":        {MaxStaff: new(1)},
+		"transactions": {MaxTransactionsPerDay: new(1)},
+		"features":     {Features: &[]domain.Feature{domain.FeatureReports}},
+		"counted":      {CountedKinds: &[]domain.TransactionKind{domain.TransactionQuote}},
+	}
+	for name, fields := range locked {
+		_, err = e.Subscriptions.UpdatePlan(ctx, plan.ID, fields)
+		requireReason(t, err, domain.ReasonPlanHasSubscribers)
+		assert.Contains(t, err.Error(), "create a new plan", name)
+	}
 
-	// Everything else may change, and a cycle sent unchanged is not a change.
-	trialCycle := domain.BillingCycleMonthly
-	_, err = e.Subscriptions.UpdatePlan(ctx, "p-trial", usecase.PlanFields{BillingCycle: &trialCycle, Price: new(int64(0)), MaxStaff: new(6)})
+	// A form that sends every field back unchanged is not a change.
+	same := usecase.PlanFields{
+		Price: new(int64(950000)), BillingCycle: &monthly, MaxGarages: new(20), MaxStaff: new(200), MaxTransactionsPerDay: new(2000),
+		Features: &plan.Features, CountedKinds: &plan.CountedKinds, Currency: new("vnd"),
+		Name: new("Enterprise plus"), Description: new("for chains"), Public: new(false), Active: new(false), SortOrder: new(99),
+	}
+	renamed, err := e.Subscriptions.UpdatePlan(ctx, plan.ID, same)
 	require.NoError(t, err)
+	assert.Equal(t, "Enterprise plus", renamed.Name)
+	assert.False(t, renamed.Active, "a plan with subscribers can still be taken off sale")
+
+	// The trial plan always has subscribers and stays tunable.
+	tuned, err := e.Subscriptions.UpdatePlan(ctx, "p-trial", usecase.PlanFields{MaxStaff: new(6), TrialDays: new(14)})
+	require.NoError(t, err)
+	assert.Equal(t, 6, tuned.MaxStaff)
 }
 
 func TestTrialLengthFollowsTheTrialPlan(t *testing.T) {

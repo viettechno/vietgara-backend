@@ -62,23 +62,13 @@ func (uc *SubscriptionUseCase) CreatePlan(ctx context.Context, fields PlanFields
 	return plan, nil
 }
 
-// UpdatePlan edits a plan (its code is immutable). Subscribers keep their
-// plan; the new limits and features apply to them at once.
+// UpdatePlan edits a plan (its code is immutable). While subscriptions use it,
+// its commercial terms are locked (checkTermsUnlocked); the name, description,
+// visibility, availability and order stay editable.
 func (uc *SubscriptionUseCase) UpdatePlan(ctx context.Context, planID string, fields PlanFields) (*domain.Plan, error) {
 	plan, err := uc.plans.FindByID(ctx, planID)
 	if err != nil {
 		return nil, toAppError("update plan", err)
-	}
-
-	if fields.BillingCycle != nil && *fields.BillingCycle != plan.BillingCycle {
-		subscribers, err := uc.plans.CountSubscribers(ctx, plan.ID)
-		if err != nil {
-			return nil, toAppError("update plan", err)
-		}
-
-		if subscribers > 0 {
-			return nil, toAppError("update plan", domain.ErrPlanHasSubscribers)
-		}
 	}
 
 	before := *plan
@@ -87,6 +77,10 @@ func (uc *SubscriptionUseCase) UpdatePlan(ctx context.Context, planID string, fi
 
 	if err := plan.Validate(); err != nil {
 		return nil, toAppError("update plan", err)
+	}
+
+	if err := uc.checkTermsUnlocked(ctx, &before, plan); err != nil {
+		return nil, err
 	}
 
 	if err := uc.plans.Update(ctx, plan); err != nil {
@@ -117,6 +111,28 @@ func (uc *SubscriptionUseCase) invalidateSubscribers(ctx context.Context, planID
 	for _, owner := range owners {
 		uc.sync.invalidate(ctx, owner)
 	}
+}
+
+// checkTermsUnlocked refuses a change of a plan's commercial terms (price,
+// cycle, limits, features, counted kinds) while subscriptions use the plan:
+// the owners on it keep the terms they bought, and a change means a new plan.
+// The trial plan is the exception, because every owner starts on it and the
+// admin tunes its length and limits (FR-LIC-05).
+func (uc *SubscriptionUseCase) checkTermsUnlocked(ctx context.Context, before, after *domain.Plan) error {
+	if after.Code == domain.TrialPlanCode || after.SameTerms(before) {
+		return nil
+	}
+
+	subscribers, err := uc.plans.CountSubscribers(ctx, after.ID)
+	if err != nil {
+		return toAppError("update plan", err)
+	}
+
+	if subscribers > 0 {
+		return toAppError("update plan", domain.ErrPlanHasSubscribers)
+	}
+
+	return nil
 }
 
 // ListSubscriptions lists subscriptions for platform admins.

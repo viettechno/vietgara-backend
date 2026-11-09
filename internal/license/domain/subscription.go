@@ -22,7 +22,7 @@ var (
 	ErrPlanNotFound          = errors.New("plan not found")
 	ErrPlanNotAvailable      = errors.New("this plan cannot be chosen")
 	ErrPlanCodeTaken         = errors.New("a plan with this code already exists")
-	ErrPlanHasSubscribers    = errors.New("the billing cycle cannot change while subscriptions use the plan")
+	ErrPlanHasSubscribers    = errors.New("the plan has subscribers: its price, billing cycle, limits and features cannot change; create a new plan instead")
 	ErrSubscriptionCancelled = errors.New("the subscription is cancelled")
 	ErrLimitReached          = errors.New("the plan limit is reached")
 	ErrInvalidExtension      = errors.New("extensions must be between 1 and 366 days")

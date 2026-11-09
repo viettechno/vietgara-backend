@@ -348,14 +348,39 @@ func TestPlanTrialDaysAndCountedKinds(t *testing.T) {
 	})
 	assert.Equal(t, "VALIDATION_ERROR", reason(err), "only the trial plan has trial days")
 
-	// The cycle of a plan with subscribers is locked.
-	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "user-1"))
+	// The terms of a plan with subscribers are locked; its name is not.
+	owner := as(t, "user-1")
+	require.NoError(t, e.Subscriptions.EnsureTrial(owner, "user-1"))
 
+	quote, err := srv.CreatePlanPaymentRequest(owner, &licensev1.CreatePlanPaymentRequestRequest{
+		PlanId: "p-pro", Kind: licensev1.PlanPaymentKind_PLAN_PAYMENT_KIND_CHANGE,
+	})
+	require.NoError(t, err)
+	_, err = srv.SubmitPlanPayment(owner, &licensev1.SubmitPlanPaymentRequest{
+		RequestId: quote.GetRequest().GetId(), PayerName: "A", TransferredAmount: quote.GetRequest().GetAmountDue(),
+		PaymentMethod: licensev1.PaymentMethod_PAYMENT_METHOD_CASH, PaidAt: timestamppb.Now(),
+	})
+	require.NoError(t, err)
+	_, err = srv.ApprovePlanPayment(ctx, &licensev1.ApprovePlanPaymentRequest{RequestId: quote.GetRequest().GetId()})
+	require.NoError(t, err)
+
+	_, err = srv.UpdatePlan(ctx, &licensev1.UpdatePlanRequest{
+		PlanId: "p-pro", UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"price"}}, Plan: &licensev1.Plan{Price: 1},
+	})
+	assert.Equal(t, "PLAN_HAS_SUBSCRIBERS", reason(err))
+
+	renamed, err := srv.UpdatePlan(ctx, &licensev1.UpdatePlanRequest{
+		PlanId: "p-pro", UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"name"}}, Plan: &licensev1.Plan{Name: "Pro 2026"},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "Pro 2026", renamed.GetPlan().GetName())
+
+	// The trial plan always has subscribers and stays editable.
 	_, err = srv.UpdatePlan(ctx, &licensev1.UpdatePlanRequest{
 		PlanId: "p-trial", UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"billing_cycle"}},
 		Plan: &licensev1.Plan{BillingCycle: licensev1.BillingCycle_BILLING_CYCLE_YEARLY},
 	})
-	assert.Equal(t, "PLAN_HAS_SUBSCRIBERS", reason(err))
+	require.NoError(t, err)
 }
 
 // Credit expiry, cash payments and the support contact reach the API (FR-LIC-07, FR-LIC-09, FR-LIC-10).

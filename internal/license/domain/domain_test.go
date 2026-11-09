@@ -391,3 +391,46 @@ func TestQuotePaymentCountsOnlyTheCreditGiven(t *testing.T) {
 	assert.Equal(t, int64(200000), q.CreditApplied)
 	assert.Equal(t, int64(400000), q.AmountDue)
 }
+
+func TestSameTerms(t *testing.T) {
+	t.Parallel()
+
+	base := func() *domain.Plan {
+		return &domain.Plan{
+			Price: 100, Currency: "VND", BillingCycle: domain.BillingCycleYearly, MaxGarages: 1, MaxStaff: 5, MaxTransactionsPerDay: 50,
+			CountedKinds: []domain.TransactionKind{domain.TransactionRepairOrder, domain.TransactionQuote},
+			Features:     []domain.Feature{domain.FeatureQuotes, domain.FeatureReports},
+		}
+	}
+
+	assert.True(t, base().SameTerms(base()))
+
+	other := base()
+	other.Name, other.Description, other.Public, other.Active, other.SortOrder = "x", "y", true, true, 9
+	assert.True(t, base().SameTerms(other), "name, description, visibility, availability and order are not terms")
+
+	lower := base()
+	lower.Currency = "vnd"
+	assert.True(t, base().SameTerms(lower), "the case of the currency is not a term")
+
+	reordered := base()
+	reordered.CountedKinds = []domain.TransactionKind{domain.TransactionQuote, domain.TransactionRepairOrder}
+	reordered.Features = []domain.Feature{domain.FeatureReports, domain.FeatureQuotes}
+	assert.True(t, base().SameTerms(reordered), "the order of kinds and features is not a term")
+
+	changes := map[string]func(p *domain.Plan){
+		"price":    func(p *domain.Plan) { p.Price++ },
+		"currency": func(p *domain.Plan) { p.Currency = "USD" },
+		"cycle":    func(p *domain.Plan) { p.BillingCycle = domain.BillingCycleMonthly },
+		"garages":  func(p *domain.Plan) { p.MaxGarages++ },
+		"staff":    func(p *domain.Plan) { p.MaxStaff++ },
+		"daily":    func(p *domain.Plan) { p.MaxTransactionsPerDay++ },
+		"kinds":    func(p *domain.Plan) { p.CountedKinds = []domain.TransactionKind{domain.TransactionRepairOrder} },
+		"features": func(p *domain.Plan) { p.Features = []domain.Feature{domain.FeatureQuotes, domain.FeatureInventory} },
+	}
+	for name, change := range changes {
+		p := base()
+		change(p)
+		assert.False(t, base().SameTerms(p), name)
+	}
+}

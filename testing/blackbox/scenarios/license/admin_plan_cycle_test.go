@@ -14,9 +14,9 @@ import (
 )
 
 // The commercial terms of a plan (here the billing cycle and the price) can
-// only change while no subscription uses it; the name and description stay editable. A plan counts repair orders unless the
-// admin says otherwise.
-func TestPlanCycleIsLockedWhileSubscribed(t *testing.T) {
+// only change while no subscription uses it; the name and description stay
+// editable. A plan counts repair orders unless the admin says otherwise.
+func TestPlanTermsAreLockedWhileSubscribed(t *testing.T) {
 	t.Parallel()
 
 	ctx := t.Context()

@@ -409,6 +409,10 @@ func TestSameTerms(t *testing.T) {
 	other.Name, other.Description, other.Public, other.Active, other.SortOrder = "x", "y", true, true, 9
 	assert.True(t, base().SameTerms(other), "name, description, visibility, availability and order are not terms")
 
+	lower := base()
+	lower.Currency = "vnd"
+	assert.True(t, base().SameTerms(lower), "the case of the currency is not a term")
+
 	reordered := base()
 	reordered.CountedKinds = []domain.TransactionKind{domain.TransactionQuote, domain.TransactionRepairOrder}
 	reordered.Features = []domain.Feature{domain.FeatureReports, domain.FeatureQuotes}

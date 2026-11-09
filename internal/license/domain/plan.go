@@ -139,7 +139,7 @@ func (p *Plan) CountsTransaction(kind TransactionKind) bool {
 // subscribers keeps its terms (the trial plan, which every owner starts on,
 // excepted), so changing them means a new plan.
 func (p *Plan) SameTerms(o *Plan) bool {
-	return p.Price == o.Price && p.Currency == o.Currency && p.BillingCycle == o.BillingCycle &&
+	return p.Price == o.Price && strings.EqualFold(p.Currency, o.Currency) && p.BillingCycle == o.BillingCycle &&
 		p.MaxGarages == o.MaxGarages && p.MaxStaff == o.MaxStaff && p.MaxTransactionsPerDay == o.MaxTransactionsPerDay &&
 		sameSet(NormalizeTransactionKinds(p.CountedKinds), NormalizeTransactionKinds(o.CountedKinds)) &&
 		sameSet(NormalizeFeatures(p.Features), NormalizeFeatures(o.Features))

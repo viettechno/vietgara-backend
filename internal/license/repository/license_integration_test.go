@@ -85,6 +85,10 @@ func TestLicenseRepositoriesOnPostgres(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, subscribers)
 
+	owners, err := plans.ListSubscriberIDs(ctx, trial.ID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{userID}, owners)
+
 	inserted, err = subs.CreateIfAbsent(ctx, domain.NewTrial(userID, trial, time.Now().UTC()))
 	require.NoError(t, err)
 	assert.False(t, inserted)
@@ -280,9 +284,13 @@ func TestCreditLotsOnPostgres(t *testing.T) {
 	assert.Zero(t, sooner, "the sooner lot is used first")
 	assert.Equal(t, int64(200000), later)
 
-	users, err := subs.UsersWithLapsedCredit(ctx, now, 10)
+	users, err := subs.UsersWithLapsedCredit(ctx, now, "", 10)
 	require.NoError(t, err)
 	assert.Equal(t, []string{lotUser}, users)
+
+	users, err = subs.UsersWithLapsedCredit(ctx, now, lotUser, 10)
+	require.NoError(t, err)
+	assert.Empty(t, users, "paging continues after the last user seen")
 
 	lapsed, err := subs.LapseCredit(ctx, lotUser, now)
 	require.NoError(t, err)
@@ -292,7 +300,7 @@ func TestCreditLotsOnPostgres(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, lapsed, "lapsing is done once")
 
-	users, err = subs.UsersWithLapsedCredit(ctx, now, 10)
+	users, err = subs.UsersWithLapsedCredit(ctx, now, "", 10)
 	require.NoError(t, err)
 	assert.Empty(t, users)
 }
@@ -350,4 +358,59 @@ func TestCashNoteOnPostgres(t *testing.T) {
 	stored, err := subs.FindRequest(ctx, req.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "received at the counter", stored.CashNote)
+}
+
+// The expiry job pages through lapsed owners by uuid: every owner appears
+// once, in uuid order, whatever the database collation.
+func TestLapsedCreditPagingOnPostgres(t *testing.T) {
+	pool, admin := startLicenseDB(t)
+	ctx := t.Context()
+	subs := repository.NewPostgresRepository(pool)
+	now := time.Now().UTC()
+
+	for i := range 5 {
+		id := uuid.NewString()
+		_, err := admin.ExecContext(ctx, `INSERT INTO users (id, email, full_name) VALUES ($1, $2, 'Lapsed')`, id, id+"@example.test")
+		require.NoError(t, err)
+		_, err = admin.ExecContext(ctx, `INSERT INTO credit_ledger (user_id, kind, amount, balance_after, expires_at, remaining)
+			VALUES ($1, 'earned', $2, $2, $3, $2)`, id, int64(1000+i), now.Add(-time.Hour))
+		require.NoError(t, err)
+	}
+
+	// The expected order is the database's own order of the uuid column.
+	rows, err := admin.QueryContext(ctx, `SELECT user_id::text FROM credit_ledger ORDER BY user_id`)
+	require.NoError(t, err)
+
+	t.Cleanup(func() { _ = rows.Close() })
+
+	var want []string
+
+	for rows.Next() {
+		var id string
+		require.NoError(t, rows.Scan(&id))
+
+		want = append(want, id)
+	}
+
+	require.NoError(t, rows.Err())
+	require.Len(t, want, 5)
+
+	var got []string
+
+	after := ""
+
+	for {
+		page, err := subs.UsersWithLapsedCredit(ctx, now, after, 2)
+		require.NoError(t, err)
+
+		got = append(got, page...)
+
+		if len(page) < 2 {
+			break
+		}
+
+		after = page[len(page)-1]
+	}
+
+	assert.Equal(t, want, got, "each owner once, in uuid order")
 }

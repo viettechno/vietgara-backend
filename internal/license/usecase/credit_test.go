@@ -1,8 +1,10 @@
 package usecase_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -310,4 +312,65 @@ func TestStaleCachedEntitlementsAreReloaded(t *testing.T) {
 	got, err := e.Entitlements.Get(ctx, "owner")
 	require.NoError(t, err)
 	assert.Equal(t, domain.AllTransactionKinds, got.CountedKinds, "the stale entry was replaced")
+}
+
+// Editing a plan reaches its subscribers at once: their cached entitlements
+// are dropped, so a changed counted kind applies without waiting for the TTL.
+func TestEditingAPlanRefreshesItsSubscribersCache(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	e := licensetest.NewEnv()
+	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "owner"))
+	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "other"))
+
+	// Warm the cache: the trial plan counts every kind.
+	got, err := e.Entitlements.Get(ctx, "owner")
+	require.NoError(t, err)
+	assert.True(t, got.CountsTransaction(domain.TransactionQuote))
+
+	_, err = e.Subscriptions.UpdatePlan(ctx, "p-trial", usecase.PlanFields{
+		CountedKinds: &[]domain.TransactionKind{domain.TransactionRepairOrder},
+	})
+	require.NoError(t, err)
+
+	got, err = e.Entitlements.Get(ctx, "owner")
+	require.NoError(t, err)
+	assert.False(t, got.CountsTransaction(domain.TransactionQuote), "the edit applies at once")
+
+	// A plan nobody uses has nobody to refresh.
+	plan, err := e.Subscriptions.CreatePlan(ctx, usecase.PlanFields{
+		Code: new("unused"), Name: new("Unused"), MaxGarages: new(1), MaxStaff: new(1), MaxTransactionsPerDay: new(1),
+	})
+	require.NoError(t, err)
+	_, err = e.Subscriptions.UpdatePlan(ctx, plan.ID, usecase.PlanFields{Name: new("Still unused")})
+	require.NoError(t, err)
+}
+
+// The credit job pages through every owner, so one owner whose expiry fails
+// does not hold back the owners after it.
+func TestCreditExpiryVisitsEveryOwnerEvenWhenOneFails(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	e := trialOwner(t)
+	sub := payNow(t, e, "p-pro", domain.PaymentChange)
+
+	// More ghosts than one page (500), all sorting before "user-1": owners with
+	// lapsed credit but no subscription, whose expiry fails.
+	expired := e.Now.Add(-time.Hour)
+	for i := range 520 {
+		e.Store.AddLapsedLot(fmt.Sprintf("a-ghost-%04d", i), 1000, expired)
+	}
+
+	_, err := e.Payments.AdjustCredit(ctx, "admin", sub.ID, 5000, "lot")
+	require.NoError(t, err)
+
+	e.Now = e.Now.AddDate(1, 1, 0)
+
+	require.Error(t, e.Expiry.Run(ctx), "the ghost owners' failures are reported")
+
+	mine, _, err := e.Subscriptions.GetMine(ctx, "user-1")
+	require.NoError(t, err)
+	assert.Zero(t, mine.CreditBalance, "user-1, on the second page, was still visited")
 }

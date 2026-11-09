@@ -96,39 +96,55 @@ func (j *ExpiryJob) Run(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// creditBatch bounds how many owners one run expires credit for; the next
-// run continues.
+// creditBatch is how many owners the job reads at a time while it expires credit.
 const creditBatch = 500
 
 // expireCredit expires the credit that lapsed one year after it was earned
 // (FR-LIC-09), one owner per transaction under the subscription's lock.
+//
+// It pages through every owner with lapsed credit in id order, so an owner
+// whose expiry keeps failing is reported on each run but never holds back the
+// owners after it.
 func (j *ExpiryJob) expireCredit(ctx context.Context, now time.Time) error {
-	userIDs, err := j.payments.UsersWithLapsedCredit(ctx, now, creditBatch)
-	if err != nil {
-		return err
-	}
+	var (
+		errs  []error
+		after string
+	)
 
-	var errs []error
-
-	for _, userID := range userIDs {
-		err := j.tx.WithTransaction(ctx, platformdb.UserScope(userID), func(ctx context.Context) error {
-			sub, err := j.subscriptions.LockByUserID(ctx, userID)
-			if err != nil {
-				return err
-			}
-
-			if err := lapseCredit(ctx, j.payments, j.sync.events, sub, now); err != nil {
-				return err
-			}
-
-			return j.subscriptions.Update(ctx, sub)
-		})
+	for {
+		userIDs, err := j.payments.UsersWithLapsedCredit(ctx, now, after, creditBatch)
 		if err != nil {
-			errs = append(errs, err)
+			return errors.Join(append(errs, err)...)
 		}
-	}
 
-	return errors.Join(errs...)
+		for _, userID := range userIDs {
+			if err := j.expireCreditOf(ctx, userID, now); err != nil {
+				errs = append(errs, err)
+			}
+		}
+
+		if len(userIDs) < creditBatch {
+			return errors.Join(errs...)
+		}
+
+		after = userIDs[len(userIDs)-1]
+	}
+}
+
+// expireCreditOf expires one owner's lapsed credit in its own transaction.
+func (j *ExpiryJob) expireCreditOf(ctx context.Context, userID string, now time.Time) error {
+	return j.tx.WithTransaction(ctx, platformdb.UserScope(userID), func(ctx context.Context) error {
+		sub, err := j.subscriptions.LockByUserID(ctx, userID)
+		if err != nil {
+			return err
+		}
+
+		if err := lapseCredit(ctx, j.payments, j.sync.events, sub, now); err != nil {
+			return err
+		}
+
+		return j.subscriptions.Update(ctx, sub)
+	})
 }
 
 func (j *ExpiryJob) process(ctx context.Context, userID string, now time.Time) error {

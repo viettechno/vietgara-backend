@@ -169,6 +169,24 @@ func (p Plans) CountSubscribers(_ context.Context, planID string) (int, error) {
 	return n, nil
 }
 
+// ListSubscriberIDs implements usecase.PlanRepository.
+func (p Plans) ListSubscriberIDs(_ context.Context, planID string) ([]string, error) {
+	p.s.mu.Lock()
+	defer p.s.mu.Unlock()
+
+	var ids []string
+
+	for user, sub := range p.s.subs {
+		if sub.PlanID == planID {
+			ids = append(ids, user)
+		}
+	}
+
+	slices.Sort(ids)
+
+	return ids, nil
+}
+
 // Update implements usecase.PlanRepository.
 func (p Plans) Update(_ context.Context, plan *domain.Plan) error {
 	p.s.mu.Lock()
@@ -747,19 +765,32 @@ func (s *Store) LapseCredit(_ context.Context, userID string, now time.Time) (in
 }
 
 // UsersWithLapsedCredit implements usecase.PaymentRepository.
-func (s *Store) UsersWithLapsedCredit(_ context.Context, now time.Time, limit int) ([]string, error) {
+func (s *Store) UsersWithLapsedCredit(_ context.Context, now time.Time, after string, limit int) ([]string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	var out []string
 
 	for _, e := range s.ledger {
-		if e.Remaining > 0 && e.ExpiresAt != nil && !e.ExpiresAt.After(now) && !slices.Contains(out, e.UserID) && len(out) < limit {
+		if e.Remaining > 0 && e.ExpiresAt != nil && !e.ExpiresAt.After(now) && e.UserID > after && !slices.Contains(out, e.UserID) {
 			out = append(out, e.UserID)
 		}
 	}
 
-	return out, nil
+	slices.Sort(out)
+
+	return out[:min(len(out), limit)], nil
+}
+
+// AddLapsedLot records credit of userID that lapses at expires, without a
+// subscription behind it, to test the expiry job against an owner it cannot lock.
+func (s *Store) AddLapsedLot(userID string, amount int64, expires time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.ledger = append(s.ledger, &domain.CreditEntry{
+		UserID: userID, Kind: domain.CreditEarned, Amount: amount, ExpiresAt: &expires, Remaining: amount,
+	})
 }
 
 // Ledger returns the credit entries recorded so far, oldest first.

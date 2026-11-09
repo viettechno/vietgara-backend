@@ -145,7 +145,7 @@ func TestPurchaseOrdersFromLowStock(t *testing.T) {
 
 	for _, o := range res.GetOrders() {
 		assert.Equal(t, inventoryv1.PurchaseOrderStatus_PURCHASE_ORDER_STATUS_DRAFT, o.GetStatus())
-		assert.Equal(t, time.Now().Format(time.DateOnly), o.GetOrderDate())
+		assert.Equal(t, fixture.GarageDate(0), o.GetOrderDate())
 		assert.Regexp(t, `^DH-\d{4}-\d{5}$`, o.GetNumber())
 	}
 

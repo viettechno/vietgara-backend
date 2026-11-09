@@ -84,7 +84,7 @@ func (p *payables) receipt(t *testing.T, daysAgo int, lines ...receiptLine) *inv
 	}
 
 	draft, err := p.Owner.API.CreateGoodsReceipt(ctx, p.GarageID, &inventoryv1.GoodsReceipt{
-		ReceiptDate: time.Now().AddDate(0, 0, -daysAgo).Format(time.DateOnly), Lines: out,
+		ReceiptDate: fixture.GarageDate(daysAgo), Lines: out,
 	})
 	require.NoError(t, err)
 
@@ -170,7 +170,7 @@ func TestReceiptMakesPayablesAndCancelCancelsThem(t *testing.T) {
 	assert.Zero(t, oil.GetPaidAmount())
 	assert.EqualValues(t, 1_000_000, oil.GetRemainingAmount())
 	assert.Equal(t, receipt.GetNumber(), oil.GetGoodsReceiptNumber())
-	assert.Equal(t, time.Now().Format(time.DateOnly), oil.GetReceiptDate())
+	assert.Equal(t, fixture.GarageDate(0), oil.GetReceiptDate())
 
 	// A receipt whose lines record no cost makes no payable.
 	free := p.receipt(t, 0, receiptLine{p.oil, p.acme, "1", 0})

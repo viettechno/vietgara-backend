@@ -317,18 +317,33 @@ func TransferEvidence() *licensev1.PaymentEvidence {
 }
 
 // LimitedPlan creates a public plan with the given daily transaction
-// limit (the other limits are generous) and moves owner onto it, so a
-// scenario can reach the limit with a handful of calls.
+// limit (the other limits are generous) that counts every kind of document,
+// and moves owner onto it, so a scenario can reach the limit with a handful
+// of calls.
 func LimitedPlan(tb testing.TB, owner *Actor, maxTransactionsPerDay int32) *licensev1.Subscription {
+	tb.Helper()
+
+	return LimitedPlanCounting(tb, owner, maxTransactionsPerDay,
+		licensev1.TransactionKind_TRANSACTION_KIND_REPAIR_ORDER,
+		licensev1.TransactionKind_TRANSACTION_KIND_QUOTE,
+		licensev1.TransactionKind_TRANSACTION_KIND_SETTLEMENT,
+	)
+}
+
+// LimitedPlanCounting is LimitedPlan counting only the given kinds of document.
+func LimitedPlanCounting(
+	tb testing.TB, owner *Actor, maxTransactionsPerDay int32, kinds ...licensev1.TransactionKind,
+) *licensev1.Subscription {
 	tb.Helper()
 
 	code := fmt.Sprintf("qa-limit-%d-%d-%d", maxTransactionsPerDay, seq.Add(1), time.Now().UnixNano()%1_000_000)
 
 	created, err := PlatformAdmin(tb).API.CreatePlan(tb.Context(), &licensev1.Plan{
 		Code: code, Name: "QA " + code, Price: 100000, Currency: "VND",
-		BillingCycle: licensev1.BillingCycle_BILLING_CYCLE_MONTHLY,
-		Limits:       &licensev1.PlanLimits{MaxGarages: 5, MaxStaff: 10, MaxTransactionsPerDay: maxTransactionsPerDay},
-		IsPublic:     true, IsActive: true,
+		BillingCycle:            licensev1.BillingCycle_BILLING_CYCLE_YEARLY,
+		Limits:                  &licensev1.PlanLimits{MaxGarages: 5, MaxStaff: 10, MaxTransactionsPerDay: maxTransactionsPerDay},
+		CountedTransactionKinds: kinds,
+		IsPublic:                true, IsActive: true,
 	})
 	if err != nil {
 		tb.Fatalf("create plan %s: %v", code, err)

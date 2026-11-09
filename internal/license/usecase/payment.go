@@ -34,6 +34,10 @@ const (
 	maxReferenceAttempts = 5
 	maxPayerNameLength   = 255
 	maxNoteLength        = 2000
+	// Lengths of the support contact columns.
+	maxSupportPhoneLength = 50
+	maxSupportEmailLength = 255
+	maxSupportZaloLength  = 100
 )
 
 // PaymentDeps are the dependencies of PaymentUseCase.
@@ -150,7 +154,14 @@ func (uc *PaymentUseCase) Start(ctx context.Context, userID, planID string, kind
 		return RequestView{}, toAppError("read payment settings", err)
 	}
 
-	quote := domain.QuotePayment(sub, plan, kind, uc.opts.now().UTC())
+	now := uc.opts.now().UTC()
+
+	credit, err := uc.payments.AvailableCredit(ctx, userID, now)
+	if err != nil {
+		return RequestView{}, toAppError("read credit", err)
+	}
+
+	quote := domain.QuotePayment(sub, plan, kind, credit, now)
 	req := &domain.PlanPaymentRequest{
 		UserID: userID, SubscriptionID: sub.ID, Kind: kind, PlanID: plan.ID, Plan: plan, Status: domain.PaymentAwaitingPayment,
 		QuotedAmount: quote.QuotedAmount, CreditApplied: quote.CreditApplied, AmountDue: quote.AmountDue,
@@ -335,17 +346,44 @@ func (uc *PaymentUseCase) mine(ctx context.Context, userID, requestID string, lo
 	return req, nil
 }
 
-// Declaration is what the owner declares about the transfer.
+// Declaration is what the owner declares about the payment.
 type Declaration struct {
+	// Method defaults to a bank transfer; cash needs only the payer's name,
+	// the amount and the date.
+	Method             domain.PaymentMethod
 	PayerName          string
 	PayerBank          string
 	PayerAccount       string
 	TransferredAmount  int64
 	BankTransactionRef string
 	PaidAt             *time.Time
-	// Evidence is the screenshot; required unless the amount due is 0.
+	// Evidence is the screenshot; required for a bank transfer unless the
+	// amount due is 0.
 	Evidence            []byte
 	EvidenceContentType string
+}
+
+// normalizeDeclaration returns the payment method of d (a bank transfer by
+// default) and drops what a cash payment does not have: bank details and
+// evidence; cash needs its date. A bank transfer of an amount due needs its evidence.
+func normalizeDeclaration(d *Declaration, amountDue int64) (domain.PaymentMethod, error) {
+	method := d.Method
+	if method == "" {
+		method = domain.PaymentBankTransfer
+	}
+
+	switch {
+	case !method.IsValid():
+		return "", domain.ErrInvalidDeclaration
+	case method == domain.PaymentCash && d.PaidAt == nil:
+		return "", domain.ErrInvalidDeclaration // a cash payment needs the date it was handed over
+	case method == domain.PaymentCash:
+		d.PayerBank, d.PayerAccount, d.BankTransactionRef, d.Evidence = "", "", "", nil
+	case amountDue > 0 && len(d.Evidence) == 0:
+		return "", domain.ErrEvidenceRequired
+	}
+
+	return method, nil
 }
 
 // Submit declares the transfer of a quoted request and sends it for review.
@@ -365,8 +403,9 @@ func (uc *PaymentUseCase) Submit(ctx context.Context, userID, requestID string, 
 		return RequestView{}, toAppError("submit payment", domain.ErrInvalidDeclaration)
 	}
 
-	if req.AmountDue > 0 && len(d.Evidence) == 0 {
-		return RequestView{}, toAppError("submit payment", domain.ErrEvidenceRequired)
+	method, err := normalizeDeclaration(&d, req.AmountDue)
+	if err != nil {
+		return RequestView{}, toAppError("submit payment", err)
 	}
 
 	if len(d.Evidence) > 0 {
@@ -380,6 +419,7 @@ func (uc *PaymentUseCase) Submit(ctx context.Context, userID, requestID string, 
 
 	now := uc.opts.now().UTC()
 	amount := d.TransferredAmount
+	req.PaymentMethod = method
 	req.PayerName, req.PayerBank, req.PayerAccount = payer, strings.TrimSpace(d.PayerBank), strings.TrimSpace(d.PayerAccount)
 	req.TransferredAmount, req.BankTransactionRef, req.PaidAt = &amount, strings.TrimSpace(d.BankTransactionRef), d.PaidAt
 	req.AmountMismatch = amount != req.AmountDue

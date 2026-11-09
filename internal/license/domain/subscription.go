@@ -6,11 +6,11 @@ import (
 	"time"
 )
 
-// Durations of the subscription lifecycle. The trial length is FR-LIC-01;
-// the reminder window is LLD Section 3.2. The grace period is not fixed by
-// the design documents; 7 days is a placeholder until Product decides.
+// Durations of the subscription lifecycle. The trial length is the trial
+// plan's TrialDays (FR-LIC-01); the reminder window is LLD Section 3.2. The
+// grace period is not fixed by the design documents; 7 days is a placeholder
+// until Product decides.
 const (
-	TrialPeriod        = 14 * 24 * time.Hour
 	ExpiringSoonWindow = 7 * 24 * time.Hour
 	GracePeriod        = 7 * 24 * time.Hour
 	MaxExtensionDays   = 366
@@ -22,6 +22,7 @@ var (
 	ErrPlanNotFound          = errors.New("plan not found")
 	ErrPlanNotAvailable      = errors.New("this plan cannot be chosen")
 	ErrPlanCodeTaken         = errors.New("a plan with this code already exists")
+	ErrPlanHasSubscribers    = errors.New("the billing cycle cannot change while subscriptions use the plan")
 	ErrSubscriptionCancelled = errors.New("the subscription is cancelled")
 	ErrLimitReached          = errors.New("the plan limit is reached")
 	ErrInvalidExtension      = errors.New("extensions must be between 1 and 366 days")
@@ -34,9 +35,10 @@ func (e InvalidPlanError) Error() string { return fmt.Sprintf("plan field %s is 
 
 // Reasons of the errors above.
 const (
-	ReasonPlanLimitReached = "PLAN_LIMIT_REACHED"
-	ReasonPlanNotAvailable = "PLAN_NOT_AVAILABLE"
-	ReasonPlanCodeTaken    = "PLAN_CODE_TAKEN"
+	ReasonPlanLimitReached   = "PLAN_LIMIT_REACHED"
+	ReasonPlanNotAvailable   = "PLAN_NOT_AVAILABLE"
+	ReasonPlanCodeTaken      = "PLAN_CODE_TAKEN"
+	ReasonPlanHasSubscribers = "PLAN_HAS_SUBSCRIBERS"
 )
 
 // SubscriptionStatus is the lifecycle state of a subscription (LLD 3.1).
@@ -87,13 +89,16 @@ type Subscription struct {
 	// CreditBalance is the account credit (VND), applied automatically to
 	// the next payment (FR-LIC-09).
 	CreditBalance int64
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	// NextCreditExpiry is when the earliest unused credit lapses; set when
+	// the subscription is read for its owner, nil when there is no credit.
+	NextCreditExpiry *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
 }
 
-// NewTrial starts a TrialPeriod-long trial on the trial plan at start.
+// NewTrial starts a trial of the plan's TrialDays on the trial plan at start.
 func NewTrial(userID string, plan *Plan, start time.Time) *Subscription {
-	end := start.Add(TrialPeriod)
+	end := start.AddDate(0, 0, plan.TrialDays)
 
 	return &Subscription{
 		UserID:             userID,

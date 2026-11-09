@@ -127,6 +127,11 @@ func (uc *SubscriptionUseCase) GetMine(ctx context.Context, userID string) (*dom
 		return nil, Usage{}, err
 	}
 
+	sub.NextCreditExpiry, err = uc.subscriptions.NextCreditExpiry(ctx, userID, uc.opts.now().UTC())
+	if err != nil {
+		return nil, Usage{}, toAppError("read credit expiry", err)
+	}
+
 	return sub, usage, nil
 }
 

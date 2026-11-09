@@ -25,7 +25,7 @@ func expectCreate(d *deps, ro usecase.RepairOrderInfo) {
 	d.Settlements.EXPECT().FindByRepairOrderID(mock.Anything, garageID, repairOrderID).Return(nil, domain.ErrSettlementNotFound).Once()
 	d.RepairOrders.EXPECT().Get(mock.Anything, garageID, repairOrderID).Return(ro, nil).Once()
 	d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
-	d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID).Return(nil).Once()
+	d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "settlement").Return(nil).Once()
 	d.Sequences.EXPECT().Next(mock.Anything, garageID, "settlement", "QT-202609-{SEQ:4}").Return(1, nil).Once()
 	d.Settlements.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
 	d.Events.EXPECT().Publish(mock.Anything, usecase.EventSettlementCreated, garageID, "", mock.Anything).Return(nil).Once()

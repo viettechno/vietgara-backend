@@ -49,7 +49,7 @@ func NewStore() *Store {
 	}
 
 	for _, p := range []*domain.Plan{
-		{ID: "p-trial", Code: domain.TrialPlanCode, Name: "Trial", Currency: "VND", BillingCycle: domain.BillingCycleMonthly, MaxGarages: 1, MaxStaff: 5, MaxTransactionsPerDay: 2, Features: domain.AllFeatures, Active: true},
+		{ID: "p-trial", Code: domain.TrialPlanCode, Name: "Trial", Currency: "VND", BillingCycle: domain.BillingCycleMonthly, MaxGarages: 1, MaxStaff: 5, MaxTransactionsPerDay: 2, TrialDays: 60, CountedKinds: domain.AllTransactionKinds, Features: domain.AllFeatures, Active: true},
 		{ID: "p-starter", Code: "starter", Name: "Starter", Price: 299000, Currency: "VND", BillingCycle: domain.BillingCycleMonthly, MaxGarages: 1, MaxStaff: 5, MaxTransactionsPerDay: 50, Features: []domain.Feature{domain.FeatureCustomers}, Public: true, Active: true, SortOrder: 10},
 		{ID: "p-pro", Code: "pro", Name: "Pro", Price: 599000, Currency: "VND", BillingCycle: domain.BillingCycleYearly, MaxGarages: 2, MaxStaff: 20, MaxTransactionsPerDay: 100, Features: domain.AllFeatures, Public: true, Active: true, SortOrder: 20},
 		{ID: "p-legacy", Code: "legacy", Name: "Legacy", Currency: "VND", BillingCycle: domain.BillingCycleMonthly, MaxGarages: 1, MaxStaff: 1, MaxTransactionsPerDay: 1, Active: false},
@@ -151,6 +151,22 @@ func (p Plans) Create(_ context.Context, plan *domain.Plan) error {
 	p.s.plans[plan.ID] = &copied
 
 	return nil
+}
+
+// CountSubscribers implements usecase.PlanRepository.
+func (p Plans) CountSubscribers(_ context.Context, planID string) (int, error) {
+	p.s.mu.Lock()
+	defer p.s.mu.Unlock()
+
+	n := 0
+
+	for _, sub := range p.s.subs {
+		if sub.PlanID == planID {
+			n++
+		}
+	}
+
+	return n, nil
 }
 
 // Update implements usecase.PlanRepository.
@@ -631,6 +647,115 @@ func (s *Store) ListCredit(_ context.Context, userID string) ([]*domain.CreditEn
 		if e.UserID == userID {
 			copied := *e
 			out = append(out, &copied)
+		}
+	}
+
+	return out, nil
+}
+
+// lots returns the user's ledger entries that still hold credit, earliest
+// expiry first. The caller holds the lock.
+func (s *Store) lots(userID string) []*domain.CreditEntry {
+	var out []*domain.CreditEntry
+
+	for _, e := range s.ledger {
+		if e.UserID == userID && e.Remaining > 0 && e.ExpiresAt != nil {
+			out = append(out, e)
+		}
+	}
+
+	slices.SortStableFunc(out, func(a, b *domain.CreditEntry) int { return a.ExpiresAt.Compare(*b.ExpiresAt) })
+
+	return out
+}
+
+// AvailableCredit implements usecase.PaymentRepository.
+func (s *Store) AvailableCredit(_ context.Context, userID string, now time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var total int64
+
+	for _, e := range s.lots(userID) {
+		if e.ExpiresAt.After(now) {
+			total += e.Remaining
+		}
+	}
+
+	return total, nil
+}
+
+// NextCreditExpiry implements usecase.PaymentRepository.
+func (s *Store) NextCreditExpiry(_ context.Context, userID string, now time.Time) (*time.Time, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for _, e := range s.lots(userID) {
+		if e.ExpiresAt.After(now) {
+			at := *e.ExpiresAt
+
+			return &at, nil
+		}
+	}
+
+	return nil, nil //nolint:nilnil // no credit is an answer
+}
+
+// TakeCredit implements usecase.PaymentRepository.
+func (s *Store) TakeCredit(_ context.Context, userID string, amount int64, now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var usable []*domain.CreditEntry
+
+	var total int64
+
+	for _, e := range s.lots(userID) {
+		if e.ExpiresAt.After(now) {
+			usable, total = append(usable, e), total+e.Remaining
+		}
+	}
+
+	if total < amount {
+		return domain.ErrCreditExpired
+	}
+
+	for _, e := range usable {
+		take := min(amount, e.Remaining)
+		e.Remaining -= take
+		amount -= take
+	}
+
+	return nil
+}
+
+// LapseCredit implements usecase.PaymentRepository.
+func (s *Store) LapseCredit(_ context.Context, userID string, now time.Time) (int64, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var lapsed int64
+
+	for _, e := range s.lots(userID) {
+		if !e.ExpiresAt.After(now) {
+			lapsed += e.Remaining
+			e.Remaining = 0
+		}
+	}
+
+	return lapsed, nil
+}
+
+// UsersWithLapsedCredit implements usecase.PaymentRepository.
+func (s *Store) UsersWithLapsedCredit(_ context.Context, now time.Time, limit int) ([]string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	var out []string
+
+	for _, e := range s.ledger {
+		if e.Remaining > 0 && e.ExpiresAt != nil && !e.ExpiresAt.After(now) && !slices.Contains(out, e.UserID) && len(out) < limit {
+			out = append(out, e.UserID)
 		}
 	}
 

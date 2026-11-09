@@ -92,22 +92,64 @@ func cycleFromProto(c licensev1.BillingCycle) domain.BillingCycle {
 	}
 }
 
+var transactionKinds = map[domain.TransactionKind]licensev1.TransactionKind{
+	domain.TransactionRepairOrder: licensev1.TransactionKind_TRANSACTION_KIND_REPAIR_ORDER,
+	domain.TransactionQuote:       licensev1.TransactionKind_TRANSACTION_KIND_QUOTE,
+	domain.TransactionSettlement:  licensev1.TransactionKind_TRANSACTION_KIND_SETTLEMENT,
+}
+
+func transactionKindsToProto(in []domain.TransactionKind) []licensev1.TransactionKind {
+	out := make([]licensev1.TransactionKind, 0, len(in))
+	for _, k := range in {
+		out = append(out, transactionKinds[k])
+	}
+
+	return out
+}
+
+// transactionKindsByProto is transactionKinds the other way round.
+var transactionKindsByProto = func() map[licensev1.TransactionKind]domain.TransactionKind {
+	out := make(map[licensev1.TransactionKind]domain.TransactionKind, len(transactionKinds))
+	for k, v := range transactionKinds {
+		out[v] = k
+	}
+
+	return out
+}()
+
+func transactionKindsFromProto(in []licensev1.TransactionKind) ([]domain.TransactionKind, bool) {
+	out := make([]domain.TransactionKind, 0, len(in))
+
+	for _, p := range in {
+		k, ok := transactionKindsByProto[p]
+		if !ok {
+			return nil, false
+		}
+
+		out = append(out, k)
+	}
+
+	return out, true
+}
+
 func planToProto(p *domain.Plan) *licensev1.Plan {
 	return &licensev1.Plan{
-		Id:           p.ID,
-		Code:         p.Code,
-		Name:         p.Name,
-		Description:  p.Description,
-		Price:        p.Price,
-		Currency:     p.Currency,
-		BillingCycle: cycleToProto(p.BillingCycle),
-		Limits:       limitsToProto(p.MaxGarages, p.MaxStaff, p.MaxTransactionsPerDay),
-		Features:     featuresToProto(p.Features),
-		IsPublic:     p.Public,
-		IsActive:     p.Active,
-		SortOrder:    int32(p.SortOrder), //nolint:gosec // small catalogue ordinal
-		CreatedAt:    converter.TimeToProto(p.CreatedAt),
-		UpdatedAt:    converter.TimeToProto(p.UpdatedAt),
+		Id:                      p.ID,
+		Code:                    p.Code,
+		Name:                    p.Name,
+		Description:             p.Description,
+		Price:                   p.Price,
+		Currency:                p.Currency,
+		BillingCycle:            cycleToProto(p.BillingCycle),
+		Limits:                  limitsToProto(p.MaxGarages, p.MaxStaff, p.MaxTransactionsPerDay),
+		TrialDays:               int32(p.TrialDays), //nolint:gosec // a trial lasts days
+		Features:                featuresToProto(p.Features),
+		CountedTransactionKinds: transactionKindsToProto(p.CountedKinds),
+		IsPublic:                p.Public,
+		IsActive:                p.Active,
+		SortOrder:               int32(p.SortOrder), //nolint:gosec // small catalogue ordinal
+		CreatedAt:               converter.TimeToProto(p.CreatedAt),
+		UpdatedAt:               converter.TimeToProto(p.UpdatedAt),
 	}
 }
 
@@ -151,6 +193,10 @@ func subscriptionToProto(s *domain.Subscription, usage *usecase.Usage) *licensev
 
 	out.CreditBalance, out.PeriodPaidAmount = s.CreditBalance, s.PeriodPaidAmount
 
+	if s.NextCreditExpiry != nil {
+		out.NextCreditExpiry = converter.TimeToProto(*s.NextCreditExpiry)
+	}
+
 	if usage != nil {
 		out.Usage = usageToProto(*usage)
 	}
@@ -192,6 +238,7 @@ const pathLimits = "limits"
 // planSettable are the plan fields admins may set; code only on create.
 var planSettable = []string{
 	"code", "name", "description", "price", "currency", "billing_cycle", pathLimits, "features", "is_public", "is_active", "sort_order",
+	"trial_days", "counted_transaction_kinds",
 }
 
 // planSetters copy one masked field of the API plan into PlanFields.
@@ -228,6 +275,20 @@ var planSetters = map[string]func(f *usecase.PlanFields, in *licensev1.Plan) err
 	},
 	"limits.max_transactions_per_day": func(f *usecase.PlanFields, in *licensev1.Plan) error {
 		setLimits(f, in.GetLimits(), "limits.max_transactions_per_day")
+		return nil
+	},
+	"trial_days": func(f *usecase.PlanFields, in *licensev1.Plan) error {
+		f.TrialDays = new(int(in.GetTrialDays()))
+		return nil
+	},
+	"counted_transaction_kinds": func(f *usecase.PlanFields, in *licensev1.Plan) error {
+		kinds, ok := transactionKindsFromProto(in.GetCountedTransactionKinds())
+		if !ok {
+			return apperror.Validation("countedTransactionKinds", apperror.IssueInvalid, "unknown transaction kind")
+		}
+
+		f.CountedKinds = &kinds
+
 		return nil
 	},
 	"features": func(f *usecase.PlanFields, in *licensev1.Plan) error {
@@ -300,6 +361,24 @@ var creditKinds = map[domain.CreditEntryKind]licensev1.CreditEntryKind{
 	domain.CreditEarned:     licensev1.CreditEntryKind_CREDIT_ENTRY_KIND_EARNED,
 	domain.CreditApplied:    licensev1.CreditEntryKind_CREDIT_ENTRY_KIND_APPLIED,
 	domain.CreditAdjustment: licensev1.CreditEntryKind_CREDIT_ENTRY_KIND_ADJUSTMENT,
+	domain.CreditExpired:    licensev1.CreditEntryKind_CREDIT_ENTRY_KIND_EXPIRED,
+}
+
+var paymentMethods = map[domain.PaymentMethod]licensev1.PaymentMethod{
+	domain.PaymentBankTransfer: licensev1.PaymentMethod_PAYMENT_METHOD_BANK_TRANSFER,
+	domain.PaymentCash:         licensev1.PaymentMethod_PAYMENT_METHOD_CASH,
+}
+
+// paymentMethodFromProto maps the declared method; unspecified is a bank
+// transfer, the default.
+func paymentMethodFromProto(m licensev1.PaymentMethod) domain.PaymentMethod {
+	for k, v := range paymentMethods {
+		if v == m {
+			return k
+		}
+	}
+
+	return domain.PaymentBankTransfer
 }
 
 func paymentRequestToProto(v usecase.RequestView) *licensev1.PlanPaymentRequest {
@@ -313,8 +392,11 @@ func paymentRequestToProto(v usecase.RequestView) *licensev1.PlanPaymentRequest 
 			BankName: r.Instructions.BankName, AccountNumber: r.Instructions.AccountNumber,
 			AccountHolder: r.Instructions.AccountHolder, Branch: r.Instructions.Branch,
 			TransferInstructions: r.Instructions.TransferInstructions, QrUrl: v.QRURL,
+			SupportPhone: r.Instructions.SupportPhone, SupportEmail: r.Instructions.SupportEmail,
+			SupportZalo: r.Instructions.SupportZalo,
 		},
-		PayerName: r.PayerName, PayerBank: r.PayerBank, PayerAccount: r.PayerAccount,
+		PaymentMethod: paymentMethods[r.PaymentMethod],
+		PayerName:     r.PayerName, PayerBank: r.PayerBank, PayerAccount: r.PayerAccount,
 		BankTransactionRef: r.BankTransactionRef, EvidenceUrl: v.EvidenceURL, AmountMismatch: r.AmountMismatch,
 		ReviewNote: r.ReviewNote, RejectionReason: r.RejectionReason, CreatedAt: converter.TimeToProto(r.CreatedAt),
 	}
@@ -339,10 +421,16 @@ func paymentRequestToProto(v usecase.RequestView) *licensev1.PlanPaymentRequest 
 }
 
 func creditEntryToProto(e *domain.CreditEntry) *licensev1.CreditLedgerEntry {
-	return &licensev1.CreditLedgerEntry{
+	out := &licensev1.CreditLedgerEntry{
 		Kind: creditKinds[e.Kind], Amount: e.Amount, BalanceAfter: e.BalanceAfter,
 		PlanPaymentRequestId: e.PlanPaymentRequestID, Note: e.Note, CreatedAt: converter.TimeToProto(e.CreatedAt),
+		Remaining: e.Remaining,
 	}
+	if e.ExpiresAt != nil {
+		out.ExpiresAt = converter.TimeToProto(*e.ExpiresAt)
+	}
+
+	return out
 }
 
 func settingsToProto(v usecase.SettingsView) *licensev1.PlatformPaymentSettings {
@@ -351,6 +439,7 @@ func settingsToProto(v usecase.SettingsView) *licensev1.PlatformPaymentSettings 
 	return &licensev1.PlatformPaymentSettings{
 		BankName: s.BankName, AccountNumber: s.AccountNumber, AccountHolder: s.AccountHolder, Branch: s.Branch,
 		TransferInstructions: s.TransferInstructions, QrUrl: v.QRURL, UpdatedAt: converter.TimeToProto(s.UpdatedAt),
+		SupportPhone: s.SupportPhone, SupportEmail: s.SupportEmail, SupportZalo: s.SupportZalo,
 	}
 }
 

@@ -3,6 +3,7 @@ package handler_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -295,4 +296,127 @@ func TestPaymentReviewHandlers(t *testing.T) {
 
 	_, err = srv.GetMyPlanPaymentRequest(as(t, "stranger"), &licensev1.GetMyPlanPaymentRequestRequest{RequestId: id})
 	assert.Equal(t, "NOT_FOUND", reason(err))
+}
+
+// The plan fields of the plan review: trial days and the counted kinds (FR-LIC-05).
+func TestPlanTrialDaysAndCountedKinds(t *testing.T) {
+	t.Parallel()
+
+	srv, e := newServer()
+	ctx := as(t, "admin")
+
+	plan := &licensev1.Plan{
+		Code: "pro2", Name: "Pro 2", Currency: "VND", BillingCycle: licensev1.BillingCycle_BILLING_CYCLE_YEARLY,
+		Limits: &licensev1.PlanLimits{MaxGarages: 3, MaxStaff: 20, MaxTransactionsPerDay: 150}, IsActive: true,
+	}
+
+	created, err := srv.CreatePlan(ctx, &licensev1.CreatePlanRequest{Plan: plan})
+	require.NoError(t, err)
+	assert.Equal(t, []licensev1.TransactionKind{licensev1.TransactionKind_TRANSACTION_KIND_REPAIR_ORDER}, created.GetPlan().GetCountedTransactionKinds(),
+		"left out, repair orders count")
+	assert.Zero(t, created.GetPlan().GetTrialDays())
+
+	plan.Code, plan.CountedTransactionKinds = "pro3", []licensev1.TransactionKind{
+		licensev1.TransactionKind_TRANSACTION_KIND_QUOTE, licensev1.TransactionKind_TRANSACTION_KIND_SETTLEMENT,
+	}
+
+	created, err = srv.CreatePlan(ctx, &licensev1.CreatePlanRequest{Plan: plan})
+	require.NoError(t, err)
+	assert.Equal(t, plan.GetCountedTransactionKinds(), created.GetPlan().GetCountedTransactionKinds())
+
+	updated, err := srv.UpdatePlan(ctx, &licensev1.UpdatePlanRequest{
+		PlanId: created.GetPlan().GetId(), UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"counted_transaction_kinds"}},
+		Plan: &licensev1.Plan{CountedTransactionKinds: []licensev1.TransactionKind{licensev1.TransactionKind_TRANSACTION_KIND_REPAIR_ORDER}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, []licensev1.TransactionKind{licensev1.TransactionKind_TRANSACTION_KIND_REPAIR_ORDER}, updated.GetPlan().GetCountedTransactionKinds())
+
+	_, err = srv.UpdatePlan(ctx, &licensev1.UpdatePlanRequest{
+		PlanId: created.GetPlan().GetId(), UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"counted_transaction_kinds"}},
+		Plan: &licensev1.Plan{CountedTransactionKinds: []licensev1.TransactionKind{99}},
+	})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err))
+
+	trial, err := srv.UpdatePlan(ctx, &licensev1.UpdatePlanRequest{
+		PlanId: "p-trial", UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"trial_days"}}, Plan: &licensev1.Plan{TrialDays: 14},
+	})
+	require.NoError(t, err)
+	assert.EqualValues(t, 14, trial.GetPlan().GetTrialDays())
+
+	_, err = srv.UpdatePlan(ctx, &licensev1.UpdatePlanRequest{
+		PlanId: created.GetPlan().GetId(), UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"trial_days"}}, Plan: &licensev1.Plan{TrialDays: 14},
+	})
+	assert.Equal(t, "VALIDATION_ERROR", reason(err), "only the trial plan has trial days")
+
+	// The cycle of a plan with subscribers is locked.
+	require.NoError(t, e.Subscriptions.EnsureTrial(ctx, "user-1"))
+
+	_, err = srv.UpdatePlan(ctx, &licensev1.UpdatePlanRequest{
+		PlanId: "p-trial", UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"billing_cycle"}},
+		Plan: &licensev1.Plan{BillingCycle: licensev1.BillingCycle_BILLING_CYCLE_YEARLY},
+	})
+	assert.Equal(t, "PLAN_HAS_SUBSCRIBERS", reason(err))
+}
+
+// Credit expiry, cash payments and the support contact reach the API (FR-LIC-07, FR-LIC-09, FR-LIC-10).
+func TestCreditExpiryCashAndSupportContact(t *testing.T) {
+	t.Parallel()
+
+	srv, e := newServer()
+	admin, owner := as(t, "admin"), as(t, "user-1")
+
+	_, err := srv.UpdatePlatformPaymentSettings(admin, &licensev1.UpdatePlatformPaymentSettingsRequest{
+		Settings:   &licensev1.PlatformPaymentSettings{SupportPhone: "0900000000", SupportEmail: "help@vietgara.vn", SupportZalo: "0900000001"},
+		UpdateMask: &fieldmaskpb.FieldMask{Paths: []string{"support_phone", "support_email", "support_zalo"}},
+	})
+	require.NoError(t, err)
+
+	instructions, err := srv.GetPaymentInstructions(owner, &licensev1.GetPaymentInstructionsRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, "0900000000", instructions.GetInstructions().GetSupportPhone())
+	assert.Equal(t, "help@vietgara.vn", instructions.GetInstructions().GetSupportEmail())
+	assert.Equal(t, "0900000001", instructions.GetInstructions().GetSupportZalo())
+
+	require.NoError(t, e.Subscriptions.EnsureTrial(owner, "user-1"))
+
+	created, err := srv.CreatePlanPaymentRequest(owner, &licensev1.CreatePlanPaymentRequestRequest{
+		PlanId: "p-pro", Kind: licensev1.PlanPaymentKind_PLAN_PAYMENT_KIND_CHANGE,
+	})
+	require.NoError(t, err)
+
+	submitted, err := srv.SubmitPlanPayment(owner, &licensev1.SubmitPlanPaymentRequest{
+		RequestId: created.GetRequest().GetId(), PayerName: "Nguyen Van A", TransferredAmount: created.GetRequest().GetAmountDue(),
+		PaymentMethod: licensev1.PaymentMethod_PAYMENT_METHOD_CASH, PaidAt: timestamppb.Now(),
+	})
+	require.NoError(t, err)
+	assert.Equal(t, licensev1.PaymentMethod_PAYMENT_METHOD_CASH, submitted.GetRequest().GetPaymentMethod())
+
+	_, err = srv.ApprovePlanPayment(admin, &licensev1.ApprovePlanPaymentRequest{RequestId: created.GetRequest().GetId(), Note: "cash"})
+	require.NoError(t, err)
+
+	sub, err := srv.GetMySubscription(owner, &licensev1.GetMySubscriptionRequest{})
+	require.NoError(t, err)
+	assert.Nil(t, sub.GetSubscription().GetNextCreditExpiry(), "no credit yet")
+
+	_, err = srv.AdjustCredit(admin, &licensev1.AdjustCreditRequest{SubscriptionId: sub.GetSubscription().GetId(), Amount: 40000, Note: "goodwill"})
+	require.NoError(t, err)
+
+	sub, err = srv.GetMySubscription(owner, &licensev1.GetMySubscriptionRequest{})
+	require.NoError(t, err)
+	assert.WithinDuration(t, e.Now.AddDate(1, 0, 0), sub.GetSubscription().GetNextCreditExpiry().AsTime(), time.Minute)
+
+	ledger, err := srv.ListMyCreditLedger(owner, &licensev1.ListMyCreditLedgerRequest{})
+	require.NoError(t, err)
+	require.NotEmpty(t, ledger.GetData())
+	assert.EqualValues(t, 40000, ledger.GetData()[0].GetRemaining())
+	assert.NotNil(t, ledger.GetData()[0].GetExpiresAt())
+
+	// The credit lapses; the job writes an EXPIRED entry.
+	e.Now = e.Now.AddDate(1, 1, 0)
+	require.NoError(t, e.Expiry.Run(owner))
+
+	ledger, err = srv.ListMyCreditLedger(owner, &licensev1.ListMyCreditLedgerRequest{})
+	require.NoError(t, err)
+	assert.Equal(t, licensev1.CreditEntryKind_CREDIT_ENTRY_KIND_EXPIRED, ledger.GetData()[0].GetKind())
+	assert.EqualValues(t, -40000, ledger.GetData()[0].GetAmount())
 }

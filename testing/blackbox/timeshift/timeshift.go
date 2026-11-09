@@ -75,6 +75,16 @@ func AgeRequest(tb testing.TB, staffEmail string) {
 		AND staff_user_id = (SELECT id FROM users WHERE email = $1)`, staffEmail)
 }
 
+// ExpireCredit is the credit helper: everything that is left of the owner's
+// account credit lapsed one minute ago. The expiry job then writes the
+// "expired" entry.
+func ExpireCredit(tb testing.TB, ownerEmail string) {
+	tb.Helper()
+
+	exec(tb, `UPDATE credit_ledger SET expires_at = now() - interval '1 minute'
+		WHERE remaining > 0 AND user_id = (SELECT id FROM users WHERE email = $1)`, ownerEmail)
+}
+
 // AgeReceivable is the receivable helper: the due date of the receivable of
 // the settlement moves to a number of days in the past (garage time is not needed: the
 // date is compared with today in the garage's zone, so a day more or less

@@ -12,10 +12,13 @@ import (
 
 var start = time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
 
+// trialLength is the length of the trial of trialPlan.
+const trialLength = 14 * 24 * time.Hour
+
 func trialPlan() *domain.Plan {
 	return &domain.Plan{
 		ID: "plan-trial", Code: domain.TrialPlanCode, MaxGarages: 1, MaxStaff: 5, MaxTransactionsPerDay: 50,
-		Features: []domain.Feature{domain.FeatureQuotes, domain.FeatureInventory}, Active: true,
+		TrialDays: 14, Features: []domain.Feature{domain.FeatureQuotes, domain.FeatureInventory}, Active: true,
 	}
 }
 
@@ -31,7 +34,7 @@ func TestSubscriptionLifecycleOverTime(t *testing.T) {
 	t.Parallel()
 
 	sub := domain.NewTrial("user-1", trialPlan(), start)
-	end := start.Add(domain.TrialPeriod)
+	end := start.Add(trialLength)
 
 	require.Equal(t, domain.StatusTrial, sub.Status)
 	require.Equal(t, end, *sub.TrialEndAt)
@@ -80,7 +83,7 @@ func TestChangePlanAndExtend(t *testing.T) {
 
 	trial := domain.NewTrial("user-2", trialPlan(), start)
 	require.NoError(t, trial.Extend(3, start))
-	assert.Equal(t, start.Add(domain.TrialPeriod+72*time.Hour), trial.CurrentPeriodEnd)
+	assert.Equal(t, start.Add(trialLength+72*time.Hour), trial.CurrentPeriodEnd)
 	assert.Equal(t, trial.CurrentPeriodEnd, *trial.TrialEndAt)
 
 	late := start.Add(60 * 24 * time.Hour)
@@ -241,7 +244,7 @@ func TestQuotePayment(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		assert.Equal(t, tt.want, domain.QuotePayment(tt.sub, tt.plan, tt.kind, tt.at), tt.name)
+		assert.Equal(t, tt.want, domain.QuotePayment(tt.sub, tt.plan, tt.kind, tt.sub.CreditBalance, tt.at), tt.name)
 	}
 }
 
@@ -324,4 +327,67 @@ func TestPaymentKindAndStatus(t *testing.T) {
 	settings := domain.PaymentSettings{BankName: "VCB", QRFileID: "f-1"}
 	assert.Equal(t, "VCB", settings.Instructions().BankName)
 	assert.Equal(t, "f-1", settings.Instructions().QRFileID)
+}
+
+func TestPlanValidateTrialDaysAndKinds(t *testing.T) {
+	t.Parallel()
+
+	valid := func(mod func(p *domain.Plan)) error {
+		p := &domain.Plan{
+			Code: "pro", Name: "Pro", Currency: "VND", BillingCycle: domain.BillingCycleYearly,
+			MaxGarages: 1, MaxStaff: 1, MaxTransactionsPerDay: 1, CountedKinds: []domain.TransactionKind{domain.TransactionRepairOrder},
+		}
+		mod(p)
+
+		return p.Validate()
+	}
+
+	require.NoError(t, valid(func(*domain.Plan) {}))
+	require.NoError(t, valid(func(p *domain.Plan) { p.Code, p.TrialDays = domain.TrialPlanCode, 60 }), "the trial plan has trial days")
+	require.Error(t, valid(func(p *domain.Plan) { p.Code = domain.TrialPlanCode }), "the trial plan needs trial days")
+	require.Error(t, valid(func(p *domain.Plan) { p.Code, p.TrialDays = domain.TrialPlanCode, domain.MaxTrialDays+1 }), "too long a trial")
+	require.Error(t, valid(func(p *domain.Plan) { p.TrialDays = 14 }), "only the trial plan has trial days")
+	require.Error(t, valid(func(p *domain.Plan) { p.CountedKinds = []domain.TransactionKind{"invoice"} }), "an unknown kind")
+	require.NoError(t, valid(func(p *domain.Plan) { p.CountedKinds = nil }), "a plan may count nothing")
+}
+
+func TestNewTrialLastsTheTrialPlansDays(t *testing.T) {
+	t.Parallel()
+
+	plan := trialPlan()
+	plan.TrialDays = 60
+
+	sub := domain.NewTrial("user-1", plan, start)
+	assert.Equal(t, start.AddDate(0, 0, 60), *sub.TrialEndAt)
+	assert.Equal(t, *sub.TrialEndAt, sub.CurrentPeriodEnd)
+}
+
+func TestCountsTransaction(t *testing.T) {
+	t.Parallel()
+
+	plan := &domain.Plan{CountedKinds: []domain.TransactionKind{domain.TransactionRepairOrder}}
+	assert.True(t, plan.CountsTransaction(domain.TransactionRepairOrder))
+	assert.False(t, plan.CountsTransaction(domain.TransactionQuote))
+
+	plan.Features = domain.AllFeatures
+	sub := &domain.Subscription{Status: domain.StatusActive, Plan: plan}
+	e := domain.NewEntitlements(sub)
+	assert.True(t, e.CountsTransaction(domain.TransactionRepairOrder))
+	assert.False(t, e.CountsTransaction(domain.TransactionSettlement))
+}
+
+func TestQuotePaymentCountsOnlyTheCreditGiven(t *testing.T) {
+	t.Parallel()
+
+	plan := &domain.Plan{ID: "p", Code: "pro", Price: 600000, BillingCycle: domain.BillingCycleYearly, Public: true, Active: true}
+	sub := activeSubscription(600000, 500000)
+
+	// The balance still shows 500,000 but all of it lapsed: nothing applies.
+	q := domain.QuotePayment(sub, plan, domain.PaymentRenew, 0, start.AddDate(0, 0, 25))
+	assert.Zero(t, q.CreditApplied)
+	assert.Equal(t, int64(600000), q.AmountDue)
+
+	q = domain.QuotePayment(sub, plan, domain.PaymentRenew, 200000, start.AddDate(0, 0, 25))
+	assert.Equal(t, int64(200000), q.CreditApplied)
+	assert.Equal(t, int64(400000), q.AmountDue)
 }

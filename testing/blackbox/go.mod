@@ -6,8 +6,9 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.2
+	github.com/ledongthuc/pdf v0.0.0-20261020125853-5e46805f718e
 	github.com/stretchr/testify v1.12.1
-	github.com/viettechno/vietgara-proto v1.22.1-0.20261105132355-d8c348a70ba5
+	github.com/viettechno/vietgara-proto v1.24.0
 	github.com/viettechno/vietgara-testdata v0.4.0
 	github.com/xuri/excelize/v2 v2.11.1-0.20261003002531-6258dcebc4e2
 	google.golang.org/protobuf v1.36.12
@@ -18,7 +19,6 @@ require (
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/kr/text v0.2.0 // indirect
-	github.com/ledongthuc/pdf v0.0.0-20261020125853-5e46805f718e // indirect
 	github.com/richardlehane/mscfb v1.0.8 // indirect
 	github.com/richardlehane/msoleps v1.0.6 // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect

@@ -21,8 +21,8 @@ import (
 
 const (
 	planColumns = `p.id, p.code, p.name, p.description, p.price, p.currency, p.billing_cycle,
-		p.max_garages, p.max_staff, p.max_transactions_per_day, p.features::text[], p.is_public, p.is_active,
-		p.sort_order, p.created_at, p.updated_at`
+		p.max_garages, p.max_staff, p.max_transactions_per_day, p.counted_transaction_kinds::text[], p.trial_days,
+		p.features::text[], p.is_public, p.is_active, p.sort_order, p.created_at, p.updated_at`
 
 	subscriptionColumns = `s.id, s.user_id, s.plan_id, s.status, s.trial_end_at,
 		s.current_period_start, s.current_period_end, s.grace_period_end, s.auto_renew,
@@ -58,16 +58,27 @@ func planDest(p *domain.Plan) (dest []any, finish func()) {
 	var (
 		cycle    string
 		features []string
+		kinds    []string
+		trial    *int32
 	)
 
 	dest = []any{
 		&p.ID, &p.Code, &p.Name, &p.Description, &p.Price, &p.Currency, &cycle,
-		&p.MaxGarages, &p.MaxStaff, &p.MaxTransactionsPerDay, &features, &p.Public, &p.Active,
+		&p.MaxGarages, &p.MaxStaff, &p.MaxTransactionsPerDay, &kinds, &trial, &features, &p.Public, &p.Active,
 		&p.SortOrder, &p.CreatedAt, &p.UpdatedAt,
 	}
 
 	return dest, func() {
 		p.BillingCycle = domain.BillingCycle(cycle)
+
+		if trial != nil {
+			p.TrialDays = int(*trial)
+		}
+
+		p.CountedKinds = make([]domain.TransactionKind, 0, len(kinds))
+		for _, k := range kinds {
+			p.CountedKinds = append(p.CountedKinds, domain.TransactionKind(k))
+		}
 
 		p.Features = make([]domain.Feature, 0, len(features))
 		for _, f := range features {
@@ -170,6 +181,26 @@ func (r *PostgresPlanRepository) FindByCode(ctx context.Context, code string) (*
 		`SELECT `+planColumns+` FROM plans p WHERE p.code = $1`, code))
 }
 
+func kindStrings(kinds []domain.TransactionKind) []string {
+	out := make([]string, 0, len(kinds))
+	for _, k := range kinds {
+		out = append(out, string(k))
+	}
+
+	return out
+}
+
+// trialDays maps a plan's TrialDays to its nullable column.
+func trialDays(p *domain.Plan) *int32 {
+	if p.TrialDays == 0 {
+		return nil
+	}
+
+	days := int32(p.TrialDays) //nolint:gosec // validated to a small positive number
+
+	return &days
+}
+
 func featureStrings(features []domain.Feature) []string {
 	out := make([]string, 0, len(features))
 	for _, f := range features {
@@ -183,11 +214,12 @@ func featureStrings(features []domain.Feature) []string {
 func (r *PostgresPlanRepository) Create(ctx context.Context, p *domain.Plan) error {
 	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
 		INSERT INTO plans (code, name, description, price, currency, billing_cycle, max_garages, max_staff,
-			max_transactions_per_day, features, is_public, is_active, sort_order)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::plan_feature[], $11, $12, $13)
+			max_transactions_per_day, counted_transaction_kinds, trial_days, features, is_public, is_active, sort_order)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::transaction_kind[], $11, $12::plan_feature[], $13, $14, $15)
 		RETURNING id, created_at, updated_at`,
 		p.Code, p.Name, p.Description, p.Price, p.Currency, string(p.BillingCycle), p.MaxGarages, p.MaxStaff,
-		p.MaxTransactionsPerDay, featureStrings(p.Features), p.Public, p.Active, p.SortOrder,
+		p.MaxTransactionsPerDay, kindStrings(p.CountedKinds), trialDays(p), featureStrings(p.Features), p.Public, p.Active,
+		p.SortOrder,
 	).Scan(&p.ID, &p.CreatedAt, &p.UpdatedAt)
 
 	var pgErr *pgconn.PgError
@@ -202,18 +234,30 @@ func (r *PostgresPlanRepository) Create(ctx context.Context, p *domain.Plan) err
 func (r *PostgresPlanRepository) Update(ctx context.Context, p *domain.Plan) error {
 	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `
 		UPDATE plans SET name = $2, description = $3, price = $4, currency = $5, billing_cycle = $6, max_garages = $7,
-			max_staff = $8, max_transactions_per_day = $9, features = $10::plan_feature[], is_public = $11,
-			is_active = $12, sort_order = $13, updated_at = now()
+			max_staff = $8, max_transactions_per_day = $9, counted_transaction_kinds = $10::transaction_kind[],
+			trial_days = $11, features = $12::plan_feature[], is_public = $13, is_active = $14, sort_order = $15,
+			updated_at = now()
 		WHERE id = $1
 		RETURNING updated_at`,
 		p.ID, p.Name, p.Description, p.Price, p.Currency, string(p.BillingCycle), p.MaxGarages, p.MaxStaff,
-		p.MaxTransactionsPerDay, featureStrings(p.Features), p.Public, p.Active, p.SortOrder,
+		p.MaxTransactionsPerDay, kindStrings(p.CountedKinds), trialDays(p), featureStrings(p.Features), p.Public, p.Active,
+		p.SortOrder,
 	).Scan(&p.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.ErrPlanNotFound
 	}
 
 	return err
+}
+
+// CountSubscribers returns how many subscriptions are on the plan.
+func (r *PostgresPlanRepository) CountSubscribers(ctx context.Context, planID string) (int, error) {
+	var n int
+
+	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx,
+		`SELECT count(*) FROM subscriptions WHERE plan_id = $1`, planID).Scan(&n)
+
+	return n, err
 }
 
 // CreateIfAbsent inserts s unless the user has a subscription already.

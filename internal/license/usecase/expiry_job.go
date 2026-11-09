@@ -85,8 +85,47 @@ func (j *ExpiryJob) Run(ctx context.Context) error {
 		}
 	}
 
+	if err := j.expireCredit(ctx, now); err != nil {
+		errs = append(errs, err)
+	}
+
 	if err := j.remindReviewers(ctx, now); err != nil {
 		errs = append(errs, err)
+	}
+
+	return errors.Join(errs...)
+}
+
+// creditBatch bounds how many owners one run expires credit for; the next
+// run continues.
+const creditBatch = 500
+
+// expireCredit expires the credit that lapsed one year after it was earned
+// (FR-LIC-09), one owner per transaction under the subscription's lock.
+func (j *ExpiryJob) expireCredit(ctx context.Context, now time.Time) error {
+	userIDs, err := j.payments.UsersWithLapsedCredit(ctx, now, creditBatch)
+	if err != nil {
+		return err
+	}
+
+	var errs []error
+
+	for _, userID := range userIDs {
+		err := j.tx.WithTransaction(ctx, platformdb.UserScope(userID), func(ctx context.Context) error {
+			sub, err := j.subscriptions.LockByUserID(ctx, userID)
+			if err != nil {
+				return err
+			}
+
+			if err := lapseCredit(ctx, j.payments, j.sync.events, sub, now); err != nil {
+				return err
+			}
+
+			return j.subscriptions.Update(ctx, sub)
+		})
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
 
 	return errors.Join(errs...)

@@ -23,7 +23,7 @@ var (
 )
 
 func planRow() []any {
-	return []any{"p-1", "pro", "Pro", "", int64(599000), "VND", "monthly", 2, 20, 100, []string{"quotes", "reports"}, true, true, 20, now, now}
+	return []any{"p-1", "pro", "Pro", "", int64(599000), "VND", "monthly", 2, 20, 100, []string{"repair_order", "quote"}, nil, []string{"quotes", "reports"}, true, true, 20, now, now}
 }
 
 func subRow() []any {
@@ -34,7 +34,9 @@ func TestPlanRepository(t *testing.T) {
 	t.Parallel()
 
 	repo := repository.NewPostgresPlanRepository(nil)
-	plan := &domain.Plan{Code: "x", Features: []domain.Feature{domain.FeatureQuotes}}
+	plan := &domain.Plan{
+		Code: "x", Features: []domain.Feature{domain.FeatureQuotes}, CountedKinds: []domain.TransactionKind{domain.TransactionRepairOrder},
+	}
 
 	tx := dbtest.New(t).
 		ExpectQuery("p.is_public AND p.is_active", dbtest.NewRows(planRow()), nil).
@@ -43,7 +45,8 @@ func TestPlanRepository(t *testing.T) {
 		ExpectQueryRow("p.id = $1", dbtest.ErrRow(pgx.ErrNoRows)).
 		ExpectQueryRow("p.code = $1", dbtest.ErrRow(errBoom)).
 		ExpectQueryRow("INSERT INTO plans", dbtest.Row("p-2", now, now)).WithArgs(func(args []any) {
-		assert.Equal(t, []string{"quotes"}, args[9])
+		assert.Equal(t, []string{"repair_order"}, args[9])
+		assert.Equal(t, []string{"quotes"}, args[11])
 	}).
 		ExpectQueryRow("INSERT INTO plans", dbtest.ErrRow(dbtest.UniqueViolation("plans_code_key"))).
 		ExpectQueryRow("UPDATE plans", dbtest.Row(now)).
@@ -55,6 +58,8 @@ func TestPlanRepository(t *testing.T) {
 	require.Len(t, plans, 1)
 	assert.Equal(t, []domain.Feature{domain.FeatureQuotes, domain.FeatureReports}, plans[0].Features)
 	assert.Equal(t, domain.BillingCycleMonthly, plans[0].BillingCycle)
+	assert.Equal(t, []domain.TransactionKind{domain.TransactionRepairOrder, domain.TransactionQuote}, plans[0].CountedKinds)
+	assert.Zero(t, plans[0].TrialDays)
 
 	_, err = repo.ListAll(ctx)
 	require.ErrorIs(t, err, errBoom)

@@ -63,13 +63,14 @@ func TestEmailSignUp(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, verified.GetUser().GetId(), garage.GetOwnerUserId())
 
-	// Verification starts the 14-day free trial (FR-LIC-01).
+	// Verification starts the free trial (FR-LIC-01): 60 days, or 14 while the
+	// trial-length scenario of the license package has the setting changed.
 	sub, err := api.WithToken(verified.GetAccessToken()).MySubscription(ctx)
 	require.NoError(t, err)
 	assert.Equal(t, "trial", sub.GetPlan().GetCode())
 	assert.Equal(t, licensev1.SubscriptionStatus_SUBSCRIPTION_STATUS_TRIAL, sub.GetStatus())
 	trialEnd := sub.GetTrialEndAt().AsTime()
-	assert.WithinRange(t, trialEnd, time.Now().Add(13*24*time.Hour), time.Now().Add(15*24*time.Hour))
+	assert.WithinRange(t, trialEnd, time.Now().Add(13*24*time.Hour), time.Now().Add(61*24*time.Hour))
 
 	// Scenario: E2E-IAM-008 (partial): unknown e-mails and wrong passwords
 	// are indistinguishable, and e-mail letter case does not matter. The

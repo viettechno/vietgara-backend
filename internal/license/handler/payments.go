@@ -70,6 +70,7 @@ func (s *Server) SubmitPlanPayment(
 	ctx context.Context, req *licensev1.SubmitPlanPaymentRequest,
 ) (*licensev1.SubmitPlanPaymentResponse, error) {
 	d := usecase.Declaration{
+		Method:    paymentMethodFromProto(req.GetPaymentMethod()),
 		PayerName: req.GetPayerName(), PayerBank: req.GetPayerBank(), PayerAccount: req.GetPayerAccount(),
 		TransferredAmount: req.GetTransferredAmount(), BankTransactionRef: req.GetBankTransactionRef(),
 		Evidence: req.GetEvidence().GetContent(), EvidenceContentType: req.GetEvidence().GetContentType(),
@@ -129,6 +130,7 @@ func (s *Server) GetPaymentInstructions(
 	return &licensev1.GetPaymentInstructionsResponse{Instructions: &licensev1.PaymentInstructions{
 		BankName: instructions.BankName, AccountNumber: instructions.AccountNumber, AccountHolder: instructions.AccountHolder,
 		Branch: instructions.Branch, TransferInstructions: instructions.TransferInstructions, QrUrl: qr,
+		SupportPhone: instructions.SupportPhone, SupportEmail: instructions.SupportEmail, SupportZalo: instructions.SupportZalo,
 	}}, nil
 }
 
@@ -216,7 +218,9 @@ func (s *Server) GetPlatformPaymentSettings(
 }
 
 // settingsPaths are the settable paths of the platform payment details.
-var settingsPaths = []string{"bank_name", "account_number", "account_holder", "branch", "transfer_instructions"}
+var settingsPaths = []string{
+	"bank_name", "account_number", "account_holder", "branch", "transfer_instructions", "support_phone", "support_email", "support_zalo",
+}
 
 // UpdatePlatformPaymentSettings changes the fields named by the update mask.
 func (s *Server) UpdatePlatformPaymentSettings(
@@ -242,6 +246,12 @@ func (s *Server) UpdatePlatformPaymentSettings(
 			fields.Branch = new(in.GetBranch())
 		case "transfer_instructions":
 			fields.TransferInstructions = new(in.GetTransferInstructions())
+		case "support_phone":
+			fields.SupportPhone = new(in.GetSupportPhone())
+		case "support_email":
+			fields.SupportEmail = new(in.GetSupportEmail())
+		case "support_zalo":
+			fields.SupportZalo = new(in.GetSupportZalo())
 		default:
 			return nil, apperror.ToGRPCError(apperror.Validation("updateMask", apperror.IssueInvalid, "field "+path+" cannot be updated"))
 		}

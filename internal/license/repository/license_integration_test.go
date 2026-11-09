@@ -381,7 +381,7 @@ func TestLapsedCreditPagingOnPostgres(t *testing.T) {
 	rows, err := admin.QueryContext(ctx, `SELECT user_id::text FROM credit_ledger ORDER BY user_id`)
 	require.NoError(t, err)
 
-	defer rows.Close()
+	t.Cleanup(func() { _ = rows.Close() })
 
 	var want []string
 

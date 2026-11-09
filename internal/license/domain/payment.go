@@ -68,8 +68,8 @@ type PaymentInstructions struct {
 	SupportZalo  string `json:"support_zalo,omitempty"`
 }
 
-// PlanPaymentRequest is an owner's request to switch plan or renew, paid by
-// a manual bank transfer (FR-LIC-07).
+// PlanPaymentRequest is an owner's request to switch plans or renew, paid by
+// bank transfer or cash (FR-LIC-07).
 type PlanPaymentRequest struct {
 	ID             string
 	UserID         string
@@ -96,6 +96,7 @@ type PlanPaymentRequest struct {
 	PayerName          string
 	PayerBank          string
 	PayerAccount       string
+	CashNote           string
 	TransferredAmount  *int64
 	BankTransactionRef string
 	PaidAt             *time.Time

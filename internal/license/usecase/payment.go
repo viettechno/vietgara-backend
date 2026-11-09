@@ -54,7 +54,7 @@ type PaymentDeps struct {
 }
 
 // PaymentUseCase (FR-LIC-07..10) is the manual payment of plan changes and
-// renewals: the owner quotes and declares a transfer, a platform admin
+// renewals: the owner gets a quote and declares a transfer or cash payment; a platform admin
 // reviews it and the plan applies at once; account credit carries unused
 // value to the next payment.
 type PaymentUseCase struct {
@@ -349,11 +349,12 @@ func (uc *PaymentUseCase) mine(ctx context.Context, userID, requestID string, lo
 // Declaration is what the owner declares about the payment.
 type Declaration struct {
 	// Method defaults to a bank transfer; cash needs only the payer's name,
-	// the amount and the date.
+	// amount, date, and optional note.
 	Method             domain.PaymentMethod
 	PayerName          string
 	PayerBank          string
 	PayerAccount       string
+	CashNote           string
 	TransferredAmount  int64
 	BankTransactionRef string
 	PaidAt             *time.Time
@@ -372,13 +373,19 @@ func normalizeDeclaration(d *Declaration, amountDue int64) (domain.PaymentMethod
 		method = domain.PaymentBankTransfer
 	}
 
+	d.CashNote = strings.TrimSpace(d.CashNote)
+
 	switch {
 	case !method.IsValid():
+		return "", domain.ErrInvalidDeclaration
+	case utf8.RuneCountInString(d.CashNote) > maxNoteLength:
 		return "", domain.ErrInvalidDeclaration
 	case method == domain.PaymentCash && d.PaidAt == nil:
 		return "", domain.ErrInvalidDeclaration // a cash payment needs the date it was handed over
 	case method == domain.PaymentCash:
 		d.PayerBank, d.PayerAccount, d.BankTransactionRef, d.Evidence = "", "", "", nil
+	case d.CashNote != "":
+		return "", domain.ErrInvalidDeclaration
 	case amountDue > 0 && len(d.Evidence) == 0:
 		return "", domain.ErrEvidenceRequired
 	}
@@ -386,7 +393,7 @@ func normalizeDeclaration(d *Declaration, amountDue int64) (domain.PaymentMethod
 	return method, nil
 }
 
-// Submit declares the transfer of a quoted request and sends it for review.
+// Submit declares a quoted payment and sends it for review.
 // The platform admins are notified (FR-LIC-07).
 func (uc *PaymentUseCase) Submit(ctx context.Context, userID, requestID string, d Declaration) (RequestView, error) {
 	req, err := uc.mine(ctx, userID, requestID, true)
@@ -421,6 +428,7 @@ func (uc *PaymentUseCase) Submit(ctx context.Context, userID, requestID string, 
 	amount := d.TransferredAmount
 	req.PaymentMethod = method
 	req.PayerName, req.PayerBank, req.PayerAccount = payer, strings.TrimSpace(d.PayerBank), strings.TrimSpace(d.PayerAccount)
+	req.CashNote = d.CashNote
 	req.TransferredAmount, req.BankTransactionRef, req.PaidAt = &amount, strings.TrimSpace(d.BankTransactionRef), d.PaidAt
 	req.AmountMismatch = amount != req.AmountDue
 	req.Status, req.SubmittedAt = domain.PaymentSubmitted, &now

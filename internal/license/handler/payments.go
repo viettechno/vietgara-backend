@@ -65,13 +65,14 @@ func (s *Server) GetMyPlanPaymentRequest(
 	return &licensev1.GetMyPlanPaymentRequestResponse{Request: paymentRequestToProto(view)}, nil
 }
 
-// SubmitPlanPayment declares the transfer with its evidence.
+// SubmitPlanPayment declares a transfer or cash payment.
 func (s *Server) SubmitPlanPayment(
 	ctx context.Context, req *licensev1.SubmitPlanPaymentRequest,
 ) (*licensev1.SubmitPlanPaymentResponse, error) {
 	d := usecase.Declaration{
 		Method:    paymentMethodFromProto(req.GetPaymentMethod()),
 		PayerName: req.GetPayerName(), PayerBank: req.GetPayerBank(), PayerAccount: req.GetPayerAccount(),
+		CashNote:          req.GetCashNote(),
 		TransferredAmount: req.GetTransferredAmount(), BankTransactionRef: req.GetBankTransactionRef(),
 		Evidence: req.GetEvidence().GetContent(), EvidenceContentType: req.GetEvidence().GetContentType(),
 	}

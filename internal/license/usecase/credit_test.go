@@ -1,6 +1,7 @@
 package usecase_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -148,12 +149,26 @@ func TestCashPayment(t *testing.T) {
 	})
 	require.Error(t, err, "cash needs the date it was handed over")
 
+	_, err = e.Payments.Submit(ctx, "user-1", v.Request.ID, usecase.Declaration{
+		Method: domain.PaymentBankTransfer, PayerName: "Nguyen Van A", TransferredAmount: v.Request.AmountDue,
+		CashNote: "not a cash payment",
+	})
+	require.ErrorIs(t, err, domain.ErrInvalidDeclaration, "cash notes are only valid for cash payments")
+
 	paid := e.Now
+	_, err = e.Payments.Submit(ctx, "user-1", v.Request.ID, usecase.Declaration{
+		Method: domain.PaymentCash, PayerName: "Nguyen Van A", TransferredAmount: v.Request.AmountDue,
+		PaidAt: &paid, CashNote: strings.Repeat("💵", 2001),
+	})
+	require.ErrorIs(t, err, domain.ErrInvalidDeclaration, "cash notes are limited by Unicode code points")
+
 	submitted, err := e.Payments.Submit(ctx, "user-1", v.Request.ID, usecase.Declaration{
-		Method: domain.PaymentCash, PayerName: "Nguyen Van A", PayerBank: "ignored", TransferredAmount: v.Request.AmountDue, PaidAt: &paid,
+		Method: domain.PaymentCash, PayerName: "Nguyen Van A", PayerBank: "ignored", TransferredAmount: v.Request.AmountDue,
+		PaidAt: &paid, CashNote: "  Received at the front desk  ",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, domain.PaymentCash, submitted.Request.PaymentMethod)
+	assert.Equal(t, "Received at the front desk", submitted.Request.CashNote)
 	assert.Empty(t, submitted.Request.PayerBank, "a cash payment has no bank details")
 	assert.Empty(t, submitted.Request.EvidenceFileID)
 	assert.False(t, submitted.Request.AmountMismatch)

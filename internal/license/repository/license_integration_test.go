@@ -315,3 +315,39 @@ func TestSupportContactOnPostgres(t *testing.T) {
 	assert.Equal(t, "help@vietgara.vn", settings.SupportEmail)
 	assert.Equal(t, "0900000001", settings.SupportZalo)
 }
+
+func TestCashNoteOnPostgres(t *testing.T) {
+	pool, admin := startLicenseDB(t)
+	ctx := t.Context()
+	plans := repository.NewPostgresPlanRepository(pool)
+	subs := repository.NewPostgresRepository(pool)
+
+	userID := uuid.NewString()
+	_, err := admin.ExecContext(ctx, `INSERT INTO users (id, email, full_name) VALUES ($1, $2, 'Payer')`, userID, userID+"@example.test")
+	require.NoError(t, err)
+
+	trial, err := plans.FindByCode(ctx, domain.TrialPlanCode)
+	require.NoError(t, err)
+	pro, err := plans.FindByCode(ctx, "professional")
+	require.NoError(t, err)
+
+	sub := domain.NewTrial(userID, trial, time.Now().UTC())
+	_, err = subs.CreateIfAbsent(ctx, sub)
+	require.NoError(t, err)
+
+	now, amount := time.Now().UTC(), pro.Price
+	req := &domain.PlanPaymentRequest{
+		UserID: userID, SubscriptionID: sub.ID, Kind: domain.PaymentChange, PlanID: pro.ID,
+		Status: domain.PaymentAwaitingPayment, Reference: domain.NewReference(), QuotedAmount: pro.Price, AmountDue: pro.Price,
+		PeriodDays: 365, Instructions: domain.PaymentInstructions{BankName: "VCB"},
+	}
+	require.NoError(t, subs.CreateRequest(ctx, req))
+
+	req.Status, req.PaymentMethod, req.CashNote = domain.PaymentSubmitted, domain.PaymentCash, "received at the counter"
+	req.PayerName, req.TransferredAmount, req.PaidAt, req.SubmittedAt = "Payer", &amount, &now, &now
+	require.NoError(t, subs.SaveRequest(ctx, req))
+
+	stored, err := subs.FindRequest(ctx, req.ID)
+	require.NoError(t, err)
+	assert.Equal(t, "received at the counter", stored.CashNote)
+}

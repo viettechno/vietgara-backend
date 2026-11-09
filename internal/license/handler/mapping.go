@@ -395,8 +395,8 @@ func paymentRequestToProto(v usecase.RequestView) *licensev1.PlanPaymentRequest 
 			SupportPhone: r.Instructions.SupportPhone, SupportEmail: r.Instructions.SupportEmail,
 			SupportZalo: r.Instructions.SupportZalo,
 		},
-		PaymentMethod: paymentMethods[r.PaymentMethod],
-		PayerName:     r.PayerName, PayerBank: r.PayerBank, PayerAccount: r.PayerAccount,
+		PaymentMethod: paymentMethods[r.PaymentMethod], CashNote: r.CashNote,
+		PayerName: r.PayerName, PayerBank: r.PayerBank, PayerAccount: r.PayerAccount,
 		BankTransactionRef: r.BankTransactionRef, EvidenceUrl: v.EvidenceURL, AmountMismatch: r.AmountMismatch,
 		ReviewNote: r.ReviewNote, RejectionReason: r.RejectionReason, CreatedAt: converter.TimeToProto(r.CreatedAt),
 	}

@@ -386,10 +386,11 @@ func TestCreditExpiryCashAndSupportContact(t *testing.T) {
 
 	submitted, err := srv.SubmitPlanPayment(owner, &licensev1.SubmitPlanPaymentRequest{
 		RequestId: created.GetRequest().GetId(), PayerName: "Nguyen Van A", TransferredAmount: created.GetRequest().GetAmountDue(),
-		PaymentMethod: licensev1.PaymentMethod_PAYMENT_METHOD_CASH, PaidAt: timestamppb.Now(),
+		PaymentMethod: licensev1.PaymentMethod_PAYMENT_METHOD_CASH, PaidAt: timestamppb.Now(), CashNote: "received at the counter",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, licensev1.PaymentMethod_PAYMENT_METHOD_CASH, submitted.GetRequest().GetPaymentMethod())
+	assert.Equal(t, "received at the counter", submitted.GetRequest().GetCashNote())
 
 	_, err = srv.ApprovePlanPayment(admin, &licensev1.ApprovePlanPaymentRequest{RequestId: created.GetRequest().GetId(), Note: "cash"})
 	require.NoError(t, err)

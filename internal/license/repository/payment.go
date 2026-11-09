@@ -18,7 +18,7 @@ import (
 
 const requestColumns = `r.id, r.user_id, r.subscription_id, r.kind::text, r.plan_id, r.status::text, r.reference,
 	r.quoted_amount, r.credit_applied, r.amount_due, r.credit_surplus, r.unused_credit, r.period_days, r.unused_days, r.instructions,
-	r.payment_method::text, r.payer_name, r.payer_bank, r.payer_account, r.transferred_amount, r.bank_transaction_ref, r.paid_at,
+	r.payment_method::text, r.cash_note, r.payer_name, r.payer_bank, r.payer_account, r.transferred_amount, r.bank_transaction_ref, r.paid_at,
 	r.evidence_file_id::text, r.amount_mismatch, r.review_note, r.rejection_reason, r.reviewed_by::text, r.reviewed_at,
 	r.submitted_at, r.created_at, ` + planColumns
 
@@ -42,14 +42,14 @@ func scanRequest(row pgx.Row) (*domain.PlanPaymentRequest, error) {
 		kind, status                                                                     string
 		instructions                                                                     []byte
 		payerName, payerBank, payerAccount, txRef, evidence, note, rejection, reviewedBy *string
-		method                                                                           *string
+		method, cashNote                                                                 *string
 	)
 
 	planFields, finish := planDest(&plan)
 	dest := append([]any{
 		&r.ID, &r.UserID, &r.SubscriptionID, &kind, &r.PlanID, &status, &r.Reference,
 		&r.QuotedAmount, &r.CreditApplied, &r.AmountDue, &r.CreditSurplus, &r.UnusedCredit, &r.PeriodDays, &r.UnusedDays, &instructions,
-		&method, &payerName, &payerBank, &payerAccount, &r.TransferredAmount, &txRef, &r.PaidAt,
+		&method, &cashNote, &payerName, &payerBank, &payerAccount, &r.TransferredAmount, &txRef, &r.PaidAt,
 		&evidence, &r.AmountMismatch, &note, &rejection, &reviewedBy, &r.ReviewedAt,
 		&r.SubmittedAt, &r.CreatedAt,
 	}, planFields...)
@@ -72,6 +72,7 @@ func scanRequest(row pgx.Row) (*domain.PlanPaymentRequest, error) {
 
 	r.Kind, r.Status, r.Plan = domain.PaymentKind(kind), domain.PaymentStatus(status), &plan
 	r.PaymentMethod = domain.PaymentMethod(nullableText{method}.String())
+	r.CashNote = nullableText{cashNote}.String()
 	r.PayerName, r.PayerBank, r.PayerAccount = nullableText{payerName}.String(), nullableText{payerBank}.String(), nullableText{payerAccount}.String()
 	r.BankTransactionRef, r.EvidenceFileID = nullableText{txRef}.String(), nullableText{evidence}.String()
 	r.ReviewNote, r.RejectionReason, r.ReviewedBy = nullableText{note}.String(), nullableText{rejection}.String(), nullableText{reviewedBy}.String()
@@ -140,13 +141,13 @@ func (r *PostgresRepository) SaveRequest(ctx context.Context, req *domain.PlanPa
 		UPDATE plan_payment_requests SET status = $2::plan_payment_status, payment_method = $16::payment_method, payer_name = $3, payer_bank = $4,
 			payer_account = $5, transferred_amount = $6, bank_transaction_ref = $7, paid_at = $8,
 			evidence_file_id = $9::uuid, amount_mismatch = $10, review_note = $11, rejection_reason = $12,
-			reviewed_by = $13::uuid, reviewed_at = $14, submitted_at = $15
+			reviewed_by = $13::uuid, reviewed_at = $14, submitted_at = $15, cash_note = $17
 		WHERE id = $1`,
 		req.ID, string(req.Status), nullableString(req.PayerName), nullableString(req.PayerBank),
 		nullableString(req.PayerAccount), req.TransferredAmount, nullableString(req.BankTransactionRef), req.PaidAt,
 		nullableString(req.EvidenceFileID), req.AmountMismatch, nullableString(req.ReviewNote),
 		nullableString(req.RejectionReason), nullableString(req.ReviewedBy), req.ReviewedAt, req.SubmittedAt,
-		nullableString(string(req.PaymentMethod)))
+		nullableString(string(req.PaymentMethod)), nullableString(req.CashNote))
 	if err != nil {
 		return err
 	}

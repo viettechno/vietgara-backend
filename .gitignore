@@ -1,6 +1,7 @@
 .env
 out/*
 .tmp/*
+graphify-out/
 
 # VS Code
 .vscode/*

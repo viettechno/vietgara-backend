@@ -13,8 +13,8 @@ import (
 	"github.com/viettechno/vietgara-backend/testing/blackbox/fixture"
 )
 
-// The billing cycle of a plan can only change while no subscription uses it;
-// every other field stays editable. A plan counts repair orders unless the
+// The commercial terms of a plan (here the billing cycle and the price) can
+// only change while no subscription uses it; the name and description stay editable. A plan counts repair orders unless the
 // admin says otherwise.
 func TestPlanCycleIsLockedWhileSubscribed(t *testing.T) {
 	t.Parallel()
@@ -46,8 +46,13 @@ func TestPlanCycleIsLockedWhileSubscribed(t *testing.T) {
 		&licensev1.Plan{BillingCycle: licensev1.BillingCycle_BILLING_CYCLE_YEARLY}, "billing_cycle")
 	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "PLAN_HAS_SUBSCRIBERS")
 
-	repriced, err := admin.API.UpdatePlan(ctx, created.GetId(), &licensev1.Plan{Price: 1200000}, "price")
-	require.NoError(t, err, "the price may change; it applies to the next payment")
-	assert.EqualValues(t, 1200000, repriced.GetPrice())
-	assert.Equal(t, licensev1.BillingCycle_BILLING_CYCLE_MONTHLY, repriced.GetBillingCycle())
+	_, err = admin.API.UpdatePlan(ctx, created.GetId(), &licensev1.Plan{Price: 1200000}, "price")
+	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "PLAN_HAS_SUBSCRIBERS")
+
+	// A form that sends the same price and cycle back changes nothing: allowed.
+	same, err := admin.API.UpdatePlan(ctx, created.GetId(),
+		&licensev1.Plan{Price: 1000000, BillingCycle: licensev1.BillingCycle_BILLING_CYCLE_MONTHLY, Description: "same terms"},
+		"price", "billing_cycle", "description")
+	require.NoError(t, err)
+	assert.Equal(t, "same terms", same.GetDescription())
 }

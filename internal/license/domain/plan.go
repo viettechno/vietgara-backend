@@ -133,6 +133,22 @@ func (p *Plan) CountsTransaction(kind TransactionKind) bool {
 	return slices.Contains(p.CountedKinds, kind)
 }
 
+// SameTerms reports whether o offers the same commercial terms as p: price,
+// currency, billing cycle, limits, counted kinds and features. The name,
+// description, visibility, availability and order are not terms. A plan with
+// subscribers keeps its terms (the trial plan, which every owner starts on,
+// excepted), so changing them means a new plan.
+func (p *Plan) SameTerms(o *Plan) bool {
+	return p.Price == o.Price && p.Currency == o.Currency && p.BillingCycle == o.BillingCycle &&
+		p.MaxGarages == o.MaxGarages && p.MaxStaff == o.MaxStaff && p.MaxTransactionsPerDay == o.MaxTransactionsPerDay &&
+		sameSet(NormalizeTransactionKinds(p.CountedKinds), NormalizeTransactionKinds(o.CountedKinds)) &&
+		sameSet(NormalizeFeatures(p.Features), NormalizeFeatures(o.Features))
+}
+
+func sameSet[T comparable](a, b []T) bool {
+	return len(a) == len(b) && !slices.ContainsFunc(a, func(x T) bool { return !slices.Contains(b, x) })
+}
+
 // HasFeature reports whether the plan includes f.
 func (p *Plan) HasFeature(f Feature) bool { return slices.Contains(p.Features, f) }
 

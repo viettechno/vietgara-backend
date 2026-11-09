@@ -50,6 +50,8 @@ type PlanRepository interface {
 	Update(ctx context.Context, p *domain.Plan) error
 	// CountSubscribers returns how many subscriptions are on the plan.
 	CountSubscribers(ctx context.Context, planID string) (int, error)
+	// ListSubscriberIDs returns the owners whose subscription is on the plan.
+	ListSubscriberIDs(ctx context.Context, planID string) ([]string, error)
 }
 
 // SubscriptionPage is one page of the admin subscription list.

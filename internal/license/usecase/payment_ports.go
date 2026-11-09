@@ -67,8 +67,9 @@ type PaymentRepository interface {
 	TakeCredit(ctx context.Context, userID string, amount int64, now time.Time) error
 	// LapseCredit zeroes the credit that lapsed at now and returns its amount.
 	LapseCredit(ctx context.Context, userID string, now time.Time) (int64, error)
-	// UsersWithLapsedCredit lists up to limit users with credit that lapsed at now.
-	UsersWithLapsedCredit(ctx context.Context, now time.Time, limit int) ([]string, error)
+	// UsersWithLapsedCredit lists up to limit users with credit that lapsed at
+	// now, in id order after the user `after` ("" starts from the first).
+	UsersWithLapsedCredit(ctx context.Context, now time.Time, after string, limit int) ([]string, error)
 	// ListCredit returns the owner's ledger, newest first.
 	ListCredit(ctx context.Context, userID string) ([]*domain.CreditEntry, error)
 	// ClaimReviewReminder reports whether the admins are due a reminder and,

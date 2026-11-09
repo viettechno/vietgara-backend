@@ -85,6 +85,10 @@ func TestLicenseRepositoriesOnPostgres(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, 1, subscribers)
 
+	owners, err := plans.ListSubscriberIDs(ctx, trial.ID)
+	require.NoError(t, err)
+	assert.Equal(t, []string{userID}, owners)
+
 	inserted, err = subs.CreateIfAbsent(ctx, domain.NewTrial(userID, trial, time.Now().UTC()))
 	require.NoError(t, err)
 	assert.False(t, inserted)
@@ -280,9 +284,13 @@ func TestCreditLotsOnPostgres(t *testing.T) {
 	assert.Zero(t, sooner, "the sooner lot is used first")
 	assert.Equal(t, int64(200000), later)
 
-	users, err := subs.UsersWithLapsedCredit(ctx, now, 10)
+	users, err := subs.UsersWithLapsedCredit(ctx, now, "", 10)
 	require.NoError(t, err)
 	assert.Equal(t, []string{lotUser}, users)
+
+	users, err = subs.UsersWithLapsedCredit(ctx, now, lotUser, 10)
+	require.NoError(t, err)
+	assert.Empty(t, users, "paging continues after the last user seen")
 
 	lapsed, err := subs.LapseCredit(ctx, lotUser, now)
 	require.NoError(t, err)
@@ -292,7 +300,7 @@ func TestCreditLotsOnPostgres(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, lapsed, "lapsing is done once")
 
-	users, err = subs.UsersWithLapsedCredit(ctx, now, 10)
+	users, err = subs.UsersWithLapsedCredit(ctx, now, "", 10)
 	require.NoError(t, err)
 	assert.Empty(t, users)
 }

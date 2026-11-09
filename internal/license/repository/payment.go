@@ -498,11 +498,13 @@ func (r *PostgresRepository) LapseCredit(ctx context.Context, userID string, now
 	return lapsed, err
 }
 
-// UsersWithLapsedCredit lists up to limit users who have credit that lapsed at now.
-func (r *PostgresRepository) UsersWithLapsedCredit(ctx context.Context, now time.Time, limit int) ([]string, error) {
+// UsersWithLapsedCredit lists up to limit users, in id order after the user
+// `after` ("" for the first page), who have credit that lapsed at now.
+func (r *PostgresRepository) UsersWithLapsedCredit(ctx context.Context, now time.Time, after string, limit int) ([]string, error) {
 	rows, err := platformdb.QuerierFromContext(ctx, r.pool).Query(ctx, `
 		SELECT DISTINCT user_id::text FROM credit_ledger
-		WHERE remaining > 0 AND expires_at <= $1 LIMIT $2`, now, limit)
+		WHERE remaining > 0 AND expires_at <= $1 AND ($2 = '' OR user_id::text > $2)
+		ORDER BY 1 LIMIT $3`, now, after, limit)
 	if err != nil {
 		return nil, err
 	}

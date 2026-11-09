@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"context"
+	"log/slog"
 	"strings"
 
 	"github.com/viettechno/vietgara-backend/internal/license/domain"
@@ -96,7 +97,25 @@ func (uc *SubscriptionUseCase) UpdatePlan(ctx context.Context, planID string, fi
 		return nil, err
 	}
 
+	uc.invalidateSubscribers(ctx, plan.ID)
+
 	return plan, nil
+}
+
+// invalidateSubscribers drops the cached entitlements of the plan's owners, so
+// an edited limit, feature or counted kind applies at once and not when each
+// cache entry expires. A failure only delays the change to the entry's TTL.
+func (uc *SubscriptionUseCase) invalidateSubscribers(ctx context.Context, planID string) {
+	owners, err := uc.plans.ListSubscriberIDs(ctx, planID)
+	if err != nil {
+		slog.Warn("license: listing the plan's subscribers failed", "plan_id", planID, "error", err)
+
+		return
+	}
+
+	for _, owner := range owners {
+		uc.sync.invalidate(ctx, owner)
+	}
 }
 
 // ListSubscriptions lists subscriptions for platform admins.

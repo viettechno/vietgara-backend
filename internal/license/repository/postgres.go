@@ -260,6 +260,29 @@ func (r *PostgresPlanRepository) CountSubscribers(ctx context.Context, planID st
 	return n, err
 }
 
+// ListSubscriberIDs returns the owners whose subscription is on the plan.
+func (r *PostgresPlanRepository) ListSubscriberIDs(ctx context.Context, planID string) ([]string, error) {
+	rows, err := platformdb.QuerierFromContext(ctx, r.pool).Query(ctx,
+		`SELECT user_id::text FROM subscriptions WHERE plan_id = $1`, planID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []string
+
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+
+		ids = append(ids, id)
+	}
+
+	return ids, rows.Err()
+}
+
 // CreateIfAbsent inserts s unless the user has a subscription already.
 func (r *PostgresRepository) CreateIfAbsent(ctx context.Context, s *domain.Subscription) (bool, error) {
 	err := platformdb.QuerierFromContext(ctx, r.pool).QueryRow(ctx, `

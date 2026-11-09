@@ -93,11 +93,12 @@ func (uc *SubscriptionUseCase) UpdatePlan(ctx context.Context, planID string, fi
 		return nil, toAppError("update plan", err)
 	}
 
+	// Right after the commit, so a failing audit write cannot leave stale entries.
+	uc.invalidateSubscribers(ctx, plan.ID)
+
 	if err := uc.auditPlan(ctx, "plan.updated", plan.ID, before, plan); err != nil {
 		return nil, err
 	}
-
-	uc.invalidateSubscribers(ctx, plan.ID)
 
 	return plan, nil
 }

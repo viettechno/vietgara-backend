@@ -1,6 +1,7 @@
 package usecase_test
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -355,18 +356,21 @@ func TestCreditExpiryVisitsEveryOwnerEvenWhenOneFails(t *testing.T) {
 	e := trialOwner(t)
 	sub := payNow(t, e, "p-pro", domain.PaymentChange)
 
-	// "a-ghost" sorts first and has lapsed credit but no subscription.
+	// More ghosts than one page (500), all sorting before "user-1": owners with
+	// lapsed credit but no subscription, whose expiry fails.
 	expired := e.Now.Add(-time.Hour)
-	e.Store.AddLapsedLot("a-ghost", 1000, expired)
+	for i := range 520 {
+		e.Store.AddLapsedLot(fmt.Sprintf("a-ghost-%04d", i), 1000, expired)
+	}
 
 	_, err := e.Payments.AdjustCredit(ctx, "admin", sub.ID, 5000, "lot")
 	require.NoError(t, err)
 
 	e.Now = e.Now.AddDate(1, 1, 0)
 
-	require.Error(t, e.Expiry.Run(ctx), "the ghost owner's failure is reported")
+	require.Error(t, e.Expiry.Run(ctx), "the ghost owners' failures are reported")
 
 	mine, _, err := e.Subscriptions.GetMine(ctx, "user-1")
 	require.NoError(t, err)
-	assert.Zero(t, mine.CreditBalance, "user-1 was still visited")
+	assert.Zero(t, mine.CreditBalance, "user-1, on the second page, was still visited")
 }

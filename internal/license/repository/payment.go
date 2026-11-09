@@ -499,12 +499,14 @@ func (r *PostgresRepository) LapseCredit(ctx context.Context, userID string, now
 }
 
 // UsersWithLapsedCredit lists up to limit users, in id order after the user
-// `after` ("" for the first page), who have credit that lapsed at now.
+// `after` ("" for the first page), who have credit that lapsed at now. The
+// cursor is a uuid, compared as one.
 func (r *PostgresRepository) UsersWithLapsedCredit(ctx context.Context, now time.Time, after string, limit int) ([]string, error) {
 	rows, err := platformdb.QuerierFromContext(ctx, r.pool).Query(ctx, `
 		SELECT DISTINCT user_id::text FROM credit_ledger
-		WHERE remaining > 0 AND expires_at <= $1 AND ($2 = '' OR user_id::text > $2)
-		ORDER BY 1 LIMIT $3`, now, after, limit)
+		WHERE remaining > 0 AND expires_at <= $1
+		  AND user_id > COALESCE(NULLIF($2, '')::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+		ORDER BY user_id LIMIT $3`, now, after, limit)
 	if err != nil {
 		return nil, err
 	}

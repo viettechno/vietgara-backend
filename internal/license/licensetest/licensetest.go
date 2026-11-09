@@ -182,6 +182,8 @@ func (p Plans) ListSubscriberIDs(_ context.Context, planID string) ([]string, er
 		}
 	}
 
+	slices.Sort(ids)
+
 	return ids, nil
 }
 

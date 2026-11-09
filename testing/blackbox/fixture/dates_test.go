@@ -1,3 +1,4 @@
+//nolint:testpackage // This test covers the unexported business-date helper.
 package fixture
 
 import (

@@ -114,6 +114,11 @@ func run(ctx context.Context, args []string, lookupEnv func(string) (string, boo
 		return fmt.Errorf("purge test users: %w", err)
 	}
 
+	if _, err := fmt.Fprintf(stdout, "Purged %d test users, %d Mailpit messages, and %d uploaded files from %s\n",
+		deleted, messages, fileCount, domain.String()); err != nil {
+		return fmt.Errorf("write purge summary: %w", err)
+	}
+
 	// After the users: their subscriptions and payment requests go with them,
 	// which leaves their retired plans unreferenced.
 	plans, err := licenserepo.NewPostgresPlanRepository(pool).DeleteRetiredTestPlans(ctx, testPlanCodePrefix)
@@ -121,9 +126,7 @@ func run(ctx context.Context, args []string, lookupEnv func(string) (string, boo
 		return fmt.Errorf("purge test plans: %w", err)
 	}
 
-	if _, err := fmt.Fprintf(stdout,
-		"Purged %d test users, %d Mailpit messages, and %d uploaded files from %s, and %d retired test plans\n",
-		deleted, messages, fileCount, domain.String(), plans); err != nil {
+	if _, err := fmt.Fprintf(stdout, "Purged %d retired test plans\n", plans); err != nil {
 		return fmt.Errorf("write purge summary: %w", err)
 	}
 

@@ -31,6 +31,8 @@ const (
 	subscriptionFrom = ` FROM subscriptions s JOIN plans p ON p.id = s.plan_id`
 )
 
+var errEmptyPlanCodePrefix = errors.New("delete retired test plans: empty plan code prefix")
+
 // PostgresRepository implements the usecase Subscription and Entitlement
 // repositories over the shared pgx pool.
 type PostgresRepository struct {
@@ -281,6 +283,30 @@ func (r *PostgresPlanRepository) ListSubscriberIDs(ctx context.Context, planID s
 	}
 
 	return ids, rows.Err()
+}
+
+// DeleteRetiredTestPlans deletes the retired plans whose code starts with
+// codePrefix that no subscription or payment request refers to, and returns how
+// many it deleted. Plans cannot be deleted through the API; this is for the
+// purge of a test deployment, which runs it after the test users, so the
+// subscriptions and requests of their plans are gone. A plan still on sale is
+// never deleted.
+func (r *PostgresPlanRepository) DeleteRetiredTestPlans(ctx context.Context, codePrefix string) (int64, error) {
+	if codePrefix == "" {
+		return 0, errEmptyPlanCodePrefix
+	}
+
+	tag, err := platformdb.QuerierFromContext(ctx, r.pool).Exec(ctx, `
+		DELETE FROM plans p
+		WHERE starts_with(p.code, $1) AND NOT p.is_active
+			AND NOT EXISTS (SELECT 1 FROM subscriptions s WHERE s.plan_id = p.id)
+			AND NOT EXISTS (SELECT 1 FROM plan_payment_requests r WHERE r.plan_id = p.id)`,
+		codePrefix)
+	if err != nil {
+		return 0, err
+	}
+
+	return tag.RowsAffected(), nil
 }
 
 // CreateIfAbsent inserts s unless the user has a subscription already.

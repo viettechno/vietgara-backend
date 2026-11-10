@@ -165,6 +165,14 @@ configuration. File cleanup happens before database deletion; if cleanup
 fails, the command stops and leaves the test users in place so it can be
 retried safely.
 
+After the users, the command deletes the test plans: the plans whose code
+starts with `qa-` that are retired (`is_active = false`) and that no
+subscription or payment request refers to any more. Plans cannot be deleted
+through the API, so scenarios that create one take it off sale when they end
+(`fixture.RetirePlanAfterTest`, which `LimitedPlan` calls too), and the purge
+removes the rows. A plan still on sale is never deleted. Give every plan a
+scenario creates a code that starts with `qa-`.
+
 ## Traceability and API coverage
 
 Every scenario test names the documented scenario it covers in a comment:

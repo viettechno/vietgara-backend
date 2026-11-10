@@ -349,5 +349,7 @@ func LimitedPlanCounting(
 		tb.Fatalf("create plan %s: %v", code, err)
 	}
 
+	RetirePlanAfterTest(tb, PlatformAdmin(tb), created.GetId())
+
 	return SwitchPlanByID(tb, owner, created.GetId(), created.GetName())
 }

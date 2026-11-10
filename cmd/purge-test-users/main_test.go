@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"testing"
@@ -289,4 +290,37 @@ func TestPurgeTestUsersDoesNotDeleteUsersWhenFileCleanupFails(t *testing.T) {
 	require.ErrorContains(t, err, "delete uploaded files for garage garage-1")
 	assert.Zero(t, deletedUsers)
 	assert.Equal(t, []string{"list", "list-garages", "delete-mail", "delete-files"}, events)
+}
+
+type fakeTestPlanDeleter struct {
+	prefix  string
+	deleted int64
+	err     error
+}
+
+func (f *fakeTestPlanDeleter) DeleteRetiredTestPlans(_ context.Context, prefix string) (int64, error) {
+	f.prefix = prefix
+
+	return f.deleted, f.err
+}
+
+func TestPurgeTestPlansDeletesOnlyQAPlansAndReportsTheCount(t *testing.T) {
+	t.Parallel()
+
+	plans := &fakeTestPlanDeleter{deleted: 3}
+	out := &bytes.Buffer{}
+
+	require.NoError(t, purgeTestPlans(t.Context(), plans, out))
+	assert.Equal(t, "qa-", plans.prefix)
+	assert.Equal(t, "Purged 3 retired test plans\n", out.String())
+}
+
+func TestPurgeTestPlansReportsTheDatabaseError(t *testing.T) {
+	t.Parallel()
+
+	out := &bytes.Buffer{}
+
+	err := purgeTestPlans(t.Context(), &fakeTestPlanDeleter{err: errTestDatabaseUnavailable}, out)
+	require.ErrorContains(t, err, "purge test plans")
+	assert.Empty(t, out.String())
 }

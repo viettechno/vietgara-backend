@@ -414,3 +414,50 @@ func TestLapsedCreditPagingOnPostgres(t *testing.T) {
 
 	assert.Equal(t, want, got, "each owner once, in uuid order")
 }
+
+func TestDeleteRetiredTestPlansOnPostgres(t *testing.T) {
+	pool, admin := startLicenseDB(t)
+	ctx := t.Context()
+	plans := repository.NewPostgresPlanRepository(pool)
+
+	create := func(code string, active bool) *domain.Plan {
+		plan := &domain.Plan{
+			Code: code, Name: code, Currency: "VND", BillingCycle: domain.BillingCycleYearly,
+			MaxGarages: 1, MaxStaff: 1, MaxTransactionsPerDay: 1, CountedKinds: []domain.TransactionKind{domain.TransactionQuote},
+			Features: []domain.Feature{domain.FeatureQuotes}, Public: true, Active: active,
+		}
+		require.NoError(t, plans.Create(ctx, plan))
+
+		return plan
+	}
+
+	create("qa-retired", false)
+	create("qa-on-sale", true)
+	create("other-retired", false)
+	used := create("qa-used", false)
+
+	userID := uuid.NewString()
+	_, err := admin.ExecContext(ctx, `INSERT INTO users (id, email, full_name) VALUES ($1, 'plan-user@example.com', 'Plan user')`, userID)
+	require.NoError(t, err)
+	_, err = admin.ExecContext(ctx, `INSERT INTO subscriptions (user_id, plan_id, status, current_period_start, current_period_end)
+		VALUES ($1, $2, 'active', now(), now() + interval '1 year')`, userID, used.ID)
+	require.NoError(t, err)
+
+	_, err = plans.DeleteRetiredTestPlans(ctx, "")
+	require.Error(t, err, "an empty prefix would match every plan")
+
+	deleted, err := plans.DeleteRetiredTestPlans(ctx, "qa-")
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), deleted, "only the retired, unreferenced test plan")
+
+	for code, want := range map[string]error{
+		"qa-retired": domain.ErrPlanNotFound, "qa-on-sale": nil, "other-retired": nil, "qa-used": nil, "starter": nil,
+	} {
+		_, err := plans.FindByCode(ctx, code)
+		if want == nil {
+			assert.NoError(t, err, code)
+		} else {
+			assert.ErrorIs(t, err, want, code)
+		}
+	}
+}

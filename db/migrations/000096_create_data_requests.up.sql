@@ -1,4 +1,4 @@
--- Personal-data requests (Release 13.1, FR-CUS-05, PD-06): the garage's record
+-- Personal-data requests (Release 11.1, FR-CUS-05, PD-06): the garage's record
 -- of a request to view, correct or delete a customer's data and of its answer,
 -- the requests of people without the app that wait for their e-mail link, and
 -- the mark of an anonymized customer.

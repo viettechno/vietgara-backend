@@ -91,7 +91,7 @@ var classified = []struct {
 	{domain.ErrInvalidQuantity, apperror.CodeInvalidArgument, ""},
 	{domain.ErrInvalidCost, apperror.CodeInvalidArgument, ""},
 
-	// Release 13.0.
+	// Release 11.0.
 	{domain.ErrPurchaseOrderNotFound, apperror.CodeNotFound, ReasonPurchaseOrderNotFound},
 	{domain.ErrPurchaseOrderNotDraft, apperror.CodeFailedPrecondition, ReasonPurchaseOrderNotDraft},
 	{domain.ErrPurchaseOrderNotSendable, apperror.CodeFailedPrecondition, ReasonPurchaseOrderNotSendable},
@@ -124,7 +124,7 @@ const (
 	ReasonStockIssueNotPosted            = "STOCK_ISSUE_NOT_POSTED"
 	ReasonReturnExceedsIssued            = "RETURN_EXCEEDS_ISSUED"
 
-	// Release 13.0.
+	// Release 11.0.
 	ReasonPurchaseOrderNotFound         = "PURCHASE_ORDER_NOT_FOUND"
 	ReasonPurchaseOrderNotDraft         = "PURCHASE_ORDER_NOT_DRAFT"
 	ReasonPurchaseOrderNotSendable      = "PURCHASE_ORDER_NOT_SENDABLE"

@@ -8,7 +8,7 @@ import (
 	inventoryv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/inventory/v1"
 )
 
-// ---- Purchase orders (Release 13.0) ------------------------------------------
+// ---- Purchase orders (Release 11.0) ------------------------------------------
 
 func purchaseOrderPath(garageID, orderID string) string {
 	return garagePath(garageID) + "/purchase-orders/" + url.PathEscape(orderID)

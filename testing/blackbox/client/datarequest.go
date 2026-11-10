@@ -8,7 +8,7 @@ import (
 	customerv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/customer/v1"
 )
 
-// ---- Personal-data requests (Release 13.1) ------------------------------------
+// ---- Personal-data requests (Release 11.1) ------------------------------------
 
 // CreateDataRequest records a request a customer made in person.
 func (c *Client) CreateDataRequest(

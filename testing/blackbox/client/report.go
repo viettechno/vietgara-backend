@@ -11,7 +11,7 @@ import (
 // fromParam is the query parameter that starts a period.
 const fromParam = "from"
 
-// ---- Technician and profit reports (Release 13.1) ----------------------------
+// ---- Technician and profit reports (Release 11.1) ----------------------------
 
 // GetTechnicianReport returns the technicians' completed lines in [from, to)
 // ("YYYY-MM-DD" in the garage's zone).

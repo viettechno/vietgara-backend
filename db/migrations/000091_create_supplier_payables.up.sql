@@ -1,4 +1,4 @@
--- Supplier payables and payment-out vouchers (Release 13.0, FR-INV-17,
+-- Supplier payables and payment-out vouchers (Release 11.0, FR-INV-17,
 -- FR-BIL-07): what the garage owes each supplier for a completed goods
 -- receipt, and the vouchers (phiếu chi) that settle it. A voucher is never
 -- deleted, only voided.

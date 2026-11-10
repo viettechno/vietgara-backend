@@ -8,7 +8,7 @@ import (
 	receivablev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/receivable/v1"
 )
 
-// ---- Supplier payables and payment-out vouchers (Release 13.0) --------------
+// ---- Supplier payables and payment-out vouchers (Release 11.0) --------------
 
 // ListSupplierPayables returns a page of the garage's payables; includePaid
 // also lists the paid ones.

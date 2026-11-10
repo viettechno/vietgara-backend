@@ -19,7 +19,7 @@ import (
 // must see in this diff. The OAuth redirect of Google sign-in is plain HTTP
 // and is not an RPC.
 var publicMethods = []string{
-	// The request page for people without the app (Release 13.1, FR-CUS-05): it
+	// The request page for people without the app (Release 11.1, FR-CUS-05): it
 	// answers the same for any address, e-mails the link only to that address and
 	// is throttled per address and per source; the design is reviewed in LLD 11.3.
 	"/vietgara.customer.v1.PublicDataRequestService/SubmitPublicDataRequest",

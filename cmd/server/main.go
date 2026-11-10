@@ -434,7 +434,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	quoteNotifications.uc = notification.uc
 	inventory.uc.SetOrderMailer(inventoryOrderMailer{uc: notification.uc})
 
-	// Receivables (Release 13.0): what customers owe, with its reminders and
+	// Receivables (Release 11.0): what customers owe, with its reminders and
 	// reconciliation (FR-REC-01, 03, 04).
 	receivable := buildReceivable(pool, tx, billing.uc, repairOrder.uc, vehicleRepo, garages, notification.uc, supplierRepo, users, auditLog)
 	document.uc.WithReceivables(documentReceivables{uc: receivable.uc}).WithPayables(documentPayables{uc: receivable.payables})

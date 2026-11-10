@@ -309,7 +309,7 @@ func completable(r *domain.GoodsReceipt) error {
 	return nil
 }
 
-// Events of a goods receipt (Release 13.0): the Receivables module makes a
+// Events of a goods receipt (Release 11.0): the Receivables module makes a
 // payable per supplier of a completed receipt and cancels them when it is
 // reversed.
 const (

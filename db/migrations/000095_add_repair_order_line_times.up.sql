@@ -1,4 +1,4 @@
--- When a repair order line was started and completed (Release 13.1, FR-RPT-02):
+-- When a repair order line was started and completed (Release 11.1, FR-RPT-02):
 -- started_at is set when the line first leaves 'not_started', completed_at when
 -- it becomes 'completed' and cleared if it is reopened. Lines completed before
 -- this release count as completed at their last update and have no start, so

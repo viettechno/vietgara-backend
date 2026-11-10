@@ -1,5 +1,5 @@
 -- The payment-out voucher and the purchase order are printable documents
--- (Release 13.0): the print settings and the print log accept them.
+-- (Release 11.0): the print settings and the print log accept them.
 
 ALTER TABLE public.garage_print_settings DROP CONSTRAINT garage_print_settings_document_type_check;
 

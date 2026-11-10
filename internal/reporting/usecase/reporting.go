@@ -13,7 +13,7 @@ type Deps struct {
 	Settlements SettlementReader
 	Garages     GarageReader
 	// Work, Orders, Costs and Names serve the technician and profit reports
-	// of Release 13.1.
+	// of Release 11.1.
 	Work   WorkReader
 	Orders OrderReader
 	Costs  CostReader

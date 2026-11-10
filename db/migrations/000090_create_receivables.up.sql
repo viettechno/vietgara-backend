@@ -1,4 +1,4 @@
--- Receivables (Release 13.0, FR-REC-01, 03, 04): what customers owe a garage,
+-- Receivables (Release 11.0, FR-REC-01, 03, 04): what customers owe a garage,
 -- with a state of its own fed by the events of Billing & Settlement.
 -- receivable_entries is its ledger; receivable_reminders logs each scheduled
 -- reminder once.

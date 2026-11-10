@@ -34,7 +34,7 @@ func remaining(want int64, status receivablev1.ReceivableStatus) func(*receivabl
 	}
 }
 
-// Scenario: E2E-REC-001, Release 13.0, a settlement becomes a receivable with its
+// Scenario: E2E-REC-001, Release 11.0, a settlement becomes a receivable with its
 // due date, and a payment settles it (FR-REC-01).
 func TestSettlementBecomesAReceivable(t *testing.T) {
 	t.Parallel()
@@ -79,7 +79,7 @@ func TestSettlementBecomesAReceivable(t *testing.T) {
 	assert.Len(t, list.GetData(), 1)
 }
 
-// Scenario: E2E-REC-002, Release 13.0, payments and voids move the remaining amount
+// Scenario: E2E-REC-002, Release 11.0, payments and voids move the remaining amount
 // and the ledger (FR-REC-01).
 func TestPaymentsAndVoidsMoveTheLedger(t *testing.T) {
 	t.Parallel()
@@ -115,7 +115,7 @@ func TestPaymentsAndVoidsMoveTheLedger(t *testing.T) {
 	assert.Len(t, r.GetEntries(), 4, "nothing earlier is rewritten")
 }
 
-// Scenario: E2E-REC-003, Release 13.0, the payment terms and the reminder schedule:
+// Scenario: E2E-REC-003, Release 11.0, the payment terms and the reminder schedule:
 // defaults, validation and the effect on new settlements (FR-REC-03).
 func TestSettingsDefaultsValidationAndEffect(t *testing.T) {
 	t.Parallel()
@@ -167,7 +167,7 @@ func TestSettingsDefaultsValidationAndEffect(t *testing.T) {
 	assert.EqualValues(t, 7, theirs.GetPaymentTermsDays(), "another garage keeps its own settings")
 }
 
-// Scenario: E2E-REC-004, Release 13.0, an overdue receivable is reminded at each
+// Scenario: E2E-REC-004, Release 11.0, an overdue receivable is reminded at each
 // offset, once (FR-REC-03). It moves the due date with SQL, so it runs on the stubbed
 // target only.
 func TestOverdueReceivableIsRemindedAtEachOffsetOnce(t *testing.T) {
@@ -232,7 +232,7 @@ func TestOverdueReceivableIsRemindedAtEachOffsetOnce(t *testing.T) {
 	k.noMail(t, "Quyết toán "+other.GetNumber()+" tại") // no further reminder for the paid one
 }
 
-// Scenario: E2E-REC-005, Release 13.0, a reminder is skipped, with its reason, for a
+// Scenario: E2E-REC-005, Release 11.0, a reminder is skipped, with its reason, for a
 // customer without e-mail, an opt-out or a switched-off type (FR-REC-03). Stubbed only.
 func TestReminderSkipsWithItsReason(t *testing.T) {
 	t.Parallel()
@@ -344,7 +344,7 @@ func TestReminderSkipsWithItsReason(t *testing.T) {
 	})
 }
 
-// Scenario: E2E-REC-006, Release 13.0, the reconciliation of a period agrees with the
+// Scenario: E2E-REC-006, Release 11.0, the reconciliation of a period agrees with the
 // settlements and vouchers (FR-REC-04); the payment-out voucher part is in E2E-PAY-002.
 func TestReconciliationAgreesWithTheLedger(t *testing.T) {
 	t.Parallel()
@@ -425,7 +425,7 @@ func TestReconciliationAgreesWithTheLedger(t *testing.T) {
 	}
 }
 
-// Scenario: E2E-REC-007, Release 13.0, the receivables and the reconciliation as Excel
+// Scenario: E2E-REC-007, Release 11.0, the receivables and the reconciliation as Excel
 // workbooks (FR-DOC-02, FR-REC-04).
 func TestReceivablesAndReconciliationAsExcel(t *testing.T) {
 	t.Parallel()
@@ -514,7 +514,7 @@ func TestReceivablesAndReconciliationAsExcel(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "VALIDATION_ERROR")
 }
 
-// Scenario: E2E-REC-008, Release 13.0, permissions and tenant isolation of the
+// Scenario: E2E-REC-008, Release 11.0, permissions and tenant isolation of the
 // receivables (FR-REC-01, NFR-SE).
 func TestPermissionsAndTenantIsolation(t *testing.T) {
 	t.Parallel()
@@ -584,7 +584,7 @@ func TestPermissionsAndTenantIsolation(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusUnauthorized, "")
 }
 
-// Scenario: E2E-REC-001 (partial), Release 13.0, a settlement that has no receivable
+// Scenario: E2E-REC-001 (partial), Release 11.0, a settlement that has no receivable
 // (issued before the module existed, or whose event was lost) gets one from the
 // reminder job (FR-REC-01). Stubbed only: it deletes the receivable with SQL.
 func TestMissingReceivableIsRebuilt(t *testing.T) {

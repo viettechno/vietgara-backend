@@ -21,9 +21,9 @@ const (
 	TypePaymentVoucher DocumentType = "payment_voucher"
 	TypeGoodsReceipt   DocumentType = "goods_receipt"
 	TypeStockIssue     DocumentType = "stock_issue"
-	// TypePaymentOut is the payment-out voucher (phiếu chi, Release 13.0).
+	// TypePaymentOut is the payment-out voucher (phiếu chi, Release 11.0).
 	TypePaymentOut DocumentType = "payment_out"
-	// TypePurchaseOrder is the purchase order to a supplier (Release 13.0).
+	// TypePurchaseOrder is the purchase order to a supplier (Release 11.0).
 	TypePurchaseOrder DocumentType = "purchase_order"
 )
 

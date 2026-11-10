@@ -66,6 +66,13 @@ func (c *Client) UnlinkGoogle(ctx context.Context, password string) (*identityv1
 		&identityv1.UnlinkGoogleRequest{Password: password})
 }
 
+// ChangePassword replaces the password after the current one and answers a
+// new session (FR-IAM-13).
+func (c *Client) ChangePassword(ctx context.Context, currentPassword, newPassword string) (*identityv1.Session, error) {
+	return call[identityv1.Session](ctx, c, http.MethodPost, "/api/v1/me/password:change",
+		&identityv1.ChangePasswordRequest{CurrentPassword: currentPassword, NewPassword: newPassword})
+}
+
 // CompleteGoogleLink links the Google account of a popup proof, as the web
 // consoles do.
 func (c *Client) CompleteGoogleLink(ctx context.Context, linkProof, password string) (*identityv1.User, error) {

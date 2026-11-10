@@ -69,6 +69,7 @@ func Policies() middleware.Policies {
 		identityv1.AuthService_CompleteGoogleLink_FullMethodName:     middleware.UserMethod(),
 		identityv1.AuthService_LinkGoogle_FullMethodName:             middleware.UserMethod(),
 		identityv1.AuthService_UnlinkGoogle_FullMethodName:           middleware.UserMethod(),
+		identityv1.AuthService_ChangePassword_FullMethodName:         middleware.UserMethod(),
 		identityv1.AuthService_VerifyMfaChallenge_FullMethodName:     middleware.PublicMethod(),
 		identityv1.MfaService_GetMfaStatus_FullMethodName:            middleware.UserMethod(),
 		identityv1.MfaService_EnrollMfa_FullMethodName:               middleware.UserMethod(),

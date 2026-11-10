@@ -109,6 +109,17 @@ func (s *Server) ResetPassword(ctx context.Context, req *identityv1.ResetPasswor
 	return &identityv1.ResetPasswordResponse{}, nil
 }
 
+// ChangePassword changes the signed-in user's password and answers a new
+// session: every other one is revoked (FR-IAM-13).
+func (s *Server) ChangePassword(ctx context.Context, req *identityv1.ChangePasswordRequest) (*identityv1.ChangePasswordResponse, error) {
+	session, err := s.uc.ChangePassword(ctx, middleware.UserID(ctx), req.GetCurrentPassword(), req.GetNewPassword())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	return &identityv1.ChangePasswordResponse{Session: s.sessionToProto(session)}, nil
+}
+
 // GetMe returns the signed-in user.
 func (s *Server) GetMe(ctx context.Context, _ *identityv1.GetMeRequest) (*identityv1.GetMeResponse, error) {
 	user, err := s.uc.GetMe(ctx, middleware.UserID(ctx))

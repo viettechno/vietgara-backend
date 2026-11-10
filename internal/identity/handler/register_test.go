@@ -23,7 +23,8 @@ func TestPolicies(t *testing.T) {
 	assert.True(t, p[identityv1.AuthService_SignInWithGoogleIdToken_FullMethodName].Public)
 	assert.True(t, p[identityv1.AuthService_VerifyMfaChallenge_FullMethodName].Public)
 	assert.Equal(t, middleware.UserMethod(), p[identityv1.MfaService_EnrollMfa_FullMethodName])
-	assert.Len(t, p, 21)
+	assert.Equal(t, middleware.UserMethod(), p[identityv1.AuthService_ChangePassword_FullMethodName])
+	assert.Len(t, p, 22)
 }
 
 func TestAuthFlow(t *testing.T) {

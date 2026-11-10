@@ -8,7 +8,7 @@ import (
 	receivablev1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/receivable/v1"
 )
 
-// ---- Receivables (Release 13.0) ---------------------------------------------
+// ---- Receivables (Release 11.0) ---------------------------------------------
 
 // ReceivableFilter is the filter of ListReceivables; the zero value lists the
 // open receivables.

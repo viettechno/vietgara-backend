@@ -17,7 +17,7 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-// dataRequestModule is the wired personal-data request module (Release 13.1,
+// dataRequestModule is the wired personal-data request module (Release 11.1,
 // FR-CUS-05, PD-06): requests recorded by staff and the public page.
 type dataRequestModule struct {
 	staff      *dataRequestHandler.Server

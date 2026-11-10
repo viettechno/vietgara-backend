@@ -177,7 +177,7 @@ type RevenueReader interface {
 	Revenue(ctx context.Context, garageID, period string, from, to time.Time) (RevenueInfo, error)
 }
 
-// ReceivableReader reads the receivables for Excel export (Release 13.0);
+// ReceivableReader reads the receivables for Excel export (Release 11.0);
 // implemented by an adapter over the Receivables module in cmd/server. The
 // filters are those of ReceivableService.ListReceivables.
 type ReceivableReader interface {
@@ -204,7 +204,7 @@ type PaymentOutInfo struct {
 }
 
 // PayableReader reads the supplier payables and payment-out vouchers for the
-// documents of Release 13.0; implemented by an adapter over the Receivables
+// documents of Release 11.0; implemented by an adapter over the Receivables
 // module in cmd/server. The filters are those of
 // PayableService.ListSupplierPayables.
 type PayableReader interface {
@@ -245,7 +245,7 @@ type DocumentUseCase struct {
 	Garages        GarageReader
 	Inventory      InventoryDocumentReader
 	Prints         PrintStore
-	// Receivables serves the Excel exports of Release 13.0; set it with
+	// Receivables serves the Excel exports of Release 11.0; set it with
 	// WithReceivables.
 	Receivables ReceivableReader
 	// Payables serves the payables workbook and the payment-out voucher;

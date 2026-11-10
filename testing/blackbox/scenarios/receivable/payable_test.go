@@ -148,7 +148,7 @@ func (p *payables) payable(t *testing.T, api *client.Client, id string) *receiva
 	return nil
 }
 
-// Scenario: E2E-PAY-001, Release 13.0, a completed goods receipt makes a payable per
+// Scenario: E2E-PAY-001, Release 11.0, a completed goods receipt makes a payable per
 // supplier of its lines; cancelling it cancels them (FR-INV-17).
 func TestReceiptMakesPayablesAndCancelCancelsThem(t *testing.T) {
 	t.Parallel()
@@ -204,7 +204,7 @@ func TestReceiptMakesPayablesAndCancelCancelsThem(t *testing.T) {
 	assert.NotEqual(t, free.GetId(), list.GetData()[0].GetGoodsReceiptId())
 }
 
-// Scenario: E2E-PAY-002, Release 13.0, a payment-out voucher is numbered and
+// Scenario: E2E-PAY-002, Release 11.0, a payment-out voucher is numbered and
 // settles payables (FR-BIL-07).
 func TestVoucherIsNumberedAndSettlesPayables(t *testing.T) {
 	t.Parallel()
@@ -261,7 +261,7 @@ func TestVoucherIsNumberedAndSettlesPayables(t *testing.T) {
 	assert.Zero(t, open.GetSummary().GetOutstandingAmount())
 }
 
-// Scenario: E2E-PAY-003, Release 13.0, wrong allocations are refused and two
+// Scenario: E2E-PAY-003, Release 11.0, wrong allocations are refused and two
 // vouchers cannot take the same remainder (FR-BIL-07).
 func TestWrongAllocationsAreRefusedAndRemaindersAreNotShared(t *testing.T) {
 	t.Parallel()
@@ -355,7 +355,7 @@ func TestWrongAllocationsAreRefusedAndRemaindersAreNotShared(t *testing.T) {
 	assert.EqualValues(t, 700_000, p.payable(t, api, big.GetId()).GetPaidAmount())
 }
 
-// Scenario: E2E-PAY-004, Release 13.0, voiding a voucher reopens its payables
+// Scenario: E2E-PAY-004, Release 11.0, voiding a voucher reopens its payables
 // and a voucher is never deleted (FR-BIL-07).
 func TestVoidingAVoucherReopensItsPayables(t *testing.T) {
 	t.Parallel()
@@ -440,7 +440,7 @@ func TestVoidingAVoucherReopensItsPayables(t *testing.T) {
 	assert.EqualValues(t, 500_000, voided.GetUnallocatedAmount(), "the allocation to a cancelled payable counts as unallocated")
 }
 
-// Scenario: E2E-PAY-005, Release 13.0, the payables by supplier and age
+// Scenario: E2E-PAY-005, Release 11.0, the payables by supplier and age
 // (FR-INV-17).
 func TestAgingBySupplierAndAge(t *testing.T) {
 	t.Parallel()
@@ -491,7 +491,7 @@ func TestAgingBySupplierAndAge(t *testing.T) {
 	assert.EqualValues(t, 4, list.GetSummary().GetOpenCount())
 }
 
-// Scenario: E2E-PAY-007, Release 13.0, permissions and tenant isolation of
+// Scenario: E2E-PAY-007, Release 11.0, permissions and tenant isolation of
 // payables and vouchers (FR-INV-17, FR-BIL-07, NFR-SE).
 func TestPayablePermissionsAndTenantIsolation(t *testing.T) {
 	t.Parallel()
@@ -577,7 +577,7 @@ func TestPayablePermissionsAndTenantIsolation(t *testing.T) {
 	fixture.RequireAPIError(t, err, http.StatusUnauthorized, "")
 }
 
-// Scenario: E2E-PAY-006, Release 13.0, the voucher as a PDF on A4 and A5 and
+// Scenario: E2E-PAY-006, Release 11.0, the voucher as a PDF on A4 and A5 and
 // the payables as Excel (FR-BIL-07, FR-DOC-04).
 func TestVoucherPDFAndPayablesWorkbook(t *testing.T) {
 	t.Parallel()

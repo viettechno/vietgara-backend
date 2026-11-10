@@ -1,4 +1,4 @@
--- Purchase orders (Release 13.0, FR-INV-16): a numbered order to one supplier
+-- Purchase orders (Release 11.0, FR-INV-16): a numbered order to one supplier
 -- that can be e-mailed and received into a goods receipt. Quantities follow
 -- the units of goods receipts: entered_* is what was typed (in unit_id, NULL
 -- for the base unit), quantity is the base-unit amount, received_quantity the

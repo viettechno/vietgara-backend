@@ -32,7 +32,7 @@ import (
 )
 
 // receivableModule is the wired Receivables module (HLD module #9, Release
-// 13.0): the receivables fed by the events of Billing & Settlement, the
+// 11.0): the receivables fed by the events of Billing & Settlement, the
 // scheduled reminders and the reconciliation.
 type receivableModule struct {
 	uc             *receivableUsecase.ReceivableUseCase

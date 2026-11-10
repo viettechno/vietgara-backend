@@ -15,10 +15,10 @@ const (
 	TypeSettlementPaid    Type = "settlement_paid"
 	TypeLowStock          Type = "low_stock"
 	// TypePaymentReminder reminds a customer of an overdue settlement (Release
-	// 13.0, FR-REC-03).
+	// 11.0, FR-REC-03).
 	TypePaymentReminder Type = "payment_reminder"
 	// TypePurchaseOrder is a purchase order e-mailed to a supplier (Release
-	// 13.0, FR-INV-16). It is logged but never a setting: it is not in
+	// 11.0, FR-INV-16). It is logged but never a setting: it is not in
 	// AllTypes, and the garage cannot switch it off.
 	TypePurchaseOrder Type = "purchase_order"
 )

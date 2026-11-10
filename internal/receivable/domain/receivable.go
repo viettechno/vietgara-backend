@@ -41,7 +41,7 @@ const (
 	OutcomeFailed  Outcome = "failed"
 )
 
-// ChannelEmail is the channel of a reminder; push joins with Release 11.0.
+// ChannelEmail is the channel of a reminder; push joins with Release 16.0.
 const ChannelEmail = "email"
 
 // Skip reasons of a reminder; the first four are the notification module's.

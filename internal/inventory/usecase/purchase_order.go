@@ -16,7 +16,7 @@ import (
 )
 
 // Audit actions, document type and numbering of the purchase order (Release
-// 13.0, FR-INV-16).
+// 11.0, FR-INV-16).
 const (
 	ActionPurchaseOrderCreated   = "purchase_order.created"
 	ActionPurchaseOrderUpdated   = "purchase_order.updated"

@@ -69,6 +69,7 @@ MANUAL_ONLY = {
     "E2E-INV-032": "cursor and scroll behaviour of the web and phone screens; the camera",
     "E2E-DOC-005": "the print dialog of a browser and a phone, and a real network printer",
     "E2E-IAM-035": "a real Google account in a web popup and in the apps",
+    "E2E-IAM-037": "the change-password card of both web consoles: a browser test of vietgara-e2e",
     "E2E-NOT-007": "a real mailbox: the provider, the attachment and the mail client's unsubscribe control",
     "E2E-LIC-017": "needs the period end moved with SQL helper H1 twice, and a renewal before and after it",
     "E2E-REC-009": "the receivables screen: a browser test of vietgara-e2e",

@@ -12,7 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/viettechno/vietgara-backend/internal/identity/repository"
+	identityrepo "github.com/viettechno/vietgara-backend/internal/identity/repository"
+	licenserepo "github.com/viettechno/vietgara-backend/internal/license/repository"
 	platformdb "github.com/viettechno/vietgara-backend/internal/platform/db"
 	"github.com/viettechno/vietgara-backend/internal/platform/mailpit"
 	"github.com/viettechno/vietgara-backend/internal/platform/storage"
@@ -32,6 +33,10 @@ type mailpitMessageDeleter interface {
 type uploadedFileDeleter interface {
 	DeletePrefix(context.Context, string) (int64, error)
 }
+
+// testPlanCodePrefix starts the code of every plan the automated suites create
+// (see the blackbox fixtures); the purge deletes only retired plans with it.
+const testPlanCodePrefix = "qa-"
 
 var (
 	errUnexpectedPositionalArguments = errors.New("unexpected positional arguments")
@@ -103,14 +108,22 @@ func run(ctx context.Context, args []string, lookupEnv func(string) (string, boo
 	cutoff := time.Now()
 
 	deleted, messages, fileCount, err := purgeTestUsers(
-		ctx, repository.NewPostgresUserRepository(pool), mailpitClient, files, domain.String(), cutoff,
+		ctx, identityrepo.NewPostgresUserRepository(pool), mailpitClient, files, domain.String(), cutoff,
 	)
 	if err != nil {
 		return fmt.Errorf("purge test users: %w", err)
 	}
 
-	if _, err := fmt.Fprintf(stdout, "Purged %d test users, %d Mailpit messages, and %d uploaded files from %s\n",
-		deleted, messages, fileCount, domain.String()); err != nil {
+	// After the users: their subscriptions and payment requests go with them,
+	// which leaves their retired plans unreferenced.
+	plans, err := licenserepo.NewPostgresPlanRepository(pool).DeleteRetiredTestPlans(ctx, testPlanCodePrefix)
+	if err != nil {
+		return fmt.Errorf("purge test plans: %w", err)
+	}
+
+	if _, err := fmt.Fprintf(stdout,
+		"Purged %d test users, %d Mailpit messages, and %d uploaded files from %s, and %d retired test plans\n",
+		deleted, messages, fileCount, domain.String(), plans); err != nil {
 		return fmt.Errorf("write purge summary: %w", err)
 	}
 

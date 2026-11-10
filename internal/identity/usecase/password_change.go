@@ -32,12 +32,15 @@ func (uc *IdentityUseCase) ChangePassword(ctx context.Context, userID, currentPa
 	passwordHash := string(hash)
 	user.PasswordHash = &passwordHash
 
-	if err := uc.users.Update(ctx, user); err != nil {
-		return nil, apperror.Internal("update password", err)
-	}
-
+	// The sessions go first, as in UnlinkGoogle: if the update then fails the
+	// user is signed out and still has the old password, whereas the other
+	// order could leave the sessions of a stolen device alive.
 	if err := uc.sessions.RevokeAllRefreshTokens(ctx, user.ID); err != nil {
 		return nil, apperror.Internal("revoke sessions", err)
+	}
+
+	if err := uc.users.Update(ctx, user); err != nil {
+		return nil, apperror.Internal("update password", err)
 	}
 
 	if uc.audit != nil {

@@ -14,10 +14,11 @@ order, so a table comes after the tables it references. Where a policy of an
 earlier table reads a later table (for example the policies of `garages`
 read `garage_staff`), it is created with the later table.
 
-Until the first real tenant exists, the migrations are edited in place and
-the database is rebuilt: locally with `make docker-clean` and `make docker-up`,
-on staging by wiping its database (staging holds test data only). From the
-first real tenant on, every change is a new forward-only migration.
+Production holds real tenant data, so every change is a new forward-only
+migration: a migration that has been released is never edited. Locally the
+database is rebuilt with `make docker-clean` and `make docker-up`, and staging
+(test data only) can be wiped and rebuilt, but neither is a reason to edit a
+released migration, because production cannot be rebuilt.
 
 | Migrations | Creates |
 | --- | --- |

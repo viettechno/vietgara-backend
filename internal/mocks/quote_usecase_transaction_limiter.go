@@ -38,20 +38,31 @@ func (_m *MockTransactionLimiter) EXPECT() *MockTransactionLimiter_Expecter {
 }
 
 // ConsumeTransaction provides a mock function for the type MockTransactionLimiter
-func (_mock *MockTransactionLimiter) ConsumeTransaction(ctx context.Context, ownerUserID string, kind string) error {
+func (_mock *MockTransactionLimiter) ConsumeTransaction(ctx context.Context, ownerUserID string, kind string) (func(context.Context), error) {
 	ret := _mock.Called(ctx, ownerUserID, kind)
 
 	if len(ret) == 0 {
 		panic("no return value specified for ConsumeTransaction")
 	}
 
-	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) error); ok {
+	var r0 func(context.Context)
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (func(context.Context), error)); ok {
+		return returnFunc(ctx, ownerUserID, kind)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) func(context.Context)); ok {
 		r0 = returnFunc(ctx, ownerUserID, kind)
 	} else {
-		r0 = ret.Error(0)
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(func(context.Context))
+		}
 	}
-	return r0
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, ownerUserID, kind)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
 }
 
 // MockTransactionLimiter_ConsumeTransaction_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ConsumeTransaction'
@@ -90,64 +101,12 @@ func (_c *MockTransactionLimiter_ConsumeTransaction_Call) Run(run func(ctx conte
 	return _c
 }
 
-func (_c *MockTransactionLimiter_ConsumeTransaction_Call) Return(err error) *MockTransactionLimiter_ConsumeTransaction_Call {
-	_c.Call.Return(err)
+func (_c *MockTransactionLimiter_ConsumeTransaction_Call) Return(release func(context.Context), err error) *MockTransactionLimiter_ConsumeTransaction_Call {
+	_c.Call.Return(release, err)
 	return _c
 }
 
-func (_c *MockTransactionLimiter_ConsumeTransaction_Call) RunAndReturn(run func(ctx context.Context, ownerUserID string, kind string) error) *MockTransactionLimiter_ConsumeTransaction_Call {
+func (_c *MockTransactionLimiter_ConsumeTransaction_Call) RunAndReturn(run func(ctx context.Context, ownerUserID string, kind string) (func(context.Context), error)) *MockTransactionLimiter_ConsumeTransaction_Call {
 	_c.Call.Return(run)
-	return _c
-}
-
-// ReleaseTransaction provides a mock function for the type MockTransactionLimiter
-func (_mock *MockTransactionLimiter) ReleaseTransaction(ctx context.Context, ownerUserID string, kind string) {
-	_mock.Called(ctx, ownerUserID, kind)
-	return
-}
-
-// MockTransactionLimiter_ReleaseTransaction_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReleaseTransaction'
-type MockTransactionLimiter_ReleaseTransaction_Call struct {
-	*mock.Call
-}
-
-// ReleaseTransaction is a helper method to define mock.On call
-//   - ctx context.Context
-//   - ownerUserID string
-//   - kind string
-func (_e *MockTransactionLimiter_Expecter) ReleaseTransaction(ctx any, ownerUserID any, kind any) *MockTransactionLimiter_ReleaseTransaction_Call {
-	return &MockTransactionLimiter_ReleaseTransaction_Call{Call: _e.mock.On("ReleaseTransaction", ctx, ownerUserID, kind)}
-}
-
-func (_c *MockTransactionLimiter_ReleaseTransaction_Call) Run(run func(ctx context.Context, ownerUserID string, kind string)) *MockTransactionLimiter_ReleaseTransaction_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
-	})
-	return _c
-}
-
-func (_c *MockTransactionLimiter_ReleaseTransaction_Call) Return() *MockTransactionLimiter_ReleaseTransaction_Call {
-	_c.Call.Return()
-	return _c
-}
-
-func (_c *MockTransactionLimiter_ReleaseTransaction_Call) RunAndReturn(run func(ctx context.Context, ownerUserID string, kind string)) *MockTransactionLimiter_ReleaseTransaction_Call {
-	_c.Run(run)
 	return _c
 }

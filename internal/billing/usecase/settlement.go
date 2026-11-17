@@ -106,14 +106,15 @@ func (uc *SettlementUseCase) Create(ctx context.Context, req CreateSettlementReq
 		return nil, err
 	}
 
-	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionSettlement); err != nil {
+	release, err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionSettlement)
+	if err != nil {
 		return nil, err
 	}
 
 	// A document that is not created after all gives its count back.
 	defer func() {
 		if err != nil {
-			uc.Limits.ReleaseTransaction(ctx, garage.OwnerUserID, transactionSettlement)
+			release(ctx)
 		}
 	}()
 

@@ -23,7 +23,7 @@ func approvedQuote() *domain.Quote {
 	return q
 }
 
-func TestQuoteUseCase_Convert(t *testing.T) {
+func TestQuoteUseCase_Convert(t *testing.T) { //nolint:funlen // one subtest per path of the use case
 	t.Parallel()
 
 	t.Run("converts the approved lines only", func(t *testing.T) {
@@ -32,7 +32,7 @@ func TestQuoteUseCase_Convert(t *testing.T) {
 		uc, d := newUseCase(t)
 		d.Quotes.EXPECT().FindByID(mock.Anything, garageID, quoteID).Return(approvedQuote(), nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
-		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil).Once()
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(noRelease, nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
 		d.RepairOrders.EXPECT().Create(mock.Anything, garageID, quoteID, vehicleID, "An Nguyen", "51F-123.45", "LSC-202609-0001", actorID, billingparty.Party{},
 			mock.MatchedBy(func(lines []domain.Line) bool { return len(lines) == 1 && lines[0].ID == "line-1" }),
@@ -85,7 +85,7 @@ func TestQuoteUseCase_Convert(t *testing.T) {
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 
 		planLimit := apperror.New(apperror.CodeFailedPrecondition, "limit reached")
-		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(planLimit).Once()
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil, planLimit).Once()
 
 		_, err := uc.Convert(t.Context(), garageID, quoteID, actorID)
 		assertAppError(t, err, apperror.CodeFailedPrecondition)
@@ -97,12 +97,14 @@ func TestQuoteUseCase_Convert(t *testing.T) {
 		uc, d := newUseCase(t)
 		d.Quotes.EXPECT().FindByID(mock.Anything, garageID, quoteID).Return(approvedQuote(), nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
-		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil).Once()
-		d.Limits.EXPECT().ReleaseTransaction(mock.Anything, ownerID, "repair_order").Once()
+
+		var released bool
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(recordRelease(&released), nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(0, errBoom).Once()
 
 		_, err := uc.Convert(t.Context(), garageID, quoteID, actorID)
 		assertAppError(t, err, apperror.CodeInternal)
+		require.True(t, released, "the count is given back")
 	})
 
 	t.Run("repair order creation failure", func(t *testing.T) {
@@ -111,8 +113,9 @@ func TestQuoteUseCase_Convert(t *testing.T) {
 		uc, d := newUseCase(t)
 		d.Quotes.EXPECT().FindByID(mock.Anything, garageID, quoteID).Return(approvedQuote(), nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
-		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil).Once()
-		d.Limits.EXPECT().ReleaseTransaction(mock.Anything, ownerID, "repair_order").Once()
+
+		var released bool
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(recordRelease(&released), nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
 		d.RepairOrders.EXPECT().
 			Create(mock.Anything, garageID, quoteID, vehicleID, "An Nguyen", "51F-123.45", "LSC-202609-0001", actorID, mock.Anything, mock.Anything).
@@ -120,6 +123,7 @@ func TestQuoteUseCase_Convert(t *testing.T) {
 
 		_, err := uc.Convert(t.Context(), garageID, quoteID, actorID)
 		assertAppError(t, err, apperror.CodeInternal)
+		require.True(t, released, "the count is given back")
 	})
 
 	t.Run("repository failure saving the converted quote", func(t *testing.T) {
@@ -128,8 +132,9 @@ func TestQuoteUseCase_Convert(t *testing.T) {
 		uc, d := newUseCase(t)
 		d.Quotes.EXPECT().FindByID(mock.Anything, garageID, quoteID).Return(approvedQuote(), nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
-		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil).Once()
-		d.Limits.EXPECT().ReleaseTransaction(mock.Anything, ownerID, "repair_order").Once()
+
+		var released bool
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(recordRelease(&released), nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
 		d.RepairOrders.EXPECT().
 			Create(mock.Anything, garageID, quoteID, vehicleID, "An Nguyen", "51F-123.45", "LSC-202609-0001", actorID, mock.Anything, mock.Anything).
@@ -138,6 +143,7 @@ func TestQuoteUseCase_Convert(t *testing.T) {
 
 		_, err := uc.Convert(t.Context(), garageID, quoteID, actorID)
 		assertAppError(t, err, apperror.CodeInternal)
+		require.True(t, released, "the count is given back")
 	})
 }
 
@@ -149,8 +155,9 @@ func TestQuoteUseCase_ConvertAnotherRequestConvertedItFirst(t *testing.T) {
 	uc, d := newUseCase(t)
 	d.Quotes.EXPECT().FindByID(mock.Anything, garageID, quoteID).Return(approvedQuote(), nil).Once()
 	d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
-	d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil).Once()
-	d.Limits.EXPECT().ReleaseTransaction(mock.Anything, ownerID, "repair_order").Once()
+
+	var released bool
+	d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(recordRelease(&released), nil).Once()
 	d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
 	d.RepairOrders.EXPECT().
 		Create(mock.Anything, garageID, quoteID, vehicleID, "An Nguyen", "51F-123.45", "LSC-202609-0001", actorID, mock.Anything, mock.Anything).
@@ -158,4 +165,5 @@ func TestQuoteUseCase_ConvertAnotherRequestConvertedItFirst(t *testing.T) {
 
 	_, err := uc.Convert(t.Context(), garageID, quoteID, actorID)
 	assertAppError(t, err, apperror.CodeFailedPrecondition)
+	require.True(t, released, "the count is given back")
 }

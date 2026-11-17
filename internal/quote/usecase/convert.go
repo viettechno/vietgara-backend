@@ -37,14 +37,15 @@ func (uc *QuoteUseCase) Convert(ctx context.Context, garageID, quoteID, actorID 
 		return ConvertQuoteResult{}, err
 	}
 
-	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionRepairOrder); err != nil {
+	release, err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionRepairOrder)
+	if err != nil {
 		return ConvertQuoteResult{}, err
 	}
 
 	// A document that is not created after all gives its count back.
 	defer func() {
 		if err != nil {
-			uc.Limits.ReleaseTransaction(ctx, garage.OwnerUserID, transactionRepairOrder)
+			release(ctx)
 		}
 	}()
 

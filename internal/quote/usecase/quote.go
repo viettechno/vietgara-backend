@@ -123,14 +123,15 @@ func (uc *QuoteUseCase) Create(ctx context.Context, req CreateQuoteRequest) (_ *
 		return nil, toAppError("create quote", err)
 	}
 
-	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionQuote); err != nil {
+	release, err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionQuote)
+	if err != nil {
 		return nil, err
 	}
 
 	// A document that is not created after all gives its count back.
 	defer func() {
 		if err != nil {
-			uc.Limits.ReleaseTransaction(ctx, garage.OwnerUserID, transactionQuote)
+			release(ctx)
 		}
 	}()
 

@@ -73,7 +73,7 @@ func TestDailyLimitFollowsTheVietnameseDay(t *testing.T) {
 	consume := func(at time.Time) error {
 		e.Now = at
 
-		return e.Entitlements.ConsumeTransaction(ctx, "owner", "quote")
+		return consume(ctx, e, "owner", "quote")
 	}
 
 	// The trial allows two a day. 23:59:59 on 1 Nov in Vietnam is still that day.
@@ -150,9 +150,9 @@ func TestEntitlements(t *testing.T) {
 	requireReason(t, e.Entitlements.CheckLimit(ctx, "owner", "max_bays", 0), apperror.ReasonInternal)
 	require.NoError(t, e.Entitlements.CheckLimit(ctx, "other", domain.LimitStaff, 0), "starts the trial")
 
-	require.NoError(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "quote"))
-	require.NoError(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "quote"))
-	requireReason(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "quote"), domain.ReasonPlanLimitReached)
+	require.NoError(t, consume(ctx, e, "owner", "quote"))
+	require.NoError(t, consume(ctx, e, "owner", "quote"))
+	requireReason(t, consume(ctx, e, "owner", "quote"), domain.ReasonPlanLimitReached)
 
 	_, usage, err := e.Subscriptions.GetMine(ctx, "owner")
 	require.NoError(t, err)
@@ -169,7 +169,7 @@ func TestEntitlements(t *testing.T) {
 
 	e.Store.Fail["plans.code"] = errBoom
 	require.Error(t, e.Entitlements.CheckLimit(ctx, "brand-new", domain.LimitStaff, 0))
-	require.Error(t, e.Entitlements.ConsumeTransaction(ctx, "brand-new", "quote"))
+	require.Error(t, consume(ctx, e, "brand-new", "quote"))
 }
 
 func TestLicenseMode(t *testing.T) {

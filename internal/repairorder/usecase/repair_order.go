@@ -110,14 +110,15 @@ func (uc *RepairOrderUseCase) Create(ctx context.Context, req CreateRepairOrderR
 		return nil, toAppError("create repair order", err)
 	}
 
-	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionRepairOrder); err != nil {
+	release, err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionRepairOrder)
+	if err != nil {
 		return nil, err
 	}
 
 	// A document that is not created after all gives its count back.
 	defer func() {
 		if err != nil {
-			uc.Limits.ReleaseTransaction(ctx, garage.OwnerUserID, transactionRepairOrder)
+			release(ctx)
 		}
 	}()
 

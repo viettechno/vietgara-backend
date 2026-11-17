@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/viettechno/vietgara-backend/internal/license/domain"
@@ -165,7 +166,7 @@ const releaseTimeout = 3 * time.Second
 // takes back exactly the count made here, from the day it was counted on. It
 // reads nothing else, so it works while the request's transaction is aborted;
 // it is best effort, logs a failure and never hides the error that caused it.
-// release is never nil.
+// Calling it twice gives the count back once. release is never nil.
 func (uc *EntitlementUseCase) ConsumeTransaction(ctx context.Context, ownerID, kind string) (release func(context.Context), err error) {
 	e, err := uc.getOrStartTrial(ctx, ownerID)
 	if err != nil {
@@ -187,14 +188,19 @@ func (uc *EntitlementUseCase) ConsumeTransaction(ctx context.Context, ownerID, k
 		return nil, limitReached(domain.LimitTransactions, e.MaxTransactionsPerDay)
 	}
 
-	return func(ctx context.Context) {
-		// The request may be cancelled by now; the count must still be given back.
-		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
-		defer cancel()
+	var once sync.Once
 
-		if err := uc.counter.Decrement(ctx, ownerID, day); err != nil {
-			slog.Warn("license: giving a transaction back failed", "user_id", ownerID, "kind", kind, "error", err)
-		}
+	return func(ctx context.Context) {
+		// A second call must not take back the count of another document.
+		once.Do(func() {
+			// The request may be cancelled by now; the count must still be given back.
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
+			defer cancel()
+
+			if err := uc.counter.Decrement(ctx, ownerID, day); err != nil {
+				slog.Warn("license: giving a transaction back failed", "user_id", ownerID, "kind", kind, "error", err)
+			}
+		})
 	}, nil
 }
 

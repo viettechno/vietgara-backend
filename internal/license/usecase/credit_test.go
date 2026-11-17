@@ -267,23 +267,26 @@ func TestReleaseGivesTheDayBack(t *testing.T) {
 	require.NoError(t, consume(ctx, e, "owner", "repair_order"), "the freed slot can be used")
 
 	first(ctx)
-	first(ctx)
-	first(ctx)
-	assert.Zero(t, today(), "the count never goes below zero")
+	assert.Equal(t, 2, today(), "a release called twice gives back once")
 
-	// The plan stops counting repair orders after the document was counted: the
+	// The plan stops counting repair orders after a document was counted: the
 	// release still gives that count back, because it does not ask the plan again.
-	require.NoError(t, consume(ctx, e, "owner", "repair_order"))
-
-	last, err := e.Entitlements.ConsumeTransaction(ctx, "owner", "repair_order")
+	last, err := e.Entitlements.ConsumeTransaction(ctx, "other", "repair_order")
 	require.NoError(t, err)
+
+	usage, err := e.Subscriptions.Usage(ctx, "other")
+	require.NoError(t, err)
+	assert.Equal(t, 1, usage.TransactionsToday)
 
 	trial.CountedKinds = []domain.TransactionKind{domain.TransactionQuote}
 	require.NoError(t, e.Store.Plans().Update(ctx, trial))
-	require.NoError(t, e.Entitlements.Invalidate(ctx, "owner"))
+	require.NoError(t, e.Entitlements.Invalidate(ctx, "other"))
 
 	last(ctx)
-	assert.Equal(t, 1, today())
+
+	usage, err = e.Subscriptions.Usage(ctx, "other")
+	require.NoError(t, err)
+	assert.Zero(t, usage.TransactionsToday)
 }
 
 // A release made after midnight in Vietnam gives back to the day that was counted.

@@ -1,7 +1,10 @@
 package repository_test
 
 import (
+	"context"
 	"errors"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -215,28 +218,111 @@ func TestCachesAndCounters(t *testing.T) {
 	redisCounter := repository.NewRedisTransactionCounter(client)
 	memoryCounter := repository.NewMemoryTransactionCounter()
 
-	for _, c := range []struct {
-		inc func() (int, error)
-		get func() (int, error)
-	}{
-		{func() (int, error) { return redisCounter.Increment(ctx, "user", "20260925") }, func() (int, error) { return redisCounter.Get(ctx, "user", "20260925") }},
-		{func() (int, error) { return memoryCounter.Increment(ctx, "user", "20260925") }, func() (int, error) { return memoryCounter.Get(ctx, "user", "20260925") }},
-	} {
-		n, err := c.get()
+	for _, c := range []interface {
+		TryIncrement(ctx context.Context, userID, day string, limit int) (bool, error)
+		Get(ctx context.Context, userID, day string) (int, error)
+	}{redisCounter, memoryCounter} {
+		n, err := c.Get(ctx, "user", "20260925")
 		require.NoError(t, err)
 		assert.Zero(t, n)
 
-		for want := 1; want <= 2; want++ {
-			n, err = c.inc()
+		for range 2 {
+			counted, err := c.TryIncrement(ctx, "user", "20260925", 2)
 			require.NoError(t, err)
-			assert.Equal(t, want, n)
+			assert.True(t, counted)
 		}
 
-		n, err = c.get()
+		counted, err := c.TryIncrement(ctx, "user", "20260925", 2)
 		require.NoError(t, err)
-		assert.Equal(t, 2, n)
+		assert.False(t, counted, "at the limit nothing is counted")
+
+		n, err = c.Get(ctx, "user", "20260925")
+		require.NoError(t, err)
+		assert.Equal(t, 2, n, "a refused try leaves the count as it was")
 	}
 
-	_, err = repository.NewRedisTransactionCounter(down).Increment(ctx, "a", "d")
+	assert.Positive(t, mr.TTL("license:transactions:user:20260925"), "the key expires")
+
+	_, err = repository.NewRedisTransactionCounter(down).TryIncrement(ctx, "a", "d", 1)
 	require.Error(t, err)
+	require.Error(t, repository.NewRedisTransactionCounter(down).Decrement(ctx, "a", "d"))
+}
+
+// Decrement gives one back, never goes below zero and does not create a key.
+func TestTransactionCounterDecrement(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
+	t.Cleanup(func() { _ = client.Close() })
+
+	for name, c := range map[string]interface {
+		TryIncrement(ctx context.Context, userID, day string, limit int) (bool, error)
+		Decrement(ctx context.Context, userID, day string) error
+		Get(ctx context.Context, userID, day string) (int, error)
+	}{
+		"redis":  repository.NewRedisTransactionCounter(client),
+		"memory": repository.NewMemoryTransactionCounter(),
+	} {
+		require.NoError(t, c.Decrement(ctx, "user", "20260925"), name)
+
+		n, err := c.Get(ctx, "user", "20260925")
+		require.NoError(t, err)
+		assert.Zero(t, n, name+": nothing to give back")
+		assert.Empty(t, mr.Keys(), name+": a missing key is not created")
+
+		for range 3 {
+			_, err = c.TryIncrement(ctx, "user", "20260925", 10)
+			require.NoError(t, err)
+		}
+
+		require.NoError(t, c.Decrement(ctx, "user", "20260925"), name)
+
+		n, err = c.Get(ctx, "user", "20260925")
+		require.NoError(t, err)
+		assert.Equal(t, 2, n, name)
+
+		mr.FlushAll()
+	}
+}
+
+// Parallel requests never count past the limit.
+func TestTransactionCounterTryIncrementIsAtomic(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
+	t.Cleanup(func() { _ = client.Close() })
+
+	for name, c := range map[string]interface {
+		TryIncrement(ctx context.Context, userID, day string, limit int) (bool, error)
+		Get(ctx context.Context, userID, day string) (int, error)
+	}{
+		"redis":  repository.NewRedisTransactionCounter(client),
+		"memory": repository.NewMemoryTransactionCounter(),
+	} {
+		var (
+			wg      sync.WaitGroup
+			counted atomic.Int32
+		)
+
+		for range 40 {
+			wg.Go(func() {
+				if ok, err := c.TryIncrement(ctx, "user", "20260925", 10); err == nil && ok {
+					counted.Add(1)
+				}
+			})
+		}
+
+		wg.Wait()
+
+		n, err := c.Get(ctx, "user", "20260925")
+		require.NoError(t, err)
+		assert.EqualValues(t, 10, counted.Load(), name)
+		assert.Equal(t, 10, n, name)
+	}
 }

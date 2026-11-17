@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sync"
+	"time"
 
 	"github.com/viettechno/vietgara-backend/internal/license/domain"
 	"github.com/viettechno/vietgara-backend/internal/middleware"
@@ -149,31 +151,57 @@ func (uc *EntitlementUseCase) CheckLimit(ctx context.Context, ownerID string, li
 	return nil
 }
 
+// releaseTimeout bounds the give-back of a count, which runs on the error path
+// of a request that has already failed.
+const releaseTimeout = 3 * time.Second
+
 // ConsumeTransaction counts one business document of kind (quote,
 // repair_order or settlement) created by the owner's garages today and
-// refuses it once the plan's daily limit is reached. A kind the plan does not
-// count is neither counted nor limited (FR-LIC-02). Called by the document
-// modules.
-func (uc *EntitlementUseCase) ConsumeTransaction(ctx context.Context, ownerID, kind string) error {
+// refuses it once the plan's daily limit is reached (a refused document is
+// never counted). A kind the plan does not count is neither counted nor
+// limited (FR-LIC-02).
+//
+// It returns release, which the document modules call when the document is
+// not created after all (a later step failed, so the request rolls back): it
+// takes back exactly the count made here, from the day it was counted on. It
+// reads nothing else, so it works while the request's transaction is aborted;
+// it is best effort, logs a failure and never hides the error that caused it.
+// Calling it twice gives the count back once. release is never nil.
+func (uc *EntitlementUseCase) ConsumeTransaction(ctx context.Context, ownerID, kind string) (release func(context.Context), err error) {
 	e, err := uc.getOrStartTrial(ctx, ownerID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if !e.CountsTransaction(domain.TransactionKind(kind)) {
-		return nil
+		return func(context.Context) {}, nil
 	}
 
-	count, err := uc.counter.Increment(ctx, ownerID, uc.opts.today())
+	day := uc.opts.today()
+
+	counted, err := uc.counter.TryIncrement(ctx, ownerID, day, e.MaxTransactionsPerDay)
 	if err != nil {
-		return toAppError("count transaction", err)
+		return nil, toAppError("count transaction", err)
 	}
 
-	if count > e.MaxTransactionsPerDay {
-		return limitReached(domain.LimitTransactions, e.MaxTransactionsPerDay)
+	if !counted {
+		return nil, limitReached(domain.LimitTransactions, e.MaxTransactionsPerDay)
 	}
 
-	return nil
+	var once sync.Once
+
+	return func(ctx context.Context) {
+		// A second call must not take back the count of another document.
+		once.Do(func() {
+			// The request may be cancelled by now; the count must still be given back.
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
+			defer cancel()
+
+			if err := uc.counter.Decrement(ctx, ownerID, day); err != nil {
+				slog.Warn("license: giving a transaction back failed", "user_id", ownerID, "kind", kind, "error", err)
+			}
+		})
+	}, nil
 }
 
 // garageOwner reads the owner from the request's authorized access, or

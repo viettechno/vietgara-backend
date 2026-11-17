@@ -20,7 +20,7 @@ type ConvertQuoteResult struct {
 // stranded as "approved but silently unconvertible". Counts against the
 // plan's daily transaction limit (FR-LIC-02), separately from the quote's
 // own creation.
-func (uc *QuoteUseCase) Convert(ctx context.Context, garageID, quoteID, actorID string) (ConvertQuoteResult, error) {
+func (uc *QuoteUseCase) Convert(ctx context.Context, garageID, quoteID, actorID string) (_ ConvertQuoteResult, err error) {
 	q, err := uc.Quotes.FindByID(ctx, garageID, quoteID)
 	if err != nil {
 		return ConvertQuoteResult{}, toAppError("convert quote", err)
@@ -37,9 +37,17 @@ func (uc *QuoteUseCase) Convert(ctx context.Context, garageID, quoteID, actorID 
 		return ConvertQuoteResult{}, err
 	}
 
-	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionRepairOrder); err != nil {
+	release, err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionRepairOrder)
+	if err != nil {
 		return ConvertQuoteResult{}, err
 	}
+
+	// A document that is not created after all gives its count back.
+	defer func() {
+		if err != nil {
+			release(ctx)
+		}
+	}()
 
 	number, err := uc.nextRepairOrderNumber(ctx, garageID, garage)
 	if err != nil {

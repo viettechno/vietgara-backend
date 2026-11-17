@@ -11,7 +11,7 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-func TestSettlementUseCase_Create(t *testing.T) {
+func TestSettlementUseCase_Create(t *testing.T) { //nolint:funlen // one subtest per path of the use case
 	t.Parallel()
 
 	t.Run("creates a settlement from a closed repair order", func(t *testing.T) {
@@ -22,7 +22,7 @@ func TestSettlementUseCase_Create(t *testing.T) {
 			Return(nil, domain.ErrSettlementNotFound).Once()
 		d.RepairOrders.EXPECT().Get(mock.Anything, garageID, repairOrderID).Return(closedRepairOrder(), nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
-		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "settlement").Return(nil).Once()
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "settlement").Return(noRelease, nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "settlement", "QT-202609-{SEQ:4}").Return(1, nil).Once()
 		d.Settlements.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
 		d.Events.EXPECT().Publish(mock.Anything, usecase.EventSettlementCreated, garageID, "", mock.Anything).Return(nil).Once()
@@ -94,7 +94,7 @@ func TestSettlementUseCase_Create(t *testing.T) {
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 
 		planLimit := apperror.New(apperror.CodeFailedPrecondition, "limit reached")
-		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "settlement").Return(planLimit).Once()
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "settlement").Return(nil, planLimit).Once()
 
 		_, err := uc.Create(t.Context(), usecase.CreateSettlementRequest{GarageID: garageID, RepairOrderID: repairOrderID})
 		assertAppError(t, err, apperror.CodeFailedPrecondition)
@@ -108,12 +108,15 @@ func TestSettlementUseCase_Create(t *testing.T) {
 			Return(nil, domain.ErrSettlementNotFound).Once()
 		d.RepairOrders.EXPECT().Get(mock.Anything, garageID, repairOrderID).Return(closedRepairOrder(), nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
-		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "settlement").Return(nil).Once()
+
+		var released bool
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "settlement").Return(recordRelease(&released), nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "settlement", "QT-202609-{SEQ:4}").Return(1, nil).Once()
 		d.Settlements.EXPECT().Create(mock.Anything, mock.Anything).Return(errBoom).Once()
 
 		_, err := uc.Create(t.Context(), usecase.CreateSettlementRequest{GarageID: garageID, RepairOrderID: repairOrderID})
 		assertAppError(t, err, apperror.CodeInternal)
+		require.True(t, released, "the count is given back")
 	})
 
 	t.Run("event publish failure", func(t *testing.T) {
@@ -124,13 +127,16 @@ func TestSettlementUseCase_Create(t *testing.T) {
 			Return(nil, domain.ErrSettlementNotFound).Once()
 		d.RepairOrders.EXPECT().Get(mock.Anything, garageID, repairOrderID).Return(closedRepairOrder(), nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
-		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "settlement").Return(nil).Once()
+
+		var released bool
+		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "settlement").Return(recordRelease(&released), nil).Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "settlement", "QT-202609-{SEQ:4}").Return(1, nil).Once()
 		d.Settlements.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
 		d.Events.EXPECT().Publish(mock.Anything, usecase.EventSettlementCreated, garageID, "", mock.Anything).Return(errBoom).Once()
 
 		_, err := uc.Create(t.Context(), usecase.CreateSettlementRequest{GarageID: garageID, RepairOrderID: repairOrderID})
 		assertAppError(t, err, apperror.CodeInternal)
+		require.True(t, released, "the count is given back")
 	})
 }
 

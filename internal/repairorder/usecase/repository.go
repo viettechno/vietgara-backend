@@ -96,7 +96,10 @@ type GarageReader interface {
 // EntitlementUseCase. kind names the document being created ("quote",
 // "repair_order" or "settlement"): the plan counts only the kinds it lists.
 type TransactionLimiter interface {
-	ConsumeTransaction(ctx context.Context, ownerUserID, kind string) error
+	// ConsumeTransaction counts the document and returns release, which gives
+	// the count back when the document is not created after all; it never
+	// fails and is never nil.
+	ConsumeTransaction(ctx context.Context, ownerUserID, kind string) (release func(context.Context), err error)
 }
 
 // Sequencer hands out document sequence numbers (FR-TEN-05); implemented

@@ -1,6 +1,7 @@
 package usecase_test
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -196,23 +197,130 @@ func TestOnlyCountedKindsUseTheDailyLimit(t *testing.T) {
 	require.NoError(t, e.Store.Plans().Update(ctx, trial))
 
 	for range 3 {
-		require.NoError(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "quote"), "quotes are not counted")
-		require.NoError(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "settlement"), "nor are settlements")
+		require.NoError(t, consume(ctx, e, "owner", "quote"), "quotes are not counted")
+		require.NoError(t, consume(ctx, e, "owner", "settlement"), "nor are settlements")
 	}
 
-	require.NoError(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "repair_order"))
-	requireReason(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "repair_order"), domain.ReasonPlanLimitReached)
+	require.NoError(t, consume(ctx, e, "owner", "repair_order"))
+	requireReason(t, consume(ctx, e, "owner", "repair_order"), domain.ReasonPlanLimitReached)
 
 	usage, err := e.Subscriptions.Usage(ctx, "owner")
 	require.NoError(t, err)
-	assert.Equal(t, 2, usage.TransactionsToday, "the shared counter went past the limit once")
+	assert.Equal(t, 1, usage.TransactionsToday, "a refused document is not counted")
 
 	// The admin makes quotes count too.
 	trial.CountedKinds = []domain.TransactionKind{domain.TransactionRepairOrder, domain.TransactionQuote}
 	require.NoError(t, e.Store.Plans().Update(ctx, trial))
 	require.NoError(t, e.Entitlements.Invalidate(ctx, "owner"))
 
-	requireReason(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "quote"), domain.ReasonPlanLimitReached)
+	requireReason(t, consume(ctx, e, "owner", "quote"), domain.ReasonPlanLimitReached)
+}
+
+// consume counts one document and drops the release function: for the tests
+// whose documents are all created.
+func consume(ctx context.Context, e *licensetest.Env, owner, kind string) error {
+	_, err := e.Entitlements.ConsumeTransaction(ctx, owner, kind)
+
+	return err
+}
+
+// A document that is not created after all gives its count back, from the day
+// it was counted on, so a failure does not use up the owner's day; a kind the
+// plan does not count has nothing to give back.
+func TestReleaseGivesTheDayBack(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	e := licensetest.NewEnv()
+
+	trial, err := e.Store.Plans().FindByCode(ctx, domain.TrialPlanCode)
+	require.NoError(t, err)
+
+	trial.MaxTransactionsPerDay = 2
+	trial.CountedKinds = []domain.TransactionKind{domain.TransactionRepairOrder}
+	require.NoError(t, e.Store.Plans().Update(ctx, trial))
+
+	today := func() int {
+		usage, err := e.Subscriptions.Usage(ctx, "owner")
+		require.NoError(t, err)
+
+		return usage.TransactionsToday
+	}
+
+	first, err := e.Entitlements.ConsumeTransaction(ctx, "owner", "repair_order")
+	require.NoError(t, err)
+	require.NoError(t, consume(ctx, e, "owner", "repair_order"))
+
+	refused, err := e.Entitlements.ConsumeTransaction(ctx, "owner", "repair_order")
+	requireReason(t, err, domain.ReasonPlanLimitReached)
+	assert.Nil(t, refused, "a refused document has nothing to give back")
+	assert.Equal(t, 2, today())
+
+	notCounted, err := e.Entitlements.ConsumeTransaction(ctx, "owner", "quote")
+	require.NoError(t, err)
+	require.NotNil(t, notCounted, "release is never nil")
+	notCounted(ctx)
+	assert.Equal(t, 2, today(), "a quote is not counted, so nothing is given back")
+
+	first(ctx)
+	assert.Equal(t, 1, today())
+	require.NoError(t, consume(ctx, e, "owner", "repair_order"), "the freed slot can be used")
+
+	first(ctx)
+	assert.Equal(t, 2, today(), "a release called twice gives back once")
+
+	// The plan stops counting repair orders after a document was counted: the
+	// release still gives that count back, because it does not ask the plan again.
+	last, err := e.Entitlements.ConsumeTransaction(ctx, "other", "repair_order")
+	require.NoError(t, err)
+
+	usage, err := e.Subscriptions.Usage(ctx, "other")
+	require.NoError(t, err)
+	assert.Equal(t, 1, usage.TransactionsToday)
+
+	trial.CountedKinds = []domain.TransactionKind{domain.TransactionQuote}
+	require.NoError(t, e.Store.Plans().Update(ctx, trial))
+	require.NoError(t, e.Entitlements.Invalidate(ctx, "other"))
+
+	last(ctx)
+
+	usage, err = e.Subscriptions.Usage(ctx, "other")
+	require.NoError(t, err)
+	assert.Zero(t, usage.TransactionsToday)
+}
+
+// A release made after midnight in Vietnam gives back to the day that was counted.
+func TestReleaseKeepsTheDayItWasCountedOn(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	e := licensetest.NewEnv()
+
+	trial, err := e.Store.Plans().FindByCode(ctx, domain.TrialPlanCode)
+	require.NoError(t, err)
+
+	trial.MaxTransactionsPerDay = 5
+	trial.CountedKinds = []domain.TransactionKind{domain.TransactionRepairOrder}
+	require.NoError(t, e.Store.Plans().Update(ctx, trial))
+
+	e.Now = time.Date(2026, 11, 1, 16, 59, 59, 0, time.UTC) // 23:59:59 on 1 Nov in Vietnam
+	release, err := e.Entitlements.ConsumeTransaction(ctx, "owner", "repair_order")
+	require.NoError(t, err)
+
+	e.Now = e.Now.Add(2 * time.Second) // 00:00:01 on 2 Nov
+	require.NoError(t, consume(ctx, e, "owner", "repair_order"))
+
+	release(ctx)
+
+	usage, err := e.Subscriptions.Usage(ctx, "owner")
+	require.NoError(t, err)
+	assert.Equal(t, 1, usage.TransactionsToday, "today's count is not touched")
+
+	e.Now = e.Now.Add(-2 * time.Second)
+
+	usage, err = e.Subscriptions.Usage(ctx, "owner")
+	require.NoError(t, err)
+	assert.Zero(t, usage.TransactionsToday, "yesterday's count was given back")
 }
 
 // While subscriptions use a plan its commercial terms are locked: a change

@@ -64,7 +64,6 @@ const (
 	CodePartInactive       = "PART_INACTIVE"
 	CodeBarcodeInvalid     = "BARCODE_INVALID"
 	CodeBarcodeAlreadyUsed = "BARCODE_ALREADY_USED"
-	CodeDuplicateBarcode   = "BARCODE_DUPLICATE"
 	CodeInvalidQuantity    = "INVALID_QUANTITY"
 	CodeInvalidCost        = "INVALID_COST"
 	CodeInvalidDate        = "INVALID_DATE"

@@ -151,8 +151,8 @@ func (uc *EntitlementUseCase) CheckLimit(ctx context.Context, ownerID string, li
 
 // ConsumeTransaction counts one business document of kind (quote,
 // repair_order or settlement) created by the owner's garages today and
-// refuses it once the plan's daily limit is reached; a refused document does
-// not stay counted. A kind the plan does not count is neither counted nor
+// refuses it once the plan's daily limit is reached (a refused document is
+// never counted). A kind the plan does not count is neither counted nor
 // limited (FR-LIC-02). Called by the document modules, which call
 // ReleaseTransaction when the document is not created after all.
 func (uc *EntitlementUseCase) ConsumeTransaction(ctx context.Context, ownerID, kind string) error {
@@ -165,14 +165,12 @@ func (uc *EntitlementUseCase) ConsumeTransaction(ctx context.Context, ownerID, k
 		return nil
 	}
 
-	count, err := uc.counter.Increment(ctx, ownerID, uc.opts.today())
+	counted, err := uc.counter.TryIncrement(ctx, ownerID, uc.opts.today(), e.MaxTransactionsPerDay)
 	if err != nil {
 		return toAppError("count transaction", err)
 	}
 
-	if count > e.MaxTransactionsPerDay {
-		uc.giveBack(ctx, ownerID)
-
+	if !counted {
 		return limitReached(domain.LimitTransactions, e.MaxTransactionsPerDay)
 	}
 

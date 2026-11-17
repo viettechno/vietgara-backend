@@ -172,46 +172,47 @@ func (_c *MockTransactionCounter_Get_Call) RunAndReturn(run func(ctx context.Con
 	return _c
 }
 
-// Increment provides a mock function for the type MockTransactionCounter
-func (_mock *MockTransactionCounter) Increment(ctx context.Context, userID string, day string) (int, error) {
-	ret := _mock.Called(ctx, userID, day)
+// TryIncrement provides a mock function for the type MockTransactionCounter
+func (_mock *MockTransactionCounter) TryIncrement(ctx context.Context, userID string, day string, limit int) (bool, error) {
+	ret := _mock.Called(ctx, userID, day, limit)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Increment")
+		panic("no return value specified for TryIncrement")
 	}
 
-	var r0 int
+	var r0 bool
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (int, error)); ok {
-		return returnFunc(ctx, userID, day)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, int) (bool, error)); ok {
+		return returnFunc(ctx, userID, day, limit)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) int); ok {
-		r0 = returnFunc(ctx, userID, day)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string, int) bool); ok {
+		r0 = returnFunc(ctx, userID, day, limit)
 	} else {
-		r0 = ret.Get(0).(int)
+		r0 = ret.Get(0).(bool)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
-		r1 = returnFunc(ctx, userID, day)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string, int) error); ok {
+		r1 = returnFunc(ctx, userID, day, limit)
 	} else {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
 }
 
-// MockTransactionCounter_Increment_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Increment'
-type MockTransactionCounter_Increment_Call struct {
+// MockTransactionCounter_TryIncrement_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'TryIncrement'
+type MockTransactionCounter_TryIncrement_Call struct {
 	*mock.Call
 }
 
-// Increment is a helper method to define mock.On call
+// TryIncrement is a helper method to define mock.On call
 //   - ctx context.Context
 //   - userID string
 //   - day string
-func (_e *MockTransactionCounter_Expecter) Increment(ctx any, userID any, day any) *MockTransactionCounter_Increment_Call {
-	return &MockTransactionCounter_Increment_Call{Call: _e.mock.On("Increment", ctx, userID, day)}
+//   - limit int
+func (_e *MockTransactionCounter_Expecter) TryIncrement(ctx any, userID any, day any, limit any) *MockTransactionCounter_TryIncrement_Call {
+	return &MockTransactionCounter_TryIncrement_Call{Call: _e.mock.On("TryIncrement", ctx, userID, day, limit)}
 }
 
-func (_c *MockTransactionCounter_Increment_Call) Run(run func(ctx context.Context, userID string, day string)) *MockTransactionCounter_Increment_Call {
+func (_c *MockTransactionCounter_TryIncrement_Call) Run(run func(ctx context.Context, userID string, day string, limit int)) *MockTransactionCounter_TryIncrement_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -225,21 +226,26 @@ func (_c *MockTransactionCounter_Increment_Call) Run(run func(ctx context.Contex
 		if args[2] != nil {
 			arg2 = args[2].(string)
 		}
+		var arg3 int
+		if args[3] != nil {
+			arg3 = args[3].(int)
+		}
 		run(
 			arg0,
 			arg1,
 			arg2,
+			arg3,
 		)
 	})
 	return _c
 }
 
-func (_c *MockTransactionCounter_Increment_Call) Return(n int, err error) *MockTransactionCounter_Increment_Call {
-	_c.Call.Return(n, err)
+func (_c *MockTransactionCounter_TryIncrement_Call) Return(b bool, err error) *MockTransactionCounter_TryIncrement_Call {
+	_c.Call.Return(b, err)
 	return _c
 }
 
-func (_c *MockTransactionCounter_Increment_Call) RunAndReturn(run func(ctx context.Context, userID string, day string) (int, error)) *MockTransactionCounter_Increment_Call {
+func (_c *MockTransactionCounter_TryIncrement_Call) RunAndReturn(run func(ctx context.Context, userID string, day string, limit int) (bool, error)) *MockTransactionCounter_TryIncrement_Call {
 	_c.Call.Return(run)
 	return _c
 }

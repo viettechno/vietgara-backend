@@ -115,8 +115,10 @@ type EntitlementCache interface {
 
 // TransactionCounter counts business documents created per owner and day.
 type TransactionCounter interface {
-	// Increment adds one to the count of day and returns the new count.
-	Increment(ctx context.Context, userID, day string) (int, error)
+	// TryIncrement adds one to the count of day unless it is already at limit,
+	// atomically, and reports whether it did: a refused document is never
+	// counted, not even for a moment.
+	TryIncrement(ctx context.Context, userID, day string, limit int) (bool, error)
 	// Decrement takes one back from the count of day, never below zero: the
 	// slot of a document that was refused or not created.
 	Decrement(ctx context.Context, userID, day string) error

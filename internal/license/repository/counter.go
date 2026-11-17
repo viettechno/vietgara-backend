@@ -27,19 +27,26 @@ func NewRedisTransactionCounter(client redis.UniversalClient) *RedisTransactionC
 	return &RedisTransactionCounter{client: client}
 }
 
-// Increment adds one and returns the day's count.
-func (c *RedisTransactionCounter) Increment(ctx context.Context, userID, day string) (int, error) {
-	key := counterKey(userID, day)
+// tryIncrementScript adds one unless the count has reached the limit, and
+// refreshes the key's lifetime. It returns 1 when it counted and 0 when not.
+var tryIncrementScript = redis.NewScript(`
+local n = tonumber(redis.call('GET', KEYS[1])) or 0
+if n >= tonumber(ARGV[1]) then
+  return 0
+end
+redis.call('INCR', KEYS[1])
+redis.call('PEXPIRE', KEYS[1], ARGV[2])
+return 1
+`)
 
-	pipe := c.client.TxPipeline()
-	incr := pipe.Incr(ctx, key)
-	pipe.Expire(ctx, key, counterTTL)
-
-	if _, err := pipe.Exec(ctx); err != nil {
-		return 0, err
+// TryIncrement adds one to the day's count unless it is already at limit.
+func (c *RedisTransactionCounter) TryIncrement(ctx context.Context, userID, day string, limit int) (bool, error) {
+	n, err := tryIncrementScript.Run(ctx, c.client, []string{counterKey(userID, day)}, limit, counterTTL.Milliseconds()).Int()
+	if err != nil {
+		return false, err
 	}
 
-	return int(incr.Val()), nil
+	return n == 1, nil
 }
 
 // decrementScript lowers the count by one only while it is above zero, so a
@@ -78,14 +85,19 @@ func NewMemoryTransactionCounter() *MemoryTransactionCounter {
 	return &MemoryTransactionCounter{counts: map[string]int{}}
 }
 
-// Increment adds one and returns the day's count.
-func (c *MemoryTransactionCounter) Increment(_ context.Context, userID, day string) (int, error) {
+// TryIncrement adds one to the day's count unless it is already at limit.
+func (c *MemoryTransactionCounter) TryIncrement(_ context.Context, userID, day string, limit int) (bool, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.counts[counterKey(userID, day)]++
+	key := counterKey(userID, day)
+	if c.counts[key] >= limit {
+		return false, nil
+	}
 
-	return c.counts[counterKey(userID, day)], nil
+	c.counts[key]++
+
+	return true, nil
 }
 
 // Decrement takes one back from the day's count, never below zero.

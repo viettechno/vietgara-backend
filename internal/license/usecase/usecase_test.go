@@ -156,7 +156,7 @@ func TestEntitlements(t *testing.T) {
 
 	_, usage, err := e.Subscriptions.GetMine(ctx, "owner")
 	require.NoError(t, err)
-	assert.Equal(t, 3, usage.TransactionsToday)
+	assert.Equal(t, 2, usage.TransactionsToday, "a refused document is not counted")
 
 	require.NoError(t, e.Entitlements.Invalidate(ctx, "owner"))
 

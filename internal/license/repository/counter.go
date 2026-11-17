@@ -42,6 +42,21 @@ func (c *RedisTransactionCounter) Increment(ctx context.Context, userID, day str
 	return int(incr.Val()), nil
 }
 
+// decrementScript lowers the count by one only while it is above zero, so a
+// key that expired or was lost is not recreated without a lifetime.
+var decrementScript = redis.NewScript(`
+local n = tonumber(redis.call('GET', KEYS[1]))
+if n and n > 0 then
+  return redis.call('DECR', KEYS[1])
+end
+return 0
+`)
+
+// Decrement takes one back from the day's count, never below zero.
+func (c *RedisTransactionCounter) Decrement(ctx context.Context, userID, day string) error {
+	return decrementScript.Run(ctx, c.client, []string{counterKey(userID, day)}).Err()
+}
+
 // Get returns the day's count.
 func (c *RedisTransactionCounter) Get(ctx context.Context, userID, day string) (int, error) {
 	n, err := c.client.Get(ctx, counterKey(userID, day)).Int()
@@ -71,6 +86,18 @@ func (c *MemoryTransactionCounter) Increment(_ context.Context, userID, day stri
 	c.counts[counterKey(userID, day)]++
 
 	return c.counts[counterKey(userID, day)], nil
+}
+
+// Decrement takes one back from the day's count, never below zero.
+func (c *MemoryTransactionCounter) Decrement(_ context.Context, userID, day string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if key := counterKey(userID, day); c.counts[key] > 0 {
+		c.counts[key]--
+	}
+
+	return nil
 }
 
 // Get returns the day's count.

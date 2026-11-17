@@ -11,7 +11,7 @@ import (
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
-func TestSettlementUseCase_Create(t *testing.T) {
+func TestSettlementUseCase_Create(t *testing.T) { //nolint:funlen // one subtest per path of the use case
 	t.Parallel()
 
 	t.Run("creates a settlement from a closed repair order", func(t *testing.T) {
@@ -109,6 +109,7 @@ func TestSettlementUseCase_Create(t *testing.T) {
 		d.RepairOrders.EXPECT().Get(mock.Anything, garageID, repairOrderID).Return(closedRepairOrder(), nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "settlement").Return(nil).Once()
+		d.Limits.EXPECT().ReleaseTransaction(mock.Anything, ownerID, "settlement").Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "settlement", "QT-202609-{SEQ:4}").Return(1, nil).Once()
 		d.Settlements.EXPECT().Create(mock.Anything, mock.Anything).Return(errBoom).Once()
 
@@ -125,6 +126,7 @@ func TestSettlementUseCase_Create(t *testing.T) {
 		d.RepairOrders.EXPECT().Get(mock.Anything, garageID, repairOrderID).Return(closedRepairOrder(), nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "settlement").Return(nil).Once()
+		d.Limits.EXPECT().ReleaseTransaction(mock.Anything, ownerID, "settlement").Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "settlement", "QT-202609-{SEQ:4}").Return(1, nil).Once()
 		d.Settlements.EXPECT().Create(mock.Anything, mock.Anything).Return(nil).Once()
 		d.Events.EXPECT().Publish(mock.Anything, usecase.EventSettlementCreated, garageID, "", mock.Anything).Return(errBoom).Once()

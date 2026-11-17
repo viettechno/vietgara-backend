@@ -151,9 +151,10 @@ func (uc *EntitlementUseCase) CheckLimit(ctx context.Context, ownerID string, li
 
 // ConsumeTransaction counts one business document of kind (quote,
 // repair_order or settlement) created by the owner's garages today and
-// refuses it once the plan's daily limit is reached. A kind the plan does not
-// count is neither counted nor limited (FR-LIC-02). Called by the document
-// modules.
+// refuses it once the plan's daily limit is reached; a refused document does
+// not stay counted. A kind the plan does not count is neither counted nor
+// limited (FR-LIC-02). Called by the document modules, which call
+// ReleaseTransaction when the document is not created after all.
 func (uc *EntitlementUseCase) ConsumeTransaction(ctx context.Context, ownerID, kind string) error {
 	e, err := uc.getOrStartTrial(ctx, ownerID)
 	if err != nil {
@@ -170,10 +171,38 @@ func (uc *EntitlementUseCase) ConsumeTransaction(ctx context.Context, ownerID, k
 	}
 
 	if count > e.MaxTransactionsPerDay {
+		uc.giveBack(ctx, ownerID)
+
 		return limitReached(domain.LimitTransactions, e.MaxTransactionsPerDay)
 	}
 
 	return nil
+}
+
+// ReleaseTransaction takes back the count of ConsumeTransaction when the
+// document of kind was not created (a later step failed or the request was
+// rolled back), so a failure does not use up the owner's day. It is best
+// effort: a failure is logged and never hides the error that caused it.
+func (uc *EntitlementUseCase) ReleaseTransaction(ctx context.Context, ownerID, kind string) {
+	// The request may be cancelled by now; the count must still be given back.
+	ctx = context.WithoutCancel(ctx)
+
+	e, err := uc.Get(ctx, ownerID)
+	if err != nil {
+		slog.Warn("license: releasing a transaction failed", "user_id", ownerID, "kind", kind, "error", err)
+
+		return
+	}
+
+	if e.CountsTransaction(domain.TransactionKind(kind)) {
+		uc.giveBack(ctx, ownerID)
+	}
+}
+
+func (uc *EntitlementUseCase) giveBack(ctx context.Context, ownerID string) {
+	if err := uc.counter.Decrement(ctx, ownerID, uc.opts.today()); err != nil {
+		slog.Warn("license: giving a transaction back failed", "user_id", ownerID, "error", err)
+	}
 }
 
 // garageOwner reads the owner from the request's authorized access, or

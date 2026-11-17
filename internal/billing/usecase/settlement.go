@@ -79,7 +79,7 @@ type CreateSettlementRequest struct {
 // Create creates a settlement from a closed repair order (FR-BIL-01),
 // aggregating its total. Counts against the plan's daily transaction
 // limit (FR-LIC-02), the same as quote and repair order creation.
-func (uc *SettlementUseCase) Create(ctx context.Context, req CreateSettlementRequest) (*domain.Settlement, error) {
+func (uc *SettlementUseCase) Create(ctx context.Context, req CreateSettlementRequest) (_ *domain.Settlement, err error) {
 	switch _, err := uc.Settlements.FindByRepairOrderID(ctx, req.GarageID, req.RepairOrderID); {
 	case err == nil:
 		return nil, toAppError("create settlement", domain.ErrAlreadySettled)
@@ -109,6 +109,13 @@ func (uc *SettlementUseCase) Create(ctx context.Context, req CreateSettlementReq
 	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionSettlement); err != nil {
 		return nil, err
 	}
+
+	// A document that is not created after all gives its count back.
+	defer func() {
+		if err != nil {
+			uc.Limits.ReleaseTransaction(ctx, garage.OwnerUserID, transactionSettlement)
+		}
+	}()
 
 	number, err := uc.nextNumber(ctx, req.GarageID, docTypeSettlement, garage.SettlementNumberTemplate, garage.Timezone)
 	if err != nil {

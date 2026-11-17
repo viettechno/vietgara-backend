@@ -98,6 +98,7 @@ func TestQuoteUseCase_Convert(t *testing.T) {
 		d.Quotes.EXPECT().FindByID(mock.Anything, garageID, quoteID).Return(approvedQuote(), nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil).Once()
+		d.Limits.EXPECT().ReleaseTransaction(mock.Anything, ownerID, "repair_order").Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(0, errBoom).Once()
 
 		_, err := uc.Convert(t.Context(), garageID, quoteID, actorID)
@@ -111,6 +112,7 @@ func TestQuoteUseCase_Convert(t *testing.T) {
 		d.Quotes.EXPECT().FindByID(mock.Anything, garageID, quoteID).Return(approvedQuote(), nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil).Once()
+		d.Limits.EXPECT().ReleaseTransaction(mock.Anything, ownerID, "repair_order").Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
 		d.RepairOrders.EXPECT().
 			Create(mock.Anything, garageID, quoteID, vehicleID, "An Nguyen", "51F-123.45", "LSC-202609-0001", actorID, mock.Anything, mock.Anything).
@@ -127,6 +129,7 @@ func TestQuoteUseCase_Convert(t *testing.T) {
 		d.Quotes.EXPECT().FindByID(mock.Anything, garageID, quoteID).Return(approvedQuote(), nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil).Once()
+		d.Limits.EXPECT().ReleaseTransaction(mock.Anything, ownerID, "repair_order").Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
 		d.RepairOrders.EXPECT().
 			Create(mock.Anything, garageID, quoteID, vehicleID, "An Nguyen", "51F-123.45", "LSC-202609-0001", actorID, mock.Anything, mock.Anything).
@@ -147,6 +150,7 @@ func TestQuoteUseCase_ConvertAnotherRequestConvertedItFirst(t *testing.T) {
 	d.Quotes.EXPECT().FindByID(mock.Anything, garageID, quoteID).Return(approvedQuote(), nil).Once()
 	d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 	d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "repair_order").Return(nil).Once()
+	d.Limits.EXPECT().ReleaseTransaction(mock.Anything, ownerID, "repair_order").Once()
 	d.Sequences.EXPECT().Next(mock.Anything, garageID, "repair_order", "LSC-202609-{SEQ:4}").Return(1, nil).Once()
 	d.RepairOrders.EXPECT().
 		Create(mock.Anything, garageID, quoteID, vehicleID, "An Nguyen", "51F-123.45", "LSC-202609-0001", actorID, mock.Anything, mock.Anything).

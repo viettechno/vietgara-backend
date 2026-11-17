@@ -47,6 +47,10 @@ func TestDailyLimitBlocksCreationNotClosing(t *testing.T) {
 	})
 	fixture.RequireAPIError(t, err, http.StatusPaymentRequired, "PLAN_LIMIT_REACHED")
 
+	sub, err = owner.API.MySubscription(ctx)
+	require.NoError(t, err)
+	assert.EqualValues(t, 2, sub.GetUsage().GetTransactionsToday(), "a refused creation is not counted")
+
 	// Closing is separate from creation and is not counted.
 	order, err := owner.API.GetRepairOrder(ctx, garage.GetId(), converted.GetRepairOrderId())
 	require.NoError(t, err)

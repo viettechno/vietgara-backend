@@ -94,7 +94,7 @@ type CreateRepairOrderRequest struct {
 // Create creates an ad-hoc repair order (FR-REP-01), numbered from the
 // garage's repair_order_number_template and counted against the plan's
 // daily transaction limit (FR-LIC-02).
-func (uc *RepairOrderUseCase) Create(ctx context.Context, req CreateRepairOrderRequest) (*domain.RepairOrder, error) {
+func (uc *RepairOrderUseCase) Create(ctx context.Context, req CreateRepairOrderRequest) (_ *domain.RepairOrder, err error) {
 	garage, err := uc.garageInfo(ctx, req.GarageID)
 	if err != nil {
 		return nil, err
@@ -113,6 +113,13 @@ func (uc *RepairOrderUseCase) Create(ctx context.Context, req CreateRepairOrderR
 	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionRepairOrder); err != nil {
 		return nil, err
 	}
+
+	// A document that is not created after all gives its count back.
+	defer func() {
+		if err != nil {
+			uc.Limits.ReleaseTransaction(ctx, garage.OwnerUserID, transactionRepairOrder)
+		}
+	}()
 
 	number, err := uc.nextNumber(ctx, req.GarageID, garage)
 	if err != nil {

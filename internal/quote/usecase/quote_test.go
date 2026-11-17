@@ -144,6 +144,7 @@ func TestQuoteUseCase_Create_MoreValidation(t *testing.T) {
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Vehicles.EXPECT().Find(mock.Anything, garageID, customerID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
 		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "quote").Return(nil).Once()
+		d.Limits.EXPECT().ReleaseTransaction(mock.Anything, ownerID, "quote").Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "quote", "BG-202609-{SEQ:4}").Return(0, errBoom).Once()
 
 		_, err := uc.Create(t.Context(), usecase.CreateQuoteRequest{
@@ -159,6 +160,7 @@ func TestQuoteUseCase_Create_MoreValidation(t *testing.T) {
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 		d.Vehicles.EXPECT().Find(mock.Anything, garageID, customerID, vehicleID).Return("An Nguyen", "51F-123.45", nil).Once()
 		d.Limits.EXPECT().ConsumeTransaction(mock.Anything, ownerID, "quote").Return(nil).Once()
+		d.Limits.EXPECT().ReleaseTransaction(mock.Anything, ownerID, "quote").Once()
 		d.Sequences.EXPECT().Next(mock.Anything, garageID, "quote", "BG-202609-{SEQ:4}").Return(1, nil).Once()
 		d.Quotes.EXPECT().Create(mock.Anything, mock.Anything).Return(errBoom).Once()
 

@@ -99,3 +99,55 @@ func (_c *MockBillingTransactionLimiter_ConsumeTransaction_Call) RunAndReturn(ru
 	_c.Call.Return(run)
 	return _c
 }
+
+// ReleaseTransaction provides a mock function for the type MockBillingTransactionLimiter
+func (_mock *MockBillingTransactionLimiter) ReleaseTransaction(ctx context.Context, ownerUserID string, kind string) {
+	_mock.Called(ctx, ownerUserID, kind)
+	return
+}
+
+// MockBillingTransactionLimiter_ReleaseTransaction_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReleaseTransaction'
+type MockBillingTransactionLimiter_ReleaseTransaction_Call struct {
+	*mock.Call
+}
+
+// ReleaseTransaction is a helper method to define mock.On call
+//   - ctx context.Context
+//   - ownerUserID string
+//   - kind string
+func (_e *MockBillingTransactionLimiter_Expecter) ReleaseTransaction(ctx any, ownerUserID any, kind any) *MockBillingTransactionLimiter_ReleaseTransaction_Call {
+	return &MockBillingTransactionLimiter_ReleaseTransaction_Call{Call: _e.mock.On("ReleaseTransaction", ctx, ownerUserID, kind)}
+}
+
+func (_c *MockBillingTransactionLimiter_ReleaseTransaction_Call) Run(run func(ctx context.Context, ownerUserID string, kind string)) *MockBillingTransactionLimiter_ReleaseTransaction_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockBillingTransactionLimiter_ReleaseTransaction_Call) Return() *MockBillingTransactionLimiter_ReleaseTransaction_Call {
+	_c.Call.Return()
+	return _c
+}
+
+func (_c *MockBillingTransactionLimiter_ReleaseTransaction_Call) RunAndReturn(run func(ctx context.Context, ownerUserID string, kind string)) *MockBillingTransactionLimiter_ReleaseTransaction_Call {
+	_c.Run(run)
+	return _c
+}

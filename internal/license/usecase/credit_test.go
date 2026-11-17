@@ -205,7 +205,7 @@ func TestOnlyCountedKindsUseTheDailyLimit(t *testing.T) {
 
 	usage, err := e.Subscriptions.Usage(ctx, "owner")
 	require.NoError(t, err)
-	assert.Equal(t, 2, usage.TransactionsToday, "the shared counter went past the limit once")
+	assert.Equal(t, 1, usage.TransactionsToday, "a refused document is not counted")
 
 	// The admin makes quotes count too.
 	trial.CountedKinds = []domain.TransactionKind{domain.TransactionRepairOrder, domain.TransactionQuote}
@@ -213,6 +213,47 @@ func TestOnlyCountedKindsUseTheDailyLimit(t *testing.T) {
 	require.NoError(t, e.Entitlements.Invalidate(ctx, "owner"))
 
 	requireReason(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "quote"), domain.ReasonPlanLimitReached)
+}
+
+// A document that is not created after all gives its count back, so a failure
+// does not use up the owner's day; a kind the plan does not count has nothing
+// to give back.
+func TestReleaseTransactionGivesTheDayBack(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	e := licensetest.NewEnv()
+
+	trial, err := e.Store.Plans().FindByCode(ctx, domain.TrialPlanCode)
+	require.NoError(t, err)
+
+	trial.MaxTransactionsPerDay = 2
+	trial.CountedKinds = []domain.TransactionKind{domain.TransactionRepairOrder}
+	require.NoError(t, e.Store.Plans().Update(ctx, trial))
+
+	today := func() int {
+		usage, err := e.Subscriptions.Usage(ctx, "owner")
+		require.NoError(t, err)
+
+		return usage.TransactionsToday
+	}
+
+	require.NoError(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "repair_order"))
+	require.NoError(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "repair_order"))
+	requireReason(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "repair_order"), domain.ReasonPlanLimitReached)
+	assert.Equal(t, 2, today())
+
+	e.Entitlements.ReleaseTransaction(ctx, "owner", "quote")
+	assert.Equal(t, 2, today(), "a quote is not counted, so nothing is given back")
+
+	e.Entitlements.ReleaseTransaction(ctx, "owner", "repair_order")
+	assert.Equal(t, 1, today())
+	require.NoError(t, e.Entitlements.ConsumeTransaction(ctx, "owner", "repair_order"), "the freed slot can be used")
+
+	e.Entitlements.ReleaseTransaction(ctx, "owner", "repair_order")
+	e.Entitlements.ReleaseTransaction(ctx, "owner", "repair_order")
+	e.Entitlements.ReleaseTransaction(ctx, "owner", "repair_order")
+	assert.Zero(t, today(), "the count never goes below zero")
 }
 
 // While subscriptions use a plan its commercial terms are locked: a change

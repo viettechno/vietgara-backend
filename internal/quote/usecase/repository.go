@@ -87,6 +87,9 @@ type GarageReader interface {
 // "repair_order" or "settlement"): the plan counts only the kinds it lists.
 type TransactionLimiter interface {
 	ConsumeTransaction(ctx context.Context, ownerUserID, kind string) error
+	// ReleaseTransaction gives back the count of ConsumeTransaction when the
+	// document was not created after all; it never fails.
+	ReleaseTransaction(ctx context.Context, ownerUserID, kind string)
 }
 
 // Sequencer hands out document sequence numbers (FR-TEN-05); implemented

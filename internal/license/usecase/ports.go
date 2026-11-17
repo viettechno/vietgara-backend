@@ -117,6 +117,9 @@ type EntitlementCache interface {
 type TransactionCounter interface {
 	// Increment adds one to the count of day and returns the new count.
 	Increment(ctx context.Context, userID, day string) (int, error)
+	// Decrement takes one back from the count of day, never below zero: the
+	// slot of a document that was refused or not created.
+	Decrement(ctx context.Context, userID, day string) error
 	Get(ctx context.Context, userID, day string) (int, error)
 }
 

@@ -1,6 +1,7 @@
 package repository_test
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
@@ -239,4 +240,45 @@ func TestCachesAndCounters(t *testing.T) {
 
 	_, err = repository.NewRedisTransactionCounter(down).Increment(ctx, "a", "d")
 	require.Error(t, err)
+	require.Error(t, repository.NewRedisTransactionCounter(down).Decrement(ctx, "a", "d"))
+}
+
+// Decrement gives one back, never goes below zero and does not create a key.
+func TestTransactionCounterDecrement(t *testing.T) {
+	t.Parallel()
+
+	ctx := t.Context()
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+
+	t.Cleanup(func() { _ = client.Close() })
+
+	for name, c := range map[string]interface {
+		Increment(ctx context.Context, userID, day string) (int, error)
+		Decrement(ctx context.Context, userID, day string) error
+		Get(ctx context.Context, userID, day string) (int, error)
+	}{
+		"redis":  repository.NewRedisTransactionCounter(client),
+		"memory": repository.NewMemoryTransactionCounter(),
+	} {
+		require.NoError(t, c.Decrement(ctx, "user", "20260925"), name)
+
+		n, err := c.Get(ctx, "user", "20260925")
+		require.NoError(t, err)
+		assert.Zero(t, n, name+": nothing to give back")
+		assert.Empty(t, mr.Keys(), name+": a missing key is not created")
+
+		for range 3 {
+			_, err = c.Increment(ctx, "user", "20260925")
+			require.NoError(t, err)
+		}
+
+		require.NoError(t, c.Decrement(ctx, "user", "20260925"), name)
+
+		n, err = c.Get(ctx, "user", "20260925")
+		require.NoError(t, err)
+		assert.Equal(t, 2, n, name)
+
+		mr.FlushAll()
+	}
 }

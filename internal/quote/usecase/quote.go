@@ -88,7 +88,7 @@ type CreateQuoteRequest struct {
 // Create creates a draft quote (FR-QUO-01), numbered from the garage's
 // quote_number_template and counted against the plan's daily transaction
 // limit (FR-LIC-02).
-func (uc *QuoteUseCase) Create(ctx context.Context, req CreateQuoteRequest) (*domain.Quote, error) {
+func (uc *QuoteUseCase) Create(ctx context.Context, req CreateQuoteRequest) (_ *domain.Quote, err error) {
 	garage, err := uc.garageInfo(ctx, req.GarageID)
 	if err != nil {
 		return nil, err
@@ -126,6 +126,13 @@ func (uc *QuoteUseCase) Create(ctx context.Context, req CreateQuoteRequest) (*do
 	if err := uc.Limits.ConsumeTransaction(ctx, garage.OwnerUserID, transactionQuote); err != nil {
 		return nil, err
 	}
+
+	// A document that is not created after all gives its count back.
+	defer func() {
+		if err != nil {
+			uc.Limits.ReleaseTransaction(ctx, garage.OwnerUserID, transactionQuote)
+		}
+	}()
 
 	number, err := uc.nextNumber(ctx, req.GarageID, garage)
 	if err != nil {

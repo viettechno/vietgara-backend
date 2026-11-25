@@ -1,13 +1,21 @@
 name: CI
 
+# Checks only: build, lint, tests, vulnerability scan and the blackbox suite against a stack made of the image
+# built from this commit. Nothing is published here.
+#   - every pull request;
+#   - called by publish.yml (push to master, tag v*), so the same checks gate what is published.
+# Pushing the image (up to the registry) is publish.yml; deploying to a VM is vietgara-infra's Deploy staging and
+# Deploy production workflows, by hand.
+
 on:
-  push:
-    branches: [master]
-    tags: ['v*']
   pull_request:
     branches: [master]
+  workflow_call:
 
-# Read-only by default (SR-21); a job that needs more asks for it itself.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 permissions:
   contents: read
 
@@ -145,80 +153,3 @@ jobs:
 
       - name: Traceability and API coverage
         run: make blackbox-traceability
-
-  # Builds the image on every run; on pushes to master and v* tags it is also
-  # pushed to ghcr.io/<owner>/<repo>, tagged like `make image-push`
-  # (git describe: v1.1.0 on a tag, v1.1.0-3-gabc1234 or abc1234 otherwise).
-  image:
-    name: Docker image
-    runs-on: ubuntu-latest
-    needs: [build-and-test, vulncheck, lint, integration, blackbox]
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # git describe needs the tags and history
-
-      - name: Image tag
-        id: version
-        run: echo "tag=$(git describe --tags --always)" >> "$GITHUB_OUTPUT"
-
-      - name: Image metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: type=raw,value=${{ steps.version.outputs.tag }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Sign in to GHCR
-        if: github.event_name == 'push'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # A fixable HIGH or CRITICAL finding in the image (operating-system
-      # packages, and for the backend the Go modules compiled into the binary)
-      # blocks the build before anything is pushed (Release 8.0).
-      - name: Build image for scanning
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64
-          load: true
-          tags: scan:local
-          build-args: APK_REFRESH=${{ github.run_id }}
-          cache-from: type=gha
-
-      - name: Scan image for vulnerabilities
-        run: >
-          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1
-          image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed scan:local
-
-      - name: Build and push
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64
-          push: ${{ github.event_name == 'push' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: APK_REFRESH=${{ github.run_id }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Summary
-        if: github.event_name == 'push'
-        run: |
-          {
-            echo "### Pushed \`${{ steps.meta.outputs.tags }}\`"
-            echo ""
-            echo "Deploy on the staging VM: \`make deploy BACKEND_TAG=${{ steps.version.outputs.tag }}\`"
-          } >> "$GITHUB_STEP_SUMMARY"

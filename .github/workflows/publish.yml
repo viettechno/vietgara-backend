@@ -16,10 +16,13 @@ on:
     branches: [master]
     tags: ['v*']
 
+# One group per commit: GitHub keeps only one pending run per group, so a group per branch would drop the image
+# of a commit that is merged while another is publishing.
 concurrency:
-  group: publish-${{ github.ref }}
+  group: publish-${{ github.sha }}
   cancel-in-progress: false
 
+# Read-only by default (SR-21); the image job asks for packages: write itself.
 permissions:
   contents: read
 

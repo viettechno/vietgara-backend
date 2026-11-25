@@ -16,6 +16,7 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# Read-only by default (SR-21); a job that needs more asks for it itself.
 permissions:
   contents: read
 

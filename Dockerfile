@@ -1,7 +1,7 @@
 # The builder runs on the build machine's platform and cross-compiles for
 # the target (e.g. an arm64 Mac building the linux/amd64 staging image), so
 # no emulation is needed.
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
 
 # Target platform for the final image. BuildKit (compose up --build,
 # buildx, CI image builds) injects TARGETOS/TARGETARCH automatically; when
@@ -22,7 +22,7 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS="${TARGETOS:-$(go env GOOS)}" GOARCH="${TARGETARCH:-$(go env GOARCH)}" go build -trimpath -ldflags='-s -w' -o /out/vietgara-backend ./cmd/server
 RUN CGO_ENABLED=0 GOOS="${TARGETOS:-$(go env GOOS)}" GOARCH="${TARGETARCH:-$(go env GOARCH)}" go build -trimpath -ldflags='-s -w' -o /out/purge-test-users ./cmd/purge-test-users
 
-FROM alpine:3.22
+FROM alpine:3.24
 
 # Pick up the fixes of the base image's operating-system packages that are
 # newer than the image itself (the vulnerability scan in CI fails on a fixable

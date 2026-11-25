@@ -431,10 +431,15 @@ k6 script that runs the quote-to-payment flow of about 50 garages, seeded by
 
 ## Container image and staging
 
-CI (`.github/workflows/ci.yml`, job **Docker image**) builds the image on
-every run and, after all checks pass, pushes it to the GitHub Container
-Registry on merges to `master` and `v*` tags, as
-`ghcr.io/viettechno/vietgara-backend:<git describe>` (public).
+CI (`.github/workflows/ci.yml`) only checks: on a pull request the blackbox
+suite builds the image from this commit and runs it, and nothing is pushed.
+The **Publish** workflow (`.github/workflows/publish.yml`) runs the same
+checks on merges to `master` and `v*` tags, then builds the image, scans it
+with Trivy (a fixable HIGH or CRITICAL finding stops the run) and pushes it
+to the GitHub Container Registry as
+`ghcr.io/viettechno/vietgara-backend:<git describe>` (public). Deploying it
+is a separate, manual step: **Deploy staging** / **Deploy production** in
+`vietgara-infra`.
 
 To push by hand instead, `make image-push` builds the same image for
 `linux/amd64` (cross-compiled, so it also works on Apple Silicon):

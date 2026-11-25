@@ -12,8 +12,11 @@ on:
     branches: [master]
   workflow_call:
 
+# A pull request cancels its own earlier run. A run called by publish.yml (a push) is grouped by commit: with the
+# branch in the group, GitHub keeps one pending run per branch and cancels the older one, so a commit merged while
+# another one is publishing would never get its image.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Read-only by default (SR-21); a job that needs more asks for it itself.

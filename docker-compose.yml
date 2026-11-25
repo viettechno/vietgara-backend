@@ -45,7 +45,7 @@ services:
 
   # Event bus (ADR-004): the outbox relay publishes, module consumers read.
   vietgara-kafka:
-    image: apache/kafka:3.9.1
+    image: apache/kafka:3.9.2
     container_name: vietgara-kafka
     restart: unless-stopped
     environment:
@@ -89,7 +89,7 @@ services:
   # The backend runs as uid 10001. A volume created before keeps root's
   # ownership: this hands over whatever is not 10001's yet, then exits.
   vietgara-uploads-owner:
-    image: alpine:3.22
+    image: alpine:3.24
     container_name: vietgara-uploads-owner
     command: ["sh", "-c", "find /app/data/uploads \\( ! -user 10001 -o ! -group 10001 \\) -exec chown -h 10001:10001 {} +"]
     volumes:

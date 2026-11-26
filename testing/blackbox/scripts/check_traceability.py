@@ -68,6 +68,8 @@ MANUAL_ONLY = {
     "E2E-IAM-021": "edits PLATFORM_ADMIN_EMAILS and restarts the backend twice",
     "E2E-INV-032": "cursor and scroll behaviour of the web and phone screens; the camera",
     "E2E-DOC-005": "the print dialog of a browser and a phone, and a real network printer",
+    "E2E-DOC-009": "a phone on the garage Wi-Fi, mDNS discovery and a real thermal printer",
+    "E2E-DOC-010": "a real label printer and IPP printer, and the phone's camera",
     "E2E-IAM-035": "a real Google account in a web popup and in the apps",
     "E2E-IAM-037": "the change-password card of both web consoles: a browser test of vietgara-e2e",
     "E2E-NOT-007": "a real mailbox: the provider, the attachment and the mail client's unsubscribe control",
@@ -317,7 +319,7 @@ def _statements(body):
 
 
 def collect_calls(body, helpers):
-    """[(http_method|None, template)] from call[/DownloadRaw sites.
+    """[(http_method|None, template)] from call[/DownloadRaw/downloadWith sites.
 
     Tracks local `name :=` / `name +=` string assembly (the client's
     `path := ...` + `?updateMask=`/`?query=` pattern); query strings are
@@ -326,7 +328,7 @@ def collect_calls(body, helpers):
     env, pairs, ok = {}, [], True
     for stmt in _statements(body):
         sites = []
-        for keyword in ("call[", "DownloadRaw("):
+        for keyword in ("call[", "DownloadRaw(", "downloadWith("):
             start = 0
             while True:
                 at = stmt.find(keyword, start)

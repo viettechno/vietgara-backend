@@ -1,0 +1,10 @@
+{
+  "payment_voucher/K57/v1/copy=false": "d4552717a4cb6e017e215c16bc87538b314ec154c22da5ce5ae5b2510f336d87",
+  "payment_voucher/K57/v1/copy=true": "aa71bed2d109a88ca7d059b26a4a3e90e28d9beb77f9f5ff1cd5025770b9d1bb",
+  "payment_voucher/K80/v1/copy=false": "ef95104b3a8230e004f2807edac6586bccafdccf77faf02f82db33efc2d3396e",
+  "payment_voucher/K80/v1/copy=true": "b978070f1c1980cbde1ba3e8b12db3e0db3aceacb53954ab96ae6b239040649a",
+  "quote/K57/v1/copy=false": "b9e8ddeb7b7edeccc0cadbd54a234463d94a673ca0375e4abbc17206c5a5ca37",
+  "quote/K57/v1/copy=true": "4f75473aee32e58ffbd8401b3546d35a81e6a4349d7ae89f2de390f4fcb2197f",
+  "quote/K80/v1/copy=false": "a2f6ec1bc19ef56ffb2bcae7a06904abcbf58f2c6a953b97196fccada23fdc25",
+  "quote/K80/v1/copy=true": "88a228fde0192e6f0e42e2dd285ea1a7ee124b7546b17fbc336d33847d6820a0"
+}

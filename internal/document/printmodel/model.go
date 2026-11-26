@@ -25,6 +25,10 @@ const (
 	TypePaymentOut DocumentType = "payment_out"
 	// TypePurchaseOrder is the purchase order to a supplier (Release 11.0).
 	TypePurchaseOrder DocumentType = "purchase_order"
+	// TypePartLabel is a part's barcode label (Release 13.0). It is not a
+	// document of Types: it has no print setting and no print log, and is
+	// only a printer's default document type.
+	TypePartLabel DocumentType = "part_label"
 )
 
 // Types lists every printable document, in the order the settings show them.
@@ -40,11 +44,23 @@ func (t DocumentType) Valid() bool {
 // Paper is the paper a document prints on.
 type Paper string
 
-// The paper sizes: A4 is 210 x 297 mm, A5 148 x 210 mm.
+// The paper sizes: A4 is 210 x 297 mm, A5 148 x 210 mm. The thermal rolls
+// (Release 13.0) are K80, 80 mm wide with 72 mm printed, and K57, 57 mm wide
+// with 48 mm printed; Label5030 is a 50 x 30 mm label.
 const (
-	A4 Paper = "A4"
-	A5 Paper = "A5"
+	A4        Paper = "A4"
+	A5        Paper = "A5"
+	K80       Paper = "K80"
+	K57       Paper = "K57"
+	Label5030 Paper = "L5030"
 )
+
+// IsPDF reports whether p is a page size, printed as a PDF: the only sizes a
+// print setting takes.
+func (p Paper) IsPDF() bool { return p == A4 || p == A5 }
+
+// IsRoll reports whether p is a thermal roll, printed as ESC/POS.
+func (p Paper) IsRoll() bool { return p == K80 || p == K57 }
 
 // Model is a document's print model.
 type Model interface {
@@ -278,3 +294,13 @@ type PurchaseOrder struct {
 
 // Type implements Model.
 func (PurchaseOrder) Type() DocumentType { return TypePurchaseOrder }
+
+// PartLabel is the print model of a part's barcode label (FR-INV-13,
+// Release 13.0).
+type PartLabel struct {
+	Name string `json:"name"`
+	SKU  string `json:"sku"`
+	// Barcode is the base unit's first barcode, or the SKU when the part has
+	// none.
+	Barcode string `json:"barcode"`
+}

@@ -421,7 +421,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// receipt PDFs, the stock movement report as Excel.
 	reporting := buildReporting(billing.settlements, garages, repairOrder.repo, inventory.repo, users, catalogue.repo)
 
-	document := buildDocument(pool, quote.quotes, repairOrder.uc, billing.uc, inventory.uc, reporting.uc, garages, files)
+	document := buildDocument(pool, quote.quotes, repairOrder.uc, billing.uc, inventory.uc, reporting.uc, garages, files, catalogue.uc)
 
 	// Reporting (Release 1.5): revenue by period (FR-RPT-01), reusing
 	// Billing & Settlement's own repository -- no tables of its own.

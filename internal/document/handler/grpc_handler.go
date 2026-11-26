@@ -72,6 +72,18 @@ func Policies() middleware.Policies {
 		// The print settings belong to the garage, like its profile.
 		documentv1.DocumentService_GetPrintSettings_FullMethodName:   middleware.GarageMethod(access.Member()),
 		documentv1.DocumentService_UpdatePrintSetting_FullMethodName: middleware.GarageMethod(access.Requires(access.GarageWrite)),
+
+		// Release 13.0: the printers belong to the garage too; any member
+		// tests one from the device it prints from. A roll print needs the
+		// permission of its document, a label the one that reads parts.
+		documentv1.DocumentService_ListPrinters_FullMethodName:              middleware.GarageMethod(access.Member()),
+		documentv1.DocumentService_CreatePrinter_FullMethodName:             middleware.GarageMethod(access.Requires(access.GarageWrite)),
+		documentv1.DocumentService_UpdatePrinter_FullMethodName:             middleware.GarageMethod(access.Requires(access.GarageWrite)),
+		documentv1.DocumentService_DeletePrinter_FullMethodName:             middleware.GarageMethod(access.Requires(access.GarageWrite)),
+		documentv1.DocumentService_PrintPrinterTestPage_FullMethodName:      middleware.GarageMethod(access.Member()),
+		documentv1.DocumentService_PrintQuoteEscPos_FullMethodName:          middleware.GarageMethod(quoteRead),
+		documentv1.DocumentService_PrintPaymentVoucherEscPos_FullMethodName: middleware.GarageMethod(billingRead),
+		documentv1.DocumentService_PrintPartLabels_FullMethodName:           middleware.GarageMethod(access.Requires(access.CatalogueRead)),
 	}
 }
 

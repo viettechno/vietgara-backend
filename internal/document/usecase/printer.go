@@ -3,7 +3,7 @@ package usecase
 import (
 	"context"
 	"errors"
-	"net"
+	"net/netip"
 	"regexp"
 	"slices"
 	"strings"
@@ -204,7 +204,7 @@ func normalizePrinter(p Printer) (Printer, error) {
 		return Printer{}, apperror.Validation("name", apperror.IssueTooLong, "name is at most 60 characters")
 	}
 
-	p.Host = strings.TrimSpace(p.Host)
+	p.Host = strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(p.Host), "["), "]")
 	if !validHost(p.Host) {
 		return Printer{}, apperror.Validation("host", apperror.IssueInvalid, "host must be an IP address or a host name")
 	}
@@ -310,8 +310,8 @@ func validHost(host string) bool {
 		return false
 	}
 
-	if ip := net.ParseIP(host); ip != nil {
-		return true
+	if _, err := netip.ParseAddr(host); err == nil {
+		return true // an IPv4 or IPv6 address, a zone allowed (fe80::1%en0)
 	}
 
 	// A name of digits and dots only is a mistyped IPv4 address
@@ -346,33 +346,9 @@ type PartReader interface {
 // PartLabels prints the labels of parts (FR-INV-13) on a label printer, as
 // ESC/POS: copies of each, in the order given. Nothing is logged.
 func (uc *DocumentUseCase) PartLabels(ctx context.Context, garageID string, paper printmodel.Paper, parts []LabelCopies) ([]byte, error) {
-	if paper != printmodel.Label5030 {
-		return nil, apperror.Validation("paperSize", apperror.IssueInvalid, "labels print on 50 x 30 mm labels")
-	}
-
-	if len(parts) == 0 || len(parts) > maxLabelParts {
-		return nil, apperror.Validation("parts", apperror.IssueInvalid, "print the labels of 1 to 50 parts")
-	}
-
-	seen := map[string]bool{}
-	total := 0
-
-	for _, p := range parts {
-		if seen[p.PartID] {
-			return nil, apperror.Validation("parts", apperror.IssueInvalid, "a part is listed twice")
-		}
-
-		seen[p.PartID] = true
-
-		if p.Copies < 1 || p.Copies > maxLabelCopies {
-			return nil, apperror.Validation("parts", apperror.IssueInvalid, "copies must be between 1 and 100")
-		}
-
-		total += p.Copies
-	}
-
-	if total > maxLabels {
-		return nil, apperror.Validation("parts", apperror.IssueInvalid, "at most 300 labels at a time")
+	total, err := checkLabelCopies(paper, parts)
+	if err != nil {
+		return nil, err
 	}
 
 	labels := make([]printmodel.PartLabel, 0, total)
@@ -389,9 +365,48 @@ func (uc *DocumentUseCase) PartLabels(ctx context.Context, garageID string, pape
 	}
 
 	data, err := render.PartLabels(paper, labels)
+	if errors.Is(err, render.ErrBarcodeUnreadable) {
+		return nil, apperror.Validation("parts", apperror.IssueInvalid,
+			"a part's code is not ASCII or too long for a readable barcode on the label: "+err.Error())
+	}
+
 	if err != nil {
 		return nil, apperror.Internal("render labels", err)
 	}
 
 	return data, nil
+}
+
+// checkLabelCopies checks a label print and returns the number of labels.
+func checkLabelCopies(paper printmodel.Paper, parts []LabelCopies) (int, error) {
+	if paper != printmodel.Label5030 {
+		return 0, apperror.Validation("paperSize", apperror.IssueInvalid, "labels print on 50 x 30 mm labels")
+	}
+
+	if len(parts) == 0 || len(parts) > maxLabelParts {
+		return 0, apperror.Validation("parts", apperror.IssueInvalid, "print the labels of 1 to 50 parts")
+	}
+
+	seen := map[string]bool{}
+	total := 0
+
+	for _, p := range parts {
+		if seen[p.PartID] {
+			return 0, apperror.Validation("parts", apperror.IssueInvalid, "a part is listed twice")
+		}
+
+		seen[p.PartID] = true
+
+		if p.Copies < 1 || p.Copies > maxLabelCopies {
+			return 0, apperror.Validation("parts", apperror.IssueInvalid, "copies must be between 1 and 100")
+		}
+
+		total += p.Copies
+	}
+
+	if total > maxLabels {
+		return 0, apperror.Validation("parts", apperror.IssueInvalid, "at most 300 labels at a time")
+	}
+
+	return total, nil
 }

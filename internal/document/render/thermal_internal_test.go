@@ -41,8 +41,12 @@ func TestBarcodeImage(t *testing.T) {
 	_, ok = barcodeImage("Mã", 376, 72)
 	assert.False(t, ok, "not ASCII")
 
-	_, ok = barcodeImage("ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ", 376, 72)
-	assert.False(t, ok, "wider than the label at one dot a module")
+	_, ok = barcodeImage("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 376, 72)
+	assert.False(t, ok, "wider than the label at two dots a module")
+
+	img, ok = barcodeImage("12345678901234567890", 376, 72)
+	require.True(t, ok, "digits pack two to a symbol")
+	assert.Zero(t, img.Rect.Dx()%2, "whole modules of two dots")
 }
 
 func TestQuoteStatusLabel(t *testing.T) {
@@ -66,4 +70,21 @@ func TestLineHoldsTheGlyphs(t *testing.T) {
 
 	c.line(f, sizeBody, "Ẫ Ứ ạ ự gy", "", alignLeft)
 	assert.Equal(t, f.Metrics().Ascent.Ceil()+f.Metrics().Descent.Ceil(), c.y)
+}
+
+func TestPairPutsAWideRightOnItsOwnLine(t *testing.T) {
+	t.Parallel()
+
+	c, err := newCanvas(dotsWide("K57"))
+	require.NoError(t, err)
+
+	defer c.close()
+
+	f, err := c.face(sizeBody, false)
+	require.NoError(t, err)
+
+	one := f.Metrics().Ascent.Ceil() + f.Metrics().Descent.Ceil()
+
+	require.NoError(t, c.pair("Thay dầu", "12,345,678,901 VND x 2", sizeBody, false))
+	assert.Equal(t, 2*one, c.y, "left, then right under it")
 }

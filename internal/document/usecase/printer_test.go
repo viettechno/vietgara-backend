@@ -153,11 +153,12 @@ func TestCreatePrinter(t *testing.T) {
 		uc, _, _, _ := newPrintingUseCase(t)
 
 		p, err := uc.CreatePrinter(t.Context(), garageID, usecase.Printer{
-			Name: "Tem", Protocol: usecase.ProtocolRaw, Host: "fe80::1", Port: 9101, Paper: printmodel.Label5030,
+			Name: "Tem", Protocol: usecase.ProtocolRaw, Host: "[fe80::1%en0]", Port: 9101, Paper: printmodel.Label5030,
 			DocumentTypes: []printmodel.DocumentType{printmodel.TypePartLabel},
 		})
 		require.NoError(t, err)
 		assert.Equal(t, 9101, p.Port)
+		assert.Equal(t, "fe80::1%en0", p.Host, "brackets removed, the zone kept")
 	})
 
 	invalid := map[string]func(*usecase.Printer){
@@ -166,6 +167,7 @@ func TestCreatePrinter(t *testing.T) {
 		"no host":                      func(p *usecase.Printer) { p.Host = "" },
 		"a host with a scheme":         func(p *usecase.Printer) { p.Host = "http://10.0.0.1" },
 		"a host with a port":           func(p *usecase.Printer) { p.Host = "10.0.0.1:9100" },
+		"a bracketed host and port":    func(p *usecase.Printer) { p.Host = "[fe80::1]:9100" },
 		"an IPv4 out of range":         func(p *usecase.Printer) { p.Host = "192.168.1.300" },
 		"a short IPv4":                 func(p *usecase.Printer) { p.Host = "10.0.0" },
 		"a port out of range":          func(p *usecase.Printer) { p.Port = 70000 },
@@ -347,6 +349,15 @@ func TestPartLabels(t *testing.T) {
 			assert.Empty(t, parts.asked)
 		})
 	}
+
+	t.Run("refuses a code too long for a readable barcode", func(t *testing.T) {
+		t.Parallel()
+
+		uc, _, _, _ := newPrintingUseCase(t)
+
+		_, err := uc.PartLabels(t.Context(), garageID, printmodel.Label5030, []usecase.LabelCopies{{PartID: strings.Repeat("9X", 20), Copies: 1}})
+		assertAppError(t, err, apperror.CodeInvalidArgument)
+	})
 
 	t.Run("a part not found", func(t *testing.T) {
 		t.Parallel()

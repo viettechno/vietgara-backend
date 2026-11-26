@@ -16,6 +16,11 @@ import (
 // ErrNotLabelPaper is returned when labels are asked for on another paper.
 var ErrNotLabelPaper = errors.New("render: labels print on label paper only")
 
+// ErrBarcodeUnreadable is returned when a label's code is not ASCII, or too
+// long for a Code 128 barcode a scanner reads (two dots a module) on the
+// label.
+var ErrBarcodeUnreadable = errors.New("render: the code does not fit a readable barcode on the label")
+
 // labelDots is the height of a 50 x 30 mm label, in dots.
 const labelDots = 240
 
@@ -34,10 +39,18 @@ func PartLabels(paper printmodel.Paper, labels []printmodel.PartLabel) ([]byte, 
 
 	buf.Write(escInit)
 
+	// Each distinct label is drawn once; its copies reuse the image.
+	drawn := map[printmodel.PartLabel]*image.Gray{}
+
 	for _, l := range labels {
-		img, err := partLabel(l)
-		if err != nil {
-			return nil, err
+		img, ok := drawn[l]
+		if !ok {
+			var err error
+			if img, err = partLabel(l); err != nil {
+				return nil, fmt.Errorf("label of %s: %w", l.SKU, err)
+			}
+
+			drawn[l] = img
 		}
 
 		raster(&buf, img, labelDots)
@@ -47,8 +60,9 @@ func PartLabels(paper printmodel.Paper, labels []printmodel.PartLabel) ([]byte, 
 	return buf.Bytes(), nil
 }
 
-// partLabel draws one label: the name on at most two lines, the SKU, and the
-// barcode with its text under it.
+// partLabel draws one label: the name on at most two lines, the SKU and the
+// barcode text on one line each, and the barcode, so that it always fits
+// the label.
 func partLabel(l printmodel.PartLabel) (*image.Gray, error) {
 	inner, err := newCanvas(dotsWide(printmodel.Label5030) - 2*labelMargin)
 	if err != nil {
@@ -70,22 +84,24 @@ func partLabel(l printmodel.PartLabel) (*image.Gray, error) {
 		inner.line(name, sizeBody, line, "", alignLeft)
 	}
 
-	if err := inner.text(labelled("SKU", l.SKU), sizeSmall, false, alignLeft); err != nil {
+	small, err := inner.face(sizeSmall, false)
+	if err != nil {
 		return nil, err
 	}
 
+	inner.line(small, sizeSmall, oneLine(small, labelled("SKU", l.SKU), inner.width()), "", alignLeft)
 	inner.feed(4)
 
-	if code, ok := barcodeImage(l.Barcode, inner.width(), 72); ok {
-		inner.grow(inner.y + code.Rect.Dy())
-		x := (inner.width() - code.Rect.Dx()) / 2
-		drawOnto(inner.img, code, x, inner.y, code.Rect.Dy())
-		inner.y += code.Rect.Dy()
+	code, ok := barcodeImage(l.Barcode, inner.width(), 64)
+	if !ok {
+		return nil, ErrBarcodeUnreadable
 	}
 
-	if err := inner.text(l.Barcode, sizeSmall, false, alignCenter); err != nil {
-		return nil, err
-	}
+	inner.grow(inner.y + code.Rect.Dy())
+	drawOnto(inner.img, code, (inner.width()-code.Rect.Dx())/2, inner.y, code.Rect.Dy())
+	inner.y += code.Rect.Dy()
+
+	inner.line(small, sizeSmall, oneLine(small, l.Barcode, inner.width()), "", alignCenter)
 
 	out := image.NewGray(image.Rect(0, 0, dotsWide(printmodel.Label5030), labelDots))
 	for i := range out.Pix {
@@ -95,6 +111,15 @@ func partLabel(l printmodel.PartLabel) (*image.Gray, error) {
 	drawOnto(out, inner.img, labelMargin, labelMargin, min(inner.y, labelDots-2*labelMargin))
 
 	return out, nil
+}
+
+// oneLine is s, or s shortened with "…" when it is wider than width.
+func oneLine(f font.Face, s string, width int) string {
+	if font.MeasureString(f, s).Ceil() <= width {
+		return s
+	}
+
+	return ellipsis(f, s, width)
 }
 
 // ellipsis shortens s with "…" until it fits width.
@@ -124,7 +149,8 @@ func drawOnto(dst, src *image.Gray, x, y, height int) {
 // barcodeImage draws code as a Code 128 barcode at most width dots wide and
 // height dots tall, with whole-dot modules and a quiet zone of ten modules
 // on each side. It is false when code cannot be encoded (a character outside
-// ASCII) or does not fit even at one dot a module.
+// ASCII) or does not fit at two dots a module: thinner bars (0.125 mm) do not
+// scan reliably.
 func barcodeImage(code string, width, height int) (*image.Gray, bool) {
 	const quiet = 10
 
@@ -135,8 +161,10 @@ func barcodeImage(code string, width, height int) (*image.Gray, bool) {
 
 	modules := bc.Bounds().Dx()
 
+	const minScale = 2
+
 	scale := width / (modules + 2*quiet)
-	if scale < 1 {
+	if scale < minScale {
 		return nil, false
 	}
 
@@ -168,7 +196,7 @@ const testText = "Tiếng Việt: ă â đ ê ô ơ ư - Á À Ả Ã Ạ - Ứ 
 // one label on label paper (FR-DOC-07).
 func TestPageEscPos(paper printmodel.Paper, garageName, printerName string) ([]byte, error) {
 	if paper == printmodel.Label5030 {
-		return PartLabels(paper, []printmodel.PartLabel{{Name: printerName, SKU: "VIETGARA", Barcode: "VIETGARA-TEST"}})
+		return PartLabels(paper, []printmodel.PartLabel{{Name: printerName, SKU: "VIETGARA", Barcode: "VG-TEST"}})
 	}
 
 	c, err := newCanvas(dotsWide(paper))

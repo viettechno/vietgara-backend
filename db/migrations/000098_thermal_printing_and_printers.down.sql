@@ -1,3 +1,7 @@
+-- Rolling back deletes the print log rows of the thermal rolls (K80, K57):
+-- the column goes back to two characters. Those prints are then forgotten:
+-- the next print of such a document is not marked as a copy.
+
 DROP TABLE IF EXISTS public.garage_printers;
 
 ALTER TABLE public.print_log NO FORCE ROW LEVEL SECURITY;

@@ -5,7 +5,6 @@ import (
 
 	documentv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/document/v1"
 	"google.golang.org/genproto/googleapis/api/httpbody"
-	"google.golang.org/protobuf/types/known/emptypb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/viettechno/vietgara-backend/internal/document/printmodel"
@@ -64,12 +63,12 @@ func (s *Server) UpdatePrinter(ctx context.Context, req *documentv1.UpdatePrinte
 }
 
 // DeletePrinter removes a printer.
-func (s *Server) DeletePrinter(ctx context.Context, req *documentv1.DeletePrinterRequest) (*emptypb.Empty, error) {
+func (s *Server) DeletePrinter(ctx context.Context, req *documentv1.DeletePrinterRequest) (*documentv1.DeletePrinterResponse, error) {
 	if err := s.uc.DeletePrinter(ctx, req.GetGarageId(), req.GetPrinterId()); err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
 
-	return &emptypb.Empty{}, nil
+	return &documentv1.DeletePrinterResponse{}, nil
 }
 
 // PrintPrinterTestPage returns the printer's test page.
@@ -179,7 +178,7 @@ func printerToProto(p usecase.Printer) *documentv1.Printer {
 	out := &documentv1.Printer{
 		Id: p.ID, Name: p.Name, Host: p.Host, Port: int32(p.Port), //nolint:gosec // at most 65535, checked on save
 		Path: p.Path, PaperSize: paperToProtoAny[p.Paper],
-		CreateTime: timestamppb.New(p.CreatedAt), UpdateTime: timestamppb.New(p.UpdatedAt),
+		CreatedAt: timestamppb.New(p.CreatedAt), UpdatedAt: timestamppb.New(p.UpdatedAt),
 	}
 
 	switch p.Protocol {

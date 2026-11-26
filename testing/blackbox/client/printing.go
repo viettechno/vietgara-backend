@@ -9,7 +9,6 @@ import (
 
 	documentv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/document/v1"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 // ---- Printers, roll prints and labels (Release 13.0) -------------------------
@@ -37,7 +36,7 @@ func (c *Client) UpdatePrinter(ctx context.Context, garageID, printerID string, 
 
 // DeletePrinter removes a printer.
 func (c *Client) DeletePrinter(ctx context.Context, garageID, printerID string) error {
-	_, err := call[emptypb.Empty](ctx, c, http.MethodDelete, printerPath(garageID, printerID), nil)
+	_, err := call[documentv1.DeletePrinterResponse](ctx, c, http.MethodDelete, printerPath(garageID, printerID), nil)
 
 	return err
 }

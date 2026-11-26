@@ -164,7 +164,8 @@ func (c *canvas) text(s string, size int, bold bool, a align) error {
 }
 
 // pair draws left at the left and right at the right of one line, left
-// wrapped into the room right leaves; its next lines are left alone.
+// wrapped into the room right leaves; its next lines are left alone. When
+// right leaves less than a third of the width, it goes on a line of its own.
 func (c *canvas) pair(left, right string, size int, bold bool) error {
 	f, err := c.face(size, bold)
 	if err != nil {
@@ -172,7 +173,18 @@ func (c *canvas) pair(left, right string, size int, bold bool) error {
 	}
 
 	room := c.width() - font.MeasureString(f, right).Ceil() - size/2
-	lines := wrap(f, left, max(room, c.width()/3))
+	if room < c.width()/3 {
+		// Too little room beside right: left on its lines, right under it.
+		for _, line := range wrap(f, left, c.width()) {
+			c.line(f, size, line, "", alignLeft)
+		}
+
+		c.line(f, size, right, "", alignRight)
+
+		return nil
+	}
+
+	lines := wrap(f, left, room)
 
 	for i, line := range lines {
 		r := ""

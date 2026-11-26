@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -116,8 +117,8 @@ func TestPartLabels(t *testing.T) {
 
 	labels := []printmodel.PartLabel{
 		{Name: "Lọc dầu động cơ Toyota Vios 2018-2022 chính hãng loại tốt nhất", SKU: "LD-001", Barcode: "8934567890123"},
-		{Name: "Má phanh", SKU: "MP-1", Barcode: "Mã có dấu"},                         // not ASCII: text only
-		{Name: "Dây", SKU: "D", Barcode: "X" + string(bytes.Repeat([]byte("9"), 63))}, // too long for 50 mm
+		{Name: "Lọc dầu động cơ Toyota Vios 2018-2022 chính hãng loại tốt nhất", SKU: "LD-001", Barcode: "8934567890123"},
+		{Name: "Dây", SKU: strings.Repeat("SKU-RẤT-DÀI-", 6), Barcode: "D-1"},
 	}
 
 	data, err := render.PartLabels(printmodel.Label5030, labels)
@@ -126,6 +127,11 @@ func TestPartLabels(t *testing.T) {
 	assert.Equal(t, 3, bytes.Count(data, gsFF))
 	// GS v 0: 50 bytes (400 dots) a row, 128 rows then 112: one 240-dot label.
 	assert.Equal(t, []byte{0x1d, 0x76, 0x30, 0x00, 50, 0, 128, 0}, data[2:10])
+
+	for _, code := range []string{"Mã có dấu", strings.Repeat("X", 30)} {
+		_, err = render.PartLabels(printmodel.Label5030, []printmodel.PartLabel{{Name: "N", SKU: "S", Barcode: code}})
+		require.ErrorIs(t, err, render.ErrBarcodeUnreadable, code)
+	}
 
 	_, err = render.PartLabels(printmodel.K80, labels)
 	require.ErrorIs(t, err, render.ErrNotLabelPaper)

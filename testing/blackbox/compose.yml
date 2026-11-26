@@ -20,7 +20,7 @@ x-db: &db
 
 services:
   vietgara-pgsql:
-    image: postgres:18.4
+    image: postgres:19.0
     environment: *db
     # Published for the suite's time-shifting setup helpers (timeshift);
     # loopback only, and the stack is disposable.
@@ -35,7 +35,7 @@ services:
       retries: 30
 
   vietgara-redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s
@@ -64,7 +64,7 @@ services:
       retries: 40
 
   vietgara-mailpit:
-    image: axllent/mailpit:latest
+    image: axllent/mailpit:v1.34
     ports:
       - "127.0.0.1:${BLACKBOX_MAILPIT_PORT:-18025}:8025"
     healthcheck:

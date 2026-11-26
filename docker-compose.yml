@@ -9,7 +9,7 @@
 
 services:
   vietgara-pgsql:
-    image: postgres:18.4
+    image: postgres:19.0
     container_name: vietgara-pgsql
     restart: unless-stopped
     environment:
@@ -19,7 +19,9 @@ services:
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
-      - vietgara-pgdata:/var/lib/postgresql/18/docker
+      # One directory per major version lives here. A volume made by an older major cannot be opened by
+      # this one: recreate it (`docker compose down -v`, then `make migrate-up`).
+      - vietgara-pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
@@ -32,7 +34,7 @@ services:
   # Sessions, OTPs, entitlement cache and transaction counters (Memorystore
   # in GCP), shared by backend instances.
   vietgara-redis:
-    image: redis:7-alpine
+    image: redis:8-alpine
     container_name: vietgara-redis
     restart: unless-stopped
     healthcheck:
@@ -78,7 +80,7 @@ services:
 
   # Local SMTP server that catches every e-mail (MAIL_PROVIDER=smtp).
   vietgara-mailpit:
-    image: axllent/mailpit:latest
+    image: axllent/mailpit:v1.34
     container_name: vietgara-mailpit
     restart: unless-stopped
     ports:

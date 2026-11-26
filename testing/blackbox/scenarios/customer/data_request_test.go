@@ -1,5 +1,5 @@
 // Scenario: E2E-DSR-001 to E2E-DSR-009
-// docs: vietgara-docs/docs/05-Testing/E2E_Scenarios/18_Data_Requests.md
+// docs: vietgara-docs/docs/en/05-Testing/E2E_Scenarios/18_Data_Requests.md
 package customer_test
 
 import (

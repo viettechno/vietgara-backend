@@ -1,5 +1,5 @@
 // Scenario: E2E-LIC-010, E2E-LIC-011, E2E-LIC-012 (partial)
-// docs: vietgara-docs/docs/05-Testing/E2E_Scenarios/03_License_Subscription.md
+// docs: vietgara-docs/docs/en/05-Testing/E2E_Scenarios/03_License_Subscription.md
 package license_test
 
 import (

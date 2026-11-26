@@ -29,7 +29,7 @@ import (
 // Image is the PostgreSQL image every integration test runs on. Keep it in
 // step with vietgara-pgsql in docker-compose.yml and the Cloud SQL major
 // version, so RLS and planner behaviour match what the backend runs on.
-const Image = "postgres:18.4"
+const Image = "postgres:19.0"
 
 const (
 	superUser     = "postgres"

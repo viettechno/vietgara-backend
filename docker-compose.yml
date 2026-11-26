@@ -9,7 +9,7 @@
 
 services:
   vietgara-pgsql:
-    image: postgres:18.4
+    image: postgres:19.0
     container_name: vietgara-pgsql
     restart: unless-stopped
     environment:
@@ -19,7 +19,7 @@ services:
     ports:
       - "${POSTGRES_PORT}:5432"
     volumes:
-      - vietgara-pgdata:/var/lib/postgresql/18/docker
+      - vietgara-pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
@@ -78,7 +78,7 @@ services:
 
   # Local SMTP server that catches every e-mail (MAIL_PROVIDER=smtp).
   vietgara-mailpit:
-    image: axllent/mailpit:latest
+    image: axllent/mailpit:v1.27
     container_name: vietgara-mailpit
     restart: unless-stopped
     ports:

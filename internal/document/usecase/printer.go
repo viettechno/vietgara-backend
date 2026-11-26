@@ -314,6 +314,12 @@ func validHost(host string) bool {
 		return true
 	}
 
+	// A name of digits and dots only is a mistyped IPv4 address
+	// (192.168.1.300, 10.0.0), not a host name.
+	if strings.Trim(host, "0123456789.") == "" {
+		return false
+	}
+
 	return hostName.MatchString(host)
 }
 

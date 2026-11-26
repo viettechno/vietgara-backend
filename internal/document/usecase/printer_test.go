@@ -166,6 +166,8 @@ func TestCreatePrinter(t *testing.T) {
 		"no host":                      func(p *usecase.Printer) { p.Host = "" },
 		"a host with a scheme":         func(p *usecase.Printer) { p.Host = "http://10.0.0.1" },
 		"a host with a port":           func(p *usecase.Printer) { p.Host = "10.0.0.1:9100" },
+		"an IPv4 out of range":         func(p *usecase.Printer) { p.Host = "192.168.1.300" },
+		"a short IPv4":                 func(p *usecase.Printer) { p.Host = "10.0.0" },
 		"a port out of range":          func(p *usecase.Printer) { p.Port = 70000 },
 		"a negative port":              func(p *usecase.Printer) { p.Port = -1 },
 		"no protocol":                  func(p *usecase.Printer) { p.Protocol = "" },

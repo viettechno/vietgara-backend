@@ -196,11 +196,14 @@ func (c *canvas) field(label, value string) error {
 }
 
 // line draws one line of text, and right aligned to the right edge when set.
-func (c *canvas) line(f font.Face, size int, s, right string, a align) {
-	height := size * 5 / 4
+// The line is as tall as the font's ascent and descent, so stacked
+// Vietnamese marks (Ẫ, Ứ) and dots below (ạ, ự) stay inside it.
+func (c *canvas) line(f font.Face, _ int, s, right string, a align) {
+	metrics := f.Metrics()
+	height := metrics.Ascent.Ceil() + metrics.Descent.Ceil()
 	c.grow(c.y + height)
 
-	baseline := c.y + f.Metrics().Ascent.Ceil() + (height-size)/2
+	baseline := c.y + metrics.Ascent.Ceil()
 
 	x := 0
 

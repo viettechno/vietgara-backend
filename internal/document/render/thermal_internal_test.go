@@ -44,3 +44,26 @@ func TestBarcodeImage(t *testing.T) {
 	_, ok = barcodeImage("ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZ", 376, 72)
 	assert.False(t, ok, "wider than the label at one dot a module")
 }
+
+func TestQuoteStatusLabel(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "(BẢN NHÁP)", quoteStatusLabel("draft"))
+	assert.Equal(t, "(KHÁCH ĐÃ TỪ CHỐI)", quoteStatusLabel("rejected"))
+	assert.Empty(t, quoteStatusLabel("approved"))
+}
+
+func TestLineHoldsTheGlyphs(t *testing.T) {
+	t.Parallel()
+
+	c, err := newCanvas(400)
+	require.NoError(t, err)
+
+	defer c.close()
+
+	f, err := c.face(sizeBody, false)
+	require.NoError(t, err)
+
+	c.line(f, sizeBody, "Ẫ Ứ ạ ự gy", "", alignLeft)
+	assert.Equal(t, f.Metrics().Ascent.Ceil()+f.Metrics().Descent.Ceil(), c.y)
+}

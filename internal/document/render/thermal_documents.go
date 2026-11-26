@@ -14,11 +14,7 @@ func quoteRoll(c *canvas, q printmodel.Quote, o Options) error {
 		return err
 	}
 
-	if err := c.text("BÁO GIÁ", sizeTitle, true, alignCenter); err != nil {
-		return err
-	}
-
-	if err := c.text("Số: "+q.Number, sizeBody, false, alignCenter); err != nil {
+	if err := quoteHeading(c, q); err != nil {
 		return err
 	}
 
@@ -151,4 +147,38 @@ func prefixed(prefix, value string) string {
 	}
 
 	return prefix + value
+}
+
+// quoteStatusLabel is the status a quote slip shows, so that a draft or a
+// rejected quote is not taken for an agreed one; "" for an approved or
+// converted quote, which the customer agreed to.
+func quoteStatusLabel(status string) string {
+	switch status {
+	case "draft":
+		return "(BẢN NHÁP)"
+	case "sent":
+		return "(CHỜ KHÁCH DUYỆT)"
+	case "rejected":
+		return "(KHÁCH ĐÃ TỪ CHỐI)"
+	default:
+		return ""
+	}
+}
+
+// quoteHeading draws the title, the number and, unless the customer agreed
+// to it, the quote's status.
+func quoteHeading(c *canvas, q printmodel.Quote) error {
+	if err := c.text("BÁO GIÁ", sizeTitle, true, alignCenter); err != nil {
+		return err
+	}
+
+	if err := c.text("Số: "+q.Number, sizeBody, false, alignCenter); err != nil {
+		return err
+	}
+
+	if label := quoteStatusLabel(q.Status); label != "" {
+		return c.text(label, sizeBody, true, alignCenter)
+	}
+
+	return nil
 }

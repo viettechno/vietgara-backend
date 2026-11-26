@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -90,7 +89,7 @@ func server(f fake) *handler.Server {
 
 func signedIn() context.Context {
 	return middleware.WithClaims(context.Background(), &auth.Claims{
-		RegisteredClaims: jwt.RegisteredClaims{Subject: "user-binh"}, EmailVerified: true,
+		Subject: "user-binh", EmailVerified: true,
 	})
 }
 

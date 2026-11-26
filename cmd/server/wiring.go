@@ -797,8 +797,8 @@ func (s documentStockMovements) List(ctx context.Context, garageID, itemID strin
 
 	for page := 1; ; page++ {
 		result, err := s.uc.ListTransactions(ctx, inventoryUsecase.ListTransactionsRequest{
-			PageRequest: inventoryUsecase.PageRequest{Page: page, PageSize: inventoryUsecase.MaxPageSize},
-			GarageID:    garageID, PartID: itemID,
+			Page: page, PageSize: inventoryUsecase.MaxPageSize,
+			GarageID: garageID, PartID: itemID,
 		})
 		if err != nil {
 			return nil, err

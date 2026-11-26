@@ -1,7 +1,7 @@
 # The builder runs on the build machine's platform and cross-compiles for
 # the target (e.g. an arm64 Mac building the linux/amd64 staging image), so
 # no emulation is needed.
-FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
+FROM --platform=$BUILDPLATFORM golang:1.27-alpine AS builder
 
 # Target platform for the final image. BuildKit (compose up --build,
 # buildx, CI image builds) injects TARGETOS/TARGETARCH automatically; when

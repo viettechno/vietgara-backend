@@ -1,4 +1,4 @@
-MOCKERY_VERSION := v3.7.2
+MOCKERY_VERSION := v3.9.2
 
 .PHONY: \
 	install-mockery \

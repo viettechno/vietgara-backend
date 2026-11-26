@@ -18,10 +18,19 @@ func NewMockConnPool(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *MockConnPool {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &MockConnPool{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -181,19 +190,19 @@ func (_e *MockConnPool_Expecter) Exec(ctx any, sql any, args ...any) *MockConnPo
 }
 
 func (_c *MockConnPool_Exec_Call) Run(run func(ctx context.Context, sql string, args ...any)) *MockConnPool_Exec_Call {
-	_c.Call.Run(func(args mock.Arguments) {
+	_c.Call.Run(func(args1 mock.Arguments) {
 		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
+		if args1[0] != nil {
+			arg0 = args1[0].(context.Context)
 		}
 		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
+		if args1[1] != nil {
+			arg1 = args1[1].(string)
 		}
 		var arg2 []any
 		var variadicArgs []any
-		if len(args) > 2 {
-			variadicArgs = args[2].([]any)
+		if len(args1) > 2 {
+			variadicArgs = args1[2].([]any)
 		}
 		arg2 = variadicArgs
 		run(
@@ -264,19 +273,19 @@ func (_e *MockConnPool_Expecter) Query(ctx any, sql any, args ...any) *MockConnP
 }
 
 func (_c *MockConnPool_Query_Call) Run(run func(ctx context.Context, sql string, args ...any)) *MockConnPool_Query_Call {
-	_c.Call.Run(func(args mock.Arguments) {
+	_c.Call.Run(func(args1 mock.Arguments) {
 		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
+		if args1[0] != nil {
+			arg0 = args1[0].(context.Context)
 		}
 		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
+		if args1[1] != nil {
+			arg1 = args1[1].(string)
 		}
 		var arg2 []any
 		var variadicArgs []any
-		if len(args) > 2 {
-			variadicArgs = args[2].([]any)
+		if len(args1) > 2 {
+			variadicArgs = args1[2].([]any)
 		}
 		arg2 = variadicArgs
 		run(
@@ -338,19 +347,19 @@ func (_e *MockConnPool_Expecter) QueryRow(ctx any, sql any, args ...any) *MockCo
 }
 
 func (_c *MockConnPool_QueryRow_Call) Run(run func(ctx context.Context, sql string, args ...any)) *MockConnPool_QueryRow_Call {
-	_c.Call.Run(func(args mock.Arguments) {
+	_c.Call.Run(func(args1 mock.Arguments) {
 		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
+		if args1[0] != nil {
+			arg0 = args1[0].(context.Context)
 		}
 		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
+		if args1[1] != nil {
+			arg1 = args1[1].(string)
 		}
 		var arg2 []any
 		var variadicArgs []any
-		if len(args) > 2 {
-			variadicArgs = args[2].([]any)
+		if len(args1) > 2 {
+			variadicArgs = args1[2].([]any)
 		}
 		arg2 = variadicArgs
 		run(
@@ -378,10 +387,19 @@ func NewMockQuerier(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *MockQuerier {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &MockQuerier{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -446,19 +464,19 @@ func (_e *MockQuerier_Expecter) Exec(ctx any, sql any, args ...any) *MockQuerier
 }
 
 func (_c *MockQuerier_Exec_Call) Run(run func(ctx context.Context, sql string, args ...any)) *MockQuerier_Exec_Call {
-	_c.Call.Run(func(args mock.Arguments) {
+	_c.Call.Run(func(args1 mock.Arguments) {
 		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
+		if args1[0] != nil {
+			arg0 = args1[0].(context.Context)
 		}
 		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
+		if args1[1] != nil {
+			arg1 = args1[1].(string)
 		}
 		var arg2 []any
 		var variadicArgs []any
-		if len(args) > 2 {
-			variadicArgs = args[2].([]any)
+		if len(args1) > 2 {
+			variadicArgs = args1[2].([]any)
 		}
 		arg2 = variadicArgs
 		run(
@@ -529,19 +547,19 @@ func (_e *MockQuerier_Expecter) Query(ctx any, sql any, args ...any) *MockQuerie
 }
 
 func (_c *MockQuerier_Query_Call) Run(run func(ctx context.Context, sql string, args ...any)) *MockQuerier_Query_Call {
-	_c.Call.Run(func(args mock.Arguments) {
+	_c.Call.Run(func(args1 mock.Arguments) {
 		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
+		if args1[0] != nil {
+			arg0 = args1[0].(context.Context)
 		}
 		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
+		if args1[1] != nil {
+			arg1 = args1[1].(string)
 		}
 		var arg2 []any
 		var variadicArgs []any
-		if len(args) > 2 {
-			variadicArgs = args[2].([]any)
+		if len(args1) > 2 {
+			variadicArgs = args1[2].([]any)
 		}
 		arg2 = variadicArgs
 		run(
@@ -603,19 +621,19 @@ func (_e *MockQuerier_Expecter) QueryRow(ctx any, sql any, args ...any) *MockQue
 }
 
 func (_c *MockQuerier_QueryRow_Call) Run(run func(ctx context.Context, sql string, args ...any)) *MockQuerier_QueryRow_Call {
-	_c.Call.Run(func(args mock.Arguments) {
+	_c.Call.Run(func(args1 mock.Arguments) {
 		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
+		if args1[0] != nil {
+			arg0 = args1[0].(context.Context)
 		}
 		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
+		if args1[1] != nil {
+			arg1 = args1[1].(string)
 		}
 		var arg2 []any
 		var variadicArgs []any
-		if len(args) > 2 {
-			variadicArgs = args[2].([]any)
+		if len(args1) > 2 {
+			variadicArgs = args1[2].([]any)
 		}
 		arg2 = variadicArgs
 		run(

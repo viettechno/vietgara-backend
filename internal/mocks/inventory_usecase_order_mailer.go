@@ -17,10 +17,19 @@ func NewMockOrderMailer(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *MockOrderMailer {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &MockOrderMailer{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -39,8 +48,8 @@ func (_m *MockOrderMailer) EXPECT() *MockOrderMailer_Expecter {
 }
 
 // SendPurchaseOrder provides a mock function for the type MockOrderMailer
-func (_mock *MockOrderMailer) SendPurchaseOrder(ctx context.Context, mail usecase.OrderMail) (bool, error) {
-	ret := _mock.Called(ctx, mail)
+func (_mock *MockOrderMailer) SendPurchaseOrder(ctx context.Context, order usecase.OrderMail) (bool, error) {
+	ret := _mock.Called(ctx, order)
 
 	if len(ret) == 0 {
 		panic("no return value specified for SendPurchaseOrder")
@@ -49,15 +58,15 @@ func (_mock *MockOrderMailer) SendPurchaseOrder(ctx context.Context, mail usecas
 	var r0 bool
 	var r1 error
 	if returnFunc, ok := ret.Get(0).(func(context.Context, usecase.OrderMail) (bool, error)); ok {
-		return returnFunc(ctx, mail)
+		return returnFunc(ctx, order)
 	}
 	if returnFunc, ok := ret.Get(0).(func(context.Context, usecase.OrderMail) bool); ok {
-		r0 = returnFunc(ctx, mail)
+		r0 = returnFunc(ctx, order)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
 	if returnFunc, ok := ret.Get(1).(func(context.Context, usecase.OrderMail) error); ok {
-		r1 = returnFunc(ctx, mail)
+		r1 = returnFunc(ctx, order)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -71,12 +80,12 @@ type MockOrderMailer_SendPurchaseOrder_Call struct {
 
 // SendPurchaseOrder is a helper method to define mock.On call
 //   - ctx context.Context
-//   - mail usecase.OrderMail
-func (_e *MockOrderMailer_Expecter) SendPurchaseOrder(ctx any, mail any) *MockOrderMailer_SendPurchaseOrder_Call {
-	return &MockOrderMailer_SendPurchaseOrder_Call{Call: _e.mock.On("SendPurchaseOrder", ctx, mail)}
+//   - order usecase.OrderMail
+func (_e *MockOrderMailer_Expecter) SendPurchaseOrder(ctx any, order any) *MockOrderMailer_SendPurchaseOrder_Call {
+	return &MockOrderMailer_SendPurchaseOrder_Call{Call: _e.mock.On("SendPurchaseOrder", ctx, order)}
 }
 
-func (_c *MockOrderMailer_SendPurchaseOrder_Call) Run(run func(ctx context.Context, mail usecase.OrderMail)) *MockOrderMailer_SendPurchaseOrder_Call {
+func (_c *MockOrderMailer_SendPurchaseOrder_Call) Run(run func(ctx context.Context, order usecase.OrderMail)) *MockOrderMailer_SendPurchaseOrder_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
@@ -99,7 +108,7 @@ func (_c *MockOrderMailer_SendPurchaseOrder_Call) Return(b bool, err error) *Moc
 	return _c
 }
 
-func (_c *MockOrderMailer_SendPurchaseOrder_Call) RunAndReturn(run func(ctx context.Context, mail usecase.OrderMail) (bool, error)) *MockOrderMailer_SendPurchaseOrder_Call {
+func (_c *MockOrderMailer_SendPurchaseOrder_Call) RunAndReturn(run func(ctx context.Context, order usecase.OrderMail) (bool, error)) *MockOrderMailer_SendPurchaseOrder_Call {
 	_c.Call.Return(run)
 	return _c
 }

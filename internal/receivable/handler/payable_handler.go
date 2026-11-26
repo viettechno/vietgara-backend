@@ -51,7 +51,7 @@ func (s *PayableServer) ListSupplierPayables(ctx context.Context, req *receivabl
 	return run(ctx, func(string) (*receivablev1.ListSupplierPayablesResponse, error) {
 		res, err := s.uc.ListPayables(ctx, usecase.ListPayablesRequest{
 			GarageID: req.GetGarageId(), SupplierID: req.GetSupplierId(), IncludePaid: req.GetIncludePaid(),
-			PageRequest: usecase.PageRequest{Page: int(req.GetPage()), PageSize: int(req.GetPageSize())},
+			Page: int(req.GetPage()), PageSize: int(req.GetPageSize()),
 		})
 		if err != nil {
 			return nil, err
@@ -94,7 +94,7 @@ func (s *PayableServer) ListPaymentOutVouchers(ctx context.Context, req *receiva
 	return run(ctx, func(string) (*receivablev1.ListPaymentOutVouchersResponse, error) {
 		res, err := s.uc.ListVouchers(ctx, usecase.ListVouchersRequest{
 			GarageID: req.GetGarageId(), SupplierID: req.GetSupplierId(), IncludeVoided: req.GetIncludeVoided(),
-			PageRequest: usecase.PageRequest{Page: int(req.GetPage()), PageSize: int(req.GetPageSize())},
+			Page: int(req.GetPage()), PageSize: int(req.GetPageSize()),
 		})
 		if err != nil {
 			return nil, err

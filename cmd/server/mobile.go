@@ -69,8 +69,8 @@ type technicianRepairOrders struct {
 func (r technicianRepairOrders) ListAssigned(ctx context.Context, garageID, userID string) ([]*repairorderDomain.RepairOrder, error) {
 	orders, err := allPages(func(page int) ([]*repairorderDomain.RepairOrder, int, error) {
 		result, err := r.uc.List(ctx, repairorderUsecase.ListRepairOrdersRequest{
-			PageRequest: repairorderUsecase.PageRequest{Page: page, PageSize: repairorderUsecase.MaxPageSize},
-			GarageID:    garageID, TechnicianID: userID,
+			Page: page, PageSize: repairorderUsecase.MaxPageSize,
+			GarageID: garageID, TechnicianID: userID,
 		})
 		if err != nil {
 			return nil, 0, err
@@ -174,8 +174,8 @@ type portalVehicles struct {
 func (v portalVehicles) ListForCustomer(ctx context.Context, garageID, customerID string) ([]*customerDomain.Vehicle, error) {
 	return allPages(func(page int) ([]*customerDomain.Vehicle, int, error) {
 		result, err := v.vehicles.List(ctx, customerUsecase.ListVehiclesRequest{
-			PageRequest: customerUsecase.PageRequest{Page: page, PageSize: customerUsecase.MaxPageSize},
-			GarageID:    garageID, CustomerID: customerID,
+			Page: page, PageSize: customerUsecase.MaxPageSize,
+			GarageID: garageID, CustomerID: customerID,
 		})
 		if err != nil {
 			return nil, 0, err

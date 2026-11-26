@@ -61,12 +61,12 @@ jobs:
           cache: true
 
       - name: govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
 
       # The blackbox suite is a separate module with its own dependencies.
       - name: govulncheck (testing/blackbox)
         working-directory: testing/blackbox
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...
 
   lint:
     name: Lint
@@ -84,13 +84,13 @@ jobs:
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.12.2
+          version: v2.15.0
 
       # The blackbox suite is a separate module; lint it with the same config.
       - name: golangci-lint (testing/blackbox)
         uses: golangci/golangci-lint-action@v9
         with:
-          version: v2.12.2
+          version: v2.15.0
           working-directory: testing/blackbox
           args: --config ../../.golangci.yml
 

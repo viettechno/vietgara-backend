@@ -27,7 +27,7 @@ func TestReceivableUseCase_List(t *testing.T) {
 
 		res, err := uc.List(t.Context(), usecase.ListRequest{
 			GarageID: garageID, CustomerID: customerID, OverdueOnly: true, IncludePaid: true, Query: "  51A ",
-			PageRequest: usecase.PageRequest{Page: 2, PageSize: 50},
+			Page: 2, PageSize: 50,
 		})
 		require.NoError(t, err)
 		require.Equal(t, 77, res.Total)
@@ -49,7 +49,7 @@ func TestReceivableUseCase_List(t *testing.T) {
 			return f.Limit == 100 && f.Offset == 0
 		})).Return(nil, 0, usecase.Summary{}, nil).Once()
 
-		res, err := uc.List(t.Context(), usecase.ListRequest{GarageID: garageID, PageRequest: usecase.PageRequest{PageSize: 1000}})
+		res, err := uc.List(t.Context(), usecase.ListRequest{GarageID: garageID, PageSize: 1000})
 		require.NoError(t, err)
 		require.Equal(t, 1, res.Page)
 		require.Empty(t, res.Items)

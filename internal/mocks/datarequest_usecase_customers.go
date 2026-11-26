@@ -18,10 +18,19 @@ func NewMockDataRequestCustomers(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *MockDataRequestCustomers {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &MockDataRequestCustomers{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }

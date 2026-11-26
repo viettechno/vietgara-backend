@@ -212,7 +212,7 @@ func TestVehicleUseCase_GetListDelete(t *testing.T) {
 	vehicles.EXPECT().FindByID(mock.Anything, garageID, vehicleID).Return(existingVehicle(), nil).Once()
 	vehicles.EXPECT().FindByID(mock.Anything, garageID, "missing").Return(nil, domain.ErrVehicleNotFound).Once()
 	vehicles.EXPECT().List(mock.Anything, garageID, usecase.VehicleFilter{
-		ListFilter: usecase.ListFilter{Query: "51F", Limit: 5, Offset: 5}, CustomerID: customerID,
+		Query: "51F", Limit: 5, Offset: 5, CustomerID: customerID,
 	}).Return([]*domain.Vehicle{existingVehicle()}, 6, nil).Once()
 	vehicles.EXPECT().List(mock.Anything, "garage-2", mock.Anything).Return(nil, 0, errBoom).Once()
 
@@ -224,7 +224,7 @@ func TestVehicleUseCase_GetListDelete(t *testing.T) {
 	assertAppError(t, err, apperror.CodeNotFound)
 
 	page, err := uc.List(t.Context(), usecase.ListVehiclesRequest{
-		PageRequest: usecase.PageRequest{Page: 2, PageSize: 5}, GarageID: garageID, CustomerID: " " + customerID, Query: "51F",
+		Page: 2, PageSize: 5, GarageID: garageID, CustomerID: " " + customerID, Query: "51F",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 6, page.Total)

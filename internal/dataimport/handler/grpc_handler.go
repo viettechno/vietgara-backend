@@ -190,5 +190,5 @@ func countMap(in map[string]int) map[string]int32 {
 }
 
 func clamp(n int) int32 {
-	return int32(min(max(n, 0), math.MaxInt32)) //nolint:gosec // clamped
+	return int32(min(max(n, 0), math.MaxInt32))
 }

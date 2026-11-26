@@ -173,4 +173,4 @@ func sourceToProto(s domain.Source) customerv1.DataRequestSource {
 	}
 }
 
-func toInt32(n int) int32 { return int32(min(max(n, 0), 1<<31-1)) } //nolint:gosec // clamped
+func toInt32(n int) int32 { return int32(min(max(n, 0), 1<<31-1)) }

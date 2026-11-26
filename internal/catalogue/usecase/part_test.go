@@ -319,7 +319,7 @@ func TestUseCase_ListParts(t *testing.T) {
 		uc, d := newUseCase(t)
 		d.Repo.EXPECT().ListParts(mock.Anything, garageID, usecase.PartFilter{Limit: 5, Offset: 10}).Return(nil, 0, nil).Once()
 
-		_, err := uc.ListParts(t.Context(), usecase.ListPartsRequest{GarageID: garageID, PageRequest: usecase.PageRequest{Page: 3, PageSize: 5}})
+		_, err := uc.ListParts(t.Context(), usecase.ListPartsRequest{GarageID: garageID, Page: 3, PageSize: 5})
 		require.NoError(t, err)
 	})
 

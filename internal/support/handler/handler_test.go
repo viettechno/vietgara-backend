@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	supportv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/support/v1"
@@ -43,13 +42,13 @@ func newEnv() *env {
 }
 
 func staffCtx(admin bool) context.Context {
-	ctx := middleware.WithClaims(context.Background(), &auth.Claims{RegisteredClaims: jwt.RegisteredClaims{Subject: "u-staff"}})
+	ctx := middleware.WithClaims(context.Background(), &auth.Claims{Subject: "u-staff"})
 
 	return access.WithPlatformAccess(ctx, &access.PlatformAccess{UserID: "u-staff", Admin: admin})
 }
 
 func ownerCtx() context.Context {
-	ctx := middleware.WithClaims(context.Background(), &auth.Claims{RegisteredClaims: jwt.RegisteredClaims{Subject: "u-owner"}})
+	ctx := middleware.WithClaims(context.Background(), &auth.Claims{Subject: "u-owner"})
 
 	return access.WithAccess(ctx, &access.Access{GarageID: garageID, UserID: "u-owner", Owner: true, Active: true})
 }

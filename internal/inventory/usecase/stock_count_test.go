@@ -161,7 +161,7 @@ func TestInventoryUseCase_GetAndListStockCounts(t *testing.T) {
 		expectCountNames(d)
 
 		page, err := uc.ListStockCounts(t.Context(), usecase.ListStockCountsRequest{
-			PageRequest: usecase.PageRequest{Page: 2, PageSize: 10}, GarageID: garageID, Query: "shelf", Status: domain.StockCountDraft,
+			Page: 2, PageSize: 10, GarageID: garageID, Query: "shelf", Status: domain.StockCountDraft,
 		})
 		require.NoError(t, err)
 		assert.Equal(t, 11, page.Total)

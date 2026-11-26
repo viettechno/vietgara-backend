@@ -65,20 +65,18 @@ func Start(tb testing.TB) *Postgres {
 	tb.Cleanup(cancel)
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: testcontainers.ContainerRequest{
-			Image:        Image,
-			ExposedPorts: []string{"5432/tcp"},
-			Env: map[string]string{
-				"POSTGRES_DB":       database,
-				"POSTGRES_USER":     superUser,
-				"POSTGRES_PASSWORD": superPassword,
-			},
-			// The entrypoint starts a temporary server for initdb first; the
-			// second "ready" line is the real one.
-			WaitingFor: wait.ForLog("database system is ready to accept connections").
-				WithOccurrence(2).
-				WithStartupTimeout(startupTimeout),
+		Image:        Image,
+		ExposedPorts: []string{"5432/tcp"},
+		Env: map[string]string{
+			"POSTGRES_DB":       database,
+			"POSTGRES_USER":     superUser,
+			"POSTGRES_PASSWORD": superPassword,
 		},
+		// The entrypoint starts a temporary server for initdb first; the
+		// second "ready" line is the real one.
+		WaitingFor: wait.ForLog("database system is ready to accept connections").
+			WithOccurrence(2).
+			WithStartupTimeout(startupTimeout),
 		Started: true,
 	})
 	if container != nil {

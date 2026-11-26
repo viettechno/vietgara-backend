@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -60,7 +59,7 @@ func newEnv(t *testing.T) *env {
 }
 
 func (e *env) as(userID string) context.Context {
-	ctx := middleware.WithClaims(context.Background(), &auth.Claims{RegisteredClaims: jwt.RegisteredClaims{Subject: userID}})
+	ctx := middleware.WithClaims(context.Background(), &auth.Claims{Subject: userID})
 	acc, _ := e.platform.PlatformAccess(ctx, userID)
 
 	return access.WithPlatformAccess(ctx, acc)

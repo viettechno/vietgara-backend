@@ -117,8 +117,8 @@ func (c dataImportCatalogue) Units(ctx context.Context, garageID string) ([]data
 
 	for page := 1; ; page++ {
 		units, err := c.uc.ListUnits(ctx, catalogueUsecase.ListUnitsRequest{
-			PageRequest: catalogueUsecase.PageRequest{Page: page, PageSize: catalogueUsecase.MaxPageSize},
-			GarageID:    garageID, IncludeInactive: true,
+			Page: page, PageSize: catalogueUsecase.MaxPageSize,
+			GarageID: garageID, IncludeInactive: true,
 		})
 		if err != nil {
 			return nil, err

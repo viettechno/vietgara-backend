@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -61,7 +60,7 @@ func (e *env) as(t *testing.T, userID string) context.Context {
 	acc, err := e.repo.PlatformAccess(t.Context(), userID)
 	require.NoError(t, err)
 
-	ctx := middleware.WithClaims(t.Context(), &auth.Claims{RegisteredClaims: jwt.RegisteredClaims{Subject: userID}})
+	ctx := middleware.WithClaims(t.Context(), &auth.Claims{Subject: userID})
 
 	return access.WithPlatformAccess(ctx, acc)
 }
@@ -69,7 +68,7 @@ func (e *env) as(t *testing.T, userID string) context.Context {
 // as2 is as without the *testing.T, for use inside closures.
 func (e *env) as2(userID string) context.Context {
 	acc, _ := e.repo.PlatformAccess(context.Background(), userID)
-	ctx := middleware.WithClaims(context.Background(), &auth.Claims{RegisteredClaims: jwt.RegisteredClaims{Subject: userID}})
+	ctx := middleware.WithClaims(context.Background(), &auth.Claims{Subject: userID})
 
 	return access.WithPlatformAccess(ctx, acc)
 }

@@ -64,12 +64,12 @@ func TestTokenIssuer_VerifyRejects(t *testing.T) {
 	require.NoError(t, err)
 
 	noSubject, err := jwt.NewWithClaims(jwt.SigningMethodHS256, &auth.Claims{
-		RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute))},
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute)),
 	}).SignedString([]byte(testSigningKey))
 	require.NoError(t, err)
 
 	noneAlg, err := jwt.NewWithClaims(jwt.SigningMethodNone, &auth.Claims{
-		RegisteredClaims: jwt.RegisteredClaims{Subject: "user-1"},
+		Subject: "user-1",
 	}).SignedString(jwt.UnsafeAllowNoneSignatureType)
 	require.NoError(t, err)
 

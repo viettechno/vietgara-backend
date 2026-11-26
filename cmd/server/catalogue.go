@@ -169,8 +169,8 @@ func (p inventoryParts) Parts(ctx context.Context, garageID string, ids []string
 
 func (p inventoryParts) SearchParts(ctx context.Context, garageID string, q inventoryUsecase.PartQuery) ([]inventoryUsecase.PartInfo, int, error) {
 	page, err := p.uc.ListParts(ctx, catalogueUsecase.ListPartsRequest{
-		PageRequest: catalogueUsecase.PageRequest{Page: q.Offset/max(q.Limit, 1) + 1, PageSize: q.Limit},
-		GarageID:    garageID, Query: q.Query, CategoryID: q.CategoryID, Brand: q.Brand, IncludeInactive: q.IncludeInactive,
+		Page: q.Offset/max(q.Limit, 1) + 1, PageSize: q.Limit,
+		GarageID: garageID, Query: q.Query, CategoryID: q.CategoryID, Brand: q.Brand, IncludeInactive: q.IncludeInactive,
 	})
 	if err != nil {
 		return nil, 0, err

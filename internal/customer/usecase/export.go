@@ -91,7 +91,7 @@ func (uc *CustomerUseCase) Export(ctx context.Context, garageID, customerID stri
 	}
 
 	vehicles, _, err := uc.vehicles.List(ctx, garageID, VehicleFilter{
-		ListFilter: ListFilter{Limit: maxExportedVehicles, IncludeInactive: true}, CustomerID: customerID,
+		Limit: maxExportedVehicles, IncludeInactive: true, CustomerID: customerID,
 	})
 	if err != nil {
 		return nil, toAppError(op, err)

@@ -55,9 +55,7 @@ func TestTaxProfilePersistence(t *testing.T) {
 	company := func(name, taxID string, isDefault bool) customerUsecase.CreateTaxProfileRequest {
 		return customerUsecase.CreateTaxProfileRequest{
 			GarageID: garageID, CustomerID: customerID, Kind: customerDomain.TaxProfileCompany,
-			TaxProfileInput: customerUsecase.TaxProfileInput{
-				LegalName: new(name), TaxID: new(taxID), Address: new("12 Le Loi"), IsDefault: new(isDefault),
-			},
+			LegalName: new(name), TaxID: new(taxID), Address: new("12 Le Loi"), IsDefault: new(isDefault),
 		}
 	}
 
@@ -85,7 +83,7 @@ func TestTaxProfilePersistence(t *testing.T) {
 	require.NoError(t, in(garageID, func(ctx context.Context) error {
 		_, err := uc.Create(ctx, customerUsecase.CreateTaxProfileRequest{
 			GarageID: garageID, CustomerID: customerID, Kind: customerDomain.TaxProfilePersonal,
-			TaxProfileInput: customerUsecase.TaxProfileInput{LegalName: new("Tran Binh")},
+			LegalName: new("Tran Binh"),
 		})
 
 		return err
@@ -94,7 +92,7 @@ func TestTaxProfilePersistence(t *testing.T) {
 	err := in(garageID, func(ctx context.Context) error {
 		_, err := uc.Create(ctx, customerUsecase.CreateTaxProfileRequest{
 			GarageID: garageID, CustomerID: customerID, Kind: customerDomain.TaxProfilePersonal,
-			TaxProfileInput: customerUsecase.TaxProfileInput{LegalName: new("Tran Binh Again")},
+			LegalName: new("Tran Binh Again"),
 		})
 
 		return err

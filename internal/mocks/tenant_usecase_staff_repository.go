@@ -17,10 +17,19 @@ func NewMockStaffRepository(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *MockStaffRepository {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &MockStaffRepository{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -158,80 +167,6 @@ func (_c *MockStaffRepository_Delete_Call) RunAndReturn(run func(ctx context.Con
 	return _c
 }
 
-// FindByUser provides a mock function for the type MockStaffRepository
-func (_mock *MockStaffRepository) FindByUser(ctx context.Context, garageID string, userID string) (*domain.Staff, error) {
-	ret := _mock.Called(ctx, garageID, userID)
-
-	if len(ret) == 0 {
-		panic("no return value specified for FindByUser")
-	}
-
-	var r0 *domain.Staff
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (*domain.Staff, error)); ok {
-		return returnFunc(ctx, garageID, userID)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) *domain.Staff); ok {
-		r0 = returnFunc(ctx, garageID, userID)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(*domain.Staff)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
-		r1 = returnFunc(ctx, garageID, userID)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockStaffRepository_FindByUser_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindByUser'
-type MockStaffRepository_FindByUser_Call struct {
-	*mock.Call
-}
-
-// FindByUser is a helper method to define mock.On call
-//   - ctx context.Context
-//   - garageID string
-//   - userID string
-func (_e *MockStaffRepository_Expecter) FindByUser(ctx any, garageID any, userID any) *MockStaffRepository_FindByUser_Call {
-	return &MockStaffRepository_FindByUser_Call{Call: _e.mock.On("FindByUser", ctx, garageID, userID)}
-}
-
-func (_c *MockStaffRepository_FindByUser_Call) Run(run func(ctx context.Context, garageID string, userID string)) *MockStaffRepository_FindByUser_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		var arg2 string
-		if args[2] != nil {
-			arg2 = args[2].(string)
-		}
-		run(
-			arg0,
-			arg1,
-			arg2,
-		)
-	})
-	return _c
-}
-
-func (_c *MockStaffRepository_FindByUser_Call) Return(staff *domain.Staff, err error) *MockStaffRepository_FindByUser_Call {
-	_c.Call.Return(staff, err)
-	return _c
-}
-
-func (_c *MockStaffRepository_FindByUser_Call) RunAndReturn(run func(ctx context.Context, garageID string, userID string) (*domain.Staff, error)) *MockStaffRepository_FindByUser_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // FindByID provides a mock function for the type MockStaffRepository
 func (_mock *MockStaffRepository) FindByID(ctx context.Context, garageID string, staffID string) (*domain.Staff, error) {
 	ret := _mock.Called(ctx, garageID, staffID)
@@ -302,6 +237,80 @@ func (_c *MockStaffRepository_FindByID_Call) Return(staff *domain.Staff, err err
 }
 
 func (_c *MockStaffRepository_FindByID_Call) RunAndReturn(run func(ctx context.Context, garageID string, staffID string) (*domain.Staff, error)) *MockStaffRepository_FindByID_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// FindByUser provides a mock function for the type MockStaffRepository
+func (_mock *MockStaffRepository) FindByUser(ctx context.Context, garageID string, userID string) (*domain.Staff, error) {
+	ret := _mock.Called(ctx, garageID, userID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for FindByUser")
+	}
+
+	var r0 *domain.Staff
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) (*domain.Staff, error)); ok {
+		return returnFunc(ctx, garageID, userID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string, string) *domain.Staff); ok {
+		r0 = returnFunc(ctx, garageID, userID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*domain.Staff)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string, string) error); ok {
+		r1 = returnFunc(ctx, garageID, userID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockStaffRepository_FindByUser_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'FindByUser'
+type MockStaffRepository_FindByUser_Call struct {
+	*mock.Call
+}
+
+// FindByUser is a helper method to define mock.On call
+//   - ctx context.Context
+//   - garageID string
+//   - userID string
+func (_e *MockStaffRepository_Expecter) FindByUser(ctx any, garageID any, userID any) *MockStaffRepository_FindByUser_Call {
+	return &MockStaffRepository_FindByUser_Call{Call: _e.mock.On("FindByUser", ctx, garageID, userID)}
+}
+
+func (_c *MockStaffRepository_FindByUser_Call) Run(run func(ctx context.Context, garageID string, userID string)) *MockStaffRepository_FindByUser_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockStaffRepository_FindByUser_Call) Return(staff *domain.Staff, err error) *MockStaffRepository_FindByUser_Call {
+	_c.Call.Return(staff, err)
+	return _c
+}
+
+func (_c *MockStaffRepository_FindByUser_Call) RunAndReturn(run func(ctx context.Context, garageID string, userID string) (*domain.Staff, error)) *MockStaffRepository_FindByUser_Call {
 	_c.Call.Return(run)
 	return _c
 }

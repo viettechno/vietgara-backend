@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	platformv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/platform/v1"
@@ -52,7 +51,7 @@ func (f *fixture) as(t *testing.T, userID string) context.Context {
 	acc, err := f.repo.PlatformAccess(t.Context(), userID)
 	require.NoError(t, err)
 
-	ctx := middleware.WithClaims(t.Context(), &auth.Claims{RegisteredClaims: jwt.RegisteredClaims{Subject: userID}})
+	ctx := middleware.WithClaims(t.Context(), &auth.Claims{Subject: userID})
 
 	return access.WithPlatformAccess(ctx, acc)
 }

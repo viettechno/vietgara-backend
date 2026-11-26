@@ -17,10 +17,19 @@ func NewMockRows(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *MockRows {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &MockRows{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -492,8 +501,8 @@ func (_c *MockRows_Values_Call) Run(run func()) *MockRows_Values_Call {
 	return _c
 }
 
-func (_c *MockRows_Values_Call) Return(vs []any, err error) *MockRows_Values_Call {
-	_c.Call.Return(vs, err)
+func (_c *MockRows_Values_Call) Return(anyMoqParams []any, err error) *MockRows_Values_Call {
+	_c.Call.Return(anyMoqParams, err)
 	return _c
 }
 

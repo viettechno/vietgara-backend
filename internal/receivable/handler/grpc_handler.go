@@ -60,7 +60,7 @@ func (s *Server) ListReceivables(ctx context.Context, req *receivablev1.ListRece
 		res, err := s.uc.List(ctx, usecase.ListRequest{
 			GarageID: req.GetGarageId(), CustomerID: req.GetCustomerId(), OverdueOnly: req.GetOverdueOnly(),
 			IncludePaid: req.GetIncludePaid(), Query: req.GetQuery(),
-			PageRequest: usecase.PageRequest{Page: int(req.GetPage()), PageSize: int(req.GetPageSize())},
+			Page: int(req.GetPage()), PageSize: int(req.GetPageSize()),
 		})
 		if err != nil {
 			return nil, err

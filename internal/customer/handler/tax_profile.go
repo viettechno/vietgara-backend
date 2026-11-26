@@ -72,10 +72,8 @@ func (s *TaxProfileServer) CreateCustomerTaxProfile(
 
 		created, err := s.uc.Create(ctx, usecase.CreateTaxProfileRequest{
 			GarageID: req.GetGarageId(), CustomerID: req.GetCustomerId(), ActorID: actorID, Kind: taxProfileKindFromProto(in.GetKind()),
-			TaxProfileInput: usecase.TaxProfileInput{
-				LegalName: new(in.GetLegalName()), TaxID: in.TaxId, Address: in.Address, InvoiceEmail: in.InvoiceEmail,
-				IsDefault: &isDefault,
-			},
+			LegalName: new(in.GetLegalName()), TaxID: in.TaxId, Address: in.Address, InvoiceEmail: in.InvoiceEmail,
+			IsDefault: &isDefault,
 		})
 		if err != nil {
 			return nil, err

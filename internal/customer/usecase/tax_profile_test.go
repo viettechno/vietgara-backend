@@ -107,10 +107,8 @@ func newProfileUseCase(t *testing.T, used bool) (*usecase.TaxProfileUseCase, *pr
 func companyRequest() usecase.CreateTaxProfileRequest {
 	return usecase.CreateTaxProfileRequest{
 		GarageID: garageID, CustomerID: customerID, ActorID: actorID, Kind: domain.TaxProfileCompany,
-		TaxProfileInput: usecase.TaxProfileInput{
-			LegalName: new(" Cong ty An Phat "), TaxID: new("0301 234-567"), Address: new("12 Le Loi"),
-			InvoiceEmail: new("Ketoan@AnPhat.vn"), IsDefault: new(true),
-		},
+		LegalName: new(" Cong ty An Phat "), TaxID: new("0301 234-567"), Address: new("12 Le Loi"),
+		InvoiceEmail: new("Ketoan@AnPhat.vn"), IsDefault: new(true),
 	}
 }
 
@@ -138,7 +136,7 @@ func TestTaxProfile_Create(t *testing.T) {
 
 	personal := usecase.CreateTaxProfileRequest{
 		GarageID: garageID, CustomerID: customerID, Kind: domain.TaxProfilePersonal,
-		TaxProfileInput: usecase.TaxProfileInput{LegalName: new("Tran Binh")},
+		LegalName: new("Tran Binh"),
 	}
 	got, err := uc.Create(t.Context(), personal)
 	require.NoError(t, err)
@@ -185,7 +183,7 @@ func TestTaxProfile_UpdateGetList(t *testing.T) {
 
 	updated, err := uc.Update(t.Context(), usecase.UpdateTaxProfileRequest{
 		GarageID: garageID, CustomerID: customerID, TaxProfileID: p.ID, ActorID: actorID,
-		TaxProfileInput: usecase.TaxProfileInput{LegalName: new("Cong ty Moi"), InvoiceEmail: new(""), IsDefault: new(false)},
+		LegalName: new("Cong ty Moi"), InvoiceEmail: new(""), IsDefault: new(false),
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "Cong ty Moi", updated.LegalName)
@@ -195,7 +193,7 @@ func TestTaxProfile_UpdateGetList(t *testing.T) {
 
 	_, err = uc.Update(t.Context(), usecase.UpdateTaxProfileRequest{
 		GarageID: garageID, CustomerID: customerID, TaxProfileID: p.ID,
-		TaxProfileInput: usecase.TaxProfileInput{TaxID: new("1")},
+		TaxID: new("1"),
 	})
 	assertAppError(t, err, apperror.CodeInvalidArgument)
 
@@ -232,7 +230,7 @@ func TestTaxProfile_DefaultOnUpdateClearsTheOthers(t *testing.T) {
 
 	_, err = uc.Update(t.Context(), usecase.UpdateTaxProfileRequest{
 		GarageID: garageID, CustomerID: customerID, TaxProfileID: second.ID,
-		TaxProfileInput: usecase.TaxProfileInput{IsDefault: new(true)},
+		IsDefault: new(true),
 	})
 	require.NoError(t, err)
 	assert.True(t, second.IsDefault)

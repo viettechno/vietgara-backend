@@ -109,7 +109,7 @@ func TestPostgresVehicleRepository_List(t *testing.T) {
 			Return(resultRows(t, vehicleValues()), nil).Once()
 
 		list, total, err := repository.NewPostgresVehicleRepository(pool).List(t.Context(), garageID, usecase.VehicleFilter{
-			ListFilter: usecase.ListFilter{Query: "30a.9", Limit: 20}, CustomerID: customerID,
+			Query: "30a.9", Limit: 20, CustomerID: customerID,
 		})
 		require.NoError(t, err)
 		assert.Equal(t, 1, total)
@@ -133,7 +133,7 @@ func TestPostgresVehicleRepository_List(t *testing.T) {
 		conn.EXPECT().QueryRow(mock.Anything, mock.Anything, mock.Anything).Return(valuesRow(t, 1)).Once()
 		conn.EXPECT().Query(mock.Anything, mock.Anything, mock.Anything).Return(resultRows(t, []any{errBoom}), nil).Once()
 
-		_, _, err := repository.NewPostgresVehicleRepository(pool).List(t.Context(), garageID, usecase.VehicleFilter{ListFilter: usecase.ListFilter{Limit: 20}})
+		_, _, err := repository.NewPostgresVehicleRepository(pool).List(t.Context(), garageID, usecase.VehicleFilter{Limit: 20})
 		require.ErrorIs(t, err, errBoom)
 	})
 }

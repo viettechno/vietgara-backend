@@ -14,7 +14,7 @@ import (
 )
 
 func toInt32(n int) int32 {
-	return int32(min(max(n, math.MinInt32), math.MaxInt32)) //nolint:gosec // clamped
+	return int32(min(max(n, math.MinInt32), math.MaxInt32))
 }
 
 func timePtr(t *time.Time) *timestamppb.Timestamp {

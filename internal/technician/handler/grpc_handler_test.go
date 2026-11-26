@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -51,7 +50,7 @@ func (passTx) WithTransaction(ctx context.Context, _ platformdb.Scope, fn func(c
 
 func signedIn(userID string) context.Context {
 	return middleware.WithClaims(context.Background(), &auth.Claims{
-		RegisteredClaims: jwt.RegisteredClaims{Subject: userID}, EmailVerified: true,
+		Subject: userID, EmailVerified: true,
 	})
 }
 

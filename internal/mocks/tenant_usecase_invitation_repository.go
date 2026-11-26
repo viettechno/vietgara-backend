@@ -17,10 +17,19 @@ func NewMockInvitationRepository(t interface {
 	mock.TestingT
 	Cleanup(func())
 }) *MockInvitationRepository {
+	if helper, ok := t.(interface{ Helper() }); ok {
+		helper.Helper()
+	}
+
 	mock := &MockInvitationRepository{}
 	mock.Mock.Test(t)
 
-	t.Cleanup(func() { mock.AssertExpectations(t) })
+	t.Cleanup(func() {
+		if helper, ok := t.(interface{ Helper() }); ok {
+			helper.Helper()
+		}
+		mock.AssertExpectations(t)
+	})
 
 	return mock
 }
@@ -226,74 +235,6 @@ func (_c *MockInvitationRepository_FindByID_Call) RunAndReturn(run func(ctx cont
 	return _c
 }
 
-// ListByUser provides a mock function for the type MockInvitationRepository
-func (_mock *MockInvitationRepository) ListByUser(ctx context.Context, userID string) ([]*domain.Invitation, error) {
-	ret := _mock.Called(ctx, userID)
-
-	if len(ret) == 0 {
-		panic("no return value specified for ListByUser")
-	}
-
-	var r0 []*domain.Invitation
-	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]*domain.Invitation, error)); ok {
-		return returnFunc(ctx, userID)
-	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []*domain.Invitation); ok {
-		r0 = returnFunc(ctx, userID)
-	} else {
-		if ret.Get(0) != nil {
-			r0 = ret.Get(0).([]*domain.Invitation)
-		}
-	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
-		r1 = returnFunc(ctx, userID)
-	} else {
-		r1 = ret.Error(1)
-	}
-	return r0, r1
-}
-
-// MockInvitationRepository_ListByUser_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListByUser'
-type MockInvitationRepository_ListByUser_Call struct {
-	*mock.Call
-}
-
-// ListByUser is a helper method to define mock.On call
-//   - ctx context.Context
-//   - userID string
-func (_e *MockInvitationRepository_Expecter) ListByUser(ctx any, userID any) *MockInvitationRepository_ListByUser_Call {
-	return &MockInvitationRepository_ListByUser_Call{Call: _e.mock.On("ListByUser", ctx, userID)}
-}
-
-func (_c *MockInvitationRepository_ListByUser_Call) Run(run func(ctx context.Context, userID string)) *MockInvitationRepository_ListByUser_Call {
-	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 context.Context
-		if args[0] != nil {
-			arg0 = args[0].(context.Context)
-		}
-		var arg1 string
-		if args[1] != nil {
-			arg1 = args[1].(string)
-		}
-		run(
-			arg0,
-			arg1,
-		)
-	})
-	return _c
-}
-
-func (_c *MockInvitationRepository_ListByUser_Call) Return(invitations []*domain.Invitation, err error) *MockInvitationRepository_ListByUser_Call {
-	_c.Call.Return(invitations, err)
-	return _c
-}
-
-func (_c *MockInvitationRepository_ListByUser_Call) RunAndReturn(run func(ctx context.Context, userID string) ([]*domain.Invitation, error)) *MockInvitationRepository_ListByUser_Call {
-	_c.Call.Return(run)
-	return _c
-}
-
 // ListByGarage provides a mock function for the type MockInvitationRepository
 func (_mock *MockInvitationRepository) ListByGarage(ctx context.Context, garageID string) ([]*domain.Invitation, error) {
 	ret := _mock.Called(ctx, garageID)
@@ -358,6 +299,74 @@ func (_c *MockInvitationRepository_ListByGarage_Call) Return(invitations []*doma
 }
 
 func (_c *MockInvitationRepository_ListByGarage_Call) RunAndReturn(run func(ctx context.Context, garageID string) ([]*domain.Invitation, error)) *MockInvitationRepository_ListByGarage_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// ListByUser provides a mock function for the type MockInvitationRepository
+func (_mock *MockInvitationRepository) ListByUser(ctx context.Context, userID string) ([]*domain.Invitation, error) {
+	ret := _mock.Called(ctx, userID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListByUser")
+	}
+
+	var r0 []*domain.Invitation
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) ([]*domain.Invitation, error)); ok {
+		return returnFunc(ctx, userID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) []*domain.Invitation); ok {
+		r0 = returnFunc(ctx, userID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]*domain.Invitation)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, userID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockInvitationRepository_ListByUser_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListByUser'
+type MockInvitationRepository_ListByUser_Call struct {
+	*mock.Call
+}
+
+// ListByUser is a helper method to define mock.On call
+//   - ctx context.Context
+//   - userID string
+func (_e *MockInvitationRepository_Expecter) ListByUser(ctx any, userID any) *MockInvitationRepository_ListByUser_Call {
+	return &MockInvitationRepository_ListByUser_Call{Call: _e.mock.On("ListByUser", ctx, userID)}
+}
+
+func (_c *MockInvitationRepository_ListByUser_Call) Run(run func(ctx context.Context, userID string)) *MockInvitationRepository_ListByUser_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockInvitationRepository_ListByUser_Call) Return(invitations []*domain.Invitation, err error) *MockInvitationRepository_ListByUser_Call {
+	_c.Call.Return(invitations, err)
+	return _c
+}
+
+func (_c *MockInvitationRepository_ListByUser_Call) RunAndReturn(run func(ctx context.Context, userID string) ([]*domain.Invitation, error)) *MockInvitationRepository_ListByUser_Call {
 	_c.Call.Return(run)
 	return _c
 }

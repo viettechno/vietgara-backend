@@ -68,12 +68,10 @@ func (i *TokenIssuer) IssueAccessToken(id Identity) (string, time.Time, error) {
 	now := i.now()
 	expiresAt := now.Add(i.accessTokenTTL)
 	claims := &Claims{
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   id.UserID,
-			ExpiresAt: jwt.NewNumericDate(expiresAt),
-			IssuedAt:  jwt.NewNumericDate(now),
-			ID:        uuid.NewString(),
-		},
+		Subject:       id.UserID,
+		ExpiresAt:     jwt.NewNumericDate(expiresAt),
+		IssuedAt:      jwt.NewNumericDate(now),
+		ID:            uuid.NewString(),
 		EmailVerified: id.EmailVerified,
 		PlatformAdmin: id.PlatformAdmin,
 	}

@@ -118,7 +118,7 @@ func TestInventoryUseCase_ListStockLevels(t *testing.T) {
 		d.Repo.EXPECT().Balances(mock.Anything, garageID, []string{}).Return(nil, nil).Once()
 
 		page, err := uc.ListStockLevels(t.Context(), usecase.ListStockLevelsRequest{
-			GarageID: garageID, PageRequest: usecase.PageRequest{Page: 3, PageSize: 10}, IncludeInactive: true,
+			GarageID: garageID, Page: 3, PageSize: 10, IncludeInactive: true,
 		})
 		require.NoError(t, err)
 		assert.Empty(t, page.Items)
@@ -167,7 +167,7 @@ func TestInventoryUseCase_ListStockLevels_LowStock(t *testing.T) {
 			Return(parts(0, 3), 3, nil).Once()
 
 		page, err := uc.ListStockLevels(t.Context(), usecase.ListStockLevelsRequest{
-			GarageID: garageID, LowStock: true, PageRequest: usecase.PageRequest{Page: 1, PageSize: 1},
+			GarageID: garageID, LowStock: true, Page: 1, PageSize: 1,
 		})
 		require.NoError(t, err)
 		assert.Equal(t, 2, page.Total)
@@ -179,7 +179,7 @@ func TestInventoryUseCase_ListStockLevels_LowStock(t *testing.T) {
 		d.Parts.EXPECT().SearchParts(mock.Anything, garageID, mock.Anything).Return(parts(0, 3), 3, nil).Once()
 
 		page, err = uc.ListStockLevels(t.Context(), usecase.ListStockLevelsRequest{
-			GarageID: garageID, LowStock: true, PageRequest: usecase.PageRequest{Page: 2, PageSize: 1},
+			GarageID: garageID, LowStock: true, Page: 2, PageSize: 1,
 		})
 		require.NoError(t, err)
 		require.Len(t, page.Items, 1)
@@ -194,7 +194,7 @@ func TestInventoryUseCase_ListStockLevels_LowStock(t *testing.T) {
 		d.Parts.EXPECT().SearchParts(mock.Anything, garageID, mock.Anything).Return(parts(0, 1), 1, nil).Once()
 
 		page, err := uc.ListStockLevels(t.Context(), usecase.ListStockLevelsRequest{
-			GarageID: garageID, LowStock: true, PageRequest: usecase.PageRequest{Page: 5, PageSize: 20},
+			GarageID: garageID, LowStock: true, Page: 5, PageSize: 20,
 		})
 		require.NoError(t, err)
 		assert.Empty(t, page.Items)

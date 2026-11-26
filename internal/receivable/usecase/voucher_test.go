@@ -403,7 +403,7 @@ func TestPayableUseCase_ListAndGetVouchers(t *testing.T) {
 			Return([]*domain.PaymentOutVoucher{{ID: voucherID}}, 6, nil).Once()
 
 		res, err := uc.ListVouchers(t.Context(), usecase.ListVouchersRequest{
-			GarageID: garageID, SupplierID: supplierID, IncludeVoided: true, PageRequest: usecase.PageRequest{Page: 2, PageSize: 5},
+			GarageID: garageID, SupplierID: supplierID, IncludeVoided: true, Page: 2, PageSize: 5,
 		})
 		require.NoError(t, err)
 		require.Equal(t, 6, res.Total)

@@ -426,6 +426,7 @@ func (r *rlsTestRows) Next(dest []driver.Value) error {
 
 	return nil
 }
+
 func (r *rlsTestRows) clone() *rlsTestRows { return &rlsTestRows{columns: r.columns, values: r.values} }
 
 type rlsTestResult struct{ err error }

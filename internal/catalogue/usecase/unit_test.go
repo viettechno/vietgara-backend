@@ -128,7 +128,7 @@ func TestUseCase_ListUnits(t *testing.T) {
 		Return([]*domain.Unit{sampleUnit()}, 11, nil).Once()
 
 	page, err := uc.ListUnits(t.Context(), usecase.ListUnitsRequest{
-		PageRequest: usecase.PageRequest{Page: 2, PageSize: 10}, GarageID: garageID, IncludeInactive: true,
+		Page: 2, PageSize: 10, GarageID: garageID, IncludeInactive: true,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 11, page.Total)
@@ -142,7 +142,7 @@ func TestUseCase_ListUnits(t *testing.T) {
 
 	d.Repo.EXPECT().ListUnits(mock.Anything, garageID, usecase.UnitFilter{Limit: usecase.MaxPageSize}).Return(nil, 0, errBoom).Once()
 
-	_, err = uc.ListUnits(t.Context(), usecase.ListUnitsRequest{GarageID: garageID, PageRequest: usecase.PageRequest{PageSize: 5000}})
+	_, err = uc.ListUnits(t.Context(), usecase.ListUnitsRequest{GarageID: garageID, PageSize: 5000})
 	assertAppError(t, err, apperror.CodeInternal)
 }
 

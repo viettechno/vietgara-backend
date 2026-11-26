@@ -23,7 +23,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
@@ -74,8 +73,8 @@ func NewMux() *runtime.ServeMux {
 	return runtime.NewServeMux(
 		runtime.WithMarshalerOption(runtime.MIMEWildcard, &runtime.HTTPBodyMarshaler{
 			Marshaler: &runtime.JSONPb{
-				MarshalOptions:   protojson.MarshalOptions{EmitDefaultValues: true},
-				UnmarshalOptions: protojson.UnmarshalOptions{DiscardUnknown: true},
+				EmitDefaultValues: true,
+				DiscardUnknown:    true,
 			},
 		}),
 		runtime.WithErrorHandler(errorHandler),

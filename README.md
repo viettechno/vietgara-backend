@@ -401,7 +401,7 @@ version pinned in `go.mod` instead. For every contract change, push and tag
 ### Security checks
 
 CI blocks on `govulncheck` (the Go toolchain and the modules the code reaches; run it locally with
-`go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...`) and on Trivy over the built image. Two tests keep
+`go run golang.org/x/vuln/cmd/govulncheck@v1.10.0 ./...`) and on Trivy over the built image. Two tests keep
 the authorization model honest: `TestEveryRPCDeclaresItsAuthorization` (`cmd/server`) fails when an RPC has no
 policy or the anonymous surface changes, and `TestEveryTableIsClassifiedForRowLevelSecurity` (integration) fails
 when a table has neither forced row-level security nor a reason in its exemption list. A new table or public RPC

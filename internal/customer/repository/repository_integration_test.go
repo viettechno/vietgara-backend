@@ -142,7 +142,7 @@ func TestCustomerAndVehicleRepositories(t *testing.T) {
 			require.Len(t, list, 1, "second page of one")
 
 			vehicles, total, err := env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{
-				ListFilter: usecase.ListFilter{Query: "30a.999", Limit: 10}, CustomerID: alice.ID,
+				Query: "30a.999", Limit: 10, CustomerID: alice.ID,
 			})
 			require.NoError(t, err)
 			require.Equal(t, 1, total)
@@ -152,7 +152,7 @@ func TestCustomerAndVehicleRepositories(t *testing.T) {
 
 	t.Run("updates persist and transfer vehicle ownership", func(t *testing.T) {
 		env.inGarage(t, env.garageA, func(ctx context.Context) {
-			vehicles, _, err := env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{ListFilter: usecase.ListFilter{Query: "30A", Limit: 10}})
+			vehicles, _, err := env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{Query: "30A", Limit: 10})
 			require.NoError(t, err)
 			require.Len(t, vehicles, 1)
 
@@ -198,12 +198,12 @@ func TestCustomerAndVehicleRepositories(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, 1, total)
 
-			_, total, err = env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{ListFilter: usecase.ListFilter{Query: "30A", Limit: 10}})
+			_, total, err = env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{Query: "30A", Limit: 10})
 			require.NoError(t, err)
 			assert.Zero(t, total, "an inactive customer's vehicles are left out too")
 
 			_, total, err = env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{
-				ListFilter: usecase.ListFilter{Query: "30A", Limit: 10, IncludeInactive: true},
+				Query: "30A", Limit: 10, IncludeInactive: true,
 			})
 			require.NoError(t, err)
 			assert.Equal(t, 1, total)
@@ -212,13 +212,13 @@ func TestCustomerAndVehicleRepositories(t *testing.T) {
 
 			require.NoError(t, env.vehicles.SetActive(ctx, env.garageA, ids[0], false, env.userID))
 
-			_, total, err = env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{ListFilter: usecase.ListFilter{Query: "30A", Limit: 10}})
+			_, total, err = env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{Query: "30A", Limit: 10})
 			require.NoError(t, err)
 			assert.Zero(t, total, "an inactive vehicle is left out")
 
 			require.NoError(t, env.vehicles.SetActive(ctx, env.garageA, ids[0], true, env.userID))
 
-			_, total, err = env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{ListFilter: usecase.ListFilter{Query: "30A", Limit: 10}})
+			_, total, err = env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{Query: "30A", Limit: 10})
 			require.NoError(t, err)
 			assert.Equal(t, 1, total)
 
@@ -235,7 +235,7 @@ func TestCustomerAndVehicleRepositories(t *testing.T) {
 			require.ErrorIs(t, err, domain.ErrCustomerNotFound)
 			require.ErrorIs(t, env.customers.SoftDelete(ctx, env.garageA, alice.ID, ""), domain.ErrCustomerNotFound)
 
-			_, total, err := env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{ListFilter: usecase.ListFilter{Query: "51F", Limit: 10}})
+			_, total, err := env.vehicles.List(ctx, env.garageA, usecase.VehicleFilter{Query: "51F", Limit: 10})
 			require.NoError(t, err)
 			assert.Zero(t, total)
 

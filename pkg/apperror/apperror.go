@@ -208,8 +208,7 @@ func defaultReason(code Code) string {
 func ToGRPCError(err error) error {
 	// Already translated (the Garage interceptor translates what a handler
 	// returned): keep the first cause instead of wrapping the wrapper.
-	var internal *internalError
-	if errors.As(err, &internal) {
+	if internal, ok := errors.AsType[*internalError](err); ok {
 		return internal
 	}
 
@@ -307,8 +306,7 @@ func (e *internalError) GRPCStatus() *status.Status {
 // InternalCause returns the cause of an error that ToGRPCError turned into an
 // opaque Internal status, or nil for any other error.
 func InternalCause(err error) error {
-	var internal *internalError
-	if errors.As(err, &internal) {
+	if internal, ok := errors.AsType[*internalError](err); ok {
 		return internal.cause
 	}
 

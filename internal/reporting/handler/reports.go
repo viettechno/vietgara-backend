@@ -122,5 +122,5 @@ func groupByFromProto(g reportingv1.ProfitGroupBy) usecase.ProfitGroupBy {
 }
 
 func toInt32(n int) int32 {
-	return int32(min(max(n, 0), 1<<31-1)) //nolint:gosec // clamped
+	return int32(min(max(n, 0), 1<<31-1))
 }

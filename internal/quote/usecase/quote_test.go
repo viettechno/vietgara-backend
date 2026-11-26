@@ -294,7 +294,7 @@ func TestQuoteUseCase_List(t *testing.T) {
 	d.Quotes.EXPECT().List(mock.Anything, "garage-2", mock.Anything).Return(nil, 0, errBoom).Once()
 
 	page, err := uc.List(t.Context(), usecase.ListQuotesRequest{
-		PageRequest: usecase.PageRequest{Page: 2, PageSize: 5}, GarageID: garageID, CustomerID: customerID, Status: domain.StatusDraft,
+		Page: 2, PageSize: 5, GarageID: garageID, CustomerID: customerID, Status: domain.StatusDraft,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, 6, page.Total)

@@ -211,7 +211,7 @@ func (a documentReceivables) Receivables(
 	for page := 1; ; page++ {
 		res, err := a.uc.List(ctx, receivableUsecase.ListRequest{
 			GarageID: garageID, CustomerID: customerID, Query: query, OverdueOnly: overdueOnly, IncludePaid: includePaid,
-			PageRequest: receivableUsecase.PageRequest{Page: page, PageSize: receivableUsecase.MaxPageSize},
+			Page: page, PageSize: receivableUsecase.MaxPageSize,
 		})
 		if err != nil {
 			return nil, err
@@ -267,7 +267,7 @@ func (a documentPayables) SupplierPayables(ctx context.Context, garageID, suppli
 	for page := 1; ; page++ {
 		res, err := a.uc.ListPayables(ctx, receivableUsecase.ListPayablesRequest{
 			GarageID: garageID, SupplierID: supplierID, IncludePaid: includePaid,
-			PageRequest: receivableUsecase.PageRequest{Page: page, PageSize: receivableUsecase.MaxPageSize},
+			Page: page, PageSize: receivableUsecase.MaxPageSize,
 		})
 		if err != nil {
 			return nil, err

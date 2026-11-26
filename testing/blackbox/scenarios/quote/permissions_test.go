@@ -1,5 +1,5 @@
 // Scenario: E2E-QUO-014
-// docs: vietgara-docs/docs/05-Testing/E2E_Scenarios/05_Quote_Pricing.md
+// docs: vietgara-docs/docs/en/05-Testing/E2E_Scenarios/05_Quote_Pricing.md
 package quote_test
 
 import (

@@ -1,5 +1,5 @@
 // Scenario: E2E-PO-001 to E2E-PO-007
-// docs: vietgara-docs/docs/05-Testing/E2E_Scenarios/16_Purchase_Orders.md
+// docs: vietgara-docs/docs/en/05-Testing/E2E_Scenarios/16_Purchase_Orders.md
 package inventory_test
 
 import (

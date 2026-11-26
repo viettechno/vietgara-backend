@@ -28,7 +28,7 @@ CREATE TABLE public.garage_printers (
     updated_by uuid,
     CONSTRAINT garage_printers_protocol_check CHECK (((protocol)::text = ANY ((ARRAY['raw'::character varying, 'ipp'::character varying])::text[]))),
     CONSTRAINT garage_printers_port_check CHECK (((port >= 1) AND (port <= 65535))),
-    CONSTRAINT garage_printers_paper_size_check CHECK (((((protocol)::text = 'raw'::text) AND ((paper_size)::text = ANY ((ARRAY['K80'::character varying, 'K57'::character varying, 'L5030'::character varying])::text[]))) OR (((protocol)::text = 'ipp'::text) AND (paper_size IS NULL))))
+    CONSTRAINT garage_printers_paper_size_check CHECK (((((protocol)::text = 'raw'::text) AND (paper_size IS NOT NULL) AND ((paper_size)::text = ANY ((ARRAY['K80'::character varying, 'K57'::character varying, 'L5030'::character varying])::text[]))) OR (((protocol)::text = 'ipp'::text) AND (paper_size IS NULL))))
 );
 
 ALTER TABLE ONLY public.garage_printers FORCE ROW LEVEL SECURITY;

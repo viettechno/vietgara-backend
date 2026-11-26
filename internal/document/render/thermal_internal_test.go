@@ -68,8 +68,10 @@ func TestLineHoldsTheGlyphs(t *testing.T) {
 	f, err := c.face(sizeBody, false)
 	require.NoError(t, err)
 
-	c.line(f, sizeBody, "Ẫ Ứ ạ ự gy", "", alignLeft)
-	assert.Equal(t, f.Metrics().Ascent.Ceil()+f.Metrics().Descent.Ceil(), c.y)
+	c.line(f, sizeBody, "ĐỨC Ẫ ạ ự gy", "", alignLeft)
+
+	bounds, _ := font.BoundString(f, "ĐỨC Ẫ ạ ự gy")
+	assert.GreaterOrEqual(t, c.y, (bounds.Max.Y - bounds.Min.Y).Ceil(), "the line holds all the ink")
 }
 
 func TestPairPutsAWideRightOnItsOwnLine(t *testing.T) {

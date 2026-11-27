@@ -1,5 +1,5 @@
 // Scenario: E2E-INV-033 to E2E-INV-038
-// docs: vietgara-docs/docs/05-Testing/E2E_Scenarios/07_Inventory.md
+// docs: vietgara-docs/docs/en/05-Testing/E2E_Scenarios/07_Inventory.md
 package inventory_test
 
 import (

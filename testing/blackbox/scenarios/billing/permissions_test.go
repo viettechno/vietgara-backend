@@ -1,5 +1,5 @@
 // Scenario: E2E-BIL-009
-// docs: vietgara-docs/docs/05-Testing/E2E_Scenarios/08_Settlement.md
+// docs: vietgara-docs/docs/en/05-Testing/E2E_Scenarios/08_Settlement.md
 package billing_test
 
 import (

@@ -50,7 +50,7 @@ DOC_FILES = [
     "17_Reports.md",
     "18_Data_Requests.md",
 ]
-DOC_BASE = "docs/05-Testing/E2E_Scenarios"
+DOC_BASE = "docs/en/05-Testing/E2E_Scenarios"
 RAW_BASE = "https://raw.githubusercontent.com/viettechno/vietgara-docs/{ref}/" + DOC_BASE
 
 ID_RE = re.compile(r"E2E-[A-Z]+-[0-9]+")

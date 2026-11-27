@@ -5,6 +5,7 @@ go 1.27.4
 require (
 	cloud.google.com/go/storage v1.71.0
 	github.com/alicebob/miniredis/v2 v2.40.0
+	github.com/boombuler/barcode v1.1.1
 	github.com/go-pdf/fpdf v0.9.0
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/golang-migrate/migrate/v4 v4.20.1
@@ -19,7 +20,7 @@ require (
 	github.com/twmb/franz-go v1.22.3
 	github.com/twmb/franz-go/pkg/kadm v1.20.0
 	github.com/twmb/franz-go/pkg/kfake v0.0.0-20260925040417-67711bad7b74
-	github.com/viettechno/vietgara-proto v1.26.0
+	github.com/viettechno/vietgara-proto v1.27.0
 	github.com/xuri/excelize/v2 v2.11.1
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.72.0
 	go.opentelemetry.io/otel v1.47.0
@@ -27,6 +28,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.47.0
 	go.opentelemetry.io/otel/trace v1.47.0
 	golang.org/x/crypto v0.59.0
+	golang.org/x/image v0.44.0
 	google.golang.org/api v0.317.0
 	google.golang.org/genproto v0.0.0-20261123191846-1e707ab9fbc2
 	google.golang.org/genproto/googleapis/api v0.0.0-20261123191846-1e707ab9fbc2

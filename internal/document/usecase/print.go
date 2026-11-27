@@ -88,7 +88,7 @@ func (uc *DocumentUseCase) UpdatePrintSetting(
 		return PrintSettingInfo{}, apperror.Validation("documentType", apperror.IssueInvalid, "document type is invalid")
 	}
 
-	if _, ok := render.Latest(t, paper); !ok {
+	if _, ok := render.Latest(t, paper); !ok || !paper.IsPDF() {
 		return PrintSettingInfo{}, apperror.Validation("paperSize", apperror.IssueInvalid, "this document cannot be printed on that paper size")
 	}
 
@@ -107,7 +107,7 @@ func effective(chosen map[printmodel.DocumentType]PrintSetting, t printmodel.Doc
 		return DefaultPrintSetting
 	}
 
-	if _, offered := render.Latest(t, setting.Paper); !offered {
+	if _, offered := render.Latest(t, setting.Paper); !offered || !setting.Paper.IsPDF() {
 		setting.Paper = DefaultPrintSetting.Paper
 	}
 
@@ -120,6 +120,26 @@ func effective(chosen map[printmodel.DocumentType]PrintSetting, t printmodel.Doc
 // render is a print (FR-DOC-05): a reprint carries the copy mark if the garage
 // wants one, and the print is logged. An export is not logged.
 func (uc *DocumentUseCase) pdf(ctx context.Context, garageID, documentID string, m printmodel.Model, printed bool) ([]byte, error) {
+	return uc.output(ctx, garageID, documentID, m, "", printed)
+}
+
+// roll prints model m of document documentID on a thermal roll (FR-DOC-06,
+// Release 13.0) as ESC/POS, with the rules of a PDF print: the version of the
+// document's first print on that roll, the copy mark of a reprint on any
+// paper when the garage wants one, and a print log row.
+func (uc *DocumentUseCase) roll(ctx context.Context, garageID, documentID string, m printmodel.Model, paper printmodel.Paper) ([]byte, error) {
+	if _, ok := render.Latest(m.Type(), paper); !ok || !paper.IsRoll() {
+		return nil, apperror.Validation("paperSize", apperror.IssueInvalid, "this document cannot be printed on that roll")
+	}
+
+	return uc.output(ctx, garageID, documentID, m, paper, true)
+}
+
+// output renders model m on paper, or on the garage's paper setting when
+// paper is empty; see pdf.
+func (uc *DocumentUseCase) output(
+	ctx context.Context, garageID, documentID string, m printmodel.Model, paper printmodel.Paper, printed bool,
+) ([]byte, error) {
 	t := m.Type()
 
 	chosen, err := uc.Prints.Settings(ctx, garageID)
@@ -128,6 +148,9 @@ func (uc *DocumentUseCase) pdf(ctx context.Context, garageID, documentID string,
 	}
 
 	setting := effective(chosen, t)
+	if paper != "" {
+		setting.Paper = paper
+	}
 
 	if printed {
 		if err := uc.Prints.Lock(ctx, garageID, t, documentID); err != nil {
@@ -149,7 +172,7 @@ func (uc *DocumentUseCase) pdf(ctx context.Context, garageID, documentID string,
 
 	data, err := tpl.Render(m, copyMark)
 	if err != nil {
-		return nil, apperror.Internal("render "+string(t)+" pdf", err)
+		return nil, apperror.Internal("render "+string(t)+" "+string(setting.Paper), err)
 	}
 
 	if printed {
@@ -181,23 +204,40 @@ func templateFor(t printmodel.DocumentType, paper printmodel.Paper, firstVersion
 }
 
 // QuotePDF renders a quote as a PDF (FR-DOC-01), or prints it (FR-DOC-05).
-//
-//nolint:dupl // each export reads one kind of document and builds its own print model
 func (uc *DocumentUseCase) QuotePDF(ctx context.Context, garageID, quoteID string, printed bool) ([]byte, error) {
-	quote, err := uc.Quotes.Get(ctx, garageID, quoteID)
-	if err != nil {
-		return nil, toAppError("export quote pdf", err)
-	}
-
-	garage, err := uc.letterhead(ctx, garageID, quote.Issuer)
+	m, err := uc.quoteModel(ctx, garageID, quoteID)
 	if err != nil {
 		return nil, err
 	}
 
-	return uc.pdf(ctx, garageID, quoteID, printmodel.Quote{
+	return uc.pdf(ctx, garageID, quoteID, m, printed)
+}
+
+// QuoteEscPos prints a quote on a K80 or K57 roll (FR-DOC-06).
+func (uc *DocumentUseCase) QuoteEscPos(ctx context.Context, garageID, quoteID string, paper printmodel.Paper) ([]byte, error) {
+	m, err := uc.quoteModel(ctx, garageID, quoteID)
+	if err != nil {
+		return nil, err
+	}
+
+	return uc.roll(ctx, garageID, quoteID, m, paper)
+}
+
+func (uc *DocumentUseCase) quoteModel(ctx context.Context, garageID, quoteID string) (printmodel.Quote, error) {
+	quote, err := uc.Quotes.Get(ctx, garageID, quoteID)
+	if err != nil {
+		return printmodel.Quote{}, toAppError("print quote", err)
+	}
+
+	garage, err := uc.letterhead(ctx, garageID, quote.Issuer)
+	if err != nil {
+		return printmodel.Quote{}, err
+	}
+
+	return printmodel.Quote{
 		Garage: garage, BillTo: billTo(quote.BillingParty), Number: quote.Number, Status: quote.Status, CustomerName: quote.CustomerName,
 		VehiclePlate: quote.VehiclePlate, Notes: quote.Notes, Lines: quote.Lines, TotalAmount: quote.TotalAmount,
-	}, printed)
+	}, nil
 }
 
 // RepairOrderPDF renders a repair order as a PDF (FR-DOC-01), or prints it.
@@ -220,8 +260,6 @@ func (uc *DocumentUseCase) RepairOrderPDF(ctx context.Context, garageID, repairO
 
 // SettlementReceiptPDF renders a settlement as a receipt PDF (FR-DOC-01), or
 // prints it.
-//
-//nolint:dupl // each export reads one kind of document and builds its own print model
 func (uc *DocumentUseCase) SettlementReceiptPDF(ctx context.Context, garageID, settlementID string, printed bool) ([]byte, error) {
 	settlement, err := uc.Settlements.Get(ctx, garageID, settlementID)
 	if err != nil {
@@ -244,27 +282,49 @@ func (uc *DocumentUseCase) SettlementReceiptPDF(ctx context.Context, garageID, s
 // (FR-BIL-05), from the legal identity it was issued with, or prints it. The
 // voucher's document id is the payment's.
 func (uc *DocumentUseCase) PaymentVoucherPDF(ctx context.Context, garageID, settlementID, paymentID string, printed bool) ([]byte, error) {
-	settlement, err := uc.Settlements.Get(ctx, garageID, settlementID)
-	if err != nil {
-		return nil, toAppError("export payment voucher pdf", err)
-	}
-
-	voucher, ok := findVoucher(settlement.Vouchers, paymentID)
-	if !ok {
-		return nil, apperror.New(apperror.CodeNotFound, "payment not found")
-	}
-
-	garage, err := uc.letterhead(ctx, garageID, voucher.Issuer)
+	m, err := uc.voucherModel(ctx, garageID, settlementID, paymentID)
 	if err != nil {
 		return nil, err
 	}
 
-	return uc.pdf(ctx, garageID, paymentID, printmodel.PaymentVoucher{
+	return uc.pdf(ctx, garageID, paymentID, m, printed)
+}
+
+// PaymentVoucherEscPos prints a payment voucher on a K80 or K57 roll
+// (FR-DOC-06).
+func (uc *DocumentUseCase) PaymentVoucherEscPos(
+	ctx context.Context, garageID, settlementID, paymentID string, paper printmodel.Paper,
+) ([]byte, error) {
+	m, err := uc.voucherModel(ctx, garageID, settlementID, paymentID)
+	if err != nil {
+		return nil, err
+	}
+
+	return uc.roll(ctx, garageID, paymentID, m, paper)
+}
+
+func (uc *DocumentUseCase) voucherModel(ctx context.Context, garageID, settlementID, paymentID string) (printmodel.PaymentVoucher, error) {
+	settlement, err := uc.Settlements.Get(ctx, garageID, settlementID)
+	if err != nil {
+		return printmodel.PaymentVoucher{}, toAppError("print payment voucher", err)
+	}
+
+	voucher, ok := findVoucher(settlement.Vouchers, paymentID)
+	if !ok {
+		return printmodel.PaymentVoucher{}, apperror.New(apperror.CodeNotFound, "payment not found")
+	}
+
+	garage, err := uc.letterhead(ctx, garageID, voucher.Issuer)
+	if err != nil {
+		return printmodel.PaymentVoucher{}, err
+	}
+
+	return printmodel.PaymentVoucher{
 		Garage: garage, Number: voucher.Number, Date: voucher.Date, PayerName: voucher.PayerName,
 		PayerAddress: voucher.PayerAddress, Reason: voucher.Reason, Amount: voucher.Amount, Method: voucher.Method,
 		SettlementNumber: settlement.Number, CollectorName: voucher.CollectorName,
 		Voided: voucher.Voided, VoidReason: voucher.VoidReason,
-	}, printed)
+	}, nil
 }
 
 // PaymentOutVoucherPDF renders a payment-out voucher as a PDF in the 02-TT

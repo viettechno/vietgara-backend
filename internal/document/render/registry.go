@@ -47,7 +47,8 @@ func entry[M printmodel.Model](paper printmodel.Paper, version int, fn func(M, O
 
 // templates is the registry. Version 1 of every A4 template is the layout the
 // documents had before Release 10.0; the A5 templates exist for the
-// documents a garage hands over on a slip.
+// documents a garage hands over on a slip; the K80 and K57 templates
+// (Release 13.0) print ESC/POS for a thermal printer, not a PDF.
 var templates = []Template{
 	entry(printmodel.A4, 1, quoteTemplate),
 	entry(printmodel.A5, 1, quoteTemplate),
@@ -62,6 +63,10 @@ var templates = []Template{
 	entry(printmodel.A5, 1, paymentOutTemplate),
 	entry(printmodel.A4, 1, purchaseOrderTemplate),
 	entry(printmodel.A5, 1, purchaseOrderTemplate),
+	entry(printmodel.K80, 1, thermalTemplate(quoteRoll)),
+	entry(printmodel.K57, 1, thermalTemplate(quoteRoll)),
+	entry(printmodel.K80, 1, thermalTemplate(paymentVoucherRoll)),
+	entry(printmodel.K57, 1, thermalTemplate(paymentVoucherRoll)),
 }
 
 // Lookup returns the template of a document type, paper size and version.
@@ -91,7 +96,8 @@ func Latest(t printmodel.DocumentType, paper printmodel.Paper) (Template, bool) 
 	return latest, found
 }
 
-// Papers lists the paper sizes a document type has a template for, A4 first.
+// Papers lists the page sizes a document type has a PDF template for, A4
+// first: the sizes a print setting offers. The rolls are not listed.
 func Papers(t printmodel.DocumentType) []printmodel.Paper {
 	var papers []printmodel.Paper
 

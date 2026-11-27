@@ -251,6 +251,18 @@ type DocumentUseCase struct {
 	// Payables serves the payables workbook and the payment-out voucher;
 	// set it with WithPayables.
 	Payables PayableReader
+	// PrinterStore keeps the garage's printers and Parts reads the parts of
+	// the labels (Release 13.0); set them with WithPrinting.
+	PrinterStore PrinterStore
+	Parts        PartReader
+}
+
+// WithPrinting sets the printer store and the reader of the parts' labels and
+// returns uc.
+func (uc *DocumentUseCase) WithPrinting(printers PrinterStore, parts PartReader) *DocumentUseCase {
+	uc.PrinterStore, uc.Parts = printers, parts
+
+	return uc
 }
 
 // NewDocumentUseCase wires the use case to its dependencies.

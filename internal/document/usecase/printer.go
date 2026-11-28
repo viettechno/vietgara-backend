@@ -466,7 +466,7 @@ func checkLabelCopies(paper printmodel.Paper, parts []LabelCopies) (int, error) 
 	}
 
 	if len(parts) == 0 || len(parts) > maxLabelParts {
-		return 0, apperror.Validation("parts", apperror.IssueInvalid, "print the labels of 1 to 50 parts")
+		return 0, apperror.Validation("parts", apperror.IssueInvalid, "print 1 to 50 entries (a part in one unit each)")
 	}
 
 	seen := map[string]bool{}

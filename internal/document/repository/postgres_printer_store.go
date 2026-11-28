@@ -26,7 +26,7 @@ func NewPostgresPrinterStore(pool *platformdb.Pool) *PostgresPrinterStore {
 	return &PostgresPrinterStore{pool: pool}
 }
 
-const printerColumns = `id, name, protocol, host, port, path, COALESCE(paper_size, ''), document_types, created_at, updated_at`
+const printerColumns = `id, name, protocol, host, port, path, COALESCE(paper_size, ''), document_types, COALESCE(agent_id::text, ''), queue, created_at, updated_at`
 
 // ListPrinters returns the garage's printers by name.
 func (s *PostgresPrinterStore) ListPrinters(ctx context.Context, garageID string) ([]usecase.Printer, error) {
@@ -93,10 +93,10 @@ func (s *PostgresPrinterStore) CountPrinters(ctx context.Context, garageID strin
 // CreatePrinter inserts a printer.
 func (s *PostgresPrinterStore) CreatePrinter(ctx context.Context, garageID string, p usecase.Printer) (usecase.Printer, error) {
 	row := platformdb.QuerierFromContext(ctx, s.pool).QueryRow(ctx, `
-		INSERT INTO garage_printers (garage_id, name, protocol, host, port, path, paper_size, document_types)
-		VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8)
+		INSERT INTO garage_printers (garage_id, name, protocol, host, port, path, paper_size, document_types, agent_id, queue)
+		VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, NULLIF($9, '')::uuid, $10)
 		RETURNING `+printerColumns,
-		garageID, p.Name, string(p.Protocol), p.Host, p.Port, p.Path, string(p.Paper), typeStrings(p.DocumentTypes))
+		garageID, p.Name, string(p.Protocol), p.Host, p.Port, p.Path, string(p.Paper), typeStrings(p.DocumentTypes), p.AgentID, p.Queue)
 
 	return printerResult(scanPrinter(row))
 }
@@ -109,10 +109,12 @@ func (s *PostgresPrinterStore) UpdatePrinter(ctx context.Context, garageID strin
 
 	row := platformdb.QuerierFromContext(ctx, s.pool).QueryRow(ctx, `
 		UPDATE garage_printers
-		SET name = $3, protocol = $4, host = $5, port = $6, path = $7, paper_size = NULLIF($8, ''), document_types = $9
+		SET name = $3, protocol = $4, host = $5, port = $6, path = $7, paper_size = NULLIF($8, ''), document_types = $9,
+		    agent_id = NULLIF($10, '')::uuid, queue = $11
 		WHERE garage_id = $1 AND id = $2
 		RETURNING `+printerColumns,
-		garageID, p.ID, p.Name, string(p.Protocol), p.Host, p.Port, p.Path, string(p.Paper), typeStrings(p.DocumentTypes))
+		garageID, p.ID, p.Name, string(p.Protocol), p.Host, p.Port, p.Path, string(p.Paper), typeStrings(p.DocumentTypes),
+		p.AgentID, p.Queue)
 
 	return printerResult(scanPrinter(row))
 }
@@ -143,7 +145,8 @@ func scanPrinter(row pgx.Row) (usecase.Printer, error) {
 		documentTypes   []string
 	)
 
-	if err := row.Scan(&p.ID, &p.Name, &protocol, &p.Host, &p.Port, &p.Path, &paper, &documentTypes, &p.CreatedAt, &p.UpdatedAt); err != nil {
+	if err := row.Scan(&p.ID, &p.Name, &protocol, &p.Host, &p.Port, &p.Path, &paper, &documentTypes, &p.AgentID, &p.Queue,
+		&p.CreatedAt, &p.UpdatedAt); err != nil {
 		return usecase.Printer{}, err //nolint:wrapcheck // printerResult classifies it
 	}
 
@@ -168,6 +171,8 @@ func printerResult(p usecase.Printer, err error) (usecase.Printer, error) {
 		return p, nil
 	case errors.Is(err, pgx.ErrNoRows):
 		return usecase.Printer{}, usecase.ErrPrinterNotFound
+	case errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "idx_garage_printers_agent_queue":
+		return usecase.Printer{}, usecase.ErrPrinterQueueTaken
 	case errors.As(err, &pgErr) && pgErr.Code == "23505":
 		return usecase.Printer{}, usecase.ErrPrinterNameTaken
 	default:

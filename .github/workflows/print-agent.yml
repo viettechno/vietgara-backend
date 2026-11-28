@@ -1,0 +1,107 @@
+name: Print agent
+
+# The print agent for Windows (Release 13.1, FR-DOC-08): vietgara-agent.exe
+# with SumatraPDF, which prints its PDFs.
+#   - a pull request that touches the agent: build and vet it for Windows;
+#   - a tag agent-vX.Y.Z: build it, publish the zip as the GitHub release of
+#     that tag, and put it in the release "print-agent", which the web
+#     console links to.
+# SumatraPDF is downloaded from its site at a pinned version and checked
+# against the repository variable SUMATRAPDF_SHA256: without it, nothing is
+# released.
+
+on:
+  pull_request:
+    branches: [master]
+    paths: ['cmd/vietgara-agent/**', 'internal/printagent/**', 'packaging/print-agent/**', '.github/workflows/print-agent.yml']
+  push:
+    tags: ['agent-v*']
+
+permissions:
+  contents: read
+
+env:
+  SUMATRAPDF_VERSION: 3.6.1
+
+jobs:
+  build:
+    name: Build for Windows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Vet for Windows
+        run: GOOS=windows GOARCH=amd64 go vet ./cmd/vietgara-agent ./internal/printagent/...
+
+      - name: Build
+        run: |
+          version="${GITHUB_REF_NAME#agent-v}"
+          [ "${GITHUB_REF_TYPE}" = tag ] || version="0.0.0-${GITHUB_SHA::7}"
+          mkdir -p dist/vietgara-agent
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${version}" \
+            -o dist/vietgara-agent/vietgara-agent.exe ./cmd/vietgara-agent
+          cp packaging/print-agent/README.txt packaging/print-agent/THIRD-PARTY.txt dist/vietgara-agent/
+          printf 'vietgara-agent %s\nSumatraPDF %s\n' "$version" "$SUMATRAPDF_VERSION" > dist/vietgara-agent/VERSION.txt
+
+      - name: Add SumatraPDF
+        if: github.ref_type == 'tag'
+        env:
+          SUMATRAPDF_SHA256: ${{ vars.SUMATRAPDF_SHA256 }}
+        run: |
+          if [ -z "$SUMATRAPDF_SHA256" ]; then
+            echo "::error::Set the repository variable SUMATRAPDF_SHA256 to the SHA-256 of SumatraPDF-${SUMATRAPDF_VERSION}-64.zip"
+            exit 1
+          fi
+          curl -fsSL --proto '=https' -o sumatra.zip \
+            "https://www.sumatrapdfreader.org/dl/rel/${SUMATRAPDF_VERSION}/SumatraPDF-${SUMATRAPDF_VERSION}-64.zip"
+          echo "${SUMATRAPDF_SHA256}  sumatra.zip" | sha256sum --check --strict
+          unzip -p sumatra.zip "SumatraPDF-${SUMATRAPDF_VERSION}-64.exe" > dist/vietgara-agent/SumatraPDF.exe
+          test -s dist/vietgara-agent/SumatraPDF.exe
+
+      - name: Zip
+        run: cd dist && zip -r vietgara-agent-windows-amd64.zip vietgara-agent
+
+      - name: Keep the build
+        uses: actions/upload-artifact@v4
+        with:
+          name: vietgara-agent-windows-amd64
+          path: dist/vietgara-agent-windows-amd64.zip
+
+  release:
+    name: Release
+    if: github.ref_type == 'tag'
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Get the build
+        uses: actions/download-artifact@v4
+        with:
+          name: vietgara-agent-windows-amd64
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          notes="The print agent for Windows (FR-DOC-08). Extract the zip and run vietgara-agent.exe setup with a pairing code from VietGara (Garage settings > Print agents and printers)."
+          # The versioned release never becomes the repository's latest (that
+          # is the backend's), and the release "print-agent" always holds the
+          # newest zip: the web console links to
+          # releases/download/print-agent/vietgara-agent-windows-amd64.zip.
+          gh release create "$GITHUB_REF_NAME" vietgara-agent-windows-amd64.zip --repo "$GITHUB_REPOSITORY" \
+            --title "VietGara Print Agent ${GITHUB_REF_NAME#agent-v}" --notes "$notes" --latest=false
+          if gh release view print-agent --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload print-agent vietgara-agent-windows-amd64.zip --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit print-agent --repo "$GITHUB_REPOSITORY" --notes "$notes (now ${GITHUB_REF_NAME})"
+          else
+            gh release create print-agent vietgara-agent-windows-amd64.zip --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "VietGara Print Agent (newest)" --notes "$notes (now ${GITHUB_REF_NAME})" --latest=false
+          fi

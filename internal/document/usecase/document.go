@@ -255,6 +255,31 @@ type DocumentUseCase struct {
 	// the labels (Release 13.0); set them with WithPrinting.
 	PrinterStore PrinterStore
 	Parts        PartReader
+	// AgentStore and JobStore keep the print agents and their jobs, Tx
+	// opens the transactions of the agents' own calls and AgentNotifier
+	// wakes their connections (Release 13.1); set them with WithAgents.
+	AgentStore    AgentStore
+	JobStore      JobStore
+	Tx            Transactor
+	AgentNotifier AgentNotifier
+	// Now is the clock; time.Now when nil.
+	Now func() time.Time
+}
+
+// WithAgents sets the stores, the transactions and the notifier of the
+// print agents and returns uc.
+func (uc *DocumentUseCase) WithAgents(agents AgentStore, jobs JobStore, tx Transactor, notifier AgentNotifier) *DocumentUseCase {
+	uc.AgentStore, uc.JobStore, uc.Tx, uc.AgentNotifier = agents, jobs, tx, notifier
+
+	return uc
+}
+
+func (uc *DocumentUseCase) now() time.Time {
+	if uc.Now != nil {
+		return uc.Now()
+	}
+
+	return time.Now()
 }
 
 // WithPrinting sets the printer store and the reader of the parts' labels and

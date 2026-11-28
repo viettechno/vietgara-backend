@@ -118,6 +118,11 @@ linters:
           - goconst
           - gocyclo
           - revive
+      # The print agent's Win32 spooler calls pass pointers by design.
+      - path: internal/printagent/spool/spool_windows\.go$
+        linters:
+          - gosec
+        text: G103
       # These integration tests use isolated containers and shared mock-driver state;
       # running them in parallel adds resource pressure without improving coverage.
       - path: _test\.go$

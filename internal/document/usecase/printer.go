@@ -10,6 +10,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/google/uuid"
+
 	"github.com/viettechno/vietgara-backend/internal/document/printmodel"
 	"github.com/viettechno/vietgara-backend/internal/document/render"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
@@ -19,15 +21,19 @@ import (
 var (
 	ErrPrinterNotFound  = errors.New("document: printer not found")
 	ErrPrinterNameTaken = errors.New("document: a printer of the garage has that name")
+	// ErrPrinterQueueTaken is a printer of an agent saved twice.
+	ErrPrinterQueueTaken = errors.New("document: the agent's printer is saved already")
 )
 
 // PrinterProtocol is how the apps send a job to a printer (FR-DOC-07).
 type PrinterProtocol string
 
-// The protocols: raw ESC/POS over TCP, or a PDF over IPP.
+// The protocols: raw ESC/POS over TCP, a PDF over IPP, or a printer of a
+// print agent (Release 13.1), which the server prints to through the agent.
 const (
-	ProtocolRaw PrinterProtocol = "raw"
-	ProtocolIPP PrinterProtocol = "ipp"
+	ProtocolRaw   PrinterProtocol = "raw"
+	ProtocolIPP   PrinterProtocol = "ipp"
+	ProtocolAgent PrinterProtocol = "agent"
 )
 
 // The limits of a printer.
@@ -56,8 +62,12 @@ type Printer struct {
 	Paper printmodel.Paper
 	// DocumentTypes are the documents the apps send to it first.
 	DocumentTypes []printmodel.DocumentType
-	CreatedAt     time.Time
-	UpdatedAt     time.Time
+	// AgentID and Queue are an agent printer's agent and its name in the
+	// PC's operating system; empty for the others.
+	AgentID   string
+	Queue     string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // PrinterStore keeps the garage's printers; implemented by
@@ -91,7 +101,7 @@ func (uc *DocumentUseCase) Printers(ctx context.Context, garageID string) ([]Pri
 
 // CreatePrinter saves a printer; the garage keeps at most MaxPrinters.
 func (uc *DocumentUseCase) CreatePrinter(ctx context.Context, garageID string, p Printer) (Printer, error) {
-	p, err := normalizePrinter(p)
+	p, err := uc.checkPrinter(ctx, garageID, p)
 	if err != nil {
 		return Printer{}, err
 	}
@@ -119,7 +129,7 @@ func (uc *DocumentUseCase) CreatePrinter(ctx context.Context, garageID string, p
 
 // UpdatePrinter replaces a printer.
 func (uc *DocumentUseCase) UpdatePrinter(ctx context.Context, garageID string, p Printer) (Printer, error) {
-	p, err := normalizePrinter(p)
+	p, err := uc.checkPrinter(ctx, garageID, p)
 	if err != nil {
 		return Printer{}, err
 	}
@@ -142,33 +152,53 @@ func (uc *DocumentUseCase) DeletePrinter(ctx context.Context, garageID, id strin
 }
 
 // PrinterTestPage returns a printer's test page and its content type: ESC/POS
-// on the roll or label of a raw printer, an A4 PDF for an IPP printer.
+// on a roll or label, else a PDF on the printer's page size (A4 when it has
+// none).
 func (uc *DocumentUseCase) PrinterTestPage(ctx context.Context, garageID, id string) ([]byte, string, error) {
 	p, err := uc.PrinterStore.GetPrinter(ctx, garageID, id)
 	if err != nil {
 		return nil, "", printerError("get printer", err)
 	}
 
-	garage, err := uc.Garages.Get(ctx, garageID)
+	data, format, _, err := uc.testPage(ctx, garageID, p)
 	if err != nil {
-		return nil, "", apperror.Internal("read garage", err)
+		return nil, "", err
 	}
 
-	if p.Protocol == ProtocolIPP {
-		data, err := render.TestPagePDF(p.Paper, garage.Name, p.Name)
-		if err != nil {
-			return nil, "", apperror.Internal("render test page", err)
+	if format == FormatPDF {
+		return data, ContentTypePDF, nil
+	}
+
+	return data, ContentTypeEscPos, nil
+}
+
+// testPage renders a printer's test page and says on what it prints.
+func (uc *DocumentUseCase) testPage(ctx context.Context, garageID string, p Printer) ([]byte, JobFormat, printmodel.Paper, error) {
+	garage, err := uc.Garages.Get(ctx, garageID)
+	if err != nil {
+		return nil, "", "", apperror.Internal("read garage", err)
+	}
+
+	if p.Paper == "" || p.Paper.IsPDF() {
+		paper := p.Paper
+		if paper == "" {
+			paper = printmodel.A4
 		}
 
-		return data, ContentTypePDF, nil
+		data, err := render.TestPagePDF(paper, garage.Name, p.Name)
+		if err != nil {
+			return nil, "", "", apperror.Internal("render test page", err)
+		}
+
+		return data, FormatPDF, paper, nil
 	}
 
 	data, err := render.TestPageEscPos(p.Paper, garage.Name, p.Name)
 	if err != nil {
-		return nil, "", apperror.Internal("render test page", err)
+		return nil, "", "", apperror.Internal("render test page", err)
 	}
 
-	return data, ContentTypeEscPos, nil
+	return data, FormatEscPos, p.Paper, nil
 }
 
 // The content types of the print output.
@@ -183,6 +213,8 @@ func printerError(op string, err error) error {
 		return apperror.New(apperror.CodeNotFound, "printer not found")
 	case errors.Is(err, ErrPrinterNameTaken):
 		return apperror.Validation("name", apperror.IssueTaken, "a printer of the garage has that name")
+	case errors.Is(err, ErrPrinterQueueTaken):
+		return apperror.Validation("queue", apperror.IssueTaken, "this printer of the agent is saved already")
 	default:
 		return apperror.Internal(op, err)
 	}
@@ -193,6 +225,25 @@ var (
 	hostName = regexp.MustCompile(`^(?i)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*\.?$`)
 	ippPath  = regexp.MustCompile(`^[A-Za-z0-9._~/-]+$`)
 )
+
+// checkPrinter checks a printer and, for an agent printer, that the agent
+// is the garage's.
+func (uc *DocumentUseCase) checkPrinter(ctx context.Context, garageID string, p Printer) (Printer, error) {
+	p, err := normalizePrinter(p)
+	if err != nil || p.Protocol != ProtocolAgent {
+		return p, err
+	}
+
+	if _, err := uc.AgentStore.GetAgent(ctx, garageID, p.AgentID); err != nil {
+		if errors.Is(err, ErrAgentNotFound) {
+			return Printer{}, apperror.Validation("agentId", apperror.IssueInvalid, "the print agent is not the garage's")
+		}
+
+		return Printer{}, apperror.Internal("get print agent", err)
+	}
+
+	return p, nil
+}
 
 // normalizePrinter trims and checks a printer and fills in the defaults.
 func normalizePrinter(p Printer) (Printer, error) {
@@ -206,12 +257,16 @@ func normalizePrinter(p Printer) (Printer, error) {
 	}
 
 	p.Host = strings.TrimSuffix(strings.TrimPrefix(strings.TrimSpace(p.Host), "["), "]")
-	if !validHost(p.Host) {
+	if p.Protocol != ProtocolAgent && !validHost(p.Host) {
 		return Printer{}, apperror.Validation("host", apperror.IssueInvalid, "host must be an IP address or a host name")
 	}
 
 	if p.Port < 0 || p.Port > 65535 {
 		return Printer{}, apperror.Validation("port", apperror.IssueInvalid, "port must be between 1 and 65535")
+	}
+
+	if p.Protocol != ProtocolAgent {
+		p.AgentID, p.Queue = "", ""
 	}
 
 	p, err := normalizeProtocol(p)
@@ -235,38 +290,82 @@ func normalizePrinter(p Printer) (Printer, error) {
 func normalizeProtocol(p Printer) (Printer, error) {
 	switch p.Protocol {
 	case ProtocolRaw:
-		if p.Port == 0 {
-			p.Port = defaultRawPort
-		}
-
-		if strings.TrimSpace(p.Path) != "" {
-			return Printer{}, apperror.Validation("path", apperror.IssueInvalid, "a path is for an IPP printer only")
-		}
-
-		p.Path = ""
-
-		if !p.Paper.IsRoll() && p.Paper != printmodel.Label5030 {
-			return Printer{}, apperror.Validation("paperSize", apperror.IssueInvalid, "a raw printer prints on K80, K57 or 50 x 30 mm labels")
-		}
+		return normalizeRawPrinter(p)
 	case ProtocolIPP:
-		if p.Port == 0 {
-			p.Port = defaultIPPPort
-		}
-
-		p.Path = strings.TrimLeft(strings.TrimSpace(p.Path), "/")
-		if p.Path == "" {
-			p.Path = defaultIPPPath
-		}
-
-		if len(p.Path) > maxPrinterPath || !ippPath.MatchString(p.Path) {
-			return Printer{}, apperror.Validation("path", apperror.IssueInvalid, "path may use letters, digits and - . _ ~ / only")
-		}
-
-		if p.Paper != "" && !p.Paper.IsPDF() {
-			return Printer{}, apperror.Validation("paperSize", apperror.IssueInvalid, "an IPP printer takes A4 or A5, or the garage's setting")
-		}
+		return normalizeIPPPrinter(p)
+	case ProtocolAgent:
+		return normalizeAgentPrinter(p)
 	default:
-		return Printer{}, apperror.Validation("protocol", apperror.IssueInvalid, "protocol must be raw or IPP")
+		return Printer{}, apperror.Validation("protocol", apperror.IssueInvalid, "protocol must be raw, IPP or agent")
+	}
+}
+
+// normalizeRawPrinter fills in the port and checks the roll or label of a
+// raw printer, which has no path.
+func normalizeRawPrinter(p Printer) (Printer, error) {
+	if p.Port == 0 {
+		p.Port = defaultRawPort
+	}
+
+	if strings.TrimSpace(p.Path) != "" {
+		return Printer{}, apperror.Validation("path", apperror.IssueInvalid, "a path is for an IPP printer only")
+	}
+
+	p.Path = ""
+
+	if !p.Paper.IsRoll() && p.Paper != printmodel.Label5030 {
+		return Printer{}, apperror.Validation("paperSize", apperror.IssueInvalid, "a raw printer prints on K80, K57 or 50 x 30 mm labels")
+	}
+
+	return p, nil
+}
+
+// normalizeIPPPrinter fills in the port and path and checks the page size
+// (A4, A5 or none) of an IPP printer.
+func normalizeIPPPrinter(p Printer) (Printer, error) {
+	if p.Port == 0 {
+		p.Port = defaultIPPPort
+	}
+
+	p.Path = strings.TrimLeft(strings.TrimSpace(p.Path), "/")
+	if p.Path == "" {
+		p.Path = defaultIPPPath
+	}
+
+	if len(p.Path) > maxPrinterPath || !ippPath.MatchString(p.Path) {
+		return Printer{}, apperror.Validation("path", apperror.IssueInvalid, "path may use letters, digits and - . _ ~ / only")
+	}
+
+	if p.Paper != "" && !p.Paper.IsPDF() {
+		return Printer{}, apperror.Validation("paperSize", apperror.IssueInvalid, "an IPP printer takes A4 or A5, or the garage's setting")
+	}
+
+	return p, nil
+}
+
+// normalizeAgentPrinter checks a printer of a print agent: the agent and the
+// PC's printer, no address, and any paper (a roll, the label, a page size or
+// the garage's setting).
+func normalizeAgentPrinter(p Printer) (Printer, error) {
+	if p.Host != "" || p.Port != 0 || strings.TrimSpace(p.Path) != "" {
+		return Printer{}, apperror.Validation("host", apperror.IssueInvalid, "a printer of a print agent has no address")
+	}
+
+	p.Path = ""
+
+	if uuid.Validate(p.AgentID) != nil {
+		return Printer{}, apperror.Validation("agentId", apperror.IssueRequired, "name the print agent")
+	}
+
+	queue, err := queueName(p.Queue)
+	if err != nil {
+		return Printer{}, err
+	}
+
+	p.Queue = queue
+
+	if p.Paper != "" && !p.Paper.IsPDF() && !p.Paper.IsRoll() && p.Paper != printmodel.Label5030 {
+		return Printer{}, apperror.Validation("paperSize", apperror.IssueInvalid, "paper size is invalid")
 	}
 
 	return p, nil
@@ -277,10 +376,10 @@ func normalizeProtocol(p Printer) (Printer, error) {
 func printerTypes(p Printer) ([]printmodel.DocumentType, error) {
 	var allowed []printmodel.DocumentType
 
-	switch {
-	case p.Protocol == ProtocolIPP && p.Paper == "":
+	switch p.Paper { //nolint:exhaustive // the page sizes and rolls share the default
+	case "":
 		allowed = printmodel.Types()
-	case p.Paper == printmodel.Label5030:
+	case printmodel.Label5030:
 		allowed = []printmodel.DocumentType{printmodel.TypePartLabel}
 	default:
 		for _, t := range printmodel.Types() {

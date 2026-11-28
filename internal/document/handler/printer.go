@@ -144,6 +144,8 @@ var paperToProtoAny = func() map[printmodel.Paper]documentv1.PaperSize {
 var protocolFromProto = map[documentv1.PrinterProtocol]usecase.PrinterProtocol{
 	documentv1.PrinterProtocol_PRINTER_PROTOCOL_RAW: usecase.ProtocolRaw,
 	documentv1.PrinterProtocol_PRINTER_PROTOCOL_IPP: usecase.ProtocolIPP,
+
+	documentv1.PrinterProtocol_PRINTER_PROTOCOL_AGENT: usecase.ProtocolAgent,
 }
 
 func printerFromProto(p *documentv1.Printer) (usecase.Printer, error) {
@@ -153,7 +155,7 @@ func printerFromProto(p *documentv1.Printer) (usecase.Printer, error) {
 
 	out := usecase.Printer{
 		Name: p.GetName(), Protocol: protocolFromProto[p.GetProtocol()], Host: p.GetHost(), Port: int(p.GetPort()),
-		Path: p.GetPath(), Paper: paperFromProtoAny[p.GetPaperSize()],
+		Path: p.GetPath(), Paper: paperFromProtoAny[p.GetPaperSize()], AgentID: p.GetAgentId(), Queue: p.GetQueue(),
 	}
 
 	for _, t := range p.GetDocumentTypes() {
@@ -181,7 +183,7 @@ func printerTypeFromProto(t documentv1.DocumentType) (printmodel.DocumentType, b
 func printerToProto(p usecase.Printer) *documentv1.Printer {
 	out := &documentv1.Printer{
 		Id: p.ID, Name: p.Name, Host: p.Host, Port: int32(p.Port), //nolint:gosec // at most 65535, checked on save
-		Path: p.Path, PaperSize: paperToProtoAny[p.Paper],
+		Path: p.Path, PaperSize: paperToProtoAny[p.Paper], AgentId: p.AgentID, Queue: p.Queue,
 		CreatedAt: timestamppb.New(p.CreatedAt), UpdatedAt: timestamppb.New(p.UpdatedAt),
 	}
 
@@ -190,6 +192,8 @@ func printerToProto(p usecase.Printer) *documentv1.Printer {
 		out.Protocol = documentv1.PrinterProtocol_PRINTER_PROTOCOL_RAW
 	case usecase.ProtocolIPP:
 		out.Protocol = documentv1.PrinterProtocol_PRINTER_PROTOCOL_IPP
+	case usecase.ProtocolAgent:
+		out.Protocol = documentv1.PrinterProtocol_PRINTER_PROTOCOL_AGENT
 	}
 
 	for _, t := range p.DocumentTypes {

@@ -43,6 +43,10 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+      # The print agent (Release 13.1) is a Windows program.
+      - name: Vet the print agent for Windows
+        run: GOOS=windows GOARCH=amd64 go vet ./cmd/vietgara-agent ./internal/printagent/...
+
       - name: Unit tests with coverage gate
         run: make test-unit
 

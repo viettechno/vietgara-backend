@@ -1,0 +1,6 @@
+SumatraPDF.exe is SumatraPDF (https://www.sumatrapdfreader.org), a separate
+program by Krzysztof Kowalczyk and contributors, distributed unmodified with
+the agent, which runs it to print PDFs. It is licensed under the GNU General
+Public License version 3; its source code is at
+https://github.com/sumatrapdfreader/sumatrapdf (the tag of the version
+shipped is in VERSION.txt).

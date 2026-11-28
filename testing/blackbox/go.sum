@@ -1,3 +1,5 @@
+github.com/coder/websocket v1.8.15 h1:6B2JPeOGlpff2Uz6vOEH1Vzpi0iUz20A+lPVhPHtNUA=
+github.com/coder/websocket v1.8.15/go.mod h1:NX3SzP+inril6yawo5CQXx8+fk145lPDC6pumgx0mVg=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/golang-jwt/jwt/v5 v5.3.1 h1:kYf81DTWFe7t+1VvL7eS+jKFVWaUnK9cB1qbwn63YCY=
@@ -38,8 +40,8 @@ github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWD
 github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
 github.com/tiendc/go-deepcopy v1.7.2 h1:Ut2yYR7W9tWjTQitganoIue4UGxZwCcJy3orjrrIj44=
 github.com/tiendc/go-deepcopy v1.7.2/go.mod h1:4bKjNC2r7boYOkD2IOuZpYjmlDdzjbpTRyCx+goBCJQ=
-github.com/viettechno/vietgara-proto v1.29.0 h1:SaPr77KIt2rkwPzRmd8kKXSpZqgEtJ5qLZ59gL4EkHQ=
-github.com/viettechno/vietgara-proto v1.29.0/go.mod h1:xqbqqNdWa8Dwel+VooOqPpspeohaxxCGZyxqnhPoklk=
+github.com/viettechno/vietgara-proto v1.30.0 h1:fCX1p4V0Qipp/9yYgVUxIWVs8XTGS4MvvG+S/Qxx60E=
+github.com/viettechno/vietgara-proto v1.30.0/go.mod h1:xqbqqNdWa8Dwel+VooOqPpspeohaxxCGZyxqnhPoklk=
 github.com/viettechno/vietgara-testdata v0.4.1 h1:+27OpofHGpsO0GyUy9gaK3ejzjY2JPZvR/m67e0uP/M=
 github.com/viettechno/vietgara-testdata v0.4.1/go.mod h1:U0TReHiBgomNBgvyFNxgMpcvQA5V8CDaOiLmeOXr1W4=
 github.com/xuri/efp v0.0.3-0.20260924042702-217b81952dec h1:sZZokRLgr8nyrzkDDCQcvEYBsTrZr6eqXa/R9qALoQA=

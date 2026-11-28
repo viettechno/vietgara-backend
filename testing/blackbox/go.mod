@@ -3,12 +3,13 @@ module github.com/viettechno/vietgara-backend/testing/blackbox
 go 1.27.4
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/ledongthuc/pdf v0.0.0-20261125152515-e8918f005efa
 	github.com/stretchr/testify v1.12.1
-	github.com/viettechno/vietgara-proto v1.29.0
+	github.com/viettechno/vietgara-proto v1.30.0
 	github.com/viettechno/vietgara-testdata v0.4.1
 	github.com/xuri/excelize/v2 v2.11.1
 	google.golang.org/protobuf v1.36.12

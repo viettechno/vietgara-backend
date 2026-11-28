@@ -1,5 +1,7 @@
 -- Rolling back forgets the page size of the IPP printers: they print on the
--- garage's setting again.
+-- garage's setting again, with the documents they listed (an A5 printer's
+-- quotes then print on the quote's setting, maybe A4 on A5 paper: set the
+-- garage's setting to match before rolling back).
 
 ALTER TABLE public.garage_printers NO FORCE ROW LEVEL SECURITY;
 UPDATE public.garage_printers SET paper_size = NULL WHERE protocol = 'ipp';

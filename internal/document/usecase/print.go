@@ -140,7 +140,7 @@ type Output struct {
 }
 
 // Export is a download: the garage's paper size, no copy mark, no log.
-var Export = Output{}
+func Export() Output { return Output{} }
 
 // PrintOn is a print on paper, A4 or A5 ("" for the garage's setting).
 func PrintOn(paper printmodel.Paper) Output { return Output{Printed: true, Paper: paper} }

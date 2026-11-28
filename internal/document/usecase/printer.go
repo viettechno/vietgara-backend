@@ -230,7 +230,8 @@ func normalizePrinter(p Printer) (Printer, error) {
 }
 
 // normalizeProtocol checks the fields that depend on the protocol: the
-// default port, the IPP path and the paper of a raw printer.
+// default port, the IPP path and page size (A4, A5 or none), and the roll or
+// label of a raw printer.
 func normalizeProtocol(p Printer) (Printer, error) {
 	switch p.Protocol {
 	case ProtocolRaw:

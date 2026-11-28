@@ -147,6 +147,10 @@ var protocolFromProto = map[documentv1.PrinterProtocol]usecase.PrinterProtocol{
 }
 
 func printerFromProto(p *documentv1.Printer) (usecase.Printer, error) {
+	if _, known := paperFromProtoAny[p.GetPaperSize()]; !known && p.GetPaperSize() != documentv1.PaperSize_PAPER_SIZE_UNSPECIFIED {
+		return usecase.Printer{}, apperror.Validation("paperSize", apperror.IssueInvalid, "paper size is invalid")
+	}
+
 	out := usecase.Printer{
 		Name: p.GetName(), Protocol: protocolFromProto[p.GetProtocol()], Host: p.GetHost(), Port: int(p.GetPort()),
 		Path: p.GetPath(), Paper: paperFromProtoAny[p.GetPaperSize()],

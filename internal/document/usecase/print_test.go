@@ -129,7 +129,7 @@ func TestPrintLogAndCopyMark(t *testing.T) {
 		uc, d := newUseCase(t)
 		expectQuote(d)
 
-		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export)
+		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export())
 		require.NoError(t, err)
 		assert.Empty(t, d.Prints.log)
 	})
@@ -187,7 +187,7 @@ func TestPrintLogAndCopyMark(t *testing.T) {
 
 		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.PrintOn(""))
 		require.NoError(t, err)
-		_, err = uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export)
+		_, err = uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export())
 		require.NoError(t, err)
 		assert.Len(t, d.Prints.log, 1)
 	})
@@ -209,7 +209,7 @@ func TestPrintUsesTheChosenPaper(t *testing.T) {
 	// A setting that names a size the document no longer offers falls back to A4.
 	d.Prints.settings[printmodel.TypeQuote] = usecase.PrintSetting{Paper: printmodel.Paper("A3")}
 
-	pdf, err = uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export)
+	pdf, err = uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export())
 	require.NoError(t, err)
 	assert.Contains(t, string(pdf), "/MediaBox [0 0 595.28 841.89]", "A4")
 }

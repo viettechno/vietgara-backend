@@ -146,7 +146,7 @@ func TestTestPages(t *testing.T) {
 		assert.True(t, bytes.HasPrefix(data, escInit), paper)
 	}
 
-	pdf, err := render.TestPagePDF("Gara An Phát", "Văn phòng")
+	pdf, err := render.TestPagePDF(printmodel.A5, "Gara An Phát", "Văn phòng")
 	require.NoError(t, err)
 	assert.True(t, bytes.HasPrefix(pdf, []byte("%PDF")))
 }

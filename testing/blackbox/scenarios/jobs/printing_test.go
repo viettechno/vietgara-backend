@@ -59,6 +59,13 @@ func TestGaragePrinters(t *testing.T) {
 	})
 	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "VALIDATION_ERROR")
 
+	_, err = api.CreatePrinter(ctx, garageID, &documentv1.Printer{
+		Name: "Quầy A5", Protocol: documentv1.PrinterProtocol_PRINTER_PROTOCOL_IPP, Host: "192.168.1.53",
+		PaperSize:     documentv1.PaperSize_PAPER_SIZE_A5,
+		DocumentTypes: []documentv1.DocumentType{documentv1.DocumentType_DOCUMENT_TYPE_STOCK_ISSUE},
+	})
+	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "VALIDATION_ERROR")
+
 	counter.PaperSize = documentv1.PaperSize_PAPER_SIZE_K57
 	updated, err := api.UpdatePrinter(ctx, garageID, counter.GetId(), counter)
 	require.NoError(t, err)

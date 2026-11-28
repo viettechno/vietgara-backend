@@ -88,7 +88,7 @@ func TestDocumentUseCase_QuotePDF(t *testing.T) {
 			TotalAmount: 250_000,
 		}, nil).Once()
 
-		pdf, err := uc.QuotePDF(t.Context(), garageID, quoteID, false)
+		pdf, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export)
 		require.NoError(t, err)
 		require.NotEmpty(t, pdf)
 		require.Equal(t, "%PDF", string(pdf[:4]))
@@ -101,7 +101,7 @@ func TestDocumentUseCase_QuotePDF(t *testing.T) {
 		d.Quotes.EXPECT().Get(mock.Anything, garageID, quoteID).Return(usecase.QuoteInfo{Number: "QT-1"}, nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(usecase.GarageHeaderInfo{}, errBoom).Once()
 
-		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, false)
+		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export)
 		assertAppError(t, err, apperror.CodeInternal)
 	})
 
@@ -113,7 +113,7 @@ func TestDocumentUseCase_QuotePDF(t *testing.T) {
 		notFound := apperror.Wrap(apperror.CodeNotFound, "quote not found", errBoom)
 		d.Quotes.EXPECT().Get(mock.Anything, garageID, quoteID).Return(usecase.QuoteInfo{}, notFound).Once()
 
-		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, false)
+		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export)
 		assertAppError(t, err, apperror.CodeNotFound)
 	})
 }
@@ -132,7 +132,7 @@ func TestDocumentUseCase_RepairOrderPDF(t *testing.T) {
 			TotalAmount: 250_000,
 		}, nil).Once()
 
-		pdf, err := uc.RepairOrderPDF(t.Context(), garageID, repairOrderID, false)
+		pdf, err := uc.RepairOrderPDF(t.Context(), garageID, repairOrderID, usecase.Export)
 		require.NoError(t, err)
 		require.NotEmpty(t, pdf)
 		require.Equal(t, "%PDF", string(pdf[:4]))
@@ -146,7 +146,7 @@ func TestDocumentUseCase_RepairOrderPDF(t *testing.T) {
 		notFound := apperror.Wrap(apperror.CodeNotFound, "repair order not found", errBoom)
 		d.RepairOrders.EXPECT().Get(mock.Anything, garageID, repairOrderID).Return(usecase.RepairOrderInfo{}, notFound).Once()
 
-		_, err := uc.RepairOrderPDF(t.Context(), garageID, repairOrderID, false)
+		_, err := uc.RepairOrderPDF(t.Context(), garageID, repairOrderID, usecase.Export)
 		assertAppError(t, err, apperror.CodeNotFound)
 	})
 }
@@ -165,7 +165,7 @@ func TestDocumentUseCase_SettlementReceiptPDF(t *testing.T) {
 			Payments: []printmodel.PaymentRow{{Date: "2026-09-30", Method: "cash", Amount: 600_000}},
 		}, nil).Once()
 
-		pdf, err := uc.SettlementReceiptPDF(t.Context(), garageID, settlementID, false)
+		pdf, err := uc.SettlementReceiptPDF(t.Context(), garageID, settlementID, usecase.Export)
 		require.NoError(t, err)
 		require.NotEmpty(t, pdf)
 		require.Equal(t, "%PDF", string(pdf[:4]))
@@ -179,7 +179,7 @@ func TestDocumentUseCase_SettlementReceiptPDF(t *testing.T) {
 		notFound := apperror.Wrap(apperror.CodeNotFound, "settlement not found", errBoom)
 		d.Settlements.EXPECT().Get(mock.Anything, garageID, settlementID).Return(usecase.SettlementInfo{}, notFound).Once()
 
-		_, err := uc.SettlementReceiptPDF(t.Context(), garageID, settlementID, false)
+		_, err := uc.SettlementReceiptPDF(t.Context(), garageID, settlementID, usecase.Export)
 		assertAppError(t, err, apperror.CodeNotFound)
 	})
 }
@@ -259,7 +259,7 @@ func TestDocumentUseCase_Letterhead(t *testing.T) {
 		d.Quotes.EXPECT().Get(mock.Anything, garageID, quoteID).Return(doc, nil).Once()
 		d.Garages.EXPECT().Logo(mock.Anything, snapshot.LogoKey).Return(logoPNG(t), nil).Once()
 
-		pdf, err := uc.QuotePDF(t.Context(), garageID, quoteID, false)
+		pdf, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export)
 		require.NoError(t, err)
 		require.Equal(t, "%PDF", string(pdf[:4]))
 	})
@@ -271,7 +271,7 @@ func TestDocumentUseCase_Letterhead(t *testing.T) {
 		d.Quotes.EXPECT().Get(mock.Anything, garageID, quoteID).Return(doc, nil).Once()
 		d.Garages.EXPECT().Logo(mock.Anything, snapshot.LogoKey).Return(nil, errBoom).Once()
 
-		pdf, err := uc.QuotePDF(t.Context(), garageID, quoteID, false)
+		pdf, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export)
 		require.NoError(t, err)
 		require.Equal(t, "%PDF", string(pdf[:4]))
 	})
@@ -284,7 +284,7 @@ func TestDocumentUseCase_Letterhead(t *testing.T) {
 		noLogo.Issuer.LogoKey = ""
 		d.Quotes.EXPECT().Get(mock.Anything, garageID, quoteID).Return(noLogo, nil).Once()
 
-		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, false)
+		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export)
 		require.NoError(t, err)
 	})
 
@@ -295,7 +295,7 @@ func TestDocumentUseCase_Letterhead(t *testing.T) {
 		d.Quotes.EXPECT().Get(mock.Anything, garageID, quoteID).Return(usecase.QuoteInfo{Number: "BG-1"}, nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 
-		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, false)
+		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export)
 		require.NoError(t, err)
 	})
 }
@@ -324,7 +324,7 @@ func TestDocumentUseCase_InventoryDocuments(t *testing.T) {
 		}, nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 
-		pdf, err := uc.GoodsReceiptPDF(t.Context(), garageID, "r-1", false)
+		pdf, err := uc.GoodsReceiptPDF(t.Context(), garageID, "r-1", usecase.Export)
 		require.NoError(t, err)
 		require.Equal(t, "%PDF", string(pdf[:4]))
 	})
@@ -339,7 +339,7 @@ func TestDocumentUseCase_InventoryDocuments(t *testing.T) {
 		}, nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Once()
 
-		pdf, err := uc.StockIssuePDF(t.Context(), garageID, repairOrderID, false)
+		pdf, err := uc.StockIssuePDF(t.Context(), garageID, repairOrderID, usecase.Export)
 		require.NoError(t, err)
 		require.Equal(t, "%PDF", string(pdf[:4]))
 	})
@@ -383,11 +383,11 @@ func TestDocumentUseCase_InventoryDocuments(t *testing.T) {
 
 		uc, d := newUseCase(t)
 		d.Inventory.EXPECT().GoodsReceipt(mock.Anything, garageID, "r-1").Return(usecase.GoodsReceiptInfo{}, errBoom).Once()
-		_, err := uc.GoodsReceiptPDF(t.Context(), garageID, "r-1", false)
+		_, err := uc.GoodsReceiptPDF(t.Context(), garageID, "r-1", usecase.Export)
 		assertAppError(t, err, apperror.CodeInternal)
 
 		d.Inventory.EXPECT().StockIssue(mock.Anything, garageID, repairOrderID).Return(usecase.StockIssueInfo{}, errBoom).Once()
-		_, err = uc.StockIssuePDF(t.Context(), garageID, repairOrderID, false)
+		_, err = uc.StockIssuePDF(t.Context(), garageID, repairOrderID, usecase.Export)
 		assertAppError(t, err, apperror.CodeInternal)
 
 		d.Inventory.EXPECT().Purchases(mock.Anything, garageID, "", "", "").Return(nil, 0, errBoom).Once()
@@ -407,10 +407,10 @@ func TestDocumentUseCase_InventoryDocuments(t *testing.T) {
 		d.Inventory.EXPECT().StockIssue(mock.Anything, garageID, repairOrderID).Return(usecase.StockIssueInfo{}, nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(usecase.GarageHeaderInfo{}, errBoom).Twice()
 
-		_, err := uc.GoodsReceiptPDF(t.Context(), garageID, "r-1", false)
+		_, err := uc.GoodsReceiptPDF(t.Context(), garageID, "r-1", usecase.Export)
 		assertAppError(t, err, apperror.CodeInternal)
 
-		_, err = uc.StockIssuePDF(t.Context(), garageID, repairOrderID, false)
+		_, err = uc.StockIssuePDF(t.Context(), garageID, repairOrderID, usecase.Export)
 		assertAppError(t, err, apperror.CodeInternal)
 	})
 }
@@ -519,12 +519,12 @@ func TestDocumentUseCase_PaymentOutVoucherPDF(t *testing.T) {
 		uc, d := newUseCase(t)
 		d.Payables.EXPECT().PaymentOutVoucher(mock.Anything, garageID, "v-1").Return(info, nil).Times(2)
 
-		exported, err := uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", false)
+		exported, err := uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", usecase.Export)
 		require.NoError(t, err)
 		require.Equal(t, "%PDF", string(exported[:4]))
 		require.Empty(t, d.Prints.log)
 
-		printed, err := uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", true)
+		printed, err := uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", usecase.PrintOn(""))
 		require.NoError(t, err)
 		require.Equal(t, "%PDF", string(printed[:4]))
 		require.Len(t, d.Prints.log, 1)
@@ -537,7 +537,7 @@ func TestDocumentUseCase_PaymentOutVoucherPDF(t *testing.T) {
 		uc, d := newUseCase(t)
 		d.Payables.EXPECT().PaymentOutVoucher(mock.Anything, garageID, "v-1").Return(usecase.PaymentOutInfo{}, errBoom).Once()
 
-		_, err := uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", false)
+		_, err := uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", usecase.Export)
 		assertAppError(t, err, apperror.CodeInternal)
 	})
 
@@ -548,7 +548,7 @@ func TestDocumentUseCase_PaymentOutVoucherPDF(t *testing.T) {
 		d.Payables.EXPECT().PaymentOutVoucher(mock.Anything, garageID, "v-1").Return(usecase.PaymentOutInfo{}, nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(usecase.GarageHeaderInfo{}, errBoom).Once()
 
-		_, err := uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", false)
+		_, err := uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", usecase.Export)
 		assertAppError(t, err, apperror.CodeInternal)
 	})
 }
@@ -561,7 +561,7 @@ func TestDocumentUseCase_PayablesNotWired(t *testing.T) {
 	_, err := uc.SupplierPayablesExcel(t.Context(), garageID, "", false)
 	assertAppError(t, err, apperror.CodeInternal)
 
-	_, err = uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", false)
+	_, err = uc.PaymentOutVoucherPDF(t.Context(), garageID, "v-1", usecase.Export)
 	assertAppError(t, err, apperror.CodeInternal)
 }
 
@@ -581,12 +581,12 @@ func TestDocumentUseCase_PurchaseOrderPDF(t *testing.T) {
 		d.Inventory.EXPECT().PurchaseOrder(mock.Anything, garageID, "po-1").Return(info, nil).Times(2)
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Times(2)
 
-		exported, err := uc.PurchaseOrderPDF(t.Context(), garageID, "po-1", false)
+		exported, err := uc.PurchaseOrderPDF(t.Context(), garageID, "po-1", usecase.Export)
 		require.NoError(t, err)
 		require.Equal(t, "%PDF", string(exported[:4]))
 		require.Empty(t, d.Prints.log)
 
-		_, err = uc.PurchaseOrderPDF(t.Context(), garageID, "po-1", true)
+		_, err = uc.PurchaseOrderPDF(t.Context(), garageID, "po-1", usecase.PrintOn(""))
 		require.NoError(t, err)
 		require.Len(t, d.Prints.log, 1)
 		require.Equal(t, printmodel.TypePurchaseOrder, d.Prints.log[0].Type)
@@ -598,14 +598,14 @@ func TestDocumentUseCase_PurchaseOrderPDF(t *testing.T) {
 		uc, d := newUseCase(t)
 		d.Inventory.EXPECT().PurchaseOrder(mock.Anything, garageID, "po-1").Return(usecase.PurchaseOrderInfo{}, errBoom).Once()
 
-		_, err := uc.PurchaseOrderPDF(t.Context(), garageID, "po-1", false)
+		_, err := uc.PurchaseOrderPDF(t.Context(), garageID, "po-1", usecase.Export)
 		assertAppError(t, err, apperror.CodeInternal)
 
 		uc, d = newUseCase(t)
 		d.Inventory.EXPECT().PurchaseOrder(mock.Anything, garageID, "po-1").Return(usecase.PurchaseOrderInfo{}, nil).Once()
 		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(usecase.GarageHeaderInfo{}, errBoom).Once()
 
-		_, err = uc.PurchaseOrderPDF(t.Context(), garageID, "po-1", false)
+		_, err = uc.PurchaseOrderPDF(t.Context(), garageID, "po-1", usecase.Export)
 		assertAppError(t, err, apperror.CodeInternal)
 	})
 }

@@ -51,7 +51,8 @@ type Printer struct {
 	Port     int
 	// Path is the IPP resource path; empty for a raw printer.
 	Path string
-	// Paper is the roll or the label of a raw printer; empty for IPP.
+	// Paper is the roll or the label of a raw printer, and A4, A5 or empty
+	// (the garage's setting) for IPP.
 	Paper printmodel.Paper
 	// DocumentTypes are the documents the apps send to it first.
 	DocumentTypes []printmodel.DocumentType
@@ -154,7 +155,7 @@ func (uc *DocumentUseCase) PrinterTestPage(ctx context.Context, garageID, id str
 	}
 
 	if p.Protocol == ProtocolIPP {
-		data, err := render.TestPagePDF(garage.Name, p.Name)
+		data, err := render.TestPagePDF(p.Paper, garage.Name, p.Name)
 		if err != nil {
 			return nil, "", apperror.Internal("render test page", err)
 		}
@@ -260,8 +261,8 @@ func normalizeProtocol(p Printer) (Printer, error) {
 			return Printer{}, apperror.Validation("path", apperror.IssueInvalid, "path may use letters, digits and - . _ ~ / only")
 		}
 
-		if p.Paper != "" {
-			return Printer{}, apperror.Validation("paperSize", apperror.IssueInvalid, "an IPP printer prints on the garage's paper setting")
+		if p.Paper != "" && !p.Paper.IsPDF() {
+			return Printer{}, apperror.Validation("paperSize", apperror.IssueInvalid, "an IPP printer takes A4 or A5, or the garage's setting")
 		}
 	default:
 		return Printer{}, apperror.Validation("protocol", apperror.IssueInvalid, "protocol must be raw or IPP")
@@ -276,7 +277,7 @@ func printerTypes(p Printer) ([]printmodel.DocumentType, error) {
 	var allowed []printmodel.DocumentType
 
 	switch {
-	case p.Protocol == ProtocolIPP:
+	case p.Protocol == ProtocolIPP && p.Paper == "":
 		allowed = printmodel.Types()
 	case p.Paper == printmodel.Label5030:
 		allowed = []printmodel.DocumentType{printmodel.TypePartLabel}

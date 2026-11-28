@@ -714,6 +714,12 @@ func (c *Client) UpdatePrintSetting(
 		&documentv1.UpdatePrintSettingRequest{PaperSize: paper, CopyMark: copyMark})
 }
 
+// PrintQuotePDFOn prints a quote on the page size of a printer (Release 13.0).
+func (c *Client) PrintQuotePDFOn(ctx context.Context, garageID, quoteID string, paper documentv1.PaperSize) (string, []byte, error) {
+	return c.downloadWith(ctx, http.MethodPost, garagePath(garageID)+"/quotes/"+url.PathEscape(quoteID)+"/pdf:print",
+		&documentv1.PrintQuotePdfRequest{PaperSize: paper})
+}
+
 // PrintQuotePDF prints a quote: it answers the PDF and logs the print.
 func (c *Client) PrintQuotePDF(ctx context.Context, garageID, quoteID string) (string, []byte, error) {
 	return c.DownloadRaw(ctx, http.MethodPost, garagePath(garageID)+"/quotes/"+url.PathEscape(quoteID)+"/pdf:print")

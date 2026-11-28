@@ -8,7 +8,7 @@ require (
 	github.com/jackc/pgx/v5 v5.13.0
 	github.com/ledongthuc/pdf v0.0.0-20261125152515-e8918f005efa
 	github.com/stretchr/testify v1.12.1
-	github.com/viettechno/vietgara-proto v1.27.0
+	github.com/viettechno/vietgara-proto v1.27.1-0.20261128015623-44d8bec2fe5e
 	github.com/viettechno/vietgara-testdata v0.4.1
 	github.com/xuri/excelize/v2 v2.11.1
 	google.golang.org/protobuf v1.36.12

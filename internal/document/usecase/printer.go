@@ -353,6 +353,8 @@ type PartInfo struct {
 	Name, SKU string
 	// BaseUnitID is the part's base unit: naming it is the same as none.
 	BaseUnitID string
+	// UnitIDs are the part's packaging units.
+	UnitIDs []string
 	// Barcodes in the catalogue's order.
 	Barcodes []PartBarcode
 }
@@ -368,9 +370,15 @@ type PartReader interface {
 // and its name, or for the base unit its first barcode, else the SKU. A
 // packaging unit without a barcode has no label: the base unit's code on a
 // case would count one piece.
-func partLabel(p PartInfo, unitID string) (printmodel.PartLabel, error) {
+// It also returns the unit resolved: "" for the base unit.
+func partLabel(p PartInfo, unitID string) (printmodel.PartLabel, string, error) {
 	if unitID == p.BaseUnitID {
 		unitID = ""
+	}
+
+	if unitID != "" && !slices.Contains(p.UnitIDs, unitID) {
+		return printmodel.PartLabel{}, "", apperror.Validation("parts", apperror.IssueInvalid,
+			"the unit is not a packaging unit of part "+p.SKU)
 	}
 
 	label := printmodel.PartLabel{Name: p.Name, SKU: p.SKU}
@@ -382,18 +390,18 @@ func partLabel(p PartInfo, unitID string) (printmodel.PartLabel, error) {
 				label.Unit = b.UnitName
 			}
 
-			return label, nil
+			return label, unitID, nil
 		}
 	}
 
 	if unitID != "" {
-		return printmodel.PartLabel{}, apperror.Validation("parts", apperror.IssueInvalid,
+		return printmodel.PartLabel{}, "", apperror.Validation("parts", apperror.IssueInvalid,
 			"the unit has no barcode of part "+p.SKU+": add one to print its labels")
 	}
 
 	label.Barcode = p.SKU
 
-	return label, nil
+	return label, "", nil
 }
 
 // PartLabels prints the labels of parts (FR-INV-13) on a label printer, as
@@ -406,21 +414,27 @@ func (uc *DocumentUseCase) PartLabels(ctx context.Context, garageID string, pape
 
 	labels := make([]printmodel.PartLabel, 0, total)
 	// The base unit named or not is one entry: checked once the part says
-	// which unit is its base.
+	// which unit is its base. Each part is read once.
 	resolved := map[string]bool{}
+	read := map[string]PartInfo{}
 
 	for _, p := range parts {
-		part, err := uc.Parts.Part(ctx, garageID, p.PartID)
-		if err != nil {
-			return nil, toAppError("read part", err)
+		part, ok := read[p.PartID]
+		if !ok {
+			var err error
+			if part, err = uc.Parts.Part(ctx, garageID, p.PartID); err != nil {
+				return nil, toAppError("read part", err)
+			}
+
+			read[p.PartID] = part
 		}
 
-		label, err := partLabel(part, p.UnitID)
+		label, unitID, err := partLabel(part, p.UnitID)
 		if err != nil {
 			return nil, err
 		}
 
-		key := p.PartID + "/" + label.Unit
+		key := p.PartID + "/" + unitID
 		if resolved[key] {
 			return nil, apperror.Validation("parts", apperror.IssueInvalid, "a part and unit are listed twice")
 		}

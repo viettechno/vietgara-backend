@@ -96,7 +96,7 @@ type fakeParts struct {
 func (f *fakeParts) Part(_ context.Context, _, partID string) (usecase.PartInfo, error) {
 	f.asked = append(f.asked, partID)
 
-	return usecase.PartInfo{Name: "Lọc dầu " + partID, SKU: "SKU-" + partID, BaseUnitID: "piece", Barcodes: []usecase.PartBarcode{
+	return usecase.PartInfo{Name: "Lọc dầu " + partID, SKU: "SKU-" + partID, BaseUnitID: "piece", UnitIDs: []string{"case", "pallet"}, Barcodes: []usecase.PartBarcode{
 		{Code: "893" + partID},
 		{Code: "CASE-" + partID, UnitID: "case", UnitName: "Thùng"},
 	}}, f.err
@@ -400,6 +400,15 @@ func TestPartLabels(t *testing.T) {
 		_, err := uc.PartLabels(t.Context(), garageID, printmodel.Label5030, []usecase.LabelCopies{
 			{PartID: "a", Copies: 1}, {PartID: "a", UnitID: "piece", Copies: 1},
 		})
+		assertAppError(t, err, apperror.CodeInvalidArgument)
+	})
+
+	t.Run("refuses a unit that is not the part's", func(t *testing.T) {
+		t.Parallel()
+
+		uc, _, _, _ := newPrintingUseCase(t)
+
+		_, err := uc.PartLabels(t.Context(), garageID, printmodel.Label5030, []usecase.LabelCopies{{PartID: "a", UnitID: "drum", Copies: 1}})
 		assertAppError(t, err, apperror.CodeInvalidArgument)
 	})
 

@@ -29,6 +29,10 @@ func (a documentParts) Part(ctx context.Context, garageID, partID string) (docum
 
 	info := documentUsecase.PartInfo{Name: p.Name, SKU: p.SKU, BaseUnitID: p.BaseUnitID}
 
+	for _, u := range p.PackagingUnits {
+		info.UnitIDs = append(info.UnitIDs, u.UnitID)
+	}
+
 	for _, b := range p.Barcodes {
 		code := documentUsecase.PartBarcode{Code: b.Barcode, UnitName: b.UnitName}
 		if b.UnitID != nil {

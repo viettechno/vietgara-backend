@@ -70,7 +70,7 @@ func (m *memPrinters) DeletePrinter(_ context.Context, _, id string) error {
 type stubParts struct{}
 
 func (stubParts) Part(_ context.Context, _, partID string) (usecase.PartInfo, error) {
-	return usecase.PartInfo{Name: "Part " + partID, SKU: partID, Barcodes: []usecase.PartBarcode{
+	return usecase.PartInfo{Name: "Part " + partID, SKU: partID, UnitIDs: []string{"case"}, Barcodes: []usecase.PartBarcode{
 		{Code: partID}, {Code: "C-" + partID, UnitID: "case", UnitName: "Thùng"},
 	}}, nil
 }

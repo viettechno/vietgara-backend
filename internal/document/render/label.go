@@ -89,7 +89,12 @@ func partLabel(l printmodel.PartLabel) (*image.Gray, error) {
 		return nil, err
 	}
 
-	inner.line(small, sizeSmall, oneLine(small, labelled("SKU", l.SKU), inner.width()), "", alignLeft)
+	sku := labelled("SKU", l.SKU)
+	if l.Unit != "" {
+		sku += " · " + l.Unit
+	}
+
+	inner.line(small, sizeSmall, oneLine(small, sku, inner.width()), "", alignLeft)
 	inner.feed(4)
 
 	code, ok := barcodeImage(l.Barcode, inner.width(), 64)

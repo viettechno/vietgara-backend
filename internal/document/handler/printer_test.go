@@ -13,7 +13,6 @@ import (
 	documentv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/document/v1"
 
 	"github.com/viettechno/vietgara-backend/internal/document/handler"
-	"github.com/viettechno/vietgara-backend/internal/document/printmodel"
 	"github.com/viettechno/vietgara-backend/internal/document/usecase"
 	"github.com/viettechno/vietgara-backend/internal/platform/access"
 )
@@ -70,8 +69,10 @@ func (m *memPrinters) DeletePrinter(_ context.Context, _, id string) error {
 
 type stubParts struct{}
 
-func (stubParts) PartLabel(_ context.Context, _, partID string) (printmodel.PartLabel, error) {
-	return printmodel.PartLabel{Name: "Part " + partID, SKU: partID, Barcode: partID}, nil
+func (stubParts) Part(_ context.Context, _, partID string) (usecase.PartInfo, error) {
+	return usecase.PartInfo{Name: "Part " + partID, SKU: partID, Barcodes: []usecase.PartBarcode{
+		{Code: partID}, {Code: "C-" + partID, UnitID: "case", UnitName: "Thùng"},
+	}}, nil
 }
 
 func newPrintingServer(t *testing.T) (*handler.Server, *env) {
@@ -195,10 +196,10 @@ func TestPrintEscPosAndLabels(t *testing.T) {
 
 	labels, err := srv.PrintPartLabels(ctx, &documentv1.PrintPartLabelsRequest{
 		GarageId: garageID, PaperSize: documentv1.PaperSize_PAPER_SIZE_LABEL_50X30,
-		Parts: []*documentv1.PartLabelCopies{{PartId: "A-1", Copies: 2}},
+		Parts: []*documentv1.PartLabelCopies{{PartId: "A-1", Copies: 2}, {PartId: "A-1", UnitId: new("case"), Copies: 1}},
 	})
 	require.NoError(t, err)
-	assert.Equal(t, 2, bytes.Count(labels.GetData(), []byte{0x1d, 0x0c}))
+	assert.Equal(t, 3, bytes.Count(labels.GetData(), []byte{0x1d, 0x0c}))
 
 	_, err = srv.PrintPartLabels(ctx, &documentv1.PrintPartLabelsRequest{GarageId: garageID, PaperSize: documentv1.PaperSize_PAPER_SIZE_K80})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))

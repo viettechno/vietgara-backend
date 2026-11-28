@@ -325,9 +325,11 @@ func validHost(host string) bool {
 	return hostName.MatchString(host)
 }
 
-// LabelCopies is how many labels of one part to print.
+// LabelCopies is how many labels of one part to print, in its base unit or,
+// with UnitID, in one of its packaging units (a case).
 type LabelCopies struct {
 	PartID string
+	UnitID string
 	Copies int
 }
 
@@ -338,11 +340,60 @@ const (
 	maxLabels      = 300
 )
 
+// PartBarcode is one barcode of a part, of its base unit (UnitID empty) or
+// of a packaging unit.
+type PartBarcode struct {
+	Code     string
+	UnitID   string
+	UnitName string
+}
+
+// PartInfo is what a label needs of a part.
+type PartInfo struct {
+	Name, SKU string
+	// BaseUnitID is the part's base unit: naming it is the same as none.
+	BaseUnitID string
+	// Barcodes in the catalogue's order.
+	Barcodes []PartBarcode
+}
+
 // PartReader reads a part for its label; implemented by an adapter over the
 // Catalogue module in cmd/server. It returns the catalogue's not found
 // error for an unknown part.
 type PartReader interface {
-	PartLabel(ctx context.Context, garageID, partID string) (printmodel.PartLabel, error)
+	Part(ctx context.Context, garageID, partID string) (PartInfo, error)
+}
+
+// partLabel is the label of a part in a unit: the unit's first barcode
+// and its name, or for the base unit its first barcode, else the SKU. A
+// packaging unit without a barcode has no label: the base unit's code on a
+// case would count one piece.
+func partLabel(p PartInfo, unitID string) (printmodel.PartLabel, error) {
+	if unitID == p.BaseUnitID {
+		unitID = ""
+	}
+
+	label := printmodel.PartLabel{Name: p.Name, SKU: p.SKU}
+
+	for _, b := range p.Barcodes {
+		if b.UnitID == unitID {
+			label.Barcode = b.Code
+			if unitID != "" {
+				label.Unit = b.UnitName
+			}
+
+			return label, nil
+		}
+	}
+
+	if unitID != "" {
+		return printmodel.PartLabel{}, apperror.Validation("parts", apperror.IssueInvalid,
+			"the unit has no barcode of part "+p.SKU+": add one to print its labels")
+	}
+
+	label.Barcode = p.SKU
+
+	return label, nil
 }
 
 // PartLabels prints the labels of parts (FR-INV-13) on a label printer, as
@@ -354,12 +405,27 @@ func (uc *DocumentUseCase) PartLabels(ctx context.Context, garageID string, pape
 	}
 
 	labels := make([]printmodel.PartLabel, 0, total)
+	// The base unit named or not is one entry: checked once the part says
+	// which unit is its base.
+	resolved := map[string]bool{}
 
 	for _, p := range parts {
-		label, err := uc.Parts.PartLabel(ctx, garageID, p.PartID)
+		part, err := uc.Parts.Part(ctx, garageID, p.PartID)
 		if err != nil {
 			return nil, toAppError("read part", err)
 		}
+
+		label, err := partLabel(part, p.UnitID)
+		if err != nil {
+			return nil, err
+		}
+
+		key := p.PartID + "/" + label.Unit
+		if resolved[key] {
+			return nil, apperror.Validation("parts", apperror.IssueInvalid, "a part and unit are listed twice")
+		}
+
+		resolved[key] = true
 
 		for range p.Copies {
 			labels = append(labels, label)
@@ -393,11 +459,12 @@ func checkLabelCopies(paper printmodel.Paper, parts []LabelCopies) (int, error) 
 	total := 0
 
 	for _, p := range parts {
-		if seen[p.PartID] {
-			return 0, apperror.Validation("parts", apperror.IssueInvalid, "a part is listed twice")
+		key := p.PartID + "/" + p.UnitID
+		if seen[key] {
+			return 0, apperror.Validation("parts", apperror.IssueInvalid, "a part and unit are listed twice")
 		}
 
-		seen[p.PartID] = true
+		seen[key] = true
 
 		if p.Copies < 1 || p.Copies > maxLabelCopies {
 			return 0, apperror.Validation("parts", apperror.IssueInvalid, "copies must be between 1 and 100")

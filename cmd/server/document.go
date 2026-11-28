@@ -6,7 +6,6 @@ import (
 	billingUsecase "github.com/viettechno/vietgara-backend/internal/billing/usecase"
 	catalogueUsecase "github.com/viettechno/vietgara-backend/internal/catalogue/usecase"
 	documentHandler "github.com/viettechno/vietgara-backend/internal/document/handler"
-	"github.com/viettechno/vietgara-backend/internal/document/printmodel"
 	documentRepository "github.com/viettechno/vietgara-backend/internal/document/repository"
 	documentUsecase "github.com/viettechno/vietgara-backend/internal/document/usecase"
 	inventoryUsecase "github.com/viettechno/vietgara-backend/internal/inventory/usecase"
@@ -21,25 +20,25 @@ import (
 // documentParts reads a part's label from the Catalogue module (FR-INV-13).
 type documentParts struct{ uc *catalogueUsecase.UseCase }
 
-// PartLabel returns the part's name, SKU and the barcode to print: the
-// base unit's first barcode, or the SKU when it has none.
-func (a documentParts) PartLabel(ctx context.Context, garageID, partID string) (printmodel.PartLabel, error) {
+// Part returns the part's name, SKU and barcodes for its labels.
+func (a documentParts) Part(ctx context.Context, garageID, partID string) (documentUsecase.PartInfo, error) {
 	p, err := a.uc.GetPart(ctx, garageID, partID)
 	if err != nil {
-		return printmodel.PartLabel{}, err //nolint:wrapcheck // already an *apperror.AppError
+		return documentUsecase.PartInfo{}, err //nolint:wrapcheck // already an *apperror.AppError
 	}
 
-	label := printmodel.PartLabel{Name: p.Name, SKU: p.SKU, Barcode: p.SKU}
+	info := documentUsecase.PartInfo{Name: p.Name, SKU: p.SKU, BaseUnitID: p.BaseUnitID}
 
 	for _, b := range p.Barcodes {
-		if b.UnitID == nil {
-			label.Barcode = b.Barcode
-
-			break
+		code := documentUsecase.PartBarcode{Code: b.Barcode, UnitName: b.UnitName}
+		if b.UnitID != nil {
+			code.UnitID = *b.UnitID
 		}
+
+		info.Barcodes = append(info.Barcodes, code)
 	}
 
-	return label, nil
+	return info, nil
 }
 
 // documentModule is the wired Document/Print module (FRD 3.13): PDF export

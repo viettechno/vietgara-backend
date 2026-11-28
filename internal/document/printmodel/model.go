@@ -300,7 +300,9 @@ func (PurchaseOrder) Type() DocumentType { return TypePurchaseOrder }
 type PartLabel struct {
 	Name string `json:"name"`
 	SKU  string `json:"sku"`
-	// Barcode is the base unit's first barcode, or the SKU when the part has
-	// none.
+	// Barcode is the label's unit's first barcode; for the base unit the SKU
+	// when the part has none.
 	Barcode string `json:"barcode"`
+	// Unit is the packaging unit's name (a case), empty for the base unit.
+	Unit string `json:"unit,omitempty"`
 }

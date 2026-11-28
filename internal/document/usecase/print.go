@@ -116,10 +116,12 @@ func effective(chosen map[printmodel.DocumentType]PrintSetting, t printmodel.Doc
 
 // pdf renders model m of document documentID the way the garage prints it
 // (FR-DOC-04): on the paper size it chose, with the template version of the
-// document's first print, so a reprint matches it. When printed is set the
-// render is a print (FR-DOC-05): a reprint carries the copy mark if the garage
-// wants one, and the print is logged. An export is not logged. A print may
-// name the page size of its printer (Release 13.0).
+// document's first print, so a reprint matches it. Output says whether it is
+// an Export() or a print, PrintOn(paper) (FR-DOC-05): a reprint carries the
+// copy mark if the garage wants one, and the print is logged; an export is
+// not. A print may name the page size of its printer (Release 13.0), which
+// replaces the garage's setting and is refused unless that size has a PDF
+// template.
 func (uc *DocumentUseCase) pdf(ctx context.Context, garageID, documentID string, m printmodel.Model, out Output) ([]byte, error) {
 	if out.Paper != "" {
 		// The page size of the printer (Release 13.0): its own template, or

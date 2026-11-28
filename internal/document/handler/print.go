@@ -216,14 +216,15 @@ func paperToProto(p printmodel.Paper) documentv1.PaperSize {
 }
 
 // printPaper is the page size a print request names: "" for none (the
-// garage's setting), refused when this server does not know the value.
+// garage's setting), refused when it is not A4 or A5 (a roll, a label, a
+// value this server does not know) before anything is read.
 func printPaper(size documentv1.PaperSize) (printmodel.Paper, error) {
 	if size == documentv1.PaperSize_PAPER_SIZE_UNSPECIFIED {
 		return "", nil
 	}
 
 	paper, ok := paperFromProtoAny[size]
-	if !ok {
+	if !ok || !paper.IsPDF() {
 		return "", apperror.Validation("paperSize", apperror.IssueInvalid, "paper size is invalid")
 	}
 

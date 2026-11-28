@@ -392,29 +392,6 @@ func TestPartLabels(t *testing.T) {
 		assert.Equal(t, 3, bytes.Count(data, []byte{0x1d, 0x0c}))
 	})
 
-	t.Run("a case label carries the case's barcode and name", func(t *testing.T) {
-		t.Parallel()
-
-		part := usecase.PartInfo{Name: "Dầu", SKU: "D-1", BaseUnitID: "l", UnitIDs: []string{"jug"}, Barcodes: []usecase.PartBarcode{
-			{Code: "JUG-1", UnitID: "jug", UnitName: "Can 5L"}, {Code: "893-1"},
-		}}
-
-		label, unit, err := usecase.PartLabelOf(part, "jug")
-		require.NoError(t, err)
-		assert.Equal(t, printmodel.PartLabel{Name: "Dầu", SKU: "D-1", Barcode: "JUG-1", Unit: "Can 5L"}, label)
-		assert.Equal(t, "jug", unit)
-
-		label, unit, err = usecase.PartLabelOf(part, "l")
-		require.NoError(t, err)
-		assert.Equal(t, printmodel.PartLabel{Name: "Dầu", SKU: "D-1", Barcode: "893-1"}, label, "the base unit named is the base unit")
-		assert.Empty(t, unit)
-
-		part.Barcodes = nil
-		label, _, err = usecase.PartLabelOf(part, "")
-		require.NoError(t, err)
-		assert.Equal(t, "D-1", label.Barcode, "the SKU when the base unit has no barcode")
-	})
-
 	t.Run("refuses the base unit named and unnamed", func(t *testing.T) {
 		t.Parallel()
 
@@ -471,4 +448,28 @@ func manyLabels(parts, copies int) []usecase.LabelCopies {
 	}
 
 	return out
+}
+
+// A case label carries the case's barcode and name.
+func TestCaseLabel(t *testing.T) {
+	t.Parallel()
+
+	part := usecase.PartInfo{Name: "Dầu", SKU: "D-1", BaseUnitID: "l", UnitIDs: []string{"jug"}, Barcodes: []usecase.PartBarcode{
+		{Code: "JUG-1", UnitID: "jug", UnitName: "Can 5L"}, {Code: "893-1"},
+	}}
+
+	label, unit, err := usecase.PartLabelOf(part, "jug")
+	require.NoError(t, err)
+	assert.Equal(t, printmodel.PartLabel{Name: "Dầu", SKU: "D-1", Barcode: "JUG-1", Unit: "Can 5L"}, label)
+	assert.Equal(t, "jug", unit)
+
+	label, unit, err = usecase.PartLabelOf(part, "l")
+	require.NoError(t, err)
+	assert.Equal(t, printmodel.PartLabel{Name: "Dầu", SKU: "D-1", Barcode: "893-1"}, label, "the base unit named is the base unit")
+	assert.Empty(t, unit)
+
+	part.Barcodes = nil
+	label, _, err = usecase.PartLabelOf(part, "")
+	require.NoError(t, err)
+	assert.Equal(t, "D-1", label.Barcode, "the SKU when the base unit has no barcode")
 }

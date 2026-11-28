@@ -180,7 +180,13 @@ func TestPartLabels(t *testing.T) {
 	_, _, err = api.PrintPartLabels(ctx, garageID, documentv1.PaperSize_PAPER_SIZE_K80, []*documentv1.PartLabelCopies{{PartId: c.filter.GetId(), Copies: 1}})
 	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "VALIDATION_ERROR")
 
-	// A case label carries the case's barcode; a unit without one is refused.
+	// A case label carries the case's barcode; a unit without one is refused,
+	// and so is a unit that is not the part's.
+	_, _, err = api.PrintPartLabels(ctx, garageID, documentv1.PaperSize_PAPER_SIZE_LABEL_50X30, []*documentv1.PartLabelCopies{
+		{PartId: c.oil.GetId(), UnitId: new(c.jug.GetId()), Copies: 1},
+	})
+	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "VALIDATION_ERROR")
+
 	_, err = api.SetPartBarcodes(ctx, garageID, c.oil.GetId(), []*cataloguev1.PartBarcode{{Barcode: "OIL-JUG-5", UnitId: new(c.jug.GetId())}})
 	require.NoError(t, err)
 

@@ -127,6 +127,8 @@ func (h *AgentHub) serve(parent context.Context, c *websocket.Conn, s usecase.Ag
 	if !h.register(s.AgentID, conn) {
 		_ = c.Close(websocket.StatusGoingAway, "shutting down")
 
+		h.forget(ctx, s)
+
 		return
 	}
 

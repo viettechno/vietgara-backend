@@ -11,14 +11,16 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 )
 
 // maxPrinted is how many printed job ids the agent remembers.
 const maxPrinted = 200
 
-// State is what the agent keeps between runs, in one JSON file only the
-// administrators and the system can read (see the command's state path).
+// State is what the agent keeps between runs, in a JSON file only the
+// administrators and the system can read (see the command's state path); the
+// ids of the jobs it printed lately are in a file beside it.
 type State struct {
 	// Server is VietGara's address, "https://app.vietgara.vn".
 	Server     string `json:"server"`
@@ -26,8 +28,6 @@ type State struct {
 	AgentName  string `json:"agentName"`
 	GarageName string `json:"garageName"`
 	Key        string `json:"key"`
-	// Printed are the ids of the jobs printed lately, oldest first.
-	Printed []string `json:"printed,omitempty"`
 }
 
 // ErrNotPaired is returned when there is no state file yet.
@@ -78,19 +78,22 @@ func (s *Store) Save(st State) error {
 	return s.save(st)
 }
 
-func (s *Store) save(st State) error {
-	data, err := json.MarshalIndent(st, "", "  ")
+func (s *Store) save(st State) error { return writeJSON(s.Path, st) }
+
+// writeJSON writes v to path atomically, readable by its owner only.
+func writeJSON(path string, v any) error {
+	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
-		return fmt.Errorf("encode state: %w", err)
+		return fmt.Errorf("encode %s: %w", path, err)
 	}
 
-	tmp := s.Path + ".tmp"
+	tmp := path + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o600); err != nil {
 		return fmt.Errorf("write %s: %w", tmp, err)
 	}
 
-	if err := os.Rename(tmp, s.Path); err != nil {
-		return fmt.Errorf("write %s: %w", s.Path, err)
+	if err := os.Rename(tmp, path); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
 	}
 
 	return nil
@@ -101,31 +104,46 @@ func (s *Store) Printed(jobID string) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	st, err := s.load()
-
-	return err == nil && slices.Contains(st.Printed, jobID)
+	return slices.Contains(s.printed(), jobID)
 }
 
-// MarkPrinted remembers a printed job, forgetting the oldest beyond 200.
+// MarkPrinted remembers a printed job, forgetting the oldest beyond 200. The
+// ids live in their own file next to the state, so that remembering one never
+// writes back a state that a new pairing (another process) replaced.
 func (s *Store) MarkPrinted(jobID string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	st, err := s.load()
-	if err != nil {
-		return err
-	}
-
-	if slices.Contains(st.Printed, jobID) {
+	printed := s.printed()
+	if slices.Contains(printed, jobID) {
 		return nil
 	}
 
-	st.Printed = append(st.Printed, jobID)
-	if len(st.Printed) > maxPrinted {
-		st.Printed = st.Printed[len(st.Printed)-maxPrinted:]
+	printed = append(printed, jobID)
+	if len(printed) > maxPrinted {
+		printed = printed[len(printed)-maxPrinted:]
 	}
 
-	return s.save(st)
+	return writeJSON(s.printedPath(), printed)
+}
+
+func (s *Store) printedPath() string {
+	return strings.TrimSuffix(s.Path, filepath.Ext(s.Path)) + ".printed.json"
+}
+
+// printed reads the printed ids; none when the file is missing or damaged.
+func (s *Store) printed() []string {
+	data, err := os.ReadFile(s.printedPath())
+	if err != nil {
+		return nil
+	}
+
+	var ids []string
+	if json.Unmarshal(data, &ids) != nil {
+		return nil
+	}
+
+	return ids
 }
 
 // EnsureDir creates the directory of the state file.

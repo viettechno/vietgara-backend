@@ -122,12 +122,26 @@ func defaultPrinter() string {
 
 // PrintRaw sends ESC/POS bytes to the printer as a RAW document, which the
 // driver passes through untouched (a "Generic / Text Only" or the maker's
-// driver).
-func (*Windows) PrintRaw(_ context.Context, printer, title string, data []byte) error {
+// driver). The spooler's calls can block on a stalled printer: PrintRaw
+// returns when ctx ends, and the calls finish in the background.
+func (*Windows) PrintRaw(ctx context.Context, printer, title string, data []byte) error {
 	if len(data) == 0 {
 		return ErrNothingToPrint
 	}
 
+	done := make(chan error, 1)
+
+	go func() { done <- printRaw(printer, title, data) }()
+
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return fmt.Errorf("%w: %q did not take the job in time", ErrPrintFailed, printer)
+	}
+}
+
+func printRaw(printer, title string, data []byte) error {
 	name, err := windows.UTF16PtrFromString(printer)
 	if err != nil {
 		return fmt.Errorf("printer name: %w", err)

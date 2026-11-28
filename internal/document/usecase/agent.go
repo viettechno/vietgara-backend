@@ -34,7 +34,7 @@ const (
 	// PairingCodeTTL is how long a pairing code works.
 	PairingCodeTTL = 15 * time.Minute
 	// AgentOnline is how long after its last heartbeat an agent still counts
-	// as connected: the connections beat every 30 seconds.
+	// as connected: the connections beat every 15 seconds (AgentHub.Tick).
 	AgentOnline = 90 * time.Second
 
 	pairingCodeLength  = 8
@@ -97,9 +97,6 @@ type AgentSession struct {
 	KeyHash  []byte
 	// ConnectionID tells this connection from a newer one of the agent.
 	ConnectionID string
-	// ConnectedAt is when the connection started: a job sent since was
-	// sent on it, one sent before is sent again.
-	ConnectedAt time.Time
 }
 
 // AgentStore keeps the print agents and their jobs; implemented by
@@ -126,8 +123,9 @@ type AgentStore interface {
 	// CompletePairing swaps a valid code for the key; ErrAgentNotFound when
 	// the code no longer works.
 	CompletePairing(ctx context.Context, garageID, agentID string, codeHash, keyHash []byte, report AgentReport) (PrintAgent, error)
-	// SetConnection records the connection serving the agent and its
-	// heartbeat; ClearConnection forgets it if it is still that one.
+	// SetConnection records the connection serving the agent, when it
+	// started and its heartbeat; ClearConnection forgets it if it is still
+	// that one.
 	// SetConnection and Heartbeat return ErrAgentRevoked when the key no
 	// longer matches; Heartbeat ErrAgentReplaced when another connection
 	// took over.
@@ -227,11 +225,7 @@ func (uc *DocumentUseCase) PairAgent(ctx context.Context, code string, report Ag
 		return PairResult{}, notFound
 	}
 
-	report, err := normalizeReport(report)
-	if err != nil {
-		return PairResult{}, err
-	}
-
+	report = normalizeReport(report)
 	codeHash := hashSecret(code)
 
 	agentID, garageID, err := uc.AgentStore.FindAgentByPairingCode(ctx, codeHash)
@@ -293,7 +287,7 @@ func (uc *DocumentUseCase) AuthenticateAgent(ctx context.Context, key, connectio
 		return AgentSession{}, apperror.Internal("find print agent", err)
 	}
 
-	s := AgentSession{AgentID: agentID, GarageID: garageID, KeyHash: hash, ConnectionID: connectionID, ConnectedAt: uc.now()}
+	s := AgentSession{AgentID: agentID, GarageID: garageID, KeyHash: hash, ConnectionID: connectionID}
 
 	if err := uc.inAgentGarage(ctx, s, func(ctx context.Context) error { return uc.AgentStore.SetConnection(ctx, s) }); err != nil {
 		return AgentSession{}, err
@@ -316,10 +310,7 @@ func (uc *DocumentUseCase) AgentDisconnected(ctx context.Context, s AgentSession
 
 // AgentReported saves what the agent says about its PC and printers.
 func (uc *DocumentUseCase) AgentReported(ctx context.Context, s AgentSession, report AgentReport) error {
-	report, err := normalizeReport(report)
-	if err != nil {
-		return err
-	}
+	report = normalizeReport(report)
 
 	return uc.inAgentGarage(ctx, s, func(ctx context.Context) error { return uc.AgentStore.SaveReport(ctx, s, report) })
 }
@@ -361,27 +352,20 @@ func agentName(name string) (string, error) {
 	return name, nil
 }
 
-// normalizeReport trims what an agent reports and refuses what does not
-// fit: at most 100 printers, each named once.
-func normalizeReport(r AgentReport) (AgentReport, error) {
+// normalizeReport trims what an agent reports and keeps what fits: the
+// first 100 printers whose names are valid, each once. A printer with an odd
+// name is left out, not the whole report, so the others can still be chosen.
+func normalizeReport(r AgentReport) AgentReport {
 	r.Hostname = clip(r.Hostname, maxAgentHostname)
 	r.OS = clip(r.OS, maxAgentLabel)
 	r.Version = clip(r.Version, maxAgentLabel)
 
-	if len(r.Printers) > maxAgentPrinters {
-		return AgentReport{}, apperror.Validation("printers", apperror.IssueInvalid, "at most 100 printers")
-	}
-
-	printers := make([]AgentPrinter, 0, len(r.Printers))
+	printers := make([]AgentPrinter, 0, min(len(r.Printers), maxAgentPrinters))
 	seen := map[string]bool{}
 
 	for _, p := range r.Printers {
 		name, err := queueName(p.Name)
-		if err != nil {
-			return AgentReport{}, err
-		}
-
-		if seen[strings.ToLower(name)] {
+		if err != nil || seen[strings.ToLower(name)] || len(printers) == maxAgentPrinters {
 			continue
 		}
 
@@ -391,7 +375,7 @@ func normalizeReport(r AgentReport) (AgentReport, error) {
 
 	r.Printers = printers
 
-	return r, nil
+	return r
 }
 
 // queueName checks the name of a PC's printer: 1 to 200 characters, no

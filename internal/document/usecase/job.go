@@ -44,7 +44,10 @@ const (
 	JobRetention = 7 * 24 * time.Hour
 	// AgentJobBatch is how many jobs a connection takes at a time.
 	AgentJobBatch = 10
-	maxJobError   = 500
+	// MaxJobBytes is the largest document a job carries: in base64 it stays
+	// under the agent's message limit (protocol.MaxServerMessage, 32 MiB).
+	MaxJobBytes = 20 << 20
+	maxJobError = 500
 )
 
 // PrintJob is a print sent to an agent's printer (FR-DOC-08).
@@ -93,9 +96,12 @@ type JobStore interface {
 	PurgeJobs(ctx context.Context, garageID string, before time.Time) error
 	// PendingJobs expires the agent's jobs past their time, then returns the
 	// oldest of those to send on the connection, with their bytes: queued,
-	// or sent before the connection started (the agent dedupes them).
+	// or sent before the connection started (the agent dedupes them). A
+	// connection that is no longer the agent's gets none.
 	PendingJobs(ctx context.Context, s AgentSession, now time.Time, limit int) ([]AgentJob, error)
-	MarkSent(ctx context.Context, s AgentSession, ids []string, at time.Time) error
+	// MarkSent records that the jobs were sent on the connection, if it is
+	// still the agent's.
+	MarkSent(ctx context.Context, s AgentSession, ids []string) error
 	// FinishJob records the agent's result of a job still queued or sent,
 	// and clears its bytes; a job that is not the agent's, or is finished,
 	// is left as it is.
@@ -147,6 +153,11 @@ func (uc *DocumentUseCase) CreatePrintJob(ctx context.Context, garageID, printer
 	data, format, paper, err := uc.renderJob(ctx, garageID, p, doc)
 	if err != nil {
 		return PrintJob{}, err
+	}
+
+	if len(data) > MaxJobBytes {
+		return PrintJob{}, apperror.Validation("document", apperror.IssueTooLong,
+			"the document is too large to send to a print agent: print it through the print dialog")
 	}
 
 	now := uc.now()
@@ -203,7 +214,7 @@ func (uc *DocumentUseCase) AgentJobs(ctx context.Context, s AgentSession) ([]Age
 
 // AgentJobsSent records that the jobs were sent to the agent.
 func (uc *DocumentUseCase) AgentJobsSent(ctx context.Context, s AgentSession, ids []string) error {
-	return uc.inAgentGarage(ctx, s, func(ctx context.Context) error { return uc.JobStore.MarkSent(ctx, s, ids, uc.now()) })
+	return uc.inAgentGarage(ctx, s, func(ctx context.Context) error { return uc.JobStore.MarkSent(ctx, s, ids) })
 }
 
 // AgentJobDone records the agent's result of a job: printed, or failed

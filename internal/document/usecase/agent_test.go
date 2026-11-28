@@ -160,21 +160,24 @@ func TestPairAgent(t *testing.T) {
 		assertAppError(t, err, apperror.CodeNotFound)
 	})
 
-	t.Run("more than 100 printers are refused", func(t *testing.T) {
+	t.Run("printers with odd names are left out, and the list stops at 100", func(t *testing.T) {
 		t.Parallel()
 
 		e := newAgentEnv(t)
+		e.d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil)
 
 		_, code, err := e.uc.CreateAgent(t.Context(), garageID, "Quầy")
 		require.NoError(t, err)
 
-		report := usecase.AgentReport{}
+		report := usecase.AgentReport{Printers: []usecase.AgentPrinter{{Name: "a\tb"}, {Name: strings.Repeat("x", 201)}}}
 		for i := range 101 {
 			report.Printers = append(report.Printers, usecase.AgentPrinter{Name: "P" + strings.Repeat("x", i)})
 		}
 
-		_, err = e.uc.PairAgent(t.Context(), code, report)
-		assertValidation(t, err, "printers")
+		result, err := e.uc.PairAgent(t.Context(), code, report)
+		require.NoError(t, err)
+		require.Len(t, result.Agent.Printers, 100)
+		assert.Equal(t, "P", result.Agent.Printers[0].Name)
 	})
 }
 

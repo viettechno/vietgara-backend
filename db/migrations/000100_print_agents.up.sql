@@ -16,9 +16,12 @@ CREATE TABLE public.print_agents (
     os character varying(40) DEFAULT ''::character varying NOT NULL,
     version character varying(40) DEFAULT ''::character varying NOT NULL,
     printers jsonb DEFAULT '[]'::jsonb NOT NULL,
-    -- The connection serving the agent (one backend instance holds it) and
-    -- its heartbeat: the agent is connected while both are set and recent.
+    -- The connection serving the agent (one backend instance holds it), when
+    -- it started (by the database clock: a job sent before it is sent again
+    -- on it) and its heartbeat: the agent is connected while the connection
+    -- is set and the heartbeat recent.
     connection_id uuid,
+    connected_at timestamp with time zone,
     last_seen_at timestamp with time zone,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     created_by uuid,

@@ -101,7 +101,7 @@ func TestAgentStore(t *testing.T) { //nolint:funlen // one scenario, step by ste
 	assert.Equal(t, garageA, garageID)
 
 	// One connection at a time.
-	first := usecase.AgentSession{AgentID: agent.ID, GarageID: garageA, KeyHash: key, ConnectionID: uuid.NewString(), ConnectedAt: time.Now()}
+	first := usecase.AgentSession{AgentID: agent.ID, GarageID: garageA, KeyHash: key, ConnectionID: uuid.NewString()}
 	second := first
 	second.ConnectionID = uuid.NewString()
 
@@ -199,28 +199,42 @@ func TestAgentStore(t *testing.T) { //nolint:funlen // one scenario, step by ste
 		assert.Equal(t, []byte{0x1b, 0x40}, jobs[0].Data)
 		assert.Equal(t, printmodel.TypePaymentVoucher, jobs[0].DocumentType)
 
-		require.NoError(t, store.MarkSent(ctx, second, []string{queued.ID}, now))
+		jobs, err = store.PendingJobs(ctx, first, now, 10)
+		require.NoError(t, err)
+		assert.Empty(t, jobs, "a replaced connection gets none")
+
+		require.NoError(t, store.MarkSent(ctx, second, []string{queued.ID}))
 
 		jobs, err = store.PendingJobs(ctx, second, now, 10)
 		require.NoError(t, err)
 		assert.Empty(t, jobs, "sent on this connection")
 
-		third := second
-		third.ConnectedAt = now.Add(time.Second)
-		jobs, err = store.PendingJobs(ctx, third, now, 10)
+		return nil
+	}))
+
+	// A newer connection, in its own transaction (the database's clock moves
+	// on), gets the job again.
+	third := second
+	third.ConnectionID = uuid.NewString()
+
+	require.NoError(t, in(garageA, func(ctx context.Context) error { return store.SetConnection(ctx, third) }))
+	require.NoError(t, in(garageA, func(ctx context.Context) error {
+		jobs, err := store.PendingJobs(ctx, third, now, 10)
 		require.NoError(t, err)
 		assert.Len(t, jobs, 1, "sent again on a newer connection")
 
-		other := second
+		require.NoError(t, store.MarkSent(ctx, second, []string{queued.ID}), "a replaced connection marks nothing")
+
+		other := third
 		other.AgentID = uuid.NewString()
 		require.NoError(t, store.FinishJob(ctx, other, queued.ID, usecase.JobPrinted, "", now))
-		require.NoError(t, store.FinishJob(ctx, second, "not-a-uuid", usecase.JobPrinted, "", now))
+		require.NoError(t, store.FinishJob(ctx, third, "not-a-uuid", usecase.JobPrinted, "", now))
 
 		got, err := store.GetJob(ctx, garageA, queued.ID)
 		require.NoError(t, err)
 		assert.Equal(t, usecase.JobSent, got.Status, "another agent's result changes nothing")
 
-		require.NoError(t, store.FinishJob(ctx, second, queued.ID, usecase.JobFailed, "Hết giấy", now))
+		require.NoError(t, store.FinishJob(ctx, third, queued.ID, usecase.JobFailed, "Hết giấy", now))
 
 		got, err = store.GetJob(ctx, garageA, queued.ID)
 		require.NoError(t, err)
@@ -256,7 +270,7 @@ func TestAgentStore(t *testing.T) { //nolint:funlen // one scenario, step by ste
 		_, err = store.SetPairingCode(ctx, garageA, agent.ID, []byte("new-code"), expires)
 		require.NoError(t, err)
 
-		require.ErrorIs(t, store.Heartbeat(ctx, second), usecase.ErrAgentRevoked)
+		require.ErrorIs(t, store.Heartbeat(ctx, third), usecase.ErrAgentRevoked)
 
 		return nil
 	}))

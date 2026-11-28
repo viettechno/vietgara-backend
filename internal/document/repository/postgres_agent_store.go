@@ -191,7 +191,7 @@ func (s *PostgresAgentStore) CompletePairing(
 
 // SetConnection records the connection and its first heartbeat.
 func (s *PostgresAgentStore) SetConnection(ctx context.Context, a usecase.AgentSession) error {
-	tag, err := s.q(ctx).Exec(ctx, `UPDATE print_agents SET connection_id = $4, last_seen_at = now()
+	tag, err := s.q(ctx).Exec(ctx, `UPDATE print_agents SET connection_id = $4, connected_at = now(), last_seen_at = now()
 		WHERE garage_id = $1 AND id = $2 AND key_hash = $3`, a.GarageID, a.AgentID, a.KeyHash, a.ConnectionID)
 	if err != nil {
 		return fmt.Errorf("print agent connection: %w", err)
@@ -318,12 +318,16 @@ func (s *PostgresAgentStore) PendingJobs(
 		return nil, fmt.Errorf("expire print jobs: %w", err)
 	}
 
+	// The connection's start and the sending times are both the database's
+	// clock, so two backend instances need not agree on the time.
 	rows, err := s.q(ctx).Query(ctx, `
-		SELECT id, queue, COALESCE(document_type, ''), format, COALESCE(paper_size, ''), data
-		FROM print_jobs
-		WHERE garage_id = $1 AND agent_id = $2 AND (status = 'queued' OR (status = 'sent' AND sent_at < $4))
-		ORDER BY created_at, id
-		LIMIT $3`, a.GarageID, a.AgentID, limit, a.ConnectedAt)
+		SELECT j.id, j.queue, COALESCE(j.document_type, ''), j.format, COALESCE(j.paper_size, ''), j.data
+		FROM print_jobs j
+		JOIN print_agents a ON a.garage_id = j.garage_id AND a.id = j.agent_id
+		WHERE j.garage_id = $1 AND j.agent_id = $2 AND a.connection_id = $4
+		  AND (j.status = 'queued' OR (j.status = 'sent' AND j.sent_at < a.connected_at))
+		ORDER BY j.created_at, j.id
+		LIMIT $3`, a.GarageID, a.AgentID, limit, a.ConnectionID)
 	if err != nil {
 		return nil, fmt.Errorf("query pending print jobs: %w", err)
 	}
@@ -352,12 +356,14 @@ func (s *PostgresAgentStore) PendingJobs(
 	return jobs, nil
 }
 
-// MarkSent records that the jobs were sent.
-func (s *PostgresAgentStore) MarkSent(ctx context.Context, a usecase.AgentSession, ids []string, at time.Time) error {
+// MarkSent records that the jobs were sent on the connection, if it is still
+// the agent's.
+func (s *PostgresAgentStore) MarkSent(ctx context.Context, a usecase.AgentSession, ids []string) error {
 	if _, err := s.q(ctx).Exec(ctx, `
-		UPDATE print_jobs SET status = 'sent', sent_at = $4
-		WHERE garage_id = $1 AND agent_id = $2 AND id = ANY($3::uuid[]) AND status IN ('queued', 'sent')`,
-		a.GarageID, a.AgentID, ids, at); err != nil {
+		UPDATE print_jobs SET status = 'sent', sent_at = now()
+		WHERE garage_id = $1 AND agent_id = $2 AND id = ANY($3::uuid[]) AND status IN ('queued', 'sent')
+		  AND EXISTS (SELECT 1 FROM print_agents a WHERE a.garage_id = $1 AND a.id = $2 AND a.connection_id = $4)`,
+		a.GarageID, a.AgentID, ids, a.ConnectionID); err != nil {
 		return fmt.Errorf("mark print jobs sent: %w", err)
 	}
 

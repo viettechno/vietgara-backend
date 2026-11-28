@@ -25,6 +25,7 @@ type Agent struct {
 	KeyHash      []byte
 	CodeHash     []byte
 	ConnectionID string
+	ConnectedAt  time.Time
 }
 
 // Job is a stored job.
@@ -250,7 +251,7 @@ func (s *Store) SetConnection(_ context.Context, sess usecase.AgentSession) erro
 	}
 
 	now := s.Now()
-	a.ConnectionID, a.LastSeenAt = sess.ConnectionID, &now
+	a.ConnectionID, a.ConnectedAt, a.LastSeenAt = sess.ConnectionID, now, &now
 
 	return nil
 }
@@ -357,6 +358,9 @@ func (s *Store) PendingJobs(_ context.Context, sess usecase.AgentSession, now ti
 
 	var out []usecase.AgentJob
 
+	a := s.agent(sess.AgentID)
+	current := a != nil && a.ConnectionID == sess.ConnectionID
+
 	for _, j := range s.Jobs {
 		if j.AgentID != sess.AgentID || (j.Status != usecase.JobQueued && j.Status != usecase.JobSent) {
 			continue
@@ -368,7 +372,7 @@ func (s *Store) PendingJobs(_ context.Context, sess usecase.AgentSession, now ti
 			continue
 		}
 
-		if j.Status == usecase.JobSent && !j.SentAt.Before(sess.ConnectedAt) {
+		if !current || (j.Status == usecase.JobSent && !j.SentAt.Before(a.ConnectedAt)) {
 			continue
 		}
 
@@ -383,9 +387,15 @@ func (s *Store) PendingJobs(_ context.Context, sess usecase.AgentSession, now ti
 }
 
 // MarkSent implements usecase.JobStore.
-func (s *Store) MarkSent(_ context.Context, sess usecase.AgentSession, ids []string, at time.Time) error {
+func (s *Store) MarkSent(_ context.Context, sess usecase.AgentSession, ids []string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+
+	if a := s.agent(sess.AgentID); a == nil || a.ConnectionID != sess.ConnectionID {
+		return nil
+	}
+
+	at := s.Now()
 
 	for _, j := range s.Jobs {
 		if j.AgentID == sess.AgentID && slices.Contains(ids, j.ID) && (j.Status == usecase.JobQueued || j.Status == usecase.JobSent) {

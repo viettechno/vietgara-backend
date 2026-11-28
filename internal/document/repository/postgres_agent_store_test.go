@@ -23,7 +23,7 @@ func agentRow(name string) []any {
 	return []any{agentID, name, true, nil, true, at, "QUAY-PC", "windows/amd64", "0.1.0", []byte(`[{"name":"XP-80C","default":true}]`), at, at}
 }
 
-var session = usecase.AgentSession{AgentID: agentID, GarageID: garageID, KeyHash: []byte("k"), ConnectionID: "c1", ConnectedAt: at}
+var session = usecase.AgentSession{AgentID: agentID, GarageID: garageID, KeyHash: []byte("k"), ConnectionID: "c1"}
 
 func TestAgentStoreReads(t *testing.T) {
 	t.Parallel()
@@ -225,8 +225,8 @@ func TestJobStore(t *testing.T) {
 		require.ErrorIs(t, err, errBoom)
 	}
 
-	require.NoError(t, store.MarkSent(ctx, session, []string{documentID}, at))
-	require.ErrorIs(t, store.MarkSent(ctx, session, []string{documentID}, at), errBoom)
+	require.NoError(t, store.MarkSent(ctx, session, []string{documentID}))
+	require.ErrorIs(t, store.MarkSent(ctx, session, []string{documentID}), errBoom)
 
 	require.NoError(t, store.FinishJob(ctx, session, documentID, usecase.JobPrinted, "", at))
 	require.ErrorIs(t, store.FinishJob(ctx, session, documentID, usecase.JobFailed, "x", at), errBoom)

@@ -95,11 +95,22 @@ func installService(out io.Writer) error {
 
 	s, err := m.OpenService(serviceName)
 	if err == nil {
-		// Installed already (a new pairing): restart it with the new key.
+		// Installed already (a new pairing, or a new version extracted
+		// elsewhere): restart it from this executable with the new key.
 		defer func() { _ = s.Close() }()
 
 		_, _ = s.Control(svc.Stop)
 		waitStopped(s)
+
+		cfg, err := s.Config()
+		if err != nil {
+			return fmt.Errorf("read the service: %w", err)
+		}
+
+		cfg.BinaryPathName = exe
+		if err := s.UpdateConfig(cfg); err != nil {
+			return fmt.Errorf("update the service: %w", err)
+		}
 	} else {
 		s, err = m.CreateService(serviceName, exe, mgr.Config{
 			DisplayName: serviceDisplay, StartType: mgr.StartAutomatic,
@@ -153,8 +164,10 @@ func uninstallService(out io.Writer) error {
 	return nil
 }
 
+// waitStopped waits until the service stops, up to three minutes: it
+// finishes the print in progress first (up to two).
 func waitStopped(s *mgr.Service) {
-	for range 20 {
+	for range 360 {
 		st, err := s.Query()
 		if err != nil || st.State == svc.Stopped {
 			return

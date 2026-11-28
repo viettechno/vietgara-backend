@@ -63,6 +63,13 @@ func TestPrinterStore(t *testing.T) {
 			Name: "Văn phòng", Protocol: usecase.ProtocolIPP, Host: "printer.local", Port: 631, Path: "ipp/print",
 		})
 		require.NoError(t, err)
+
+		a5, err := store.CreatePrinter(ctx, garageA, usecase.Printer{
+			Name: "Quầy A5", Protocol: usecase.ProtocolIPP, Host: "10.0.0.5", Port: 631, Path: "ipp/print", Paper: printmodel.A5,
+		})
+		require.NoError(t, err)
+		assert.Equal(t, printmodel.A5, a5.Paper, "an IPP printer keeps its page size (migration 99)")
+		require.NoError(t, store.DeletePrinter(ctx, garageA, a5.ID))
 		assert.Empty(t, office.Paper)
 		assert.Empty(t, office.DocumentTypes)
 	})

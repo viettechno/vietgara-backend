@@ -227,9 +227,14 @@ func TestPageEscPos(paper printmodel.Paper, garageName, printerName string) ([]b
 	return c.receipt(), nil
 }
 
-// TestPagePDF is an IPP printer's test page, on A4 (FR-DOC-07).
-func TestPagePDF(garageName, printerName string) ([]byte, error) {
-	pdf := newPDF(layoutFor(printmodel.A4), "")
+// TestPagePDF is an IPP printer's test page on its page size, A4 when it
+// has none (FR-DOC-07).
+func TestPagePDF(paper printmodel.Paper, garageName, printerName string) ([]byte, error) {
+	if !paper.IsPDF() {
+		paper = printmodel.A4
+	}
+
+	pdf := newPDF(layoutFor(paper), "")
 
 	pdf.SetFont(fontFamily, "B", 18)
 	pdf.CellFormat(0, 10, "TRANG IN THỬ", "", 1, "C", false, 0, "")

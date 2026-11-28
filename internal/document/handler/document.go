@@ -8,12 +8,13 @@ import (
 	reportingv1 "github.com/viettechno/vietgara-proto/apis-go/vietgara/reporting/v1"
 	"google.golang.org/genproto/googleapis/api/httpbody"
 
+	"github.com/viettechno/vietgara-backend/internal/document/usecase"
 	"github.com/viettechno/vietgara-backend/pkg/apperror"
 )
 
 // ExportQuotePdf renders the quote as a PDF (FR-DOC-01).
 func (s *Server) ExportQuotePdf(ctx context.Context, req *documentv1.ExportQuotePdfRequest) (*httpbody.HttpBody, error) {
-	data, err := s.uc.QuotePDF(ctx, req.GetGarageId(), req.GetQuoteId(), false)
+	data, err := s.uc.QuotePDF(ctx, req.GetGarageId(), req.GetQuoteId(), usecase.Export())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -25,7 +26,7 @@ func (s *Server) ExportQuotePdf(ctx context.Context, req *documentv1.ExportQuote
 func (s *Server) ExportRepairOrderPdf(
 	ctx context.Context, req *documentv1.ExportRepairOrderPdfRequest,
 ) (*httpbody.HttpBody, error) {
-	data, err := s.uc.RepairOrderPDF(ctx, req.GetGarageId(), req.GetRepairOrderId(), false)
+	data, err := s.uc.RepairOrderPDF(ctx, req.GetGarageId(), req.GetRepairOrderId(), usecase.Export())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -38,7 +39,7 @@ func (s *Server) ExportRepairOrderPdf(
 func (s *Server) ExportSettlementReceiptPdf(
 	ctx context.Context, req *documentv1.ExportSettlementReceiptPdfRequest,
 ) (*httpbody.HttpBody, error) {
-	data, err := s.uc.SettlementReceiptPDF(ctx, req.GetGarageId(), req.GetSettlementId(), false)
+	data, err := s.uc.SettlementReceiptPDF(ctx, req.GetGarageId(), req.GetSettlementId(), usecase.Export())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -51,7 +52,7 @@ func (s *Server) ExportSettlementReceiptPdf(
 func (s *Server) ExportPaymentVoucherPdf(
 	ctx context.Context, req *documentv1.ExportPaymentVoucherPdfRequest,
 ) (*httpbody.HttpBody, error) {
-	data, err := s.uc.PaymentVoucherPDF(ctx, req.GetGarageId(), req.GetSettlementId(), req.GetPaymentId(), false)
+	data, err := s.uc.PaymentVoucherPDF(ctx, req.GetGarageId(), req.GetSettlementId(), req.GetPaymentId(), usecase.Export())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -131,7 +132,7 @@ func (s *Server) ExportSupplierPayablesExcel(ctx context.Context, req *documentv
 // ExportPaymentOutVoucherPdf renders one payment-out voucher as a PDF
 // (FR-BIL-07).
 func (s *Server) ExportPaymentOutVoucherPdf(ctx context.Context, req *documentv1.ExportPaymentOutVoucherPdfRequest) (*httpbody.HttpBody, error) {
-	data, err := s.uc.PaymentOutVoucherPDF(ctx, req.GetGarageId(), req.GetVoucherId(), false)
+	data, err := s.uc.PaymentOutVoucherPDF(ctx, req.GetGarageId(), req.GetVoucherId(), usecase.Export())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -162,7 +163,7 @@ func revenuePeriod(p reportingv1.RevenuePeriod) string {
 
 // ExportPurchaseOrderPdf renders a purchase order as a PDF (FR-INV-16).
 func (s *Server) ExportPurchaseOrderPdf(ctx context.Context, req *documentv1.ExportPurchaseOrderPdfRequest) (*httpbody.HttpBody, error) {
-	data, err := s.uc.PurchaseOrderPDF(ctx, req.GetGarageId(), req.GetPurchaseOrderId(), false)
+	data, err := s.uc.PurchaseOrderPDF(ctx, req.GetGarageId(), req.GetPurchaseOrderId(), usecase.Export())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -172,7 +173,7 @@ func (s *Server) ExportPurchaseOrderPdf(ctx context.Context, req *documentv1.Exp
 
 // ExportGoodsReceiptPdf renders a goods receipt as a PDF (FR-INV-06).
 func (s *Server) ExportGoodsReceiptPdf(ctx context.Context, req *documentv1.ExportGoodsReceiptPdfRequest) (*httpbody.HttpBody, error) {
-	data, err := s.uc.GoodsReceiptPDF(ctx, req.GetGarageId(), req.GetGoodsReceiptId(), false)
+	data, err := s.uc.GoodsReceiptPDF(ctx, req.GetGarageId(), req.GetGoodsReceiptId(), usecase.Export())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -183,7 +184,7 @@ func (s *Server) ExportGoodsReceiptPdf(ctx context.Context, req *documentv1.Expo
 // ExportStockIssuePdf renders a repair order's stock issue as a PDF
 // (FR-INV-20).
 func (s *Server) ExportStockIssuePdf(ctx context.Context, req *documentv1.ExportStockIssuePdfRequest) (*httpbody.HttpBody, error) {
-	data, err := s.uc.StockIssuePDF(ctx, req.GetGarageId(), req.GetRepairOrderId(), false)
+	data, err := s.uc.StockIssuePDF(ctx, req.GetGarageId(), req.GetRepairOrderId(), usecase.Export())
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}

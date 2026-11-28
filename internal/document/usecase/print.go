@@ -116,12 +116,36 @@ func effective(chosen map[printmodel.DocumentType]PrintSetting, t printmodel.Doc
 
 // pdf renders model m of document documentID the way the garage prints it
 // (FR-DOC-04): on the paper size it chose, with the template version of the
-// document's first print, so a reprint matches it. When printed is set the
-// render is a print (FR-DOC-05): a reprint carries the copy mark if the garage
-// wants one, and the print is logged. An export is not logged.
-func (uc *DocumentUseCase) pdf(ctx context.Context, garageID, documentID string, m printmodel.Model, printed bool) ([]byte, error) {
-	return uc.output(ctx, garageID, documentID, m, "", printed)
+// document's first print, so a reprint matches it. Output says whether it is
+// an Export() or a print, PrintOn(paper) (FR-DOC-05): a reprint carries the
+// copy mark if the garage wants one, and the print is logged; an export is
+// not. A print may name the page size of its printer (Release 13.0), which
+// replaces the garage's setting and is refused unless that size has a PDF
+// template.
+func (uc *DocumentUseCase) pdf(ctx context.Context, garageID, documentID string, m printmodel.Model, out Output) ([]byte, error) {
+	if out.Paper != "" {
+		// The page size of the printer (Release 13.0): its own template, or
+		// a refusal; a document is never scaled to another size.
+		if _, ok := render.Latest(m.Type(), out.Paper); !ok || !out.Paper.IsPDF() {
+			return nil, apperror.Validation("paperSize", apperror.IssueInvalid, "this document cannot be printed on that paper size")
+		}
+	}
+
+	return uc.output(ctx, garageID, documentID, m, out.Paper, out.Printed)
 }
+
+// Output is how a PDF is rendered: an export, or a print, on the paper size
+// of the printer or, when Paper is empty, on the garage's print setting.
+type Output struct {
+	Printed bool
+	Paper   printmodel.Paper
+}
+
+// Export is a download: the garage's paper size, no copy mark, no log.
+func Export() Output { return Output{} }
+
+// PrintOn is a print on paper, A4 or A5 ("" for the garage's setting).
+func PrintOn(paper printmodel.Paper) Output { return Output{Printed: true, Paper: paper} }
 
 // roll prints model m of document documentID on a thermal roll (FR-DOC-06,
 // Release 13.0) as ESC/POS, with the rules of a PDF print: the version of the
@@ -204,13 +228,13 @@ func templateFor(t printmodel.DocumentType, paper printmodel.Paper, firstVersion
 }
 
 // QuotePDF renders a quote as a PDF (FR-DOC-01), or prints it (FR-DOC-05).
-func (uc *DocumentUseCase) QuotePDF(ctx context.Context, garageID, quoteID string, printed bool) ([]byte, error) {
+func (uc *DocumentUseCase) QuotePDF(ctx context.Context, garageID, quoteID string, out Output) ([]byte, error) {
 	m, err := uc.quoteModel(ctx, garageID, quoteID)
 	if err != nil {
 		return nil, err
 	}
 
-	return uc.pdf(ctx, garageID, quoteID, m, printed)
+	return uc.pdf(ctx, garageID, quoteID, m, out)
 }
 
 // QuoteEscPos prints a quote on a K80 or K57 roll (FR-DOC-06).
@@ -241,7 +265,7 @@ func (uc *DocumentUseCase) quoteModel(ctx context.Context, garageID, quoteID str
 }
 
 // RepairOrderPDF renders a repair order as a PDF (FR-DOC-01), or prints it.
-func (uc *DocumentUseCase) RepairOrderPDF(ctx context.Context, garageID, repairOrderID string, printed bool) ([]byte, error) {
+func (uc *DocumentUseCase) RepairOrderPDF(ctx context.Context, garageID, repairOrderID string, out Output) ([]byte, error) {
 	ro, err := uc.RepairOrders.Get(ctx, garageID, repairOrderID)
 	if err != nil {
 		return nil, toAppError("export repair order pdf", err)
@@ -255,12 +279,12 @@ func (uc *DocumentUseCase) RepairOrderPDF(ctx context.Context, garageID, repairO
 	return uc.pdf(ctx, garageID, repairOrderID, printmodel.RepairOrder{
 		Garage: garage, BillTo: billTo(ro.BillingParty), Number: ro.Number, Status: ro.Status, CustomerName: ro.CustomerName,
 		VehiclePlate: ro.VehiclePlate, Lines: ro.Lines, TotalAmount: ro.TotalAmount,
-	}, printed)
+	}, out)
 }
 
 // SettlementReceiptPDF renders a settlement as a receipt PDF (FR-DOC-01), or
 // prints it.
-func (uc *DocumentUseCase) SettlementReceiptPDF(ctx context.Context, garageID, settlementID string, printed bool) ([]byte, error) {
+func (uc *DocumentUseCase) SettlementReceiptPDF(ctx context.Context, garageID, settlementID string, out Output) ([]byte, error) {
 	settlement, err := uc.Settlements.Get(ctx, garageID, settlementID)
 	if err != nil {
 		return nil, toAppError("export settlement receipt pdf", err)
@@ -275,19 +299,19 @@ func (uc *DocumentUseCase) SettlementReceiptPDF(ctx context.Context, garageID, s
 		Garage: garage, BillTo: billTo(settlement.BillingParty), Number: settlement.Number, Status: settlement.Status,
 		CustomerName: settlement.CustomerName, VehiclePlate: settlement.VehiclePlate, TotalAmount: settlement.TotalAmount,
 		PaidAmount: settlement.PaidAmount, Payments: settlement.Payments,
-	}, printed)
+	}, out)
 }
 
 // PaymentVoucherPDF renders one payment voucher as a PDF in the 01-TT layout
 // (FR-BIL-05), from the legal identity it was issued with, or prints it. The
 // voucher's document id is the payment's.
-func (uc *DocumentUseCase) PaymentVoucherPDF(ctx context.Context, garageID, settlementID, paymentID string, printed bool) ([]byte, error) {
+func (uc *DocumentUseCase) PaymentVoucherPDF(ctx context.Context, garageID, settlementID, paymentID string, out Output) ([]byte, error) {
 	m, err := uc.voucherModel(ctx, garageID, settlementID, paymentID)
 	if err != nil {
 		return nil, err
 	}
 
-	return uc.pdf(ctx, garageID, paymentID, m, printed)
+	return uc.pdf(ctx, garageID, paymentID, m, out)
 }
 
 // PaymentVoucherEscPos prints a payment voucher on a K80 or K57 roll
@@ -330,7 +354,7 @@ func (uc *DocumentUseCase) voucherModel(ctx context.Context, garageID, settlemen
 // PaymentOutVoucherPDF renders a payment-out voucher as a PDF in the 02-TT
 // layout (FR-BIL-07), from the legal identity it was issued with, or prints
 // it.
-func (uc *DocumentUseCase) PaymentOutVoucherPDF(ctx context.Context, garageID, voucherID string, printed bool) ([]byte, error) {
+func (uc *DocumentUseCase) PaymentOutVoucherPDF(ctx context.Context, garageID, voucherID string, out Output) ([]byte, error) {
 	if uc.Payables == nil {
 		return nil, apperror.Internal("export payment-out voucher pdf", errPayablesNotWired)
 	}
@@ -349,11 +373,11 @@ func (uc *DocumentUseCase) PaymentOutVoucherPDF(ctx context.Context, garageID, v
 		Garage: garage, Number: voucher.Number, Date: voucher.Date, PayeeName: voucher.PayeeName, PayeeAddress: voucher.PayeeAddress,
 		Reason: voucher.Reason, Amount: voucher.Amount, Method: voucher.Method, Receipts: voucher.Receipts,
 		IssuerName: voucher.IssuerName, Voided: voucher.Voided, VoidReason: voucher.VoidReason,
-	}, printed)
+	}, out)
 }
 
 // GoodsReceiptPDF renders a goods receipt as a PDF (FR-INV-06), or prints it.
-func (uc *DocumentUseCase) GoodsReceiptPDF(ctx context.Context, garageID, receiptID string, printed bool) ([]byte, error) {
+func (uc *DocumentUseCase) GoodsReceiptPDF(ctx context.Context, garageID, receiptID string, out Output) ([]byte, error) {
 	receipt, err := uc.Inventory.GoodsReceipt(ctx, garageID, receiptID)
 	if err != nil {
 		return nil, toAppError("export goods receipt pdf", err)
@@ -368,12 +392,12 @@ func (uc *DocumentUseCase) GoodsReceiptPDF(ctx context.Context, garageID, receip
 		Garage: garage, Number: receipt.Number, Status: receipt.Status, Date: receipt.Date,
 		DeliveryNoteNumber: receipt.DeliveryNoteNumber, Notes: receipt.Notes, Lines: receipt.Lines,
 		ShowCost: receipt.ShowCost, TotalAmount: receipt.TotalAmount,
-	}, printed)
+	}, out)
 }
 
 // PurchaseOrderPDF renders a purchase order as a PDF (FR-INV-16), or prints
 // it. Prices are on it only for a caller who may see costs.
-func (uc *DocumentUseCase) PurchaseOrderPDF(ctx context.Context, garageID, orderID string, printed bool) ([]byte, error) {
+func (uc *DocumentUseCase) PurchaseOrderPDF(ctx context.Context, garageID, orderID string, out Output) ([]byte, error) {
 	order, err := uc.Inventory.PurchaseOrder(ctx, garageID, orderID)
 	if err != nil {
 		return nil, toAppError("export purchase order pdf", err)
@@ -387,12 +411,12 @@ func (uc *DocumentUseCase) PurchaseOrderPDF(ctx context.Context, garageID, order
 	return uc.pdf(ctx, garageID, orderID, printmodel.PurchaseOrder{
 		Garage: garage, Number: order.Number, Status: order.Status, Date: order.Date, ExpectedDate: order.ExpectedDate,
 		SupplierName: order.SupplierName, Notes: order.Notes, Lines: order.Lines, ShowCost: order.ShowCost, TotalAmount: order.TotalAmount,
-	}, printed)
+	}, out)
 }
 
 // StockIssuePDF renders a repair order's stock issue (phiếu xuất kho) as a
 // PDF (FR-INV-20), or prints it. The document id is the repair order's.
-func (uc *DocumentUseCase) StockIssuePDF(ctx context.Context, garageID, repairOrderID string, printed bool) ([]byte, error) {
+func (uc *DocumentUseCase) StockIssuePDF(ctx context.Context, garageID, repairOrderID string, out Output) ([]byte, error) {
 	issue, err := uc.Inventory.StockIssue(ctx, garageID, repairOrderID)
 	if err != nil {
 		return nil, toAppError("export stock issue pdf", err)
@@ -406,5 +430,5 @@ func (uc *DocumentUseCase) StockIssuePDF(ctx context.Context, garageID, repairOr
 	return uc.pdf(ctx, garageID, repairOrderID, printmodel.StockIssue{
 		Garage: garage, Number: issue.Number, Status: issue.Status, RepairOrderNumber: issue.RepairOrderNumber,
 		PostedAt: issue.PostedAt, PostedBy: issue.PostedBy, Lines: issue.Lines,
-	}, printed)
+	}, out)
 }

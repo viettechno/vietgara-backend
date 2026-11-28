@@ -168,6 +168,13 @@ func TestPrintEscPosAndLabels(t *testing.T) {
 		Vouchers: []usecase.VoucherInfo{{ID: "p", Number: "PT-1", Amount: 1000}},
 	}, nil)
 
+	pdf, err := srv.PrintQuotePdf(ctx, &documentv1.PrintQuotePdfRequest{GarageId: garageID, QuoteId: quoteID, PaperSize: documentv1.PaperSize_PAPER_SIZE_A5})
+	require.NoError(t, err)
+	assert.Contains(t, string(pdf.GetData()), "/MediaBox [0 0 420.94 595.28]", "the printer's A5")
+
+	_, err = srv.PrintQuotePdf(ctx, &documentv1.PrintQuotePdfRequest{GarageId: garageID, QuoteId: quoteID, PaperSize: documentv1.PaperSize_PAPER_SIZE_K80})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+
 	body, err := srv.PrintQuoteEscPos(ctx, &documentv1.PrintQuoteEscPosRequest{GarageId: garageID, QuoteId: quoteID, PaperSize: documentv1.PaperSize_PAPER_SIZE_K80})
 	require.NoError(t, err)
 	assert.Equal(t, "application/octet-stream", body.GetContentType())
@@ -194,5 +201,14 @@ func TestPrintEscPosAndLabels(t *testing.T) {
 	assert.Equal(t, 2, bytes.Count(labels.GetData(), []byte{0x1d, 0x0c}))
 
 	_, err = srv.PrintPartLabels(ctx, &documentv1.PrintPartLabelsRequest{GarageId: garageID, PaperSize: documentv1.PaperSize_PAPER_SIZE_K80})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}
+
+func TestPrintRefusesAnUnknownPaperSize(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := newPrintingServer(t)
+
+	_, err := srv.PrintQuotePdf(t.Context(), &documentv1.PrintQuotePdfRequest{GarageId: garageID, QuoteId: quoteID, PaperSize: 99})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }

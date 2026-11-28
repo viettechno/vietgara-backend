@@ -133,20 +133,6 @@ func TestCreatePrinter(t *testing.T) {
 		assert.True(t, printers.locked, "the count is taken under the lock")
 	})
 
-	t.Run("an IPP printer gets port 631 and the default path", func(t *testing.T) {
-		t.Parallel()
-
-		uc, _, _, _ := newPrintingUseCase(t)
-
-		p, err := uc.CreatePrinter(t.Context(), garageID, usecase.Printer{
-			Name: "Văn phòng", Protocol: usecase.ProtocolIPP, Host: "EPSON-L3250.local.", Path: "/",
-			DocumentTypes: []printmodel.DocumentType{printmodel.TypeRepairOrder},
-		})
-		require.NoError(t, err)
-		assert.Equal(t, 631, p.Port)
-		assert.Equal(t, "ipp/print", p.Path)
-	})
-
 	t.Run("a label printer and an IPv6 address", func(t *testing.T) {
 		t.Parallel()
 
@@ -162,23 +148,27 @@ func TestCreatePrinter(t *testing.T) {
 	})
 
 	invalid := map[string]func(*usecase.Printer){
-		"no name":                      func(p *usecase.Printer) { p.Name = " " },
-		"a long name":                  func(p *usecase.Printer) { p.Name = strings.Repeat("x", 61) },
-		"no host":                      func(p *usecase.Printer) { p.Host = "" },
-		"a host with a scheme":         func(p *usecase.Printer) { p.Host = "http://10.0.0.1" },
-		"a host with a port":           func(p *usecase.Printer) { p.Host = "10.0.0.1:9100" },
-		"a bracketed host and port":    func(p *usecase.Printer) { p.Host = "[fe80::1]:9100" },
-		"an IPv4 out of range":         func(p *usecase.Printer) { p.Host = "192.168.1.300" },
-		"a short IPv4":                 func(p *usecase.Printer) { p.Host = "10.0.0" },
-		"a port out of range":          func(p *usecase.Printer) { p.Port = 70000 },
-		"a negative port":              func(p *usecase.Printer) { p.Port = -1 },
-		"no protocol":                  func(p *usecase.Printer) { p.Protocol = "" },
-		"a raw printer with a path":    func(p *usecase.Printer) { p.Path = "ipp/print" },
-		"a raw printer on A4":          func(p *usecase.Printer) { p.Paper = printmodel.A4 },
-		"a raw printer with no paper":  func(p *usecase.Printer) { p.Paper = "" },
-		"a roll for a repair order":    func(p *usecase.Printer) { p.DocumentTypes = []printmodel.DocumentType{printmodel.TypeRepairOrder} },
-		"a roll for labels":            func(p *usecase.Printer) { p.DocumentTypes = []printmodel.DocumentType{printmodel.TypePartLabel} },
-		"an IPP printer with paper":    func(p *usecase.Printer) { p.Protocol = usecase.ProtocolIPP },
+		"no name":                     func(p *usecase.Printer) { p.Name = " " },
+		"a long name":                 func(p *usecase.Printer) { p.Name = strings.Repeat("x", 61) },
+		"no host":                     func(p *usecase.Printer) { p.Host = "" },
+		"a host with a scheme":        func(p *usecase.Printer) { p.Host = "http://10.0.0.1" },
+		"a host with a port":          func(p *usecase.Printer) { p.Host = "10.0.0.1:9100" },
+		"a bracketed host and port":   func(p *usecase.Printer) { p.Host = "[fe80::1]:9100" },
+		"an IPv4 out of range":        func(p *usecase.Printer) { p.Host = "192.168.1.300" },
+		"a short IPv4":                func(p *usecase.Printer) { p.Host = "10.0.0" },
+		"a port out of range":         func(p *usecase.Printer) { p.Port = 70000 },
+		"a negative port":             func(p *usecase.Printer) { p.Port = -1 },
+		"no protocol":                 func(p *usecase.Printer) { p.Protocol = "" },
+		"a raw printer with a path":   func(p *usecase.Printer) { p.Path = "ipp/print" },
+		"a raw printer on A4":         func(p *usecase.Printer) { p.Paper = printmodel.A4 },
+		"a raw printer with no paper": func(p *usecase.Printer) { p.Paper = "" },
+		"a roll for a repair order":   func(p *usecase.Printer) { p.DocumentTypes = []printmodel.DocumentType{printmodel.TypeRepairOrder} },
+		"a roll for labels":           func(p *usecase.Printer) { p.DocumentTypes = []printmodel.DocumentType{printmodel.TypePartLabel} },
+		"an IPP printer with a roll":  func(p *usecase.Printer) { p.Protocol = usecase.ProtocolIPP },
+		"an A5 printer for stock issues": func(p *usecase.Printer) {
+			*p = ippWith(printmodel.TypeStockIssue)
+			p.Paper = printmodel.A5
+		},
 		"an IPP printer for labels":    func(p *usecase.Printer) { *p = ippWith(printmodel.TypePartLabel) },
 		"an IPP path with a query":     func(p *usecase.Printer) { *p = ippWith(); p.Path = "ipp/print?x=1" },
 		"an IPP path that is too long": func(p *usecase.Printer) { *p = ippWith(); p.Path = strings.Repeat("a", 201) },
@@ -230,6 +220,37 @@ func TestCreatePrinter(t *testing.T) {
 	})
 }
 
+func TestCreateIPPPrinter(t *testing.T) {
+	t.Parallel()
+
+	t.Run("an IPP printer gets port 631 and the default path", func(t *testing.T) {
+		t.Parallel()
+
+		uc, _, _, _ := newPrintingUseCase(t)
+
+		p, err := uc.CreatePrinter(t.Context(), garageID, usecase.Printer{
+			Name: "Văn phòng", Protocol: usecase.ProtocolIPP, Host: "EPSON-L3250.local.", Path: "/",
+			DocumentTypes: []printmodel.DocumentType{printmodel.TypeRepairOrder},
+		})
+		require.NoError(t, err)
+		assert.Equal(t, 631, p.Port)
+		assert.Equal(t, "ipp/print", p.Path)
+	})
+
+	t.Run("an A5 IPP printer takes the documents with an A5 template", func(t *testing.T) {
+		t.Parallel()
+
+		uc, _, _, _ := newPrintingUseCase(t)
+		printer := ippWith(printmodel.TypePaymentVoucher, printmodel.TypeQuote)
+		printer.Paper = printmodel.A5
+
+		p, err := uc.CreatePrinter(t.Context(), garageID, printer)
+		require.NoError(t, err)
+		assert.Equal(t, printmodel.A5, p.Paper)
+		assert.Equal(t, []printmodel.DocumentType{printmodel.TypeQuote, printmodel.TypePaymentVoucher}, p.DocumentTypes)
+	})
+}
+
 func ippWith(types ...printmodel.DocumentType) usecase.Printer {
 	return usecase.Printer{Name: "A4", Protocol: usecase.ProtocolIPP, Host: "10.0.0.2", DocumentTypes: types}
 }
@@ -272,6 +293,7 @@ func TestPrinterTestPage(t *testing.T) {
 
 	uc, d, printers, _ := newPrintingUseCase(t)
 	printers.printers = []usecase.Printer{
+		{ID: "a5", Name: "A5", Protocol: usecase.ProtocolIPP, Paper: printmodel.A5},
 		{ID: "raw", Name: "Quầy", Protocol: usecase.ProtocolRaw, Paper: printmodel.K57},
 		{ID: "label", Name: "Tem", Protocol: usecase.ProtocolRaw, Paper: printmodel.Label5030},
 		{ID: "ipp", Name: "A4", Protocol: usecase.ProtocolIPP},
@@ -291,7 +313,11 @@ func TestPrinterTestPage(t *testing.T) {
 	data, contentType, err = uc.PrinterTestPage(t.Context(), garageID, "ipp")
 	require.NoError(t, err)
 	assert.Equal(t, usecase.ContentTypePDF, contentType)
-	assert.True(t, bytes.HasPrefix(data, []byte("%PDF")))
+	assert.Contains(t, string(data), "/MediaBox [0 0 595.28 841.89]", "A4 without a size")
+
+	data, _, err = uc.PrinterTestPage(t.Context(), garageID, "a5")
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "/MediaBox [0 0 420.94 595.28]", "the printer's A5")
 
 	_, _, err = uc.PrinterTestPage(t.Context(), garageID, "missing")
 	assertAppError(t, err, apperror.CodeNotFound)

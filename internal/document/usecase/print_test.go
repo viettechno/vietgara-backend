@@ -129,7 +129,7 @@ func TestPrintLogAndCopyMark(t *testing.T) {
 		uc, d := newUseCase(t)
 		expectQuote(d)
 
-		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, false)
+		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export())
 		require.NoError(t, err)
 		assert.Empty(t, d.Prints.log)
 	})
@@ -141,7 +141,7 @@ func TestPrintLogAndCopyMark(t *testing.T) {
 		expectQuote(d)
 		d.Prints.settings = map[printmodel.DocumentType]usecase.PrintSetting{printmodel.TypeQuote: {Paper: printmodel.A4, CopyMark: true}}
 
-		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, true)
+		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.PrintOn(""))
 		require.NoError(t, err)
 		assert.Equal(t, []printRecord{{Type: printmodel.TypeQuote, DocumentID: quoteID, Paper: printmodel.A4, Version: 1}}, d.Prints.log)
 	})
@@ -154,7 +154,7 @@ func TestPrintLogAndCopyMark(t *testing.T) {
 		d.Prints.settings = map[printmodel.DocumentType]usecase.PrintSetting{printmodel.TypeQuote: {Paper: printmodel.A4, CopyMark: true}}
 
 		for range 2 {
-			_, err := uc.QuotePDF(t.Context(), garageID, quoteID, true)
+			_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.PrintOn(""))
 			require.NoError(t, err)
 		}
 
@@ -170,7 +170,7 @@ func TestPrintLogAndCopyMark(t *testing.T) {
 		expectQuote(d)
 
 		for range 2 {
-			_, err := uc.QuotePDF(t.Context(), garageID, quoteID, true)
+			_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.PrintOn(""))
 			require.NoError(t, err)
 		}
 
@@ -185,9 +185,9 @@ func TestPrintLogAndCopyMark(t *testing.T) {
 		expectQuote(d)
 		d.Prints.settings = map[printmodel.DocumentType]usecase.PrintSetting{printmodel.TypeQuote: {Paper: printmodel.A4, CopyMark: true}}
 
-		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, true)
+		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.PrintOn(""))
 		require.NoError(t, err)
-		_, err = uc.QuotePDF(t.Context(), garageID, quoteID, false)
+		_, err = uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export())
 		require.NoError(t, err)
 		assert.Len(t, d.Prints.log, 1)
 	})
@@ -200,7 +200,7 @@ func TestPrintUsesTheChosenPaper(t *testing.T) {
 	expectQuote(d)
 	d.Prints.settings = map[printmodel.DocumentType]usecase.PrintSetting{printmodel.TypeQuote: {Paper: printmodel.A5}}
 
-	pdf, err := uc.QuotePDF(t.Context(), garageID, quoteID, true)
+	pdf, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.PrintOn(""))
 	require.NoError(t, err)
 	assert.Contains(t, string(pdf), "/MediaBox [0 0 420.94 595.28]", "A5")
 	require.Len(t, d.Prints.log, 1)
@@ -209,7 +209,7 @@ func TestPrintUsesTheChosenPaper(t *testing.T) {
 	// A setting that names a size the document no longer offers falls back to A4.
 	d.Prints.settings[printmodel.TypeQuote] = usecase.PrintSetting{Paper: printmodel.Paper("A3")}
 
-	pdf, err = uc.QuotePDF(t.Context(), garageID, quoteID, false)
+	pdf, err = uc.QuotePDF(t.Context(), garageID, quoteID, usecase.Export())
 	require.NoError(t, err)
 	assert.Contains(t, string(pdf), "/MediaBox [0 0 595.28 841.89]", "A4")
 }
@@ -223,12 +223,12 @@ func TestChangingThePaperIsAReprintWithItsOwnFirstVersion(t *testing.T) {
 	expectQuote(d)
 	d.Prints.settings = map[printmodel.DocumentType]usecase.PrintSetting{printmodel.TypeQuote: {Paper: printmodel.A4, CopyMark: true}}
 
-	_, err := uc.QuotePDF(t.Context(), garageID, quoteID, true)
+	_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.PrintOn(""))
 	require.NoError(t, err)
 
 	d.Prints.settings[printmodel.TypeQuote] = usecase.PrintSetting{Paper: printmodel.A5, CopyMark: true}
 
-	_, err = uc.QuotePDF(t.Context(), garageID, quoteID, true)
+	_, err = uc.QuotePDF(t.Context(), garageID, quoteID, usecase.PrintOn(""))
 	require.NoError(t, err)
 
 	require.Len(t, d.Prints.log, 2)
@@ -247,7 +247,7 @@ func TestReprintKeepsTheFirstPrintsVersion(t *testing.T) {
 		expectQuote(d)
 		d.Prints.log = []printRecord{{Type: printmodel.TypeQuote, DocumentID: quoteID, Paper: printmodel.A4, Version: 1}}
 
-		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, true)
+		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.PrintOn(""))
 		require.NoError(t, err)
 		require.Len(t, d.Prints.log, 2)
 		assert.Equal(t, 1, d.Prints.log[1].Version)
@@ -260,7 +260,7 @@ func TestReprintKeepsTheFirstPrintsVersion(t *testing.T) {
 		expectQuote(d)
 		d.Prints.log = []printRecord{{Type: printmodel.TypeQuote, DocumentID: quoteID, Paper: printmodel.A4, Version: 9}}
 
-		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, true)
+		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.PrintOn(""))
 		assertAppError(t, err, apperror.CodeInternal)
 		assert.Len(t, d.Prints.log, 1, "nothing was logged")
 	})
@@ -282,7 +282,7 @@ func TestPrintStoreFailures(t *testing.T) {
 			expectQuote(d)
 			fail(d.Prints)
 
-			_, err := uc.QuotePDF(t.Context(), garageID, quoteID, true)
+			_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.PrintOn(""))
 			assertAppError(t, err, apperror.CodeInternal)
 		})
 	}

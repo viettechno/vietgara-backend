@@ -117,6 +117,18 @@ func TestChooseA5(t *testing.T) {
 	got, err := api.GetPrintSettings(ctx, garageID)
 	require.NoError(t, err)
 	assert.Equal(t, documentv1.PaperSize_PAPER_SIZE_A4, got.GetSettings()[1].GetPaperSize(), "the refused setting changed nothing")
+
+	// Release 13.0: a print on the page size of the printer, whatever the
+	// setting; never a size without a template.
+	_, err = api.UpdatePrintSetting(ctx, garageID, documentv1.DocumentType_DOCUMENT_TYPE_QUOTE, documentv1.PaperSize_PAPER_SIZE_A4, false)
+	require.NoError(t, err)
+
+	_, onA5, err := api.PrintQuotePDFOn(ctx, garageID, quote.GetId(), documentv1.PaperSize_PAPER_SIZE_A5)
+	require.NoError(t, err)
+	assert.Contains(t, string(onA5), a5Box, "the A5 printer gets the A5 template")
+
+	_, _, err = api.PrintQuotePDFOn(ctx, garageID, quote.GetId(), documentv1.PaperSize_PAPER_SIZE_K80)
+	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "VALIDATION_ERROR")
 }
 
 // Scenario: E2E-DOC-003, Release 10.0, a reprint carries the copy mark only

@@ -110,3 +110,48 @@ func TestUpdatePrintSettingRefusesRolls(t *testing.T) {
 		assertAppError(t, err, apperror.CodeInvalidArgument)
 	}
 }
+
+func TestPrintOnThePrintersPageSize(t *testing.T) {
+	t.Parallel()
+
+	t.Run("an A5 printer prints the A5 template, pinned on A5", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		expectQuote(d)
+
+		_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.PrintOn(printmodel.A5))
+		require.NoError(t, err)
+		_, err = uc.QuotePDF(t.Context(), garageID, quoteID, usecase.PrintOn(""))
+		require.NoError(t, err)
+
+		assert.Equal(t, []printRecord{
+			{Type: printmodel.TypeQuote, DocumentID: quoteID, Paper: printmodel.A5, Version: 1},
+			{Type: printmodel.TypeQuote, DocumentID: quoteID, Paper: printmodel.A4, Version: 1},
+		}, d.Prints.log, "an empty size is the garage's setting (A4 by default)")
+	})
+
+	for _, paper := range []printmodel.Paper{printmodel.K80, printmodel.Label5030, "B5"} {
+		t.Run("refuses "+string(paper), func(t *testing.T) {
+			t.Parallel()
+
+			uc, d := newUseCase(t)
+			expectQuote(d)
+
+			_, err := uc.QuotePDF(t.Context(), garageID, quoteID, usecase.PrintOn(paper))
+			assertAppError(t, err, apperror.CodeInvalidArgument)
+			assert.Empty(t, d.Prints.log)
+		})
+	}
+
+	t.Run("refuses A5 for a document without an A5 template", func(t *testing.T) {
+		t.Parallel()
+
+		uc, d := newUseCase(t)
+		d.Garages.EXPECT().Get(mock.Anything, garageID).Return(defaultGarage(), nil).Maybe()
+		d.RepairOrders.EXPECT().Get(mock.Anything, garageID, repairOrderID).Return(usecase.RepairOrderInfo{Number: "LSC-1"}, nil)
+
+		_, err := uc.RepairOrderPDF(t.Context(), garageID, repairOrderID, usecase.PrintOn(printmodel.A5))
+		assertAppError(t, err, apperror.CodeInvalidArgument)
+	})
+}

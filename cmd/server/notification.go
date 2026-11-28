@@ -200,11 +200,11 @@ type notificationReceipts struct {
 }
 
 func (a notificationReceipts) SettlementReceipt(ctx context.Context, garageID, settlementID string) ([]byte, error) {
-	return a.documents.SettlementReceiptPDF(ctx, garageID, settlementID, false)
+	return a.documents.SettlementReceiptPDF(ctx, garageID, settlementID, documentUsecase.Export())
 }
 
 func (a notificationReceipts) PurchaseOrder(ctx context.Context, garageID, orderID string) ([]byte, error) {
-	return a.documents.PurchaseOrderPDF(ctx, garageID, orderID, false)
+	return a.documents.PurchaseOrderPDF(ctx, garageID, orderID, documentUsecase.Export())
 }
 
 // inventoryOrderMailer gives Inventory the call that e-mails a purchase order

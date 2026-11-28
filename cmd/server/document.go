@@ -53,10 +53,15 @@ func (a documentParts) Part(ctx context.Context, garageID, partID string) (docum
 type documentModule struct {
 	server *documentHandler.Server
 	uc     *documentUsecase.DocumentUseCase
+	// agents is the print agents' API and hub serves their connections
+	// (Release 13.1).
+	agents *documentHandler.AgentServer
+	hub    *documentHandler.AgentHub
 }
 
 func buildDocument(
 	pool *platformdb.Pool,
+	tx *platformdb.TxManager,
 	quotes *quoteRepository.PostgresRepository,
 	repairOrders *repairorderUsecase.RepairOrderUseCase,
 	settlements *billingUsecase.SettlementUseCase,
@@ -72,5 +77,11 @@ func buildDocument(
 		documentInventory{uc: inventory}, documentRepository.NewPostgresPrintStore(pool),
 	).WithPrinting(documentRepository.NewPostgresPrinterStore(pool), documentParts{uc: catalogue})
 
-	return &documentModule{server: documentHandler.NewServer(uc), uc: uc}
+	agents := documentRepository.NewPostgresAgentStore(pool)
+	hub := documentHandler.NewAgentHub(uc)
+	uc.WithAgents(agents, agents, tx, hub)
+
+	return &documentModule{
+		server: documentHandler.NewServer(uc), uc: uc, agents: documentHandler.NewAgentServer(uc), hub: hub,
+	}
 }

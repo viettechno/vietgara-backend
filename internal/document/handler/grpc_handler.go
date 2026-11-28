@@ -84,6 +84,18 @@ func Policies() middleware.Policies {
 		documentv1.DocumentService_PrintQuoteEscPos_FullMethodName:          middleware.GarageMethod(quoteRead),
 		documentv1.DocumentService_PrintPaymentVoucherEscPos_FullMethodName: middleware.GarageMethod(billingRead),
 		documentv1.DocumentService_PrintPartLabels_FullMethodName:           middleware.GarageMethod(access.Requires(access.CatalogueRead)),
+
+		// Release 13.1: the print agents belong to the garage like its
+		// printers. A print job needs the permission of the document it
+		// prints, which the use case checks (the document is in the body);
+		// pairing is the agent's own public call, its code the credential.
+		documentv1.DocumentService_ListPrintAgents_FullMethodName:            middleware.GarageMethod(access.Member()),
+		documentv1.DocumentService_CreatePrintAgent_FullMethodName:           middleware.GarageMethod(access.Requires(access.GarageWrite)),
+		documentv1.DocumentService_IssuePrintAgentPairingCode_FullMethodName: middleware.GarageMethod(access.Requires(access.GarageWrite)),
+		documentv1.DocumentService_DeletePrintAgent_FullMethodName:           middleware.GarageMethod(access.Requires(access.GarageWrite)),
+		documentv1.DocumentService_CreatePrintJob_FullMethodName:             middleware.IdempotentGarageMethod(access.Member()),
+		documentv1.DocumentService_GetPrintJob_FullMethodName:                middleware.GarageMethod(access.Member()),
+		documentv1.PrintAgentService_PairPrintAgent_FullMethodName:           middleware.PublicMethod(),
 	}
 }
 

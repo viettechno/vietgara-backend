@@ -70,6 +70,8 @@ MANUAL_ONLY = {
     "E2E-DOC-005": "the print dialog of a browser and a phone, and a real network printer",
     "E2E-DOC-009": "a phone on the garage Wi-Fi, mDNS discovery and a real thermal printer",
     "E2E-DOC-010": "a real label printer and IPP printer, and the phone's camera",
+    "E2E-DOC-015": "the print agents and printers screens and the print menu: a browser test of vietgara-e2e",
+    "E2E-DOC-016": "a Windows PC with the agent service, a real thermal printer and an A4 printer",
     "E2E-IAM-035": "a real Google account in a web popup and in the apps",
     "E2E-IAM-037": "the change-password card of both web consoles: a browser test of vietgara-e2e",
     "E2E-NOT-007": "a real mailbox: the provider, the attachment and the mail client's unsubscribe control",

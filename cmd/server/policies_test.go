@@ -24,6 +24,11 @@ var publicMethods = []string{
 	// is throttled per address and per source; the design is reviewed in LLD 11.3.
 	"/vietgara.customer.v1.PublicDataRequestService/SubmitPublicDataRequest",
 	"/vietgara.customer.v1.PublicDataRequestService/ConfirmPublicDataRequest",
+	// The print agent's pairing (Release 13.1, FR-DOC-08): the credential is a
+	// single-use code of 8 characters from 31 (about 8.5e11), valid 15 minutes
+	// and stored hashed; the route is under /api/v1/public, so the gateway
+	// limits it per address (30 a minute, 300 an hour). Reviewed in LLD 7.9.
+	"/vietgara.document.v1.PrintAgentService/PairPrintAgent",
 	"/vietgara.identity.v1.AuthService/Login",
 	"/vietgara.identity.v1.AuthService/RefreshToken",
 	"/vietgara.identity.v1.AuthService/Logout",

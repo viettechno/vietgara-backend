@@ -91,6 +91,7 @@ import (
 	"github.com/viettechno/vietgara-backend/internal/platform/tracing"
 	platformStaffHandler "github.com/viettechno/vietgara-backend/internal/platformstaff/handler"
 	staffRepository "github.com/viettechno/vietgara-backend/internal/platformstaff/repository"
+	"github.com/viettechno/vietgara-backend/internal/printagent/protocol"
 	quoteHandler "github.com/viettechno/vietgara-backend/internal/quote/handler"
 	receivableHandler "github.com/viettechno/vietgara-backend/internal/receivable/handler"
 	receivableUsecase "github.com/viettechno/vietgara-backend/internal/receivable/usecase"
@@ -178,6 +179,7 @@ type worker func(ctx context.Context)
 type application struct {
 	grpcServer    *grpc.Server
 	httpServer    *http.Server
+	agentHub      *documentHandler.AgentHub
 	metricsServer *http.Server
 	metrics       *observability.Metrics
 	workers       []worker
@@ -421,7 +423,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	// receipt PDFs, the stock movement report as Excel.
 	reporting := buildReporting(billing.settlements, garages, repairOrder.repo, inventory.repo, users, catalogue.repo)
 
-	document := buildDocument(pool, quote.quotes, repairOrder.uc, billing.uc, inventory.uc, reporting.uc, garages, files, catalogue.uc)
+	document := buildDocument(pool, tx, quote.quotes, repairOrder.uc, billing.uc, inventory.uc, reporting.uc, garages, files, catalogue.uc)
 
 	// Reporting (Release 1.5): revenue by period (FR-RPT-01), reusing
 	// Billing & Settlement's own repository -- no tables of its own.
@@ -524,6 +526,7 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 	inventoryv1.RegisterImportServiceServer(app.grpcServer, dataImport.server)
 	billingv1.RegisterSettlementServiceServer(app.grpcServer, billing.server)
 	documentv1.RegisterDocumentServiceServer(app.grpcServer, document.server)
+	documentv1.RegisterPrintAgentServiceServer(app.grpcServer, document.agents)
 	reportingv1.RegisterReportingServiceServer(app.grpcServer, reporting.server)
 	notificationv1.RegisterNotificationServiceServer(app.grpcServer, notification.server)
 	receivablev1.RegisterReceivableServiceServer(app.grpcServer, receivable.server)
@@ -537,7 +540,15 @@ func build(ctx context.Context, pool *platformdb.Pool) (*application, error) {
 		return nil, err
 	}
 
-	app.httpServer = &http.Server{Handler: httpapi.NoStore(httpapi.NoContentForDelete(httpapi.LimitBody(mux, bodyLimit))), ReadHeaderTimeout: 5 * time.Second}
+	// The print agents' WebSocket (Release 13.1) is served beside the
+	// gateway, outside its body limit and response wrappers: it is
+	// authenticated by the agent's key, not by a user's token.
+	root := http.NewServeMux()
+	root.Handle("GET "+protocol.ConnectPath, document.hub)
+	root.Handle("/", httpapi.NoStore(httpapi.NoContentForDelete(httpapi.LimitBody(mux, bodyLimit))))
+
+	app.agentHub = document.hub
+	app.httpServer = &http.Server{Handler: root, ReadHeaderTimeout: 5 * time.Second}
 
 	return app, nil
 }
@@ -656,7 +667,7 @@ func buildGateway(
 		quotev1.RegisterQuoteServiceHandler, quotev1.RegisterPublicQuoteServiceHandler,
 		repairorderv1.RegisterRepairOrderServiceHandler, inventoryv1.RegisterInventoryServiceHandler, inventoryv1.RegisterPurchaseOrderServiceHandler,
 		inventoryv1.RegisterImportServiceHandler,
-		billingv1.RegisterSettlementServiceHandler, documentv1.RegisterDocumentServiceHandler,
+		billingv1.RegisterSettlementServiceHandler, documentv1.RegisterDocumentServiceHandler, documentv1.RegisterPrintAgentServiceHandler,
 		reportingv1.RegisterReportingServiceHandler, notificationv1.RegisterNotificationServiceHandler, receivablev1.RegisterReceivableServiceHandler, receivablev1.RegisterPayableServiceHandler,
 		technicianv1.RegisterTechnicianServiceHandler, customerportalv1.RegisterCustomerPortalServiceHandler,
 	} {
@@ -779,6 +790,9 @@ func serve(ctx context.Context, app *application) error {
 
 		shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
 		defer cancel()
+
+		// Shutdown does not close the hijacked WebSockets of the print agents.
+		app.agentHub.Close()
 
 		if err := app.httpServer.Shutdown(shutdownCtx); err != nil {
 			slog.Error("HTTP server shutdown failed", "error", err)

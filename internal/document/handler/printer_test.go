@@ -203,3 +203,12 @@ func TestPrintEscPosAndLabels(t *testing.T) {
 	_, err = srv.PrintPartLabels(ctx, &documentv1.PrintPartLabelsRequest{GarageId: garageID, PaperSize: documentv1.PaperSize_PAPER_SIZE_K80})
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 }
+
+func TestPrintRefusesAnUnknownPaperSize(t *testing.T) {
+	t.Parallel()
+
+	srv, _ := newPrintingServer(t)
+
+	_, err := srv.PrintQuotePdf(t.Context(), &documentv1.PrintQuotePdfRequest{GarageId: garageID, QuoteId: quoteID, PaperSize: 99})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
+}

@@ -13,7 +13,12 @@ import (
 
 // PrintQuotePdf prints the quote (FR-DOC-05).
 func (s *Server) PrintQuotePdf(ctx context.Context, req *documentv1.PrintQuotePdfRequest) (*httpbody.HttpBody, error) {
-	data, err := s.uc.QuotePDF(ctx, req.GetGarageId(), req.GetQuoteId(), usecase.PrintOn(paperFromProtoAny[req.GetPaperSize()]))
+	paper, err := printPaper(req.GetPaperSize())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	data, err := s.uc.QuotePDF(ctx, req.GetGarageId(), req.GetQuoteId(), usecase.PrintOn(paper))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -23,7 +28,12 @@ func (s *Server) PrintQuotePdf(ctx context.Context, req *documentv1.PrintQuotePd
 
 // PrintRepairOrderPdf prints the repair order (FR-DOC-05).
 func (s *Server) PrintRepairOrderPdf(ctx context.Context, req *documentv1.PrintRepairOrderPdfRequest) (*httpbody.HttpBody, error) {
-	data, err := s.uc.RepairOrderPDF(ctx, req.GetGarageId(), req.GetRepairOrderId(), usecase.PrintOn(paperFromProtoAny[req.GetPaperSize()]))
+	paper, err := printPaper(req.GetPaperSize())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	data, err := s.uc.RepairOrderPDF(ctx, req.GetGarageId(), req.GetRepairOrderId(), usecase.PrintOn(paper))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -35,7 +45,12 @@ func (s *Server) PrintRepairOrderPdf(ctx context.Context, req *documentv1.PrintR
 func (s *Server) PrintSettlementReceiptPdf(
 	ctx context.Context, req *documentv1.PrintSettlementReceiptPdfRequest,
 ) (*httpbody.HttpBody, error) {
-	data, err := s.uc.SettlementReceiptPDF(ctx, req.GetGarageId(), req.GetSettlementId(), usecase.PrintOn(paperFromProtoAny[req.GetPaperSize()]))
+	paper, err := printPaper(req.GetPaperSize())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	data, err := s.uc.SettlementReceiptPDF(ctx, req.GetGarageId(), req.GetSettlementId(), usecase.PrintOn(paper))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -45,7 +60,12 @@ func (s *Server) PrintSettlementReceiptPdf(
 
 // PrintPaymentVoucherPdf prints one payment voucher (FR-DOC-05).
 func (s *Server) PrintPaymentVoucherPdf(ctx context.Context, req *documentv1.PrintPaymentVoucherPdfRequest) (*httpbody.HttpBody, error) {
-	data, err := s.uc.PaymentVoucherPDF(ctx, req.GetGarageId(), req.GetSettlementId(), req.GetPaymentId(), usecase.PrintOn(paperFromProtoAny[req.GetPaperSize()]))
+	paper, err := printPaper(req.GetPaperSize())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	data, err := s.uc.PaymentVoucherPDF(ctx, req.GetGarageId(), req.GetSettlementId(), req.GetPaymentId(), usecase.PrintOn(paper))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -55,7 +75,12 @@ func (s *Server) PrintPaymentVoucherPdf(ctx context.Context, req *documentv1.Pri
 
 // PrintPaymentOutVoucherPdf prints one payment-out voucher (FR-DOC-05).
 func (s *Server) PrintPaymentOutVoucherPdf(ctx context.Context, req *documentv1.PrintPaymentOutVoucherPdfRequest) (*httpbody.HttpBody, error) {
-	data, err := s.uc.PaymentOutVoucherPDF(ctx, req.GetGarageId(), req.GetVoucherId(), usecase.PrintOn(paperFromProtoAny[req.GetPaperSize()]))
+	paper, err := printPaper(req.GetPaperSize())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	data, err := s.uc.PaymentOutVoucherPDF(ctx, req.GetGarageId(), req.GetVoucherId(), usecase.PrintOn(paper))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -65,7 +90,12 @@ func (s *Server) PrintPaymentOutVoucherPdf(ctx context.Context, req *documentv1.
 
 // PrintPurchaseOrderPdf prints the purchase order (FR-DOC-05).
 func (s *Server) PrintPurchaseOrderPdf(ctx context.Context, req *documentv1.PrintPurchaseOrderPdfRequest) (*httpbody.HttpBody, error) {
-	data, err := s.uc.PurchaseOrderPDF(ctx, req.GetGarageId(), req.GetPurchaseOrderId(), usecase.PrintOn(paperFromProtoAny[req.GetPaperSize()]))
+	paper, err := printPaper(req.GetPaperSize())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	data, err := s.uc.PurchaseOrderPDF(ctx, req.GetGarageId(), req.GetPurchaseOrderId(), usecase.PrintOn(paper))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -75,7 +105,12 @@ func (s *Server) PrintPurchaseOrderPdf(ctx context.Context, req *documentv1.Prin
 
 // PrintGoodsReceiptPdf prints the goods receipt (FR-DOC-05).
 func (s *Server) PrintGoodsReceiptPdf(ctx context.Context, req *documentv1.PrintGoodsReceiptPdfRequest) (*httpbody.HttpBody, error) {
-	data, err := s.uc.GoodsReceiptPDF(ctx, req.GetGarageId(), req.GetGoodsReceiptId(), usecase.PrintOn(paperFromProtoAny[req.GetPaperSize()]))
+	paper, err := printPaper(req.GetPaperSize())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	data, err := s.uc.GoodsReceiptPDF(ctx, req.GetGarageId(), req.GetGoodsReceiptId(), usecase.PrintOn(paper))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -85,7 +120,12 @@ func (s *Server) PrintGoodsReceiptPdf(ctx context.Context, req *documentv1.Print
 
 // PrintStockIssuePdf prints the repair order's stock issue (FR-DOC-05).
 func (s *Server) PrintStockIssuePdf(ctx context.Context, req *documentv1.PrintStockIssuePdfRequest) (*httpbody.HttpBody, error) {
-	data, err := s.uc.StockIssuePDF(ctx, req.GetGarageId(), req.GetRepairOrderId(), usecase.PrintOn(paperFromProtoAny[req.GetPaperSize()]))
+	paper, err := printPaper(req.GetPaperSize())
+	if err != nil {
+		return nil, apperror.ToGRPCError(err)
+	}
+
+	data, err := s.uc.StockIssuePDF(ctx, req.GetGarageId(), req.GetRepairOrderId(), usecase.PrintOn(paper))
 	if err != nil {
 		return nil, apperror.ToGRPCError(err)
 	}
@@ -173,4 +213,19 @@ func paperToProto(p printmodel.Paper) documentv1.PaperSize {
 	}
 
 	return documentv1.PaperSize_PAPER_SIZE_A4
+}
+
+// printPaper is the page size a print request names: "" for none (the
+// garage's setting), refused when this server does not know the value.
+func printPaper(size documentv1.PaperSize) (printmodel.Paper, error) {
+	if size == documentv1.PaperSize_PAPER_SIZE_UNSPECIFIED {
+		return "", nil
+	}
+
+	paper, ok := paperFromProtoAny[size]
+	if !ok {
+		return "", apperror.Validation("paperSize", apperror.IssueInvalid, "paper size is invalid")
+	}
+
+	return paper, nil
 }

@@ -70,7 +70,6 @@ func TestPrinterStore(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, printmodel.A5, a5.Paper, "an IPP printer keeps its page size (migration 99)")
 		require.NoError(t, store.DeletePrinter(ctx, garageA, a5.ID))
-		require.NoError(t, err)
 		assert.Empty(t, office.Paper)
 		assert.Empty(t, office.DocumentTypes)
 	})

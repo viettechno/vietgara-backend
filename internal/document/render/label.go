@@ -16,6 +16,10 @@ import (
 // ErrNotLabelPaper is returned when labels are asked for on another paper.
 var ErrNotLabelPaper = errors.New("render: labels print on label paper only")
 
+// errLabelTooTall means the content of a label does not fit it; the layout
+// keeps every line to one or two, so it is a bug in the layout, not data.
+var errLabelTooTall = errors.New("render: the label's content is taller than the label")
+
 // ErrBarcodeUnreadable is returned when a label's code is not ASCII, or too
 // long for a Code 128 barcode a scanner reads (two dots a module) on the
 // label.
@@ -60,9 +64,9 @@ func PartLabels(paper printmodel.Paper, labels []printmodel.PartLabel) ([]byte, 
 	return buf.Bytes(), nil
 }
 
-// partLabel draws one label: the name on at most two lines, the SKU and the
-// barcode text on one line each, and the barcode, so that it always fits
-// the label.
+// partLabel draws one label: the name on at most two lines, the unit of a
+// case label, the SKU and the barcode text on one line each, and the
+// barcode, so that it always fits the label (checked: errLabelTooTall).
 func partLabel(l printmodel.PartLabel) (*image.Gray, error) {
 	inner, err := newCanvas(dotsWide(printmodel.Label5030) - 2*labelMargin)
 	if err != nil {
@@ -89,6 +93,11 @@ func partLabel(l printmodel.PartLabel) (*image.Gray, error) {
 		return nil, err
 	}
 
+	if l.Unit != "" {
+		// The unit on a line of its own, so a long SKU never hides it.
+		inner.line(name, sizeBody, oneLine(name, "["+l.Unit+"]", inner.width()), "", alignLeft)
+	}
+
 	inner.line(small, sizeSmall, oneLine(small, labelled("SKU", l.SKU), inner.width()), "", alignLeft)
 	inner.feed(4)
 
@@ -102,6 +111,10 @@ func partLabel(l printmodel.PartLabel) (*image.Gray, error) {
 	inner.y += code.Rect.Dy()
 
 	inner.line(small, sizeSmall, oneLine(small, l.Barcode, inner.width()), "", alignCenter)
+
+	if inner.y > labelDots-2*labelMargin {
+		return nil, fmt.Errorf("%w: %d dots", errLabelTooTall, inner.y)
+	}
 
 	out := image.NewGray(image.Rect(0, 0, dotsWide(printmodel.Label5030), labelDots))
 	for i := range out.Pix {

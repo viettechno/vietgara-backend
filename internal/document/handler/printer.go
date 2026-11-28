@@ -107,7 +107,7 @@ func (s *Server) PrintPaymentVoucherEscPos(
 func (s *Server) PrintPartLabels(ctx context.Context, req *documentv1.PrintPartLabelsRequest) (*httpbody.HttpBody, error) {
 	parts := make([]usecase.LabelCopies, 0, len(req.GetParts()))
 	for _, p := range req.GetParts() {
-		parts = append(parts, usecase.LabelCopies{PartID: p.GetPartId(), Copies: int(p.GetCopies())})
+		parts = append(parts, usecase.LabelCopies{PartID: p.GetPartId(), UnitID: p.GetUnitId(), Copies: int(p.GetCopies())})
 	}
 
 	data, err := s.uc.PartLabels(ctx, req.GetGarageId(), paperFromProtoAny[req.GetPaperSize()], parts)

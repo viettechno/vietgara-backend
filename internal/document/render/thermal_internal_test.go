@@ -3,6 +3,8 @@ package render
 import (
 	"testing"
 
+	"github.com/viettechno/vietgara-backend/internal/document/printmodel"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/image/font"
@@ -89,4 +91,14 @@ func TestPairPutsAWideRightOnItsOwnLine(t *testing.T) {
 
 	require.NoError(t, c.pair("Thay dầu", "12,345,678,901 VND x 2", sizeBody, false))
 	assert.Equal(t, 2*one, c.y, "left, then right under it")
+}
+
+func TestTheTallestLabelFits(t *testing.T) {
+	t.Parallel()
+
+	_, err := partLabel(printmodel.PartLabel{
+		Name: "Lọc dầu động cơ Toyota Vios 2018-2022 chính hãng loại tốt nhất Ứ Ẫ", SKU: "LD-TOY-001-RẤT-DÀI-QUÁ-KHỔ",
+		Barcode: "8934567890123", Unit: "Thùng 24 chai",
+	})
+	require.NoError(t, err)
 }

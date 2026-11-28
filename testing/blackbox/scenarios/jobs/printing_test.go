@@ -145,8 +145,9 @@ func TestRollPrint(t *testing.T) {
 }
 
 // Scenario: E2E-DOC-008, Release 13.0, barcode labels of parts print as
-// ESC/POS on 50 x 30 mm labels, one per copy; the limits are refused and a
-// part of another garage is not found (FR-INV-13).
+// ESC/POS on 50 x 30 mm labels, one per copy; a case label carries the
+// case's barcode and a unit without one is refused; the limits are refused
+// and a part of another garage is not found (FR-INV-13).
 func TestPartLabels(t *testing.T) {
 	t.Parallel()
 
@@ -177,6 +178,27 @@ func TestPartLabels(t *testing.T) {
 	}
 
 	_, _, err = api.PrintPartLabels(ctx, garageID, documentv1.PaperSize_PAPER_SIZE_K80, []*documentv1.PartLabelCopies{{PartId: c.filter.GetId(), Copies: 1}})
+	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "VALIDATION_ERROR")
+
+	// A case label carries the case's barcode; a unit without one is refused,
+	// and so is a unit that is not the part's.
+	_, _, err = api.PrintPartLabels(ctx, garageID, documentv1.PaperSize_PAPER_SIZE_LABEL_50X30, []*documentv1.PartLabelCopies{
+		{PartId: c.oil.GetId(), UnitId: new(c.jug.GetId()), Copies: 1},
+	})
+	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "VALIDATION_ERROR")
+
+	_, err = api.SetPartBarcodes(ctx, garageID, c.oil.GetId(), []*cataloguev1.PartBarcode{{Barcode: "OIL-JUG-5", UnitId: new(c.jug.GetId())}})
+	require.NoError(t, err)
+
+	_, cases, err := api.PrintPartLabels(ctx, garageID, documentv1.PaperSize_PAPER_SIZE_LABEL_50X30, []*documentv1.PartLabelCopies{
+		{PartId: c.oil.GetId(), UnitId: new(c.jug.GetId()), Copies: 2}, {PartId: c.oil.GetId(), Copies: 1},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 3, bytes.Count(cases, gsFF), "two case labels and one litre label")
+
+	_, _, err = api.PrintPartLabels(ctx, garageID, documentv1.PaperSize_PAPER_SIZE_LABEL_50X30, []*documentv1.PartLabelCopies{
+		{PartId: c.filter.GetId(), UnitId: new(c.jug.GetId()), Copies: 1},
+	})
 	fixture.RequireAPIError(t, err, http.StatusUnprocessableEntity, "VALIDATION_ERROR")
 
 	other := setup(t, "print-008-other")
